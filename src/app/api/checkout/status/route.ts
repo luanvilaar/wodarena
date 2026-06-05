@@ -34,8 +34,21 @@ export async function GET(request: Request) {
     }
 
     const paymentData = await response.json();
+    let registrationPayload = null;
+
+    if (paymentData.metadata?.registration_json) {
+      try {
+        registrationPayload = JSON.parse(paymentData.metadata.registration_json);
+      } catch (parseErr) {
+        console.warn("[MercadoPago Status API] Metadados de inscrição inválidos:", parseErr);
+      }
+    }
+
     return NextResponse.json({
-      status: paymentData.status
+      status: paymentData.status,
+      registrationData: registrationPayload?.registrationData || null,
+      athleteProfile: registrationPayload?.athleteProfile || null,
+      cpf: paymentData.metadata?.payer_cpf || ''
     });
 
   } catch (err) {

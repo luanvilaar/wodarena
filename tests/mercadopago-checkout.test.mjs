@@ -12,6 +12,7 @@ const preferenceRoute = read('../src/app/api/checkout/preference/route.ts');
 const webhookRoute = read('../src/app/api/webhooks/mercadopago/route.ts');
 const oauthCallback = read('../src/app/api/mercadopago/oauth/callback/route.ts');
 const registerModal = read('../src/components/RegisterModal.tsx');
+const appContext = read('../src/context/AppContext.tsx');
 
 test('Mercado Pago checkout resolves credentials from organizer secrets', () => {
   assert.match(helper, /from\('events'\)[\s\S]*select\('organizer_id, marketplace_fee, mp_access_token'\)/);
@@ -35,6 +36,20 @@ test('transparent checkout sends marketplace application fee and payer CPF', () 
   assert.match(pixRoute, /payer_cpf: cleanCpf/);
   assert.match(registerModal, /installments: 1,\s*cpf/);
   assert.match(registerModal, /paymentMethodsResponse\?\.results/);
+});
+
+test('Pix approval can render voucher without relying only on sessionStorage', () => {
+  assert.match(statusRoute, /registrationData: registrationPayload\?\.registrationData \|\| null/);
+  assert.match(statusRoute, /athleteProfile: registrationPayload\?\.athleteProfile \|\| null/);
+  assert.match(registerModal, /let registrationPayload = data\.registrationData \|\| null/);
+  assert.match(registerModal, /let athletePayload = data\.athleteProfile \|\| null/);
+  assert.match(registerModal, /createdReg = registerTicket\(registrationPayload, athletePayload\)/);
+});
+
+test('local registration preserves checkout identifiers for webhook and voucher consistency', () => {
+  assert.match(appContext, /const regId = registrationData\.id \|\| `reg-\$\{Date\.now\(\)\}`/);
+  assert.match(appContext, /createdAt: registrationData\.createdAt \|\| new Date\(\)\.toISOString\(\)/);
+  assert.match(appContext, /const newAthleteId = athleteProfile\?\.id \|\| `ath-\$\{Date\.now\(\)\}`/);
 });
 
 test('Mercado Pago OAuth callback persists secrets with Supabase service role', () => {

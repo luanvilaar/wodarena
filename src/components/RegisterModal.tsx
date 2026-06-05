@@ -27,6 +27,14 @@ type ParticipantForm = {
   photoUrl: string;
 };
 
+type CheckoutRegistrationData = Omit<Registration, 'createdAt'> & Partial<Pick<Registration, 'createdAt'>>;
+type CheckoutStatusResponse = {
+  status?: string;
+  registrationData?: CheckoutRegistrationData | null;
+  athleteProfile?: Athlete | null;
+  cpf?: string;
+};
+
 const createEmptyParticipant = (): ParticipantForm => ({
   name: '',
   email: '',
@@ -89,33 +97,41 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
       try {
         const res = await fetch(`/api/checkout/status?payment_id=${pixData.paymentId}&event_id=${event.id}`);
         if (!res.ok) return;
-        const data = await res.json();
+        const data: CheckoutStatusResponse = await res.json();
         if (data.status === 'approved' && active) {
           active = false; // Bloqueia reentradas concorrentes
           clearInterval(intervalId);
-          
+
           // Registrar localmente
           const pendingRegStr = sessionStorage.getItem('pending_registration');
           let createdReg = null;
           let parsedAthlete = null;
           let parsedCpf = cpf;
-          
+          let registrationPayload = data.registrationData || null;
+          let athletePayload = data.athleteProfile || null;
+
           if (pendingRegStr) {
             try {
               const { registrationData, athleteProfile, cpf: savedCpf } = JSON.parse(pendingRegStr);
-              createdReg = registerTicket(registrationData, athleteProfile);
-              parsedAthlete = athleteProfile;
+              registrationPayload = registrationData;
+              athletePayload = athleteProfile;
               parsedCpf = savedCpf || cpf;
-              if (registrationData.couponCode) {
-                incrementCouponUsage(event.id, registrationData.couponCode);
-              }
             } catch (err) {
               console.error("[RegisterModal Pix success] Erro ao registrar localmente:", err);
             } finally {
               sessionStorage.removeItem('pending_registration');
             }
           }
-          
+
+          if (registrationPayload && athletePayload) {
+            createdReg = registerTicket(registrationPayload, athletePayload);
+            parsedAthlete = athletePayload;
+            parsedCpf = parsedCpf || data.cpf || cpf;
+            if (registrationPayload.couponCode) {
+              incrementCouponUsage(event.id, registrationPayload.couponCode);
+            }
+          }
+
           if (onSuccess && createdReg && parsedAthlete) {
             // Disparar envio de e-mail local em background
             fetch('/api/checkout/email', {

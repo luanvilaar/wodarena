@@ -7,6 +7,21 @@ import { supabase } from '../lib/supabase';
 import { INITIAL_EVENTS, INITIAL_ATHLETES, INITIAL_SCORES, INITIAL_USERS } from '../data/mockData';
 import { buildFitnessRacingCourse, buildFitnessRacingDefaults, normalizeInstagram } from '@/lib/fitnessRacing';
 
+type RegistrationDraft = Omit<Registration, 'id' | 'createdAt'> & Partial<Pick<Registration, 'id' | 'createdAt'>>;
+type AthleteProfileDraft = {
+  id?: string;
+  birthDate?: string;
+  gender?: 'male' | 'female';
+  city?: string;
+  state?: string;
+  instagram?: string;
+  photoUrl?: string;
+  email?: string;
+  phone?: string;
+  isTeam?: boolean;
+  teamMembers?: { name: string; instagram: string; }[];
+};
+
 interface AppContextType {
   events: Event[];
   athletes: Athlete[];
@@ -23,18 +38,7 @@ interface AppContextType {
   addWorkout: (eventId: string, workout: Omit<Workout, 'id'>) => void;
   deleteDivision: (eventId: string, divisionId: string) => Promise<void>;
   deleteWorkout: (eventId: string, workoutId: string) => Promise<void>;
-  registerTicket: (registration: Omit<Registration, 'id' | 'createdAt'>, athleteProfile?: {
-    birthDate?: string;
-    gender?: 'male' | 'female';
-    city?: string;
-    state?: string;
-    instagram?: string;
-    photoUrl?: string;
-    email?: string;
-    phone?: string;
-    isTeam?: boolean;
-    teamMembers?: { name: string; instagram: string; }[];
-  }) => Registration;
+  registerTicket: (registration: RegistrationDraft, athleteProfile?: AthleteProfileDraft) => Registration;
   submitScore: (score: Score) => void;
   submitScoresBulk: (newScores: Score[]) => Promise<void>;
   getLeaderboard: (eventId: string, divisionId: string) => AthleteOverall[];
@@ -806,25 +810,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // Comprar Ingresso / Inscrição
   const registerTicket = (
-    registrationData: Omit<Registration, 'id' | 'createdAt'>,
-    athleteProfile?: {
-      birthDate?: string;
-      gender?: 'male' | 'female';
-      city?: string;
-      state?: string;
-      instagram?: string;
-      photoUrl?: string;
-      email?: string;
-      phone?: string;
-      isTeam?: boolean;
-      teamMembers?: { name: string; instagram: string; }[];
-    }
+    registrationData: RegistrationDraft,
+    athleteProfile?: AthleteProfileDraft
   ) => {
-    const regId = `reg-${Date.now()}`;
+    const regId = registrationData.id || `reg-${Date.now()}`;
     const newRegistration: Registration = {
       ...registrationData,
       id: regId,
-      createdAt: new Date().toISOString()
+      createdAt: registrationData.createdAt || new Date().toISOString()
     };
 
     // Adicionar atleta ao evento se ainda não cadastrado para fins de simulação
@@ -833,7 +826,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       a.divisionId === registrationData.divisionId
     );
 
-    const newAthleteId = `ath-${Date.now()}`;
+    const newAthleteId = athleteProfile?.id || `ath-${Date.now()}`;
     let newAthlete: Athlete | null = null;
 
     if (!exists) {
