@@ -25,7 +25,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-background">
       <section className="relative overflow-hidden border-b border-card-border py-16 sm:py-20 lg:py-24">
-        {/* Vídeo de fundo em telas Mobile/Tablet */}
+        {/* Vídeo de fundo em telas Mobile/Tablet (Vertical) */}
         <div className="absolute inset-0 z-0 pointer-events-none lg:hidden">
           <video 
             src="/hero-vertical.mp4" 
@@ -38,9 +38,23 @@ export default function Home() {
           <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-background/50"></div>
         </div>
 
-        <div className="relative z-10 mx-auto grid max-w-7xl gap-10 px-4 sm:px-6 lg:grid-cols-[65%_35%] lg:items-center lg:px-8">
-          {/* Coluna da Esquerda: Textos, Ações e Stats */}
-          <div className="space-y-8">
+        {/* Vídeo de fundo em telas Desktop (Horizontal, ocupando toda a hero) */}
+        <div className="absolute inset-0 z-0 pointer-events-none hidden lg:block">
+          <video 
+            src="/hero-vertical.mp4" 
+            autoPlay 
+            loop 
+            muted 
+            playsInline 
+            className="h-full w-full object-cover opacity-20"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-background/65"></div>
+          <div className="absolute inset-0 bg-gradient-to-r from-background via-transparent to-background/30"></div>
+        </div>
+
+        <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          {/* Conteúdo: Textos, Ações e Stats */}
+          <div className="space-y-8 max-w-4xl">
             <span className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-primary">
               <Trophy className="h-4 w-4" aria-hidden="true" /> O placar oficial da arena
             </span>
@@ -71,38 +85,13 @@ export default function Home() {
               ].map((stat) => {
                 const Icon = stat.icon;
                 return (
-                  <div key={stat.label} className="rounded-xl border border-card-border bg-card p-4 transition-colors hover:border-primary/20">
+                  <div key={stat.label} className="rounded-xl border border-card-border bg-card/85 backdrop-blur-sm p-4 transition-colors hover:border-primary/20">
                     <Icon className="mb-3 h-4 w-4 text-primary" aria-hidden="true" />
                     <p className="font-number text-xl font-bold text-primary">{stat.value}</p>
                     <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">{stat.label}</p>
                   </div>
                 );
               })}
-            </div>
-          </div>
-
-          {/* Coluna da Direita: Vídeo Horizontal Fundido com o Background (Somente Desktop) */}
-          <div className="hidden lg:flex lg:justify-end lg:items-center pr-4">
-            <div className="relative w-full aspect-[16/9] overflow-hidden rounded-2xl">
-              {/* Vídeo Widescreen Horizontal */}
-              <video 
-                src="/hero-vertical.mp4" 
-                autoPlay 
-                loop 
-                muted 
-                playsInline 
-                className="w-full h-full object-cover"
-              />
-              
-              {/* Overlays de gradiente para fusão perfeita com o fundo escuro do site */}
-              {/* Borda Esquerda (Suavização com a coluna de texto) */}
-              <div className="absolute inset-y-0 left-0 w-1/4 bg-gradient-to-r from-background to-transparent pointer-events-none"></div>
-              {/* Borda Direita */}
-              <div className="absolute inset-y-0 right-0 w-1/12 bg-gradient-to-l from-background to-transparent pointer-events-none"></div>
-              {/* Topo */}
-              <div className="absolute inset-x-0 top-0 h-1/6 bg-gradient-to-b from-background to-transparent pointer-events-none"></div>
-              {/* Base */}
-              <div className="absolute inset-x-0 bottom-0 h-1/6 bg-gradient-to-t from-background to-transparent pointer-events-none"></div>
             </div>
           </div>
         </div>
