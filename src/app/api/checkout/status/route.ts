@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import {
+  MercadoPagoConfigError,
+  resolveMercadoPagoCheckoutConfig
+} from '@/lib/mercadopagoServer';
 
 export async function GET(request: Request) {
   try {
@@ -11,31 +14,17 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Parâmetro payment_id obrigatório.' }, { status: 400 });
     }
 
-    let accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
-    if (eventId) {
-      try {
-        const { data: dbEvent } = await supabase
-          .from('events')
-          .select('mp_access_token')
-          .eq('id', eventId)
-          .single();
-        if (dbEvent?.mp_access_token) {
-          accessToken = dbEvent.mp_access_token;
-          console.log(`[MercadoPago Status API] Usando Access Token customizado para o evento ${eventId}`);
-        }
-      } catch (err) {
-        console.warn("[MercadoPago Status API] Erro ao carregar credenciais customizadas:", err);
-      }
+    if (!eventId) {
+      return NextResponse.json({ error: 'Parâmetro event_id obrigatório.' }, { status: 400 });
     }
-    if (!accessToken) {
-      console.error("[MercadoPago Status API] ACCESS_TOKEN não configurado no .env");
-      return NextResponse.json({ error: 'Configuração do gateway pendente.' }, { status: 500 });
-    }
+
+    const checkoutConfig = await resolveMercadoPagoCheckoutConfig(eventId);
+    console.log(`[MercadoPago Status API] Usando credenciais ${checkoutConfig.source} do organizador ${checkoutConfig.organizerId} para o evento ${eventId}`);
 
     console.log(`[MercadoPago Status API] Buscando status do pagamento: ${paymentId}`);
     const response = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
       headers: {
-        'Authorization': `Bearer ${accessToken}`
+        'Authorization': `Bearer ${checkoutConfig.accessToken}`
       }
     });
 
@@ -50,6 +39,11 @@ export async function GET(request: Request) {
     });
 
   } catch (err) {
+    if (err instanceof MercadoPagoConfigError) {
+      console.error("[MercadoPago Status API] Erro de configuração:", err.message);
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
+
     console.error("[MercadoPago Status API] Erro interno na consulta de status:", err);
     return NextResponse.json({ error: 'Erro interno ao consultar status do pagamento.' }, { status: 500 });
   }

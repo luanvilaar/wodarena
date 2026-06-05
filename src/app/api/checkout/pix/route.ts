@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import {
+  getMercadoPagoApplicationFee,
+  MercadoPagoConfigError,
+  resolveMercadoPagoCheckoutConfig
+} from '@/lib/mercadopagoServer';
 
 export async function POST(request: Request) {
   try {
@@ -10,27 +14,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Parâmetros inválidos.' }, { status: 400 });
     }
 
-    let accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
-    if (registrationData.eventId) {
-      try {
-        const { data: dbEvent } = await supabase
-          .from('events')
-          .select('mp_access_token')
-          .eq('id', registrationData.eventId)
-          .single();
-        if (dbEvent?.mp_access_token) {
-          accessToken = dbEvent.mp_access_token;
-          console.log(`[MercadoPago Pix API] Usando Access Token customizado para o evento ${registrationData.eventId}`);
-        }
-      } catch (err) {
-        console.warn("[MercadoPago Pix API] Erro ao carregar credenciais customizadas:", err);
-      }
-    }
-
-    if (!accessToken) {
-      console.error("[MercadoPago Pix API] ACCESS_TOKEN não configurado");
-      return NextResponse.json({ error: 'Configuração do gateway pendente.' }, { status: 500 });
-    }
+    const checkoutConfig = await resolveMercadoPagoCheckoutConfig(registrationData.eventId);
+    console.log(`[MercadoPago Pix API] Usando credenciais ${checkoutConfig.source} do organizador ${checkoutConfig.organizerId} para o evento ${registrationData.eventId}`);
 
     // Limpa o CPF para ter apenas números
     const cleanCpf = cpf.replace(/\D/g, '');
@@ -51,6 +36,7 @@ export async function POST(request: Request) {
       transaction_amount: Number(registrationData.totalPaid),
       description: `Inscrição: ${registrationData.ticketType} - WODArena`,
       payment_method_id: 'pix',
+      application_fee: getMercadoPagoApplicationFee(Number(registrationData.totalPaid), checkoutConfig.marketplaceFee),
       payer: {
         email: athleteProfile.email || registrationData.athleteEmail || 'atleta@wodarena.com',
         first_name: firstName,
@@ -61,6 +47,7 @@ export async function POST(request: Request) {
         }
       },
       metadata: {
+        payer_cpf: cleanCpf,
         registration_json: JSON.stringify({
           registrationData,
           athleteProfile
@@ -73,7 +60,7 @@ export async function POST(request: Request) {
     const response = await fetch('https://api.mercadopago.com/v1/payments', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${accessToken}`,
+        'Authorization': `Bearer ${checkoutConfig.accessToken}`,
         'Content-Type': 'application/json',
         'X-Idempotency-Key': `pix-${registrationData.id}`
       },
@@ -102,6 +89,11 @@ export async function POST(request: Request) {
     });
 
   } catch (err) {
+    if (err instanceof MercadoPagoConfigError) {
+      console.error("[MercadoPago Pix API] Erro de configuração:", err.message);
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
+
     console.error("[MercadoPago Pix API] Erro interno na API de Pix:", err);
     return NextResponse.json({ error: 'Erro interno ao processar pagamento Pix.' }, { status: 500 });
   }

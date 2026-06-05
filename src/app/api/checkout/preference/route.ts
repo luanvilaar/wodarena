@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import {
+  MercadoPagoConfigError,
+  resolveMercadoPagoCheckoutConfig
+} from '@/lib/mercadopagoServer';
 
 export async function POST(request: Request) {
   try {
@@ -10,52 +13,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Parâmetros inválidos.' }, { status: 400 });
     }
 
-    let accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
-    let marketplaceFee = Number(process.env.WODARENA_MARKETPLACE_FEE_DEFAULT || '10');
-
-    if (registrationData.eventId) {
-      try {
-        const { data: dbEvent } = await supabase
-          .from('events')
-          .select('organizer_id, marketplace_fee, mp_access_token')
-          .eq('id', registrationData.eventId)
-          .single();
-
-        if (dbEvent) {
-          // 1. Tenta carregar a credencial da conta conectada via OAuth do Gestor
-          const { data: mpSecret } = await supabase
-            .from('mercadopago_secrets')
-            .select('access_token')
-            .eq('user_id', dbEvent.organizer_id)
-            .maybeSingle();
-
-          if (mpSecret?.access_token) {
-            accessToken = mpSecret.access_token;
-            console.log(`[MercadoPago Preference API] Usando Access Token OAuth do organizador ${dbEvent.organizer_id} para o evento ${registrationData.eventId}`);
-          } else if (dbEvent.mp_access_token) {
-            // Fallback de compatibilidade caso o evento ainda use o token legado do evento
-            accessToken = dbEvent.mp_access_token;
-            console.log(`[MercadoPago Preference API] Usando Access Token legado do evento ${registrationData.eventId}`);
-          } else {
-            // Caso não tenha Mercado Pago conectado, barra o pagamento conforme as regras do Marketplace
-            console.error(`[MercadoPago Preference API] Gestor ${dbEvent.organizer_id} não possui Mercado Pago conectado.`);
-            return NextResponse.json({ error: 'Este evento não aceita pagamentos online no momento. Entre em contato com o organizador.' }, { status: 403 });
-          }
-
-          // 2. Define a taxa do marketplace
-          if (dbEvent.marketplace_fee !== null && dbEvent.marketplace_fee !== undefined) {
-            marketplaceFee = Number(dbEvent.marketplace_fee);
-          }
-        }
-      } catch (err) {
-        console.warn("[MercadoPago Preference API] Erro ao carregar credenciais customizadas/OAuth:", err);
-      }
-    }
-
-    if (!accessToken) {
-      console.error("[MercadoPago Preference API] ACCESS_TOKEN não configurado");
-      return NextResponse.json({ error: 'Configuração do gateway pendente.' }, { status: 500 });
-    }
+    const checkoutConfig = await resolveMercadoPagoCheckoutConfig(registrationData.eventId);
+    console.log(`[MercadoPago Preference API] Usando credenciais ${checkoutConfig.source} do organizador ${checkoutConfig.organizerId} para o evento ${registrationData.eventId}`);
 
     // Serializa os dados complexos de inscrição para caberem no metadata plano do Mercado Pago
     const metadataPayload = {
@@ -92,7 +51,7 @@ export async function POST(request: Request) {
         pending: `${origin}/event/${registrationData.eventId}?payment=pending`
       },
       metadata: metadataPayload,
-      marketplace_fee: marketplaceFee,
+      marketplace_fee: checkoutConfig.marketplaceFee,
       ...(isLocalhost ? {} : { 
         auto_return: 'approved',
         notification_url: `${origin}/api/webhooks/mercadopago?event_id=${registrationData.eventId}` 
@@ -103,7 +62,7 @@ export async function POST(request: Request) {
     const mpResponse = await fetch('https://api.mercadopago.com/checkout/preferences', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${accessToken}`,
+        'Authorization': `Bearer ${checkoutConfig.accessToken}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(preferencePayload)
@@ -123,6 +82,11 @@ export async function POST(request: Request) {
     });
 
   } catch (err) {
+    if (err instanceof MercadoPagoConfigError) {
+      console.error("[MercadoPago Preference API] Erro de configuração:", err.message);
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
+
     console.error("[MercadoPago Preference API] Erro interno na API:", err);
     return NextResponse.json({ error: 'Erro interno ao criar preferência de pagamento.' }, { status: 500 });
   }

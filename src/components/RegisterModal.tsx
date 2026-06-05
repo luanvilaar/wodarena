@@ -372,6 +372,12 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
           return;
         }
 
+        if (!/^\d{2}\/\d{2}$/.test(expirationDate)) {
+          alert('Informe a validade do cartão no formato MM/AA.');
+          setIsProcessing(false);
+          return;
+        }
+
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         if (!(window as any).MercadoPago) {
           alert('O gateway de pagamento do Mercado Pago está carregando. Por favor, tente novamente em alguns segundos.');
@@ -387,6 +393,13 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
         const expirationParts = expirationDate.split('/');
         const month = expirationParts[0]?.trim();
         const year = '20' + expirationParts[1]?.trim();
+        const monthNumber = Number(month);
+
+        if (!month || !year || monthNumber < 1 || monthNumber > 12) {
+          alert('Validade do cartão inválida.');
+          setIsProcessing(false);
+          return;
+        }
 
         let cardToken;
         try {
@@ -416,7 +429,10 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
         let paymentMethodId = 'visa';
         try {
           const bin = cardNumber.replace(/\s/g, '').substring(0, 6);
-          const paymentMethods = await mp.getPaymentMethods({ bin });
+          const paymentMethodsResponse = await mp.getPaymentMethods({ bin });
+          const paymentMethods = Array.isArray(paymentMethodsResponse)
+            ? paymentMethodsResponse
+            : paymentMethodsResponse?.results || [];
           paymentMethodId = paymentMethods[0]?.id || 'visa';
         } catch (binErr) {
           console.warn("[Checkout Card Method Detector] Erro ao detectar bandeira, usando visa fallback:", binErr);
@@ -433,7 +449,8 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
             athleteProfile,
             token: cardToken.id,
             payment_method_id: paymentMethodId,
-            installments: 1
+            installments: 1,
+            cpf
           })
         });
 

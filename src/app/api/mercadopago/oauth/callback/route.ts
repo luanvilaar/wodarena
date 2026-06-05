@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || 'https://momigbtnsswoldqnadmc.supabase.co';
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 export async function GET(request: Request) {
   const origin = request.headers.get('origin') || new URL(request.url).origin;
@@ -17,10 +20,17 @@ export async function GET(request: Request) {
     const clientSecret = process.env.MERCADOPAGO_CLIENT_SECRET;
     const redirectUri = process.env.MERCADOPAGO_REDIRECT_URI || `${origin}/api/mercadopago/oauth/callback`;
 
-    if (!clientId || !clientSecret) {
-      console.error('[OAuth Callback] Variáveis de ambiente MERCADOPAGO_CLIENT_ID ou MERCADOPAGO_CLIENT_SECRET não configuradas.');
+    if (!clientId || !clientSecret || !supabaseServiceKey) {
+      console.error('[OAuth Callback] Variáveis de ambiente MERCADOPAGO_CLIENT_ID, MERCADOPAGO_CLIENT_SECRET ou SUPABASE_SERVICE_ROLE_KEY não configuradas.');
       return NextResponse.redirect(`${origin}/admin?tab=payments&error=critical_error`);
     }
+
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false
+      }
+    });
 
     console.log(`[OAuth Callback] Iniciando troca de token para o gestor: ${userId}...`);
 
@@ -52,7 +62,7 @@ export async function GET(request: Request) {
     console.log(`[OAuth Callback] Token obtido. Gravando na tabela mercadopago_accounts para o usuário: ${userId}...`);
 
     // 1. Gravar dados públicos
-    const { error: dbPublicError } = await supabase
+    const { error: dbPublicError } = await supabaseAdmin
       .from('mercadopago_accounts')
       .upsert({
         user_id: userId,
@@ -69,7 +79,7 @@ export async function GET(request: Request) {
     }
 
     // 2. Gravar segredos na tabela privada
-    const { error: dbSecretError } = await supabase
+    const { error: dbSecretError } = await supabaseAdmin
       .from('mercadopago_secrets')
       .upsert({
         user_id: userId,
@@ -81,7 +91,7 @@ export async function GET(request: Request) {
     if (dbSecretError) {
       console.error('[OAuth Callback] Erro ao gravar segredos no Supabase:', dbSecretError);
       // Remove a conta pública recém-criada para manter consistência
-      await supabase.from('mercadopago_accounts').delete().eq('user_id', userId);
+      await supabaseAdmin.from('mercadopago_accounts').delete().eq('user_id', userId);
       return NextResponse.redirect(`${origin}/admin?tab=payments&error=db_error`);
     }
 

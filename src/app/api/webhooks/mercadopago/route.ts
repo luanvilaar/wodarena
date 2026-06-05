@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { sendRegistrationEmail } from '@/lib/resend';
+import {
+  MercadoPagoConfigError,
+  resolveMercadoPagoCheckoutConfig
+} from '@/lib/mercadopagoServer';
 
 // Inicializa o cliente do Supabase com privilégios de Admin para o servidor
 const supabaseAdmin = createClient(
@@ -36,46 +40,18 @@ export async function POST(request: Request) {
     }
 
     const eventId = searchParams.get('event_id');
-    let accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
-    if (eventId) {
-      try {
-        const { data: dbEvent } = await supabaseAdmin
-          .from('events')
-          .select('organizer_id, mp_access_token')
-          .eq('id', eventId)
-          .single();
-
-        if (dbEvent) {
-          // 1. Tenta obter o Access Token do Gestor conectado via OAuth
-          const { data: mpSecret } = await supabaseAdmin
-            .from('mercadopago_secrets')
-            .select('access_token')
-            .eq('user_id', dbEvent.organizer_id)
-            .maybeSingle();
-
-          if (mpSecret?.access_token) {
-            accessToken = mpSecret.access_token;
-            console.log(`[MercadoPago Webhook] Usando Access Token OAuth do organizador ${dbEvent.organizer_id} para o evento ${eventId}`);
-          } else if (dbEvent.mp_access_token) {
-            // Fallback de compatibilidade caso o evento ainda use o token legado do evento
-            accessToken = dbEvent.mp_access_token;
-            console.log(`[MercadoPago Webhook] Usando Access Token legado para o evento ${eventId}`);
-          }
-        }
-      } catch (err) {
-        console.warn("[MercadoPago Webhook] Erro ao buscar credenciais customizadas/OAuth:", err);
-      }
+    if (!eventId) {
+      console.error("[MercadoPago Webhook] event_id ausente na notificação de pagamento.");
+      return NextResponse.json({ error: 'Evento obrigatório para processar webhook.' }, { status: 400 });
     }
 
-    if (!accessToken) {
-      console.error("[MercadoPago Webhook] ACCESS_TOKEN não configurado");
-      return NextResponse.json({ error: 'Configuração do gateway pendente.' }, { status: 500 });
-    }
+    const checkoutConfig = await resolveMercadoPagoCheckoutConfig(eventId);
+    console.log(`[MercadoPago Webhook] Usando credenciais ${checkoutConfig.source} do organizador ${checkoutConfig.organizerId} para o evento ${eventId}`);
 
     console.log(`[MercadoPago Webhook] Buscando detalhes do pagamento ${paymentId}...`);
     const mpResponse = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
       headers: {
-        'Authorization': `Bearer ${accessToken}`
+        'Authorization': `Bearer ${checkoutConfig.accessToken}`
       }
     });
 
@@ -281,6 +257,11 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ received: true });
   } catch (err) {
+    if (err instanceof MercadoPagoConfigError) {
+      console.error("[MercadoPago Webhook] Erro de configuração:", err.message);
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
+
     console.error("[MercadoPago Webhook] Erro crítico no processamento:", err);
     return NextResponse.json({ error: 'Erro crítico interno.' }, { status: 500 });
   }
