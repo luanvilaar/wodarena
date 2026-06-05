@@ -12,6 +12,7 @@ const preferenceRoute = read('../src/app/api/checkout/preference/route.ts');
 const configRoute = read('../src/app/api/checkout/config/route.ts');
 const webhookRoute = read('../src/app/api/webhooks/mercadopago/route.ts');
 const oauthCallback = read('../src/app/api/mercadopago/oauth/callback/route.ts');
+const adminMercadoPagoRoute = read('../src/app/api/admin/mercadopago/route.ts');
 const registerModal = read('../src/components/RegisterModal.tsx');
 const appContext = read('../src/context/AppContext.tsx');
 
@@ -72,4 +73,11 @@ test('Mercado Pago OAuth callback persists secrets with Supabase service role', 
   assert.match(oauthCallback, /SUPABASE_SERVICE_ROLE_KEY/);
   assert.match(oauthCallback, /createClient\(supabaseUrl, supabaseServiceKey/);
   assert.match(oauthCallback, /from\('mercadopago_secrets'\)/);
+});
+
+test('manual Mercado Pago credentials are validated and store the real collector id', () => {
+  assert.match(adminMercadoPagoRoute, /https:\/\/api\.mercadopago\.com\/users\/me/);
+  assert.match(adminMercadoPagoRoute, /Access Token Mercado Pago inválido/);
+  assert.match(adminMercadoPagoRoute, /const mercadopagoUserId = mpUserData\?\.id \? String\(mpUserData\.id\)/);
+  assert.match(adminMercadoPagoRoute, /mercadopago_user_id: mercadopagoUserId/);
 });

@@ -40,6 +40,21 @@ export async function POST(request: Request) {
       tokenToSave = existing.access_token;
     }
 
+    const mpUserResponse = await fetch('https://api.mercadopago.com/users/me', {
+      headers: {
+        'Authorization': `Bearer ${tokenToSave}`
+      }
+    });
+
+    if (!mpUserResponse.ok) {
+      const errorData = await mpUserResponse.json().catch(() => null);
+      console.error('[API Admin MercadoPago] Access Token inválido ou sem acesso a /users/me:', errorData);
+      return NextResponse.json({ error: 'Access Token Mercado Pago inválido. Verifique a credencial informada.' }, { status: 400 });
+    }
+
+    const mpUserData = await mpUserResponse.json();
+    const mercadopagoUserId = mpUserData?.id ? String(mpUserData.id) : `manual-${userId}`;
+
     console.log(`[API Admin MercadoPago] Salvando credenciais de forma segura para o gestor: ${userId}...`);
 
     // 1. Gravar informações públicas
@@ -49,7 +64,7 @@ export async function POST(request: Request) {
         user_id: userId,
         public_key: publicKey,
         status: 'connected',
-        mercadopago_user_id: `manual-${userId}`,
+        mercadopago_user_id: mercadopagoUserId,
         expires_at: new Date('2099-12-31T23:59:59Z').toISOString(),
         updated_at: new Date().toISOString()
       }, { onConflict: 'user_id' })
