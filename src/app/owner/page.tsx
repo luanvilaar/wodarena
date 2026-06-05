@@ -5,21 +5,21 @@ import Image from 'next/image';
 import { useApp } from '@/context/AppContext';
 import { Leaderboard } from '@/components/Leaderboard';
 import { BrandLogo } from '@/components/BrandLogo';
-import { 
-  Shield, LayoutDashboard, Users, Trophy, DollarSign, 
+import {
+  Shield, LayoutDashboard, Users, Trophy, DollarSign,
   UserPlus, Calendar, Medal, LogOut, KeyRound, Building, ShieldCheck
 } from 'lucide-react';
 
 export default function OwnerPage() {
-  const { 
-    events, registrations, users, currentUser, login, logout, createManagerAccount 
+  const {
+    events, registrations, users, currentUser, login, logout, createManagerAccount
   } = useApp();
 
   // Estados locais
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
-  
+
   // Abas do Painel
   const [activeTab, setActiveTab] = useState<'dashboard' | 'managers' | 'events' | 'leaderboards'>('dashboard');
 
@@ -33,10 +33,19 @@ export default function OwnerPage() {
   // 1. Validar se o usuário atual é o proprietário (role: 'owner')
   const isOwner = currentUser && currentUser.role === 'owner';
 
-  // 2. Estatísticas Consolidadas (Taxa de 10%)
+  // 2. Estatísticas Consolidadas (Taxa Dinâmica por Evento)
   const stats = useMemo(() => {
     const totalVolume = registrations.reduce((sum, r) => sum + r.totalPaid, 0);
-    const platformRevenue = totalVolume * 0.1; // 10% de comissão
+
+    // Calcula a receita da comissão dinamicamente com base nas taxas de cada evento
+    const platformRevenue = registrations.reduce((sum, r) => {
+      const event = events.find(e => e.id === r.eventId);
+      const fee = event && event.marketplace_fee !== undefined && event.marketplace_fee !== null
+        ? Number(event.marketplace_fee)
+        : 10;
+      return sum + fee;
+    }, 0);
+
     const managersCount = users.filter(u => u.role === 'manager').length;
     const eventsCount = events.length;
 
@@ -51,19 +60,29 @@ export default function OwnerPage() {
   // 3. Compilar faturamento e dados por Gestor
   const managersList = useMemo(() => {
     const managers = users.filter(u => u.role === 'manager');
-    
+
     return managers.map(m => {
       // Eventos desse gestor
       const managerEvents = events.filter(e => e.organizerId === m.id);
       const eventIds = managerEvents.map(e => e.id);
-      
+
       // Inscrições dos eventos desse gestor
       const managerRegistrations = registrations.filter(r => eventIds.includes(r.eventId));
-      
-      // Faturamento Bruto e Faturamento Líquido (90%)
+
+      // Faturamento Bruto
       const grossRevenue = managerRegistrations.reduce((sum, r) => sum + r.totalPaid, 0);
-      const netRevenue = grossRevenue * 0.9; // 90% para o organizador
-      const platformFee = grossRevenue * 0.1; // 10% para o site
+
+      // Comissão da Plataforma calculada dinamicamente por evento
+      const platformFee = managerRegistrations.reduce((sum, r) => {
+        const event = events.find(e => e.id === r.eventId);
+        const fee = event && event.marketplace_fee !== undefined && event.marketplace_fee !== null
+          ? Number(event.marketplace_fee)
+          : 10;
+        return sum + fee;
+      }, 0);
+
+      // Repasse Líquido (Faturamento Bruto - Comissão da Plataforma)
+      const netRevenue = Math.max(0, grossRevenue - platformFee);
 
       return {
         manager: m,
@@ -82,9 +101,9 @@ export default function OwnerPage() {
   }, [events, selectedEventIdLead]);
 
   // Ação de Login
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const success = login(email, password);
+    const success = await login(email, password);
     if (success) {
       // Verificar se realmente é o proprietário
       // O state do currentUser é assíncrono no localStorage, então checamos a lista original
@@ -101,14 +120,14 @@ export default function OwnerPage() {
   };
 
   // Ação de Cadastrar Gestor
-  const handleCreateManager = (e: React.FormEvent) => {
+  const handleCreateManager = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newManagerName || !newManagerEmail || !newManagerPassword || !newManagerOrg) {
       setCreateMsg({ text: 'Por favor, preencha todos os campos do gestor.', isError: true });
       return;
     }
 
-    const success = createManagerAccount(
+    const success = await createManagerAccount(
       newManagerName,
       newManagerEmail,
       newManagerPassword,
@@ -121,11 +140,11 @@ export default function OwnerPage() {
       setNewManagerEmail('');
       setNewManagerPassword('');
       setNewManagerOrg('');
-      
+
       // Limpar mensagem após 4 segundos
       setTimeout(() => setCreateMsg({ text: '', isError: false }), 4000);
     } else {
-      setCreateMsg({ text: 'Erro: Este e-mail já está sendo utilizado.', isError: true });
+      setCreateMsg({ text: 'Erro ao cadastrar gestor. O e-mail já existe ou houve um problema.', isError: true });
     }
   };
 
@@ -216,7 +235,7 @@ export default function OwnerPage() {
               <p className="text-xs text-muted font-medium">Controle de faturamento, comissões de SaaS e cadastro de organizadores.</p>
             </div>
           </div>
-          <button 
+          <button
             onClick={logout}
             className="flex items-center gap-1.5 px-4 py-2 rounded-md bg-dark-gray border border-card-border text-xs font-bold text-muted hover:text-white hover:border-red-500/40 hover:bg-red-950/10 transition-colors"
           >
@@ -229,7 +248,7 @@ export default function OwnerPage() {
       {/* Conteúdo Principal do Painel */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-          
+
           {/* Menu Lateral de Admin */}
           <aside className="flex flex-row overflow-x-auto gap-2 pb-2 scrollbar-none lg:flex-col lg:overflow-x-visible lg:pb-0 lg:col-span-1 lg:space-y-2 w-full">
             {[
@@ -265,10 +284,10 @@ export default function OwnerPage() {
                 <h3 className="text-lg font-bold text-white uppercase tracking-wider border-b border-card-border pb-3">
                   Resumo Financeiro e Operacional
                 </h3>
-                
+
                 {/* Grid de Métricas Consolidadas */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  
+
                   {/* Faturamento de Taxas do Site */}
                   <div className="bg-card border border-primary/20 rounded-xl p-5 flex items-center justify-between">
                     <div className="space-y-1">
@@ -316,14 +335,14 @@ export default function OwnerPage() {
                 </div>
 
                 <div className="bg-card border border-card-border rounded-xl p-6 space-y-4">
-                  <h4 className="text-sm font-bold text-white uppercase tracking-wider">Modelo Comercial WODArena</h4>
+                  <h4 className="text-sm font-bold text-white uppercase tracking-wider">Modelo Comercial WODArena (Mercado Pago Split)</h4>
                   <p className="text-xs text-muted leading-relaxed font-normal">
-                    A WODArena atua com base no modelo de taxa por transação de serviço:
+                    A WODArena atua com base no modelo de divisão direta de valores (Split de Pagamentos) via gateway de pagamento conectado:
                   </p>
                   <ul className="list-disc list-inside text-xs text-muted space-y-1.5 pt-2 border-t border-card-border/50">
-                    <li><strong className="text-white">Taxa de Plataforma</strong>: 10% cobrados sobre o valor bruto de cada inscrição de atleta comprada no site.</li>
-                    <li><strong className="text-white">Repasse aos Organizadores</strong>: 90% da receita de vendas são repassados ao Gestor do evento, deduzidas as taxas de hospedagem.</li>
-                    <li><strong className="text-white">Criação de Contas</strong>: Apenas você, proprietário da plataforma, tem o poder de emitir credenciais para novos parceiros organizadores criarem seus eventos na aba <strong className="text-white">&quot;Gestores & Vendas&quot;</strong>.</li>
+                    <li><strong className="text-white">Taxa de Plataforma (Split)</strong>: Valor fixo em reais debitado automaticamente a cada inscrição paga (padrão de R$ 10,00 ou conforme personalizado por evento).</li>
+                    <li><strong className="text-white">Repasse Imediato via Marketplace</strong>: A transação é enviada diretamente à conta conectada do Gestor do evento, caindo na sua carteira deduzida a comissão da plataforma em tempo real.</li>
+                    <li><strong className="text-white">Autonomia de Contas</strong>: O Gestor conecta seu próprio Mercado Pago para operar de forma transparente, eliminando repasses manuais e centralizados.</li>
                   </ul>
                 </div>
               </div>
@@ -332,7 +351,7 @@ export default function OwnerPage() {
             {/* ABA: Gestores e Vendas */}
             {activeTab === 'managers' && (
               <div className="space-y-6">
-                
+
                 {/* 1. Cadastrar Novo Gestor */}
                 <form onSubmit={handleCreateManager} className="bg-card border border-card-border rounded-xl p-6 space-y-4">
                   <div className="border-b border-card-border pb-3 flex justify-between items-center">
@@ -427,7 +446,7 @@ export default function OwnerPage() {
                   <h3 className="text-base font-bold text-white uppercase tracking-wider border-b border-card-border pb-3">
                     Relatório Financeiro por Organizador
                   </h3>
-                  
+
                   <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse min-w-[600px]">
                       <thead>
@@ -468,7 +487,7 @@ export default function OwnerPage() {
                 <h3 className="text-lg font-bold text-white uppercase tracking-wider border-b border-card-border pb-3">
                   Eventos Ativos na Plataforma
                 </h3>
-                
+
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse min-w-[600px]">
                     <thead>
@@ -477,6 +496,7 @@ export default function OwnerPage() {
                         <th className="py-3 px-3">Organizador ID</th>
                         <th className="py-3 px-3">Status</th>
                         <th className="py-3 px-3">Data</th>
+                        <th className="py-3 px-3 text-right">Taxa Split</th>
                         <th className="py-3 px-3 text-right">Inscrições</th>
                       </tr>
                     </thead>
@@ -510,6 +530,9 @@ export default function OwnerPage() {
                               )}
                             </td>
                             <td className="py-3 px-3 text-muted">{event.date}</td>
+                            <td className="py-3 px-3 text-right font-bold text-primary font-number">
+                              R$ {(event.marketplace_fee !== undefined && event.marketplace_fee !== null ? event.marketplace_fee : 10).toFixed(2)}
+                            </td>
                             <td className="py-3 px-3 text-right font-bold font-number text-white">R$ {eventRevenue.toFixed(2)}</td>
                           </tr>
                         );
@@ -526,7 +549,7 @@ export default function OwnerPage() {
                 <h3 className="text-lg font-bold text-white uppercase tracking-wider border-b border-card-border pb-3">
                   Auditar Leaderboard da Plataforma
                 </h3>
-                
+
                 <div>
                   <label htmlFor="owner-leaderboard-event" className="block text-xs font-bold text-muted uppercase tracking-wider mb-1">Selecione o Evento para Audit</label>
                   <select

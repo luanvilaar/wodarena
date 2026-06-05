@@ -17,8 +17,8 @@ test('lógica de auditoria em tempo real para percursos de Fitness Racing', () =
 });
 
 test('funcionalidade de replicação e publicação de percursos', () => {
-  assert.match(admin, /handlePublishAndReplicateCourse/);
-  assert.match(admin, /isReplicateModalOpen/);
+  assert.match(admin, /handlePublishActiveCourse/);
+  assert.match(admin, /selectedDivisionIdsForCourse/);
   assert.match(admin, /saveCourseLayout/);
 });
 
@@ -27,4 +27,10 @@ test('migração SQL de publicação de percursos existe', () => {
   assert.equal(existsSync(migrationPath), true, 'A migração SQL deve existir');
   const sql = readFileSync(migrationPath, 'utf8');
   assert.match(sql, /ALTER TABLE divisions ADD COLUMN IF NOT EXISTS is_course_published/i);
+});
+
+test('alocação mista de atletas e seleção multi-categoria em Fitness Racing', () => {
+  assert.match(admin, /isFitnessRacingTotal/);
+  assert.match(admin, /allDivisionsAthletes/);
+  assert.match(admin, /reversedIds/);
 });

@@ -14,9 +14,9 @@ interface AppContextType {
   registrations: Registration[];
   users: User[];
   currentUser: User | null;
-  login: (email: string, password: string) => boolean;
+  login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
-  createManagerAccount: (name: string, email: string, password: string, organization: string) => boolean;
+  createManagerAccount: (name: string, email: string, password: string, organization: string) => Promise<boolean>;
   addEvent: (event: Omit<Event, 'id' | 'organizerId' | 'sponsors' | 'format' | 'ticketPrice' | 'ticketSlots' | 'isTicketingActive'> & { format?: 'individual' | 'duo' | 'trio'; ticketPrice?: number; ticketSlots?: number; isTicketingActive?: boolean; eventType?: 'functional_fitness' | 'fitness_racing'; }) => void;
   addDivision: (eventId: string, division: Omit<Division, 'id'>) => void;
   updateDivision: (eventId: string, divisionId: string, updatedData: Partial<Division>) => Promise<void>;
@@ -41,11 +41,23 @@ interface AppContextType {
   updateEventTicketing: (eventId: string, config: { format: 'individual' | 'duo' | 'trio'; ticketPrice: number; ticketSlots: number; isTicketingActive: boolean; }) => Promise<void>;
   updateEvent: (eventId: string, updatedData: Partial<Event>) => Promise<void>;
   saveCourseLayout: (divisionId: string, layout: CourseStage[]) => Promise<void>;
+  updateWorkout: (eventId: string, workoutId: string, updatedData: Partial<Workout>) => Promise<void>;
   coupons: Coupon[];
   addCoupon: (coupon: Omit<Coupon, 'id' | 'usageCount' | 'createdAt'>) => Promise<void>;
   incrementCouponUsage: (eventId: string, code: string) => Promise<void>;
-  changePassword: (userId: string, newPassword: string) => Promise<boolean>;
+  changePassword: (userId: string, currentPassword: string, newPassword: string) => Promise<boolean>;
 }
+
+type WorkoutDbUpdate = Partial<{
+  name: string;
+  description: string;
+  type: WorkoutType;
+  time_cap: string;
+  code: string;
+  order_index: number;
+  division_id: string;
+  tie_breaker: string;
+}>;
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
@@ -174,18 +186,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           setCoupons([]);
         }
 
-        // 5. Carregar eventos, divisões e workouts
+        // 5. Carregar eventos, divisões, workouts e credenciais Mercado Pago dos gestores
         const { data: dbEvents } = await supabase.from('events').select('*');
         const { data: dbDivisions } = await supabase.from('divisions').select('*');
         const { data: dbWorkouts } = await supabase.from('workouts').select('*');
+        const { data: dbMpAccounts } = await supabase
+          .from('mercadopago_accounts')
+          .select('user_id, public_key')
+          .eq('status', 'connected');
 
         if (dbEvents && dbEvents.length > 0 && dbDivisions && dbWorkouts) {
           const combinedEvents = dbEvents.map((evt): Event => {
             const evDivs: Division[] = dbDivisions
               .filter(d => d.event_id === evt.id)
-              .map(d => ({ 
-                id: d.id, 
-                name: d.name, 
+              .map(d => ({
+                id: d.id,
+                name: d.name,
                 category: d.category,
                 type: d.type || 'individual',
                 slotsLimit: d.slots_limit !== undefined && d.slots_limit !== null ? Number(d.slots_limit) : 100,
@@ -196,20 +212,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 courseLayout: d.course_layout ? (typeof d.course_layout === 'string' ? JSON.parse(d.course_layout) : d.course_layout) : [],
                 isCoursePublished: d.is_course_published || false
               }));
-            
+
             const evWods: Workout[] = dbWorkouts
               .filter(w => w.event_id === evt.id)
-              .map(w => ({ 
-                id: w.id, 
-                name: w.name, 
-                description: w.description, 
-                type: w.type, 
+              .map(w => ({
+                id: w.id,
+                name: w.name,
+                description: w.description,
+                type: w.type,
                 timeCap: w.time_cap || undefined,
                 code: w.code || '',
                 orderIndex: w.order_index !== undefined && w.order_index !== null ? Number(w.order_index) : 1,
                 divisionId: w.division_id || undefined,
                 tieBreaker: w.tie_breaker || ''
               }));
+
+            const organizerMp = dbMpAccounts?.find(acc => acc.user_id === evt.organizer_id);
 
             return {
               id: evt.id,
@@ -238,7 +256,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               scheduleItems: evt.event_schedule
                 ? (typeof evt.event_schedule === 'string' ? JSON.parse(evt.event_schedule) : evt.event_schedule)
                 : [],
-              mpPublicKey: evt.mp_public_key || '',
+              mpPublicKey: evt.mp_public_key || organizerMp?.public_key || '',
               mpAccessToken: evt.mp_access_token || ''
             };
           });
@@ -283,7 +301,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
         evt.divisions.forEach(division => {
           const hasTotal = currentWods.some(w => w.divisionId === division.id && w.code === 'TOTAL');
-          
+
           if (!hasTotal) {
             const workoutId = `wod-${division.id}-total`;
             const autoWorkout: Workout = {
@@ -338,13 +356,31 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [events]);
 
   // Lógica de Login
-  const login = (emailInput: string, passwordInput: string): boolean => {
-    const user = users.find(u => u.email.toLowerCase() === emailInput.toLowerCase() && u.password === passwordInput);
-    if (user) {
-      setCurrentUser(user);
+  const login = async (emailInput: string, passwordInput: string): Promise<boolean> => {
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          email: emailInput,
+          password: passwordInput
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        console.error('Erro de login:', data.error);
+        return false;
+      }
+
+      setCurrentUser(data.user);
       return true;
+    } catch (err) {
+      console.error('Erro crítico no login:', err);
+      return false;
     }
-    return false;
   };
 
   // Lógica de Logout
@@ -353,33 +389,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Lógica para Proprietário cadastrar Gestor
-  const createManagerAccount = (name: string, emailInput: string, passwordInput: string, organization: string): boolean => {
-    const exists = users.some(u => u.email.toLowerCase() === emailInput.toLowerCase());
-    if (exists) return false;
+  const createManagerAccount = async (name: string, emailInput: string, passwordInput: string, organization: string): Promise<boolean> => {
+    try {
+      const response = await fetch('/api/admin/create-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          name,
+          email: emailInput,
+          password: passwordInput,
+          organization
+        })
+      });
 
-    const newManager: User = {
-      id: `org-${Date.now()}`,
-      name,
-      email: emailInput,
-      password: passwordInput,
-      role: 'manager',
-      organization
-    };
+      const data = await response.json();
+      if (!response.ok) {
+        console.error('Erro ao cadastrar gestor:', data.error);
+        return false;
+      }
 
-    // Salvar no Supabase em background
-    supabase.from('users').insert({
-      id: newManager.id,
-      name: newManager.name,
-      email: newManager.email,
-      password: newManager.password,
-      role: newManager.role,
-      organization: newManager.organization
-    }).then(({ error }) => {
-      if (error) console.error("Erro ao cadastrar gestor no Supabase:", error);
-    });
-
-    setUsers([...users, newManager]);
-    return true;
+      setUsers(prev => [...prev, data.user]);
+      return true;
+    } catch (err) {
+      console.error('Erro crítico ao cadastrar gestor:', err);
+      return false;
+    }
   };
 
   // Recalcular posições e pontos para um determinado workout quando scores mudam
@@ -420,7 +456,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     // 5. Atribuir Ranks e Pontos com regras de empates do Low-Point
     const updatedScoresMap = new Map<string, Score>();
-    
+
     sortedScores.forEach((score, index) => {
       const isPending = !score.result || score.result === '-' || score.result === '';
       let rank = 0;
@@ -790,10 +826,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       id: regId,
       createdAt: new Date().toISOString()
     };
-    
+
     // Adicionar atleta ao evento se ainda não cadastrado para fins de simulação
     const exists = athletes.some(
-      a => a.name.toLowerCase() === registrationData.athleteName.toLowerCase() && 
+      a => a.name.toLowerCase() === registrationData.athleteName.toLowerCase() &&
       a.divisionId === registrationData.divisionId
     );
 
@@ -844,7 +880,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           team_members: newAthlete.teamMembers ? JSON.stringify(newAthlete.teamMembers) : '[]'
         });
       }
-      
+
       await supabase.from('registrations').insert({
         id: newRegistration.id,
         event_id: newRegistration.eventId,
@@ -900,7 +936,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // Incrementar o uso de um cupom
   const incrementCouponUsage = async (eventId: string, code: string) => {
-    setCoupons(prev => prev.map(c => 
+    setCoupons(prev => prev.map(c =>
       (c.eventId === eventId && c.code.toLowerCase() === code.toLowerCase())
         ? { ...c, usageCount: c.usageCount + 1 }
         : c
@@ -925,22 +961,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Alterar senha do usuário
-  const changePassword = async (userId: string, newPassword: string): Promise<boolean> => {
+  const changePassword = async (userId: string, currentPassword: string, newPassword: string): Promise<boolean> => {
     try {
-      const { error } = await supabase
-        .from('users')
-        .update({ password: newPassword })
-        .eq('id', userId);
+      const response = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          userId,
+          currentPassword,
+          newPassword
+        })
+      });
 
-      if (error) {
-        console.error("Erro ao atualizar senha no Supabase:", error);
+      const data = await response.json();
+      if (!response.ok) {
+        console.error("Erro ao atualizar senha:", data.error);
         return false;
-      }
-
-      setUsers(prev => prev.map(u => u.id === userId ? { ...u, password: newPassword } : u));
-
-      if (currentUser && currentUser.id === userId) {
-        setCurrentUser({ ...currentUser, password: newPassword });
       }
 
       return true;
@@ -1002,7 +1040,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // Menor tempo (value) é melhor
         const sortedScores = [...workoutScores].sort((a, b) => a.value - b.value);
         const updatedScoresMap = new Map<string, Score>();
-        
+
         sortedScores.forEach((score, idx) => {
           updatedScoresMap.set(score.athleteId, {
             ...score,
@@ -1039,7 +1077,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     affectedPairs.forEach(({ workoutId, divisionId }) => {
       const divisionAthletes = athletes.filter(a => a.divisionId === divisionId);
       const athleteIds = divisionAthletes.map(a => a.id);
-      
+
       const divisionScores = tempScores.filter(
         s => s.workoutId === workoutId && athleteIds.includes(s.athleteId)
       );
@@ -1061,7 +1099,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const { error } = await supabase
         .from('scores')
         .upsert(dbPayload, { onConflict: 'athlete_id,workout_id' });
-      
+
       if (error) {
         console.error("Erro ao salvar scores em lote no Supabase:", error);
       }
@@ -1222,7 +1260,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (index > 0) {
         const prevItem = sortedList[index - 1];
         let isEqual = item.totalPoints === prevItem.totalPoints;
-        
+
         if (isEqual) {
           // Confronto direto
           const { aWins, bWins } = getDirectWins(item, prevItem);
@@ -1338,6 +1376,36 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const updateWorkout = async (eventId: string, workoutId: string, updatedData: Partial<Workout>) => {
+    setEvents(prev => prev.map(e => {
+      if (e.id !== eventId) return e;
+      return {
+        ...e,
+        workouts: e.workouts.map(w => w.id === workoutId ? { ...w, ...updatedData } : w)
+      };
+    }));
+
+    const dbData: WorkoutDbUpdate = {};
+    if (updatedData.name !== undefined) dbData.name = updatedData.name;
+    if (updatedData.description !== undefined) dbData.description = updatedData.description;
+    if (updatedData.type !== undefined) dbData.type = updatedData.type;
+    if (updatedData.timeCap !== undefined) dbData.time_cap = updatedData.timeCap;
+    if (updatedData.code !== undefined) dbData.code = updatedData.code;
+    if (updatedData.orderIndex !== undefined) dbData.order_index = updatedData.orderIndex;
+    if (updatedData.divisionId !== undefined) dbData.division_id = updatedData.divisionId;
+    if (updatedData.tieBreaker !== undefined) dbData.tie_breaker = updatedData.tieBreaker;
+
+    const { error } = await supabase
+      .from('workouts')
+      .update(dbData)
+      .eq('id', workoutId);
+
+    if (error) {
+      console.error("Erro ao atualizar prova no Supabase:", error);
+      throw error;
+    }
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -1364,6 +1432,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         updateEventTicketing,
         updateEvent,
         saveCourseLayout,
+        updateWorkout,
         addCoupon,
         incrementCouponUsage,
         changePassword

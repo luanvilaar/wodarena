@@ -10,7 +10,7 @@ import { RegistrationVoucher } from '@/components/RegistrationVoucher';
 import {
   LayoutDashboard, Calendar, Trophy,
   ClipboardCheck, LogIn, LogOut, DollarSign, Users, Ticket, Settings,
-  Upload, X, Trash2, Plus, ShieldAlert, Pencil, Copy, GripVertical, ArrowDown, ArrowUp, Library, Compass, ReceiptText, Mail, CreditCard,
+  Upload, X, Trash2, Plus, ShieldAlert, Pencil, Copy, GripVertical, ArrowDown, ArrowUp, Library, ReceiptText, Mail, CreditCard,
   Lock
 } from 'lucide-react';
 
@@ -78,7 +78,7 @@ export default function AdminPage() {
   const {
     events, athletes, scores, registrations, coupons, users, currentUser,
     login, logout, addEvent, addDivision, updateDivision,
-    addWorkout, deleteDivision, deleteWorkout, submitScore, submitScoresBulk, updateEvent, getLeaderboard, registerTicket, saveCourseLayout,
+    addWorkout, deleteDivision, deleteWorkout, submitScore, submitScoresBulk, updateEvent, getLeaderboard, registerTicket, saveCourseLayout, updateWorkout,
     addCoupon, incrementCouponUsage, changePassword
   } = useApp();
 
@@ -93,8 +93,11 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'my-events' | 'event' | 'payments' | 'security'>('dashboard');
 
   // Estados para integração do Mercado Pago Marketplace
-  const [mpAccount, setMpAccount] = useState<{ id: string; mercadopago_user_id: string; status: string } | null>(null);
+  const [mpAccount, setMpAccount] = useState<{ id: string; mercadopago_user_id: string; status: string; public_key?: string; access_token?: string } | null>(null);
   const [loadingMp, setLoadingMp] = useState(false);
+  const [manualPublicKey, setManualPublicKey] = useState('');
+  const [manualAccessToken, setManualAccessToken] = useState('');
+  const [savingManualMp, setSavingManualMp] = useState(false);
 
   // Estados para aba de Segurança
   const [securityCurrentPassword, setSecurityCurrentPassword] = useState('');
@@ -140,14 +143,18 @@ export default function AdminPage() {
       try {
         const { data } = await supabase
           .from('mercadopago_accounts')
-          .select('id, mercadopago_user_id, status')
+          .select('id, mercadopago_user_id, status, public_key')
           .eq('user_id', currentUser.id)
           .maybeSingle();
 
         if (data && data.status === 'connected') {
           setMpAccount(data);
+          setManualPublicKey(data.public_key || '');
+          setManualAccessToken(data.public_key ? '••••••••••••••••' : '');
         } else {
           setMpAccount(null);
+          setManualPublicKey('');
+          setManualAccessToken('');
         }
       } catch (err) {
         console.error('Erro ao buscar conta do Mercado Pago:', err);
@@ -161,6 +168,7 @@ export default function AdminPage() {
     }
   }, [activeTab, currentUser]);
 
+
   const handleDisconnectMp = async () => {
     if (!currentUser) return;
     if (!confirm('Deseja realmente desconectar sua conta do Mercado Pago? As inscrições online para seus eventos serão suspensas.')) return;
@@ -168,11 +176,13 @@ export default function AdminPage() {
     try {
       const { error } = await supabase
         .from('mercadopago_accounts')
-        .update({ status: 'disconnected', access_token: '', refresh_token: '' })
+        .update({ status: 'disconnected', access_token: '', refresh_token: '', public_key: '' })
         .eq('user_id', currentUser.id);
 
       if (error) throw error;
       setMpAccount(null);
+      setManualPublicKey('');
+      setManualAccessToken('');
       setAdminNotice({ text: 'Conta do Mercado Pago desconectada com sucesso.', tone: 'success' });
     } catch (err) {
       console.error('Erro ao desconectar:', err);
@@ -182,19 +192,57 @@ export default function AdminPage() {
     }
   };
 
+  const handleSaveManualMp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentUser) return;
+    if (!manualPublicKey || !manualAccessToken) {
+      setAdminNotice({ text: 'Por favor, preencha a Public Key e o Access Token.', tone: 'error' });
+      return;
+    }
+
+    setSavingManualMp(true);
+    setAdminNotice(null);
+
+    try {
+      const response = await fetch('/api/admin/mercadopago', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          userId: currentUser.id,
+          publicKey: manualPublicKey,
+          accessToken: manualAccessToken
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Erro ao salvar credenciais.');
+      }
+
+      setMpAccount({
+        id: `manual-${currentUser.id}`,
+        mercadopago_user_id: `manual-${currentUser.id}`,
+        status: 'connected',
+        public_key: manualPublicKey
+      });
+
+      setManualAccessToken('••••••••••••••••');
+      setAdminNotice({ text: 'Credenciais manuais do Mercado Pago salvas com sucesso!', tone: 'success' });
+    } catch (err: unknown) {
+      console.error('Erro ao salvar credenciais manuais:', err);
+      setAdminNotice({ text: err instanceof Error ? err.message : 'Não foi possível salvar as credenciais do Mercado Pago.', tone: 'error' });
+    } finally {
+      setSavingManualMp(false);
+    }
+  };
+
   const handleSecuritySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAdminNotice(null);
 
     if (!currentUser) return;
-
-    const userInDb = users.find(u => u.id === currentUser.id);
-    const actualPassword = userInDb?.password || currentUser.password;
-
-    if (securityCurrentPassword !== actualPassword) {
-      setAdminNotice({ text: 'A senha atual está incorreta.', tone: 'error' });
-      return;
-    }
 
     if (securityNewPassword.length < 6) {
       setAdminNotice({ text: 'A nova senha deve ter pelo menos 6 caracteres.', tone: 'error' });
@@ -208,14 +256,14 @@ export default function AdminPage() {
 
     setSecuritySubmitting(true);
     try {
-      const success = await changePassword(currentUser.id, securityNewPassword);
+      const success = await changePassword(currentUser.id, securityCurrentPassword, securityNewPassword);
       if (success) {
         setAdminNotice({ text: 'Senha atualizada com sucesso!', tone: 'success' });
         setSecurityCurrentPassword('');
         setSecurityNewPassword('');
         setSecurityConfirmPassword('');
       } else {
-        setAdminNotice({ text: 'Erro ao atualizar a senha. Tente novamente.', tone: 'error' });
+        setAdminNotice({ text: 'Erro ao atualizar a senha. A senha atual está incorreta.', tone: 'error' });
       }
     } catch (err) {
       console.error(err);
@@ -266,8 +314,7 @@ export default function AdminPage() {
   const [editEventTicketSlots, setEditEventTicketSlots] = useState<number>(100);
   const [editEventIsTicketingActive, setEditEventIsTicketingActive] = useState(true);
   const [editEventFormat, setEditEventFormat] = useState<'individual' | 'duo' | 'trio'>('individual');
-  const [editEventMpPublicKey, setEditEventMpPublicKey] = useState('');
-  const [editEventMpAccessToken, setEditEventMpAccessToken] = useState('');
+
 
   // Estados Fitness Racing
   const [eventType, setEventType] = useState<'functional_fitness' | 'fitness_racing'>('functional_fitness');
@@ -277,7 +324,11 @@ export default function AdminPage() {
   const [newAgeGroupInput, setNewAgeGroupInput] = useState('');
   const [isStationLibraryOpen, setIsStationLibraryOpen] = useState(false);
   const [libraryInsertAfterStage, setLibraryInsertAfterStage] = useState<CourseStage | null>(null);
-  const [courseSelectedDivId, setCourseSelectedDivId] = useState('');
+  const [activeCourseDivisionId, setActiveCourseDivisionId] = useState<string>('');
+  const [courseEditingLayout, setCourseEditingLayout] = useState<CourseStage[]>([]);
+  const [selectedDivisionIdsForCourse, setSelectedDivisionIdsForCourse] = useState<string[]>([]);
+  const [courseWorkoutName, setCourseWorkoutName] = useState('Percurso Completo');
+  const [courseWorkoutDescription, setCourseWorkoutDescription] = useState('Tempo oficial total do percurso de Fitness Racing.');
 
   // Estados para nova Etapa do Percurso (Aba: Configuração do Percurso)
   const [stageName, setStageName] = useState('');
@@ -304,6 +355,57 @@ export default function AdminPage() {
   const [leaderboardAgeGroupFilter, setLeaderboardAgeGroupFilter] = useState('');
   const [leaderboardSearchFilter, setLeaderboardSearchFilter] = useState('');
   const [heatAthleteSearchQuery, setHeatAthleteSearchQuery] = useState('');
+
+  // Sincronização inteligente do percurso de Fitness Racing e prova por categoria ativa
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (!selectedEventToManage) {
+      setCourseEditingLayout([]);
+      setSelectedDivisionIdsForCourse([]);
+      setCourseWorkoutName('Percurso Completo');
+      setCourseWorkoutDescription('Tempo oficial total do percurso de Fitness Racing.');
+      setActiveCourseDivisionId('');
+      return;
+    }
+    const divisions = selectedEventToManage.divisions || [];
+    if (divisions.length === 0) return;
+
+    // Tenta manter a categoria ativa selecionada se ela ainda existir no evento
+    let currentDivId = activeCourseDivisionId;
+    if (!currentDivId || !divisions.some(d => d.id === currentDivId)) {
+      const firstDivWithLayout = divisions.find(d => d.courseLayout && d.courseLayout.length > 0);
+      currentDivId = firstDivWithLayout ? firstDivWithLayout.id : divisions[0].id;
+      setActiveCourseDivisionId(currentDivId);
+    }
+
+    const activeDiv = divisions.find(d => d.id === currentDivId);
+    if (activeDiv) {
+      const layout = activeDiv.courseLayout || [];
+      setCourseEditingLayout(layout);
+
+      // Associadas são as divisões que possuem layouts idênticos ao layout da divisão ativa
+      const associatedIds = divisions
+        .filter(d => {
+          if (d.id === currentDivId) return true;
+          if (!d.courseLayout || d.courseLayout.length !== layout.length) return false;
+          return d.courseLayout.every((stg, idx) => stg.name === layout[idx]?.name && stg.type === layout[idx]?.type);
+        })
+        .map(d => d.id);
+      setSelectedDivisionIdsForCourse(associatedIds);
+
+      // Carrega o workout TOTAL específico para a categoria ativa
+      const divWorkout = (selectedEventToManage.workouts || [])
+        .find(w => w.code === 'TOTAL' && w.divisionId === currentDivId);
+      if (divWorkout) {
+        setCourseWorkoutName(divWorkout.name);
+        setCourseWorkoutDescription(divWorkout.description || '');
+      } else {
+        setCourseWorkoutName('Percurso Completo');
+        setCourseWorkoutDescription('Tempo oficial total do percurso de Fitness Racing.');
+      }
+    }
+  }, [selectedEventToManage, activeCourseDivisionId]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Funções Utilitárias de Tempo
   const timeToSeconds = (timeStr: string): number => {
@@ -510,9 +612,9 @@ export default function AdminPage() {
   }, [managerEvents, athletes, registrations]);
 
   // Lógica de Login
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const success = login(email, password);
+    const success = await login(email, password);
     if (success) {
       const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
       if (user && user.role === 'manager') {
@@ -856,8 +958,7 @@ export default function AdminPage() {
     setEditEventIsTicketingActive(evt.isTicketingActive ?? true);
     setEditEventFormat(evt.format || 'individual');
     setEditEventType(evt.eventType || 'functional_fitness');
-    setEditEventMpPublicKey(evt.mpPublicKey || '');
-    setEditEventMpAccessToken(evt.mpAccessToken || '');
+
 
     // Inicializar estados da calculadora de baterias
     setHeatDate(evt.date);
@@ -899,9 +1000,7 @@ export default function AdminPage() {
         ticketSlots: editEventTicketSlots,
         isTicketingActive: editEventIsTicketingActive,
         format: editEventFormat,
-        eventType: editEventType,
-        mpPublicKey: editEventMpPublicKey,
-        mpAccessToken: editEventMpAccessToken
+        eventType: editEventType
       });
 
       // Recarregar evento selecionado no estado local
@@ -926,9 +1025,7 @@ export default function AdminPage() {
           ticketSlots: editEventTicketSlots,
           isTicketingActive: editEventIsTicketingActive,
           format: editEventFormat,
-          eventType: editEventType,
-          mpPublicKey: editEventMpPublicKey,
-          mpAccessToken: editEventMpAccessToken
+          eventType: editEventType
         };
       });
 
@@ -1137,7 +1234,7 @@ export default function AdminPage() {
       });
       if (scoreFilterCatId === division.id) setScoreFilterCatId('');
       if (leaderboardFilterCatId === division.id) setLeaderboardFilterCatId('');
-      if (courseSelectedDivId === division.id) setCourseSelectedDivId('');
+      if (activeCourseDivisionId === division.id) setActiveCourseDivisionId('');
       setAdminNotice({ text: `Categoria "${division.name}" excluída com sucesso.`, tone: 'success' });
     } catch (err) {
       console.error(err);
@@ -1812,44 +1909,7 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* Integração Mercado Pago */}
-        <div className="border-t border-card-border pt-6 mt-6 space-y-4">
-          <div className="border-b border-card-border pb-2">
-            <h4 className="text-sm font-black text-white uppercase tracking-wider text-primary">Integração Financeira (Mercado Pago)</h4>
-            <p className="text-xs text-muted font-medium mt-1">
-              A WODArena realiza a ponte de integração, e a transação financeira é processada com total segurança diretamente na sua conta do Mercado Pago.
-            </p>
-            <div className="mt-2 rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs text-primary font-medium leading-relaxed">
-              <span className="font-bold uppercase block mb-1">Aviso de Credenciais (API v2):</span>
-              Utilizamos a versão mais recente do checkout do Mercado Pago. Por isso, <strong>não é necessário</strong> preencher as chaves Client ID e Client Secret. Preencha apenas a <strong>Public Key</strong> e o <strong>Access Token</strong> de produção de sua conta.
-            </div>
-          </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="edit-event-mp-public-key" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Public Key (Chave Pública)</label>
-              <input
-                id="edit-event-mp-public-key"
-                type="text"
-                placeholder="Ex: APP_USR-..."
-                value={editEventMpPublicKey}
-                onChange={(e) => setEditEventMpPublicKey(e.target.value.trim())}
-                className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none font-mono"
-              />
-            </div>
-            <div>
-              <label htmlFor="edit-event-mp-access-token" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Access Token (Token de Acesso)</label>
-              <input
-                id="edit-event-mp-access-token"
-                type="password"
-                placeholder="Ex: APP_USR-..."
-                value={editEventMpAccessToken}
-                onChange={(e) => setEditEventMpAccessToken(e.target.value.trim())}
-                className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none font-mono"
-              />
-            </div>
-          </div>
-        </div>
       </div>
 
       <div className="flex justify-end border-t border-card-border pt-5">
@@ -2167,57 +2227,39 @@ export default function AdminPage() {
 
   // --- FITNESS RACING COURSE MANAGEMENT ---
   const handleLoadDefaultHyroxCourse = async () => {
-    if (!selectedEventToManage || !courseSelectedDivId) return;
+    if (!selectedEventToManage) return;
 
-    const division = selectedEventToManage.divisions.find(d => d.id === courseSelectedDivId);
-    if (!division) return;
-
-    const isPro = division.name.toLowerCase().includes('pro');
-    const isFemale = division.name.toLowerCase().includes('fem') || division.category === 'female';
-
-    // Configurar cargas com base na divisão
+    // Configurar cargas com base no padrão HYROX Open Geral
     const defaultStages: CourseStage[] = [
       { id: 'run-1', name: 'Run 1', type: 'run', orderIndex: 1, distance: '1000m' },
       { id: 'ski-erg', name: 'Ski Erg', type: 'station', orderIndex: 2, distance: '1000m' },
       { id: 'run-2', name: 'Run 2', type: 'run', orderIndex: 3, distance: '1000m' },
-      { id: 'sled-push', name: 'Sled Push', type: 'station', orderIndex: 4, distance: '50m', maleWeight: isPro ? '202 kg' : '152 kg', femaleWeight: isPro ? '152 kg' : '102 kg' },
+      { id: 'sled-push', name: 'Sled Push', type: 'station', orderIndex: 4, distance: '50m', maleWeight: '152 kg', femaleWeight: '102 kg' },
       { id: 'run-3', name: 'Run 3', type: 'run', orderIndex: 5, distance: '1000m' },
-      { id: 'sled-pull', name: 'Sled Pull', type: 'station', orderIndex: 6, distance: '50m', maleWeight: isPro ? '153 kg' : '103 kg', femaleWeight: isPro ? '103 kg' : '78 kg' },
+      { id: 'sled-pull', name: 'Sled Pull', type: 'station', orderIndex: 6, distance: '50m', maleWeight: '103 kg', femaleWeight: '78 kg' },
       { id: 'run-4', name: 'Run 4', type: 'run', orderIndex: 7, distance: '1000m' },
       { id: 'burpee-broad-jump', name: 'Burpee Broad Jump', type: 'station', orderIndex: 8, distance: '80m' },
       { id: 'run-5', name: 'Run 5', type: 'run', orderIndex: 9, distance: '1000m' },
       { id: 'row', name: 'Row', type: 'station', orderIndex: 10, distance: '1000m' },
       { id: 'run-6', name: 'Run 6', type: 'run', orderIndex: 11, distance: '1000m' },
-      { id: 'farmers-carry', name: 'Farmers Carry', type: 'station', orderIndex: 12, distance: '200m', maleWeight: isPro ? '2x32 kg' : '2x24 kg', femaleWeight: isPro ? '2x24 kg' : '2x16 kg' },
+      { id: 'farmers-carry', name: 'Farmers Carry', type: 'station', orderIndex: 12, distance: '200m', maleWeight: '2x24 kg', femaleWeight: '2x16 kg' },
       { id: 'run-7', name: 'Run 7', type: 'run', orderIndex: 13, distance: '1000m' },
-      { id: 'sandbag-lunges', name: 'Sandbag Lunges', type: 'station', orderIndex: 14, distance: '100m', maleWeight: isPro ? '30 kg' : '20 kg', femaleWeight: isPro ? '20 kg' : '10 kg' },
+      { id: 'sandbag-lunges', name: 'Sandbag Lunges', type: 'station', orderIndex: 14, distance: '100m', maleWeight: '20 kg', femaleWeight: '10 kg' },
       { id: 'run-8', name: 'Run 8', type: 'run', orderIndex: 15, distance: '1000m' },
-      { id: 'wall-balls', name: 'Wall Balls', type: 'station', orderIndex: 16, reps: isPro ? 100 : (isFemale ? 75 : 100), maleWeight: '9 kg', femaleWeight: isPro ? '9 kg' : '6 kg' }
+      { id: 'wall-balls', name: 'Wall Balls', type: 'station', orderIndex: 16, reps: 100, maleWeight: '9 kg', femaleWeight: '6 kg' }
     ];
 
     try {
-      await saveCourseLayout(courseSelectedDivId, defaultStages);
-
-      // Atualizar localmente o selectedEventToManage
-      setSelectedEventToManage(prev => {
-        if (!prev) return null;
-        return {
-          ...prev,
-          divisions: prev.divisions.map(d => d.id === courseSelectedDivId ? { ...d, courseLayout: defaultStages } : d)
-        };
-      });
-
-      setAdminNotice({ text: 'Percurso padrão HYROX carregado com sucesso.', tone: 'success' });
+      await saveUpdatedCourseLayoutToSelected(defaultStages, 'Percurso padrão HYROX carregado com sucesso.');
     } catch (err) {
       console.error(err);
       setAdminNotice({ text: 'Não foi possível carregar o percurso padrão.', tone: 'error' });
     }
   };
 
-
-
   const fillStageForm = (stage: CourseStage, orderOverride?: number) => {
     setEditingStageId(stage.id);
+    setLibraryInsertAfterStage(null);
     setStageName(stage.name);
     setStageType(stage.type);
     setStageOrder(orderOverride || stage.orderIndex);
@@ -2225,46 +2267,67 @@ export default function AdminPage() {
     setStageReps(stage.reps);
     setStageMaleWeight(stage.maleWeight || '');
     setStageFemaleWeight(stage.femaleWeight || '');
+    setIsStationLibraryOpen(true);
   };
 
+  const saveUpdatedCourseLayoutToSelected = async (updatedLayout: CourseStage[], successMessage: string) => {
+    if (!selectedEventToManage) return;
+    let runCounter = 1;
+    const normalizedLayout = [...updatedLayout]
+      .sort((a, b) => a.orderIndex - b.orderIndex)
+      .map((stg, idx) => {
+        const isRun = stg.type === 'run';
+        const isStandardRunName = !stg.name || /^Run\s*\d*$/i.test(stg.name.trim()) || stg.name.toLowerCase() === 'corrida';
+        const newName = (isRun && isStandardRunName) ? `Run ${runCounter++}` : stg.name;
+        return {
+          ...stg,
+          name: newName,
+          orderIndex: idx + 1
+        };
+      });
+    try {
+      for (const divId of selectedDivisionIdsForCourse) {
+        await saveCourseLayout(divId, normalizedLayout);
+      }
 
+      setSelectedEventToManage(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          divisions: prev.divisions.map(d =>
+            selectedDivisionIdsForCourse.includes(d.id)
+              ? { ...d, courseLayout: normalizedLayout }
+              : d
+          )
+        };
+      });
 
-  const saveUpdatedCourseLayout = async (updatedLayout: CourseStage[], successMessage: string) => {
-    if (!selectedEventToManage || !courseSelectedDivId) return;
-    const normalizedLayout = updatedLayout.map((stage, index) => ({ ...stage, orderIndex: index + 1 }));
-    await saveCourseLayout(courseSelectedDivId, normalizedLayout);
-    setSelectedEventToManage(prev => {
-      if (!prev) return null;
-      return {
-        ...prev,
-        divisions: prev.divisions.map(d => d.id === courseSelectedDivId ? { ...d, courseLayout: normalizedLayout } : d)
-      };
-    });
-    setAdminNotice({ text: successMessage, tone: 'success' });
+      setCourseEditingLayout(normalizedLayout);
+      setAdminNotice({ text: successMessage, tone: 'success' });
+    } catch (err) {
+      console.error(err);
+      setAdminNotice({ text: 'Erro ao atualizar o percurso para as categorias selecionadas.', tone: 'error' });
+    }
   };
 
   const handleMoveCourseStage = async (stageId: string, direction: 'up' | 'down') => {
-    if (!selectedEventToManage || !courseSelectedDivId) return;
-    const division = selectedEventToManage.divisions.find(d => d.id === courseSelectedDivId);
-    if (!division) return;
-    const layout = [...(division.courseLayout || [])].sort((a, b) => a.orderIndex - b.orderIndex);
+    if (!selectedEventToManage) return;
+    const layout = [...courseEditingLayout].sort((a, b) => a.orderIndex - b.orderIndex);
     const currentIndex = layout.findIndex(stage => stage.id === stageId);
     const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
     if (currentIndex < 0 || targetIndex < 0 || targetIndex >= layout.length) return;
     const reordered = [...layout];
     const [stage] = reordered.splice(currentIndex, 1);
     reordered.splice(targetIndex, 0, stage);
-    await saveUpdatedCourseLayout(reordered, 'Ordem do percurso atualizada.');
+    await saveUpdatedCourseLayoutToSelected(reordered, 'Ordem do percurso atualizada.');
   };
 
   const handleDropCourseStage = async (targetStageId: string) => {
-    if (!selectedEventToManage || !courseSelectedDivId || !draggedStageId || draggedStageId === targetStageId) {
+    if (!selectedEventToManage || !draggedStageId || draggedStageId === targetStageId) {
       setDraggedStageId('');
       return;
     }
-    const division = selectedEventToManage.divisions.find(d => d.id === courseSelectedDivId);
-    if (!division) return;
-    const layout = [...(division.courseLayout || [])].sort((a, b) => a.orderIndex - b.orderIndex);
+    const layout = [...courseEditingLayout].sort((a, b) => a.orderIndex - b.orderIndex);
     const currentIndex = layout.findIndex(stage => stage.id === draggedStageId);
     const targetIndex = layout.findIndex(stage => stage.id === targetStageId);
     if (currentIndex < 0 || targetIndex < 0) return;
@@ -2272,11 +2335,12 @@ export default function AdminPage() {
     const [stage] = reordered.splice(currentIndex, 1);
     reordered.splice(targetIndex, 0, stage);
     setDraggedStageId('');
-    await saveUpdatedCourseLayout(reordered, 'Percurso reordenado.');
+    await saveUpdatedCourseLayoutToSelected(reordered, 'Percurso reordenado.');
   };
 
   const handleInsertStageBelow = (stage: CourseStage) => {
     setEditingStageId('');
+    setLibraryInsertAfterStage(stage);
     setStageName('');
     setStageType(stage.type === 'run' ? 'station' : 'run');
     setStageOrder(stage.orderIndex + 1);
@@ -2284,28 +2348,34 @@ export default function AdminPage() {
     setStageReps(undefined);
     setStageMaleWeight('');
     setStageFemaleWeight('');
+    setIsStationLibraryOpen(true);
   };
 
   const handleRemoveCourseStage = async (stageId: string) => {
-    if (!selectedEventToManage || !courseSelectedDivId) return;
-
-    const division = selectedEventToManage.divisions.find(d => d.id === courseSelectedDivId);
-    if (!division) return;
-
-    const updatedLayout = (division.courseLayout || [])
+    if (!selectedEventToManage) return;
+    const updatedLayout = courseEditingLayout
       .filter(s => s.id !== stageId)
       .map((s, idx) => ({ ...s, orderIndex: idx + 1 }));
 
     try {
-      await saveCourseLayout(courseSelectedDivId, updatedLayout);
+      for (const divId of selectedDivisionIdsForCourse) {
+        await saveCourseLayout(divId, updatedLayout);
+      }
 
       setSelectedEventToManage(prev => {
         if (!prev) return null;
         return {
           ...prev,
-          divisions: prev.divisions.map(d => d.id === courseSelectedDivId ? { ...d, courseLayout: updatedLayout } : d)
+          divisions: prev.divisions.map(d =>
+            selectedDivisionIdsForCourse.includes(d.id)
+              ? { ...d, courseLayout: updatedLayout }
+              : d
+          )
         };
       });
+
+      setCourseEditingLayout(updatedLayout);
+
       if (editingStageId === stageId) {
         setEditingStageId('');
         setStageName('');
@@ -2320,20 +2390,16 @@ export default function AdminPage() {
 
   const handleSaveLibraryStage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedEventToManage || !courseSelectedDivId || !stageName) return;
+    if (!selectedEventToManage || !stageName) return;
 
-    const division = selectedEventToManage.divisions.find(d => d.id === courseSelectedDivId);
-    if (!division) return;
-
-    const currentLayout = division.courseLayout || [];
-    const targetId = editingStageId || `stage-${courseSelectedDivId}-${stageName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}`;
+    const targetId = editingStageId || `stage-course-${stageName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}`;
 
     let newOrder = stageOrder;
     if (!editingStageId) {
       if (libraryInsertAfterStage) {
         newOrder = libraryInsertAfterStage.orderIndex + 1;
       } else {
-        newOrder = currentLayout.length + 1;
+        newOrder = courseEditingLayout.length + 1;
       }
     }
 
@@ -2350,30 +2416,48 @@ export default function AdminPage() {
 
     let updatedLayout: CourseStage[] = [];
     if (editingStageId) {
-      updatedLayout = currentLayout.map(stg => stg.id === editingStageId ? newStage : stg);
+      updatedLayout = courseEditingLayout.map(stg => stg.id === editingStageId ? newStage : stg);
     } else if (libraryInsertAfterStage) {
       const afterIndex = libraryInsertAfterStage.orderIndex;
-      const beforeStages = currentLayout.filter(stg => stg.orderIndex <= afterIndex);
-      const afterStages = currentLayout.filter(stg => stg.orderIndex > afterIndex);
+      const beforeStages = courseEditingLayout.filter(stg => stg.orderIndex <= afterIndex);
+      const afterStages = courseEditingLayout.filter(stg => stg.orderIndex > afterIndex);
       updatedLayout = [...beforeStages, newStage, ...afterStages];
     } else {
-      updatedLayout = [...currentLayout.filter(stg => stg.id !== targetId), newStage];
+      updatedLayout = [...courseEditingLayout.filter(stg => stg.id !== targetId), newStage];
     }
 
-    const normalizedLayout = updatedLayout
+    let runCounter = 1;
+    const normalizedLayout = [...updatedLayout]
       .sort((a, b) => a.orderIndex - b.orderIndex)
-      .map((stg, idx) => ({ ...stg, orderIndex: idx + 1 }));
+      .map((stg, idx) => {
+        const isRun = stg.type === 'run';
+        const isStandardRunName = !stg.name || /^Run\s*\d*$/i.test(stg.name.trim()) || stg.name.toLowerCase() === 'corrida';
+        const newName = (isRun && isStandardRunName) ? `Run ${runCounter++}` : stg.name;
+        return {
+          ...stg,
+          name: newName,
+          orderIndex: idx + 1
+        };
+      });
 
     try {
-      await saveCourseLayout(courseSelectedDivId, normalizedLayout);
+      for (const divId of selectedDivisionIdsForCourse) {
+        await saveCourseLayout(divId, normalizedLayout);
+      }
+
       setSelectedEventToManage(prev => {
         if (!prev) return null;
         return {
           ...prev,
-          divisions: prev.divisions.map(d => d.id === courseSelectedDivId ? { ...d, courseLayout: normalizedLayout } : d)
+          divisions: prev.divisions.map(d =>
+            selectedDivisionIdsForCourse.includes(d.id)
+              ? { ...d, courseLayout: normalizedLayout }
+              : d
+          )
         };
       });
 
+      setCourseEditingLayout(normalizedLayout);
       setStageName('');
       setStageDistance('');
       setStageReps(undefined);
@@ -2389,21 +2473,48 @@ export default function AdminPage() {
     }
   };
 
-  const handlePublishAndReplicateCourse = async () => {
-    if (!selectedEventToManage || !courseSelectedDivId) return;
-    const currentDivision = selectedEventToManage.divisions.find(d => d.id === courseSelectedDivId);
-    if (!currentDivision) return;
-    const currentLayout = currentDivision.courseLayout || [];
+  const handleToggleDivisionConnection = async (divId: string, isChecked: boolean) => {
+    if (!selectedEventToManage) return;
 
+    try {
+      if (isChecked) {
+        await saveCourseLayout(divId, courseEditingLayout);
+        setSelectedDivisionIdsForCourse(prev => [...prev, divId]);
+
+        setSelectedEventToManage(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            divisions: prev.divisions.map(d => d.id === divId ? { ...d, courseLayout: courseEditingLayout } : d)
+          };
+        });
+        setAdminNotice({ text: 'Categoria vinculada ao percurso com sucesso.', tone: 'success' });
+      } else {
+        await saveCourseLayout(divId, []);
+        await updateDivision(selectedEventToManage.id, divId, { isCoursePublished: false });
+        setSelectedDivisionIdsForCourse(prev => prev.filter(id => id !== divId));
+
+        setSelectedEventToManage(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            divisions: prev.divisions.map(d => d.id === divId ? { ...d, courseLayout: [], isCoursePublished: false } : d)
+          };
+        });
+        setAdminNotice({ text: 'Categoria desvinculada do percurso.', tone: 'success' });
+      }
+    } catch (err) {
+      console.error(err);
+      setAdminNotice({ text: 'Erro ao alterar vínculo da categoria.', tone: 'error' });
+    }
+  };
+
+  const handlePublishActiveCourse = async () => {
+    if (!selectedEventToManage || selectedDivisionIdsForCourse.length === 0) return;
     setIsReplicating(true);
     try {
-      await updateDivision(selectedEventToManage.id, courseSelectedDivId, {
-        isCoursePublished: true
-      });
-
-      for (const targetDivId of replicateTargetDivIds) {
-        await saveCourseLayout(targetDivId, currentLayout);
-        await updateDivision(selectedEventToManage.id, targetDivId, {
+      for (const divId of selectedDivisionIdsForCourse) {
+        await updateDivision(selectedEventToManage.id, divId, {
           isCoursePublished: true
         });
       }
@@ -2412,115 +2523,205 @@ export default function AdminPage() {
         if (!prev) return null;
         return {
           ...prev,
-          divisions: prev.divisions.map(d => {
-            if (d.id === courseSelectedDivId || replicateTargetDivIds.includes(d.id)) {
-              return { ...d, courseLayout: currentLayout, isCoursePublished: true };
-            }
-            return d;
-          })
+          divisions: prev.divisions.map(d =>
+            selectedDivisionIdsForCourse.includes(d.id)
+              ? { ...d, isCoursePublished: true }
+              : d
+          )
         };
       });
 
-      setAdminNotice({
-        text: replicateTargetDivIds.length > 0
-          ? `Percurso publicado e replicado com sucesso para ${replicateTargetDivIds.length} categoria(s).`
-          : 'Percurso publicado com sucesso.',
-        tone: 'success'
-      });
-
-      setIsReplicateModalOpen(false);
-      setReplicateTargetDivIds([]);
+      setAdminNotice({ text: 'Percurso publicado com sucesso para todas as categorias vinculadas.', tone: 'success' });
     } catch (err) {
       console.error(err);
-      setAdminNotice({ text: 'Erro ao publicar e replicar o percurso.', tone: 'error' });
+      setAdminNotice({ text: 'Erro ao publicar o percurso.', tone: 'error' });
     } finally {
       setIsReplicating(false);
     }
   };
 
+  const handleSaveCourseWorkoutSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedEventToManage) return;
+
+    try {
+      // 1. Atualizar nome e descrição na tabela workouts para todas as divisões ativas que usam a prova
+      const totalWorkouts = (selectedEventToManage.workouts || [])
+        .filter(w => w.code === 'TOTAL' && w.divisionId && selectedDivisionIdsForCourse.includes(w.divisionId));
+
+      for (const w of totalWorkouts) {
+        await updateWorkout(selectedEventToManage.id, w.id, {
+          name: courseWorkoutName,
+          description: courseWorkoutDescription
+        });
+      }
+
+      setAdminNotice({ text: 'Configurações da prova salvas com sucesso!', tone: 'success' });
+    } catch (err) {
+      console.error(err);
+      setAdminNotice({ text: 'Erro ao salvar configurações da prova.', tone: 'error' });
+    }
+  };
+
+
   const renderAbaFitnessRaceCourse = () => {
     const divisions = selectedEventToManage?.divisions || [];
-    const division = divisions.find(d => d.id === courseSelectedDivId);
-    const layout = division?.courseLayout || [];
+    const layout = courseEditingLayout;
 
     // Auditoria em tempo real
     const courseAuditAlerts: string[] = [];
-    if (division) {
-      if (layout.length !== 16) {
-        courseAuditAlerts.push('O percurso de Fitness Racing deve conter exatamente 16 etapas.');
-      }
-      let hasConsecutiveSameType = false;
-      for (let i = 0; i < layout.length - 1; i++) {
-        if (layout[i].type === layout[i + 1].type) {
-          hasConsecutiveSameType = true;
-          break;
-        }
-      }
-      if (hasConsecutiveSameType) {
-        courseAuditAlerts.push('O percurso deve alternar entre Corridas e Estações de Exercício.');
+    if (layout.length !== 16) {
+      courseAuditAlerts.push('O percurso de Fitness Racing deve conter exatamente 16 etapas.');
+    }
+    let hasConsecutiveSameType = false;
+    for (let i = 0; i < layout.length - 1; i++) {
+      if (layout[i].type === layout[i + 1].type) {
+        hasConsecutiveSameType = true;
+        break;
       }
     }
+    if (hasConsecutiveSameType) {
+      courseAuditAlerts.push('O percurso deve alternar entre Corridas e Estações de Exercício.');
+    }
+
+    const allSelectedPublished = selectedDivisionIdsForCourse.length > 0 && selectedDivisionIdsForCourse.every(divId => {
+      const div = divisions.find(d => d.id === divId);
+      return div?.isCoursePublished;
+    });
 
     return (
-      <div className="space-y-6 text-white">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-xl border border-card-border p-6 bg-card">
-          <div className="space-y-1">
-            <h3 className="text-lg font-black text-white uppercase tracking-wider">Editor Visual de Percurso</h3>
-            <p className="text-xs text-muted font-medium">Configure a ordem exata de corridas e estações para as categorias de Fitness Racing.</p>
-          </div>
-          <div>
-            <select
-              id="course-div-select-top"
-              value={courseSelectedDivId}
-              onChange={(e) => {
-                setCourseSelectedDivId(e.target.value);
-                const div = divisions.find(d => d.id === e.target.value);
-                setStageOrder((div?.courseLayout?.length || 0) + 1);
-              }}
-              className="w-full sm:w-64 rounded-md border border-card-border bg-dark-gray px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white focus:border-primary/50 focus:outline-none"
-            >
-              <option value="">Selecionar Categoria...</option>
-              {divisions.map((d) => (
-                <option key={d.id} value={d.id}>{d.name}</option>
-              ))}
-            </select>
-          </div>
-        </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 text-white font-sans">
+        {/* Formulário lateral de Configurações da Prova */}
+        <form onSubmit={handleSaveCourseWorkoutSettings} className="lg:col-span-1 space-y-6 rounded-xl border border-card-border p-6 bg-card text-white flex flex-col justify-between">
+          <div className="space-y-6">
+            <div className="border-b border-card-border pb-3">
+              <h3 className="text-base font-bold text-white uppercase tracking-wider">Configuração da Prova</h3>
+              <p className="text-xs text-muted font-medium">Defina os dados gerais do percurso e selecione as categorias vinculadas.</p>
+            </div>
 
-        {division ? (
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="activeCourseDivisionSelect" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Editar Percurso de: *</label>
+                <select
+                  id="activeCourseDivisionSelect"
+                  value={activeCourseDivisionId}
+                  onChange={(e) => setActiveCourseDivisionId(e.target.value)}
+                  className="w-full rounded-lg border border-card-border bg-dark-gray px-4 py-2 text-sm text-white hover:border-muted focus:border-primary/50 focus:outline-none"
+                >
+                  {divisions.map((div) => (
+                    <option key={div.id} value={div.id}>
+                      {div.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="courseWorkoutName" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Título da Prova *</label>
+                <input
+                  id="courseWorkoutName"
+                  type="text"
+                  required
+                  placeholder="Ex: Percurso Completo TOTAL"
+                  value={courseWorkoutName}
+                  onChange={(e) => setCourseWorkoutName(e.target.value)}
+                  className="w-full rounded-lg border border-card-border bg-dark-gray px-4 py-2 text-sm text-white placeholder:text-muted focus:border-primary/50 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="courseWorkoutDescription" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Descrição da Prova *</label>
+                <textarea
+                  id="courseWorkoutDescription"
+                  required
+                  rows={4}
+                  placeholder="Ex: Tempo total acumulado para completar todas as etapas de corrida e estações de exercícios."
+                  value={courseWorkoutDescription}
+                  onChange={(e) => setCourseWorkoutDescription(e.target.value)}
+                  className="w-full rounded-lg border border-card-border bg-dark-gray px-4 py-2 text-sm text-white placeholder:text-muted focus:border-primary/50 focus:outline-none resize-none"
+                />
+              </div>
+
+              <div className="border-t border-card-border/60 pt-4 space-y-3">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-muted">Categorias Vinculadas</h4>
+                <div className="space-y-2.5 max-h-[320px] overflow-y-auto pr-1">
+                  {divisions.map((div) => {
+                    const isChecked = selectedDivisionIdsForCourse.includes(div.id);
+                    const getFormatLabel = (type?: string) => {
+                      if (type === 'duo') return 'Duplas 👥';
+                      if (type === 'trio') return 'Trios 👥👤';
+                      if (type === 'team') return 'Equipes 👥👥';
+                      return 'Individual 👤';
+                    };
+                    return (
+                      <div key={div.id} className={`flex items-center justify-between gap-3 p-2.5 rounded-lg border transition-all ${
+                        isChecked
+                          ? 'border-primary bg-elevated'
+                          : 'border-card-border/60 bg-dark-gray'
+                      }`}>
+                        <label className="flex items-center gap-2 cursor-pointer text-xs font-bold select-none min-w-0 flex-1">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            disabled={div.id === activeCourseDivisionId}
+                            onChange={(e) => handleToggleDivisionConnection(div.id, e.target.checked)}
+                            className="h-4 w-4 rounded border-card-border bg-dark-gray text-primary focus:ring-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                          />
+                          <span className="truncate text-white" title={div.name}>{div.name}</span>
+                        </label>
+                        <span className="text-[10px] font-bold text-muted bg-dark-gray border border-card-border/60 rounded px-2.5 py-1 whitespace-nowrap select-none">
+                          {getFormatLabel(div.type)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="pt-4 border-t border-card-border/60">
+            <button
+              type="submit"
+              className="w-full flex min-h-10 items-center justify-center rounded-md bg-primary hover:bg-primary-hover text-ink text-xs font-black uppercase tracking-wider transition-colors"
+            >
+              💾 Salvar Configurações
+            </button>
+          </div>
+        </form>
+
+        {/* Coluna da Direita: Editor do Percurso (Linha do Tempo) */}
+        <div className="lg:col-span-2 space-y-6">
           <div className="bg-card border border-card-border rounded-xl p-6 space-y-6">
-            <div className="border-b border-card-border pb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="border-b border-card-border pb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2">
               <div className="space-y-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h4 className="text-sm font-black text-primary uppercase tracking-wider">Percurso Ativo: {division.name}</h4>
+                  <h4 className="text-sm font-black text-white uppercase tracking-wider">Linha do Tempo Oficial</h4>
                   <span className={`rounded px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider border ${
-                    division.isCoursePublished
-                      ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-400'
-                      : 'bg-amber-500/10 border-amber-500/25 text-amber-400'
+                    allSelectedPublished
+                      ? 'bg-trading-up/10 border-trading-up/25 text-trading-up'
+                      : 'bg-primary/10 border-primary/25 text-primary'
                   }`}>
-                    {division.isCoursePublished ? 'Publicado ✅' : 'Rascunho 📝'}
+                    {allSelectedPublished ? 'Publicado ✅' : 'Rascunho 📝'}
                   </span>
                 </div>
-                <p className="text-xs text-muted">Linha do tempo oficial com as etapas da competição.</p>
+                <p className="text-xs text-muted font-medium">As etapas e estações da competição que serão compartilhadas pelas categorias selecionadas.</p>
               </div>
               <div className="flex gap-2 flex-wrap">
                 {layout.length > 0 && (
                   <button
                     type="button"
-                    onClick={() => {
-                      setReplicateTargetDivIds([]);
-                      setIsReplicateModalOpen(true);
-                    }}
-                    className="flex min-h-9 items-center justify-center rounded bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors"
+                    onClick={handlePublishActiveCourse}
+                    className="flex min-h-9 items-center justify-center rounded-md bg-card hover:bg-elevated text-white border border-card-border px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors"
                   >
-                    📢 Publicar & Replicar
+                    📢 Publicar Percurso
                   </button>
                 )}
                 {layout.length === 0 && (
                   <button
                     type="button"
                     onClick={handleLoadDefaultHyroxCourse}
-                    className="flex min-h-9 items-center justify-center rounded bg-primary/10 hover:bg-primary/20 border border-primary/30 px-4 py-2 text-xs font-bold text-primary uppercase transition-colors"
+                    className="flex min-h-9 items-center justify-center rounded-md bg-card hover:bg-elevated text-primary border border-card-border px-4 py-2 text-xs font-bold uppercase transition-colors"
                   >
                     Carregar Padrão HYROX
                   </button>
@@ -2538,7 +2739,7 @@ export default function AdminPage() {
                     setStageFemaleWeight('');
                     setIsStationLibraryOpen(true);
                   }}
-                  className="flex min-h-9 items-center justify-center rounded bg-primary hover:bg-primary-hover text-ink px-4 py-2 text-xs font-black uppercase tracking-wider transition-colors"
+                  className="flex min-h-9 items-center justify-center rounded-md bg-primary hover:bg-primary-hover text-ink px-4 py-2 text-xs font-black uppercase tracking-wider transition-colors"
                 >
                   ➕ Adicionar Etapa
                 </button>
@@ -2548,8 +2749,8 @@ export default function AdminPage() {
             {courseAuditAlerts.length > 0 && (
               <div className="space-y-2">
                 {courseAuditAlerts.map((alertText, idx) => (
-                  <div key={idx} className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 flex items-start gap-2.5 text-amber-200">
-                    <ShieldAlert className="h-4 w-4 shrink-0 text-amber-400 mt-0.5" />
+                  <div key={idx} className="rounded-lg border border-primary/30 bg-primary/10 p-3 flex items-start gap-2.5 text-white">
+                    <ShieldAlert className="h-4 w-4 shrink-0 text-primary mt-0.5" />
                     <span className="text-xs font-semibold leading-relaxed">{alertText}</span>
                   </div>
                 ))}
@@ -2557,7 +2758,7 @@ export default function AdminPage() {
             )}
 
             {layout.length === 0 ? (
-              <div className="text-center py-16 space-y-6 rounded-xl border border-dashed border-card-border bg-dark-gray/10">
+              <div className="text-center py-16 space-y-6 rounded-lg border border-dashed border-card-border bg-dark-gray/30">
                 <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-dark-gray border border-card-border">
                   <Library className="h-6 w-6 text-muted" aria-hidden="true" />
                 </div>
@@ -2569,7 +2770,7 @@ export default function AdminPage() {
                   <button
                     type="button"
                     onClick={handleLoadDefaultHyroxCourse}
-                    className="flex min-h-10 items-center justify-center rounded-md bg-primary/10 border border-primary/30 px-5 text-xs font-bold text-primary uppercase hover:bg-primary/20 transition-colors"
+                    className="flex min-h-10 items-center justify-center rounded-md bg-card hover:bg-elevated border border-card-border px-5 text-xs font-bold text-white uppercase transition-colors"
                   >
                     Carregar Estrutura HYROX
                   </button>
@@ -2593,9 +2794,9 @@ export default function AdminPage() {
                 </div>
               </div>
             ) : (
-              <div className="relative space-y-8 pl-4 pr-1">
+              <div className="relative space-y-3 pl-4 pr-1">
                 {/* Conector Vertical */}
-                <div className="absolute left-[34px] top-4 bottom-4 w-[2px] bg-primary/30" aria-hidden="true" />
+                <div className="absolute left-[39px] top-4 bottom-4 w-[2px] bg-primary/20" aria-hidden="true" />
 
                 {layout
                   .slice()
@@ -2609,106 +2810,106 @@ export default function AdminPage() {
                           onDragStart={() => setDraggedStageId(stg.id)}
                           onDragOver={(e) => e.preventDefault()}
                           onDrop={() => handleDropCourseStage(stg.id)}
-                          className={`relative grid grid-cols-[40px_1fr] gap-6 rounded-xl border p-4 transition-all duration-200 ${
+                          className={`relative grid grid-cols-[20px_32px_1fr] gap-3 items-center rounded-lg border p-2 px-3 transition-all duration-200 ${
                             draggedStageId === stg.id
-                              ? 'border-primary bg-primary/10 scale-[0.99] opacity-80'
-                              : 'border-card-border bg-background/50 hover:border-muted hover:bg-background/80'
+                              ? 'border-primary bg-elevated scale-[0.99]'
+                              : 'border-card-border bg-dark-gray hover:border-muted hover:bg-elevated'
                           }`}
                         >
+                          {/* Arrastar (Grip) */}
+                          <div className="cursor-grab active:cursor-grabbing flex items-center justify-center h-full" title="Arrastar para reordenar">
+                            <GripVertical className="h-4 w-4 text-muted hover:text-white transition-colors" />
+                          </div>
+
                           {/* Círculo do Número */}
-                          <div className="flex flex-col items-center justify-center relative z-10">
-                            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 text-xs font-black font-mono ${
+                          <div className="flex items-center justify-center relative z-10">
+                            <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-xs font-black font-mono ${
                               isRun
-                                ? 'border-emerald-500 bg-emerald-950 text-emerald-400'
-                                : 'border-primary bg-amber-950 text-primary'
+                                ? 'border-trading-up bg-dark-gray text-trading-up'
+                                : 'border-primary bg-dark-gray text-primary'
                             }`}>
                               {index + 1}
                             </div>
-                            <div className="mt-2 cursor-grab active:cursor-grabbing" title="Arrastar para reordenar">
-                              <GripVertical className="h-4 w-4 text-muted hover:text-white transition-colors" />
-                            </div>
                           </div>
 
-                          {/* Conteúdo do Card */}
-                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 min-w-0">
-                            <div className="space-y-1.5 min-w-0">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <h5 className="text-sm font-black text-white uppercase tracking-wider truncate">{stg.name}</h5>
-                                <span className={`inline-flex rounded px-2 py-0.5 text-[9px] font-black uppercase tracking-widest border ${
-                                  isRun
-                                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                                    : 'bg-primary/10 border-primary/20 text-primary'
-                                }`}>
-                                  {isRun ? 'Corrida' : 'Estação'}
-                                </span>
-                              </div>
-                              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
+                          {/* Conteúdo do Card em Linha Única */}
+                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 min-w-0">
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0">
+                              <h5 className="text-xs font-black text-white uppercase tracking-wider truncate">{stg.name}</h5>
+                              <span className={`inline-flex rounded px-1.5 py-0.5 text-[8px] font-black uppercase tracking-widest border ${
+                                isRun
+                                  ? 'bg-trading-up/10 border-trading-up/25 text-trading-up'
+                                  : 'bg-primary/10 border-primary/25 text-primary'
+                              }`}>
+                                {isRun ? 'Corrida' : 'Estação'}
+                              </span>
+                              <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted border-l border-card-border/60 pl-3">
                                 {stg.distance && (
                                   <span className="flex items-center gap-1">
-                                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-soft">Distância:</span>
+                                    <span className="font-bold uppercase tracking-wider text-muted-soft text-[9px]">Distância:</span>
                                     <span className="font-semibold text-white font-mono">{stg.distance}</span>
                                   </span>
                                 )}
                                 {stg.reps && (
                                   <span className="flex items-center gap-1">
-                                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-soft">Reps:</span>
+                                    <span className="font-bold uppercase tracking-wider text-muted-soft text-[9px]">Reps:</span>
                                     <span className="font-semibold text-white font-mono">{stg.reps}</span>
                                   </span>
                                 )}
                                 {!isRun && (stg.maleWeight || stg.femaleWeight) && (
-                                  <span className="flex items-center gap-1.5 flex-wrap">
-                                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-soft">Pesos (M/F):</span>
-                                    <span className="rounded bg-dark-gray border border-card-border/60 px-1.5 py-0.5 text-[10px] font-bold text-white font-mono">{stg.maleWeight || '-'}</span>
+                                  <span className="flex items-center gap-1 flex-wrap">
+                                    <span className="font-bold uppercase tracking-wider text-muted-soft text-[9px]">Pesos (M/F):</span>
+                                    <span className="rounded bg-dark-gray border border-card-border/60 px-1 py-0.5 text-[9px] font-bold text-white font-mono">{stg.maleWeight || '-'}</span>
                                     <span className="text-muted-soft">/</span>
-                                    <span className="rounded bg-dark-gray border border-card-border/60 px-1.5 py-0.5 text-[10px] font-bold text-white font-mono">{stg.femaleWeight || '-'}</span>
+                                    <span className="rounded bg-dark-gray border border-card-border/60 px-1 py-0.5 text-[9px] font-bold text-white font-mono">{stg.femaleWeight || '-'}</span>
                                   </span>
                                 )}
                               </div>
                             </div>
 
-                            {/* Controles de Ação */}
-                            <div className="flex flex-wrap items-center gap-1">
+                            {/* Controles de Ação Compactos */}
+                            <div className="flex items-center gap-1 shrink-0 ml-auto md:ml-0">
                               <button
                                 type="button"
                                 onClick={() => handleMoveCourseStage(stg.id, 'up')}
                                 disabled={index === 0}
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-card-border bg-dark-gray/50 text-muted transition-colors hover:border-primary hover:text-primary disabled:opacity-30 disabled:hover:text-muted disabled:hover:border-card-border"
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-card-border bg-dark-gray/50 text-muted transition-colors hover:border-primary hover:text-primary disabled:opacity-30 disabled:hover:text-muted disabled:hover:border-card-border"
                                 title="Mover para cima"
                               >
-                                <ArrowUp className="h-4 w-4" aria-hidden="true" />
+                                <ArrowUp className="h-3.5 w-3.5" aria-hidden="true" />
                               </button>
                               <button
                                 type="button"
                                 onClick={() => handleMoveCourseStage(stg.id, 'down')}
                                 disabled={index === layout.length - 1}
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-card-border bg-dark-gray/50 text-muted transition-colors hover:border-primary hover:text-primary disabled:opacity-30 disabled:hover:text-muted disabled:hover:border-card-border"
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-card-border bg-dark-gray/50 text-muted transition-colors hover:border-primary hover:text-primary disabled:opacity-30 disabled:hover:text-muted disabled:hover:border-card-border"
                                 title="Mover para baixo"
                               >
-                                <ArrowDown className="h-4 w-4" aria-hidden="true" />
+                                <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />
                               </button>
                               <button
                                 type="button"
                                 onClick={() => fillStageForm(stg)}
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-card-border bg-dark-gray/50 text-muted transition-colors hover:border-primary hover:text-primary"
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-card-border bg-dark-gray/50 text-muted transition-colors hover:border-primary hover:text-primary"
                                 title="✏️ Editar etapa"
                               >
-                                <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                                <Pencil className="h-3 w-3" aria-hidden="true" />
                               </button>
                               <button
                                 type="button"
                                 onClick={() => handleInsertStageBelow(stg)}
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-card-border bg-dark-gray/50 text-muted transition-colors hover:border-primary hover:text-primary"
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-card-border bg-dark-gray/50 text-muted transition-colors hover:border-primary hover:text-primary"
                                 title="➕ Inserir etapa abaixo"
                               >
-                                <Plus className="h-4 w-4" aria-hidden="true" />
+                                <Plus className="h-3.5 w-3.5" aria-hidden="true" />
                               </button>
                               <button
                                 type="button"
                                 onClick={() => handleRemoveCourseStage(stg.id)}
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-card-border bg-dark-gray/50 text-red-500 transition-colors hover:border-red-500 hover:text-red-400"
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-card-border bg-dark-gray/50 text-trading-down transition-colors hover:border-trading-down hover:text-trading-down"
                                 title="🗑 Excluir"
                               >
-                                <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                                <Trash2 className="h-3 w-3" aria-hidden="true" />
                               </button>
                             </div>
                           </div>
@@ -2716,7 +2917,7 @@ export default function AdminPage() {
 
                         {/* Botão de Inserir Intermediário na Linha de Conexão */}
                         {index < layout.length - 1 && (
-                          <div className="absolute left-[26px] -bottom-[22px] z-20">
+                          <div className="absolute left-[29px] -bottom-[10px] z-20">
                             <button
                               type="button"
                               onClick={() => handleInsertStageBelow(stg)}
@@ -2733,13 +2934,7 @@ export default function AdminPage() {
               </div>
             )}
           </div>
-        ) : (
-          <div className="rounded-xl border border-card-border bg-card p-12 text-center text-muted">
-            <Compass className="mx-auto h-12 w-12 text-muted-soft animate-spin-slow mb-4" />
-            <p className="text-sm font-bold uppercase tracking-wider text-white">Nenhuma Categoria Selecionada</p>
-            <p className="text-xs text-muted max-w-xs mx-auto mt-2">Escolha uma das categorias no topo da tela para visualizar e editar seu respectivo percurso de Fitness Racing.</p>
-          </div>
-        )}
+        </div>
 
         {/* Modal da Biblioteca de Estações */}
         {isStationLibraryOpen && (
@@ -2783,9 +2978,9 @@ export default function AdminPage() {
                           setStageMaleWeight('');
                           setStageFemaleWeight('');
                         }}
-                        className="flex flex-col justify-between p-3 rounded-lg border border-card-border bg-emerald-950/10 hover:border-emerald-500/50 hover:bg-emerald-950/30 text-left transition-colors min-h-[90px]"
+                        className="flex flex-col justify-between p-3 rounded-lg border border-card-border bg-dark-gray hover:border-trading-up hover:bg-elevated text-left transition-colors min-h-[90px]"
                       >
-                        <span className="text-[10px] font-black uppercase text-emerald-400 tracking-wider">Run</span>
+                        <span className="text-[10px] font-black uppercase text-trading-up tracking-wider">Run</span>
                         <span className="text-xs font-bold text-white mt-1">Corrida de 1km</span>
                         <span className="text-[9px] text-muted-soft font-mono mt-0.5 block">1000m padrão</span>
                       </button>
@@ -2803,7 +2998,7 @@ export default function AdminPage() {
                             setStageMaleWeight(preset.maleWeight || '');
                             setStageFemaleWeight(preset.femaleWeight || '');
                           }}
-                          className="flex flex-col justify-between p-3 rounded-lg border border-card-border bg-dark-gray/30 hover:border-primary/50 hover:bg-dark-gray/60 text-left transition-colors min-h-[90px]"
+                          className="flex flex-col justify-between p-3 rounded-lg border border-card-border bg-dark-gray hover:border-primary hover:bg-elevated text-left transition-colors min-h-[90px]"
                         >
                           <span className="text-[10px] font-black uppercase text-primary tracking-wider">Estação</span>
                           <span className="text-xs font-bold text-white mt-1">{preset.name}</span>
@@ -2824,7 +3019,7 @@ export default function AdminPage() {
                           setStageMaleWeight('');
                           setStageFemaleWeight('');
                         }}
-                        className="flex flex-col justify-between p-3 rounded-lg border border-dashed border-card-border bg-transparent hover:border-white hover:bg-dark-gray/10 text-left transition-colors min-h-[90px]"
+                        className="flex flex-col justify-between p-3 rounded-lg border border-dashed border-card-border bg-transparent hover:border-white hover:bg-elevated text-left transition-colors min-h-[90px]"
                       >
                         <span className="text-[10px] font-black uppercase text-muted tracking-wider">Customizado</span>
                         <span className="text-xs font-bold text-white mt-1">Personalizado</span>
@@ -2850,7 +3045,7 @@ export default function AdminPage() {
                         placeholder="Ex: Run 1, Sled Push"
                         value={stageName}
                         onChange={(e) => setStageName(e.target.value)}
-                        className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white placeholder:text-muted focus:border-primary/50 focus:outline-none"
+                        className="w-full rounded-lg border border-card-border bg-dark-gray px-4 py-2 text-sm text-white placeholder:text-muted focus:border-primary/50 focus:outline-none"
                       />
                     </div>
                     <div>
@@ -2875,7 +3070,7 @@ export default function AdminPage() {
                         value={editingStageId ? stageOrder : (libraryInsertAfterStage ? libraryInsertAfterStage.orderIndex + 1 : layout.length + 1)}
                         onChange={(e) => setStageOrder(Number(e.target.value))}
                         disabled={!editingStageId && !!libraryInsertAfterStage}
-                        className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none font-number disabled:opacity-40"
+                        className="w-full rounded-lg border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none font-number disabled:opacity-40"
                       />
                     </div>
                   </div>
@@ -2889,7 +3084,7 @@ export default function AdminPage() {
                         placeholder="Ex: 1000m, 50m"
                         value={stageDistance}
                         onChange={(e) => setStageDistance(e.target.value)}
-                        className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white placeholder:text-muted focus:border-primary/50 focus:outline-none"
+                        className="w-full rounded-lg border border-card-border bg-dark-gray px-4 py-2 text-sm text-white placeholder:text-muted focus:border-primary/50 focus:outline-none"
                       />
                     </div>
                     <div>
@@ -2901,7 +3096,7 @@ export default function AdminPage() {
                         placeholder="Ex: 100, 75"
                         value={stageReps || ''}
                         onChange={(e) => setStageReps(e.target.value ? Number(e.target.value) : undefined)}
-                        className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white placeholder:text-muted focus:border-primary/50 focus:outline-none font-number"
+                        className="w-full rounded-lg border border-card-border bg-dark-gray px-4 py-2 text-sm text-white placeholder:text-muted focus:border-primary/50 focus:outline-none font-number"
                       />
                     </div>
                   </div>
@@ -2916,7 +3111,7 @@ export default function AdminPage() {
                           placeholder="Ex: 152kg"
                           value={stageMaleWeight}
                           onChange={(e) => setStageMaleWeight(e.target.value)}
-                          className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white placeholder:text-muted focus:border-primary/50 focus:outline-none font-mono"
+                          className="w-full rounded-lg border border-card-border bg-dark-gray px-4 py-2 text-sm text-white placeholder:text-muted focus:border-primary/50 focus:outline-none font-mono"
                         />
                       </div>
                       <div>
@@ -2927,7 +3122,7 @@ export default function AdminPage() {
                           placeholder="Ex: 102kg"
                           value={stageFemaleWeight}
                           onChange={(e) => setStageFemaleWeight(e.target.value)}
-                          className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white placeholder:text-muted focus:border-primary/50 focus:outline-none font-mono"
+                          className="w-full rounded-lg border border-card-border bg-dark-gray px-4 py-2 text-sm text-white placeholder:text-muted focus:border-primary/50 focus:outline-none font-mono"
                         />
                       </div>
                     </div>
@@ -2957,100 +3152,6 @@ export default function AdminPage() {
             </div>
           </div>
         )}
-
-        {/* Modal de Publicação e Replicação do Percurso */}
-        {isReplicateModalOpen && division && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-fade-in">
-            <div className="w-full max-w-md rounded-xl border border-card-border bg-card text-white flex flex-col overflow-hidden relative animate-scale-up" role="dialog" aria-modal="true" aria-labelledby="modal-replicate-title">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsReplicateModalOpen(false);
-                  setReplicateTargetDivIds([]);
-                }}
-                className="absolute right-4 top-4 text-muted hover:text-white transition-colors"
-                aria-label="Fechar modal"
-              >
-                <X className="h-5 w-5" />
-              </button>
-
-              <div className="p-6 border-b border-card-border">
-                <h4 id="modal-replicate-title" className="text-base font-black text-white uppercase tracking-wider">
-                  Publicar e Replicar Percurso
-                </h4>
-                <p className="text-xs text-muted font-medium mt-1">
-                  O percurso atual de <strong className="text-primary">{division.name}</strong> será marcado como publicado. Selecione outras categorias do evento para aplicar o mesmo layout de percurso.
-                </p>
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-6 space-y-4 max-h-[50vh]">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-primary font-sans">Categorias do Evento</p>
-
-                {divisions.filter(d => d.id !== division.id).length === 0 ? (
-                  <p className="text-xs text-muted">Não há outras categorias cadastradas neste evento.</p>
-                ) : (
-                  <div className="space-y-2.5">
-                    {divisions
-                      .filter(d => d.id !== division.id)
-                      .map((d) => {
-                        const isChecked = replicateTargetDivIds.includes(d.id);
-                        return (
-                          <label
-                            key={d.id}
-                            className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                              isChecked
-                                ? 'bg-primary/5 border-primary text-white'
-                                : 'bg-dark-gray/30 border-card-border hover:border-muted text-muted hover:text-white'
-                            }`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setReplicateTargetDivIds(prev => [...prev, d.id]);
-                                } else {
-                                  setReplicateTargetDivIds(prev => prev.filter(id => id !== d.id));
-                                }
-                              }}
-                              className="rounded border-card-border bg-dark-gray text-primary focus:ring-primary h-4 w-4"
-                            />
-                            <div className="flex-1">
-                              <p className="text-xs font-bold uppercase tracking-wider">{d.name}</p>
-                              {d.isCoursePublished && (
-                                <span className="text-[9px] text-emerald-400 font-bold uppercase mt-0.5 block">Já possui percurso publicado</span>
-                              )}
-                            </div>
-                          </label>
-                        );
-                      })}
-                  </div>
-                )}
-              </div>
-
-              <div className="p-6 border-t border-card-border flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsReplicateModalOpen(false);
-                    setReplicateTargetDivIds([]);
-                  }}
-                  className="flex-1 min-h-10 flex items-center justify-center rounded-md border border-card-border bg-dark-gray text-xs font-bold uppercase tracking-wider transition-colors hover:border-muted text-muted hover:text-white"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={handlePublishAndReplicateCourse}
-                  disabled={isReplicating}
-                  className="flex-1 min-h-10 flex items-center justify-center rounded-md bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black uppercase tracking-wider transition-colors disabled:opacity-50"
-                >
-                  {isReplicating ? 'Replicando...' : 'Confirmar e Publicar'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     );
   };
@@ -3058,6 +3159,30 @@ export default function AdminPage() {
   const renderAbaSchedule = () => {
     const workouts = selectedEventToManage?.workouts || [];
     const hasWorkouts = workouts.length > 0;
+
+    const selectedWorkout = workouts.find(w => w.id === heatWorkoutId);
+
+    // Identificar as provas equivalentes de Fitness Racing TOTAL
+    const getEquivalentWorkoutIds = (workoutId: string) => {
+      const currentWorkout = workouts.find(w => w.id === workoutId);
+      if (!currentWorkout || currentWorkout.code !== 'TOTAL' || !selectedEventToManage || selectedEventToManage.eventType !== 'fitness_racing') {
+        return [workoutId];
+      }
+
+      const activeDiv = (selectedEventToManage.divisions || []).find(d => d.id === currentWorkout.divisionId);
+      const activeLayout = activeDiv?.courseLayout || [];
+      const equivalentDivisionIds = (selectedEventToManage.divisions || []).filter(d => {
+        if (d.id === currentWorkout.divisionId) return true;
+        if (!d.courseLayout || d.courseLayout.length !== activeLayout.length) return false;
+        return d.courseLayout.every((stg, idx) => stg.name === activeLayout[idx]?.name && stg.type === activeLayout[idx]?.type);
+      }).map(d => d.id);
+
+      return workouts
+        .filter(w => w.code === 'TOTAL' && w.divisionId && equivalentDivisionIds.includes(w.divisionId))
+        .map(w => w.id);
+    };
+
+    const targetWorkoutIds = heatWorkoutId ? getEquivalentWorkoutIds(heatWorkoutId) : [];
 
     // Filtra apenas itens do cronograma geral (que não são baterias de provas)
     const scheduleItems = [...(selectedEventToManage?.scheduleItems || [])]
@@ -3079,58 +3204,58 @@ export default function AdminPage() {
     const handleSaveWorkoutHeats = async () => {
       if (!selectedEventToManage || !heatWorkoutId) return;
 
-      const selectedWorkout = workouts.find(w => w.id === heatWorkoutId);
       if (!selectedWorkout) return;
 
-      // Descobrir se as baterias já existiam e estavam publicadas/chamadas
+      // Descobrir se as baterias já existiam e estavam publicadas
       const wasPublishedBefore = (selectedEventToManage.scheduleItems || []).some(
         item => item.kind === 'heat' && item.workoutId === heatWorkoutId && item.isPublished
       );
-      const wasCallReleasedBefore = (selectedEventToManage.scheduleItems || []).some(
-        item => item.kind === 'heat' && item.workoutId === heatWorkoutId && item.isCallReleased
-      );
 
-      // 1. Gerar as novas baterias
+      // 1. Gerar as novas baterias em lote para todos os workouts do grupo equivalente
       const newHeatItems: EventScheduleItem[] = [];
-      let currentStartTime = hhmmToMinutes(heatStartTime);
 
-      for (let i = 1; i <= heatCount; i++) {
-        const startMin = currentStartTime;
-        const endMin = startMin + heatWorkoutDuration;
-        const filaMin = startMin - heatCheckinDuration;
-        const warmupMin = startMin - heatWarmupDuration;
+      for (const wId of targetWorkoutIds) {
+        const currentWorkout = workouts.find(w => w.id === wId);
+        if (!currentWorkout) continue;
 
-        const timeStr = minutesToHhmm(startMin);
-        const warmupStr = minutesToHhmm(warmupMin);
-        const checkinStr = minutesToHhmm(filaMin);
-        const endStr = minutesToHhmm(endMin);
+        let currentStartTime = hhmmToMinutes(heatStartTime);
+        for (let i = 1; i <= heatCount; i++) {
+          const startMin = currentStartTime;
+          const endMin = startMin + heatWorkoutDuration;
+          const filaMin = startMin - heatCheckinDuration;
+          const warmupMin = startMin - heatWarmupDuration;
 
-        newHeatItems.push({
-          id: `heat-${heatWorkoutId}-${i}`,
-          kind: 'heat',
-          date: heatDate,
-          time: timeStr,
-          title: `BATERIA ${i} - ${selectedWorkout.name}`,
-          description: `Aquecimento: ${warmupStr} | Fila: ${checkinStr} | Início: ${timeStr} | Final: ${endStr}`,
-          location: selectedEventToManage.location,
-          workoutId: heatWorkoutId,
-          heatNumber: i,
-          warmupTime: warmupStr,
-          checkinTime: checkinStr,
-          endTime: endStr,
-          athleteIds: heatAllocations[`heat-${heatWorkoutId}-${i}`] || [],
-          capacity: heatCapacity,
-          isPublished: wasPublishedBefore,
-          isCallReleased: wasCallReleasedBefore
-        });
+          const timeStr = minutesToHhmm(startMin);
+          const warmupStr = minutesToHhmm(warmupMin);
+          const checkinStr = minutesToHhmm(filaMin);
+          const endStr = minutesToHhmm(endMin);
 
-        currentStartTime = endMin + heatIntervalDuration;
+          newHeatItems.push({
+            id: `heat-${wId}-${i}`,
+            kind: 'heat',
+            date: heatDate,
+            time: timeStr,
+            title: `BATERIA ${i} - ${currentWorkout.name}`,
+            description: `Aquecimento: ${warmupStr} | Fila: ${checkinStr} | Início: ${timeStr} | Final: ${endStr}`,
+            location: selectedEventToManage.location,
+            workoutId: wId,
+            heatNumber: i,
+            warmupTime: warmupStr,
+            checkinTime: checkinStr,
+            endTime: endStr,
+            athleteIds: heatAllocations[`heat-${heatWorkoutId}-${i}`] || [],
+            capacity: heatCapacity,
+            isPublished: wasPublishedBefore
+          });
+
+          currentStartTime = endMin + heatIntervalDuration;
+        }
       }
 
-      // 2. Mesclar removendo baterias antigas desta prova
+      // 2. Mesclar removendo baterias antigas de todos os workouts do grupo
       const existingItems = selectedEventToManage.scheduleItems || [];
       const filteredItems = existingItems.filter(
-        item => !(item.kind === 'heat' && item.workoutId === heatWorkoutId)
+        item => !(item.kind === 'heat' && item.workoutId && targetWorkoutIds.includes(item.workoutId))
       );
 
       const updatedSchedule = [...filteredItems, ...newHeatItems];
@@ -3139,48 +3264,67 @@ export default function AdminPage() {
       try {
         await updateEvent(selectedEventToManage.id, { scheduleItems: updatedSchedule });
         setSelectedEventToManage(prev => prev ? { ...prev, scheduleItems: updatedSchedule } : null);
-        setAdminNotice({ text: `Baterias para a prova "${selectedWorkout.code || selectedWorkout.name}" salvas com sucesso!`, tone: 'success' });
+        setAdminNotice({ text: `Baterias salvas com sucesso para o grupo de categorias equivalentes!`, tone: 'success' });
       } catch (err) {
         console.error(err);
         setAdminNotice({ text: 'Não foi possível salvar o cronograma de baterias.', tone: 'error' });
       }
     };
 
-    // Função para limpar baterias salvas
+    // Função para limpar baterias salvas do grupo
     const handleClearWorkoutHeats = async () => {
       if (!selectedEventToManage || !heatWorkoutId) return;
 
-      const selectedWorkout = workouts.find(w => w.id === heatWorkoutId);
       if (!selectedWorkout) return;
 
       const updatedSchedule = (selectedEventToManage.scheduleItems || []).filter(
-        item => !(item.kind === 'heat' && item.workoutId === heatWorkoutId)
+        item => !(item.kind === 'heat' && item.workoutId && targetWorkoutIds.includes(item.workoutId))
       );
 
       try {
         await updateEvent(selectedEventToManage.id, { scheduleItems: updatedSchedule });
         setSelectedEventToManage(prev => prev ? { ...prev, scheduleItems: updatedSchedule } : null);
-        setAdminNotice({ text: `Baterias para a prova "${selectedWorkout.code || selectedWorkout.name}" foram removidas.`, tone: 'success' });
+        setAdminNotice({ text: `Baterias para o grupo de percursos equivalentes foram removidas.`, tone: 'success' });
       } catch (err) {
         console.error(err);
         setAdminNotice({ text: 'Não foi possível remover as baterias.', tone: 'error' });
       }
     };
 
-    // Função de auto-preenchimento das baterias pelo leaderboard reverso
+    // Função de auto-preenchimento das baterias pelo leaderboard reverso para o grupo
     const handleAutoFillHeats = () => {
       if (!selectedEventToManage || !heatWorkoutId) return;
 
-      const selectedWorkout = workouts.find(w => w.id === heatWorkoutId);
       if (!selectedWorkout) return;
 
-      const divisionId = selectedWorkout.divisionId;
-
-      // Se o WOD tem categoria vinculada, usa o leaderboard para ordenação
-      // Se não, usa os atletas do evento diretamente (sem ordenação por leaderboard)
+      const isFitnessRacingTotal = selectedEventToManage.eventType === 'fitness_racing' && selectedWorkout.code === 'TOTAL';
       let athletesToAllocate: { id: string }[] = [];
 
-      if (divisionId) {
+      if (isFitnessRacingTotal) {
+        // Coleta apenas as divisões equivalentes do grupo de percurso
+        const activeDiv = (selectedEventToManage?.divisions || []).find(d => d.id === selectedWorkout.divisionId);
+        const activeLayout = activeDiv?.courseLayout || [];
+        const equivalentDivisions = (selectedEventToManage?.divisions || []).filter(d => {
+          if (d.id === selectedWorkout.divisionId) return true;
+          if (!d.courseLayout || d.courseLayout.length !== activeLayout.length) return false;
+          return d.courseLayout.every((stg, idx) => stg.name === activeLayout[idx]?.name && stg.type === activeLayout[idx]?.type);
+        });
+
+        const allDivisionsAthletes: { id: string }[] = [];
+
+        equivalentDivisions.forEach(div => {
+          const divLeaderboard = getLeaderboard(selectedEventToManage.id, div.id);
+          if (divLeaderboard.length > 0) {
+            const reversedIds = [...divLeaderboard].reverse().map(entry => ({ id: entry.athlete.id }));
+            allDivisionsAthletes.push(...reversedIds);
+          } else {
+            const divAthletes = athletes.filter(a => a.divisionId === div.id);
+            allDivisionsAthletes.push(...divAthletes.map(a => ({ id: a.id })));
+          }
+        });
+
+        athletesToAllocate = allDivisionsAthletes;
+      } else if (divisionId) {
         const leaderboardList = getLeaderboard(selectedEventToManage.id, divisionId);
         if (leaderboardList.length === 0) {
           setAdminNotice({ text: 'Não há competidores cadastrados nesta categoria para alocar.', tone: 'error' });
@@ -3243,7 +3387,6 @@ export default function AdminPage() {
     );
 
     // Gerar baterias na memória para visualização em tempo real na tabela
-    const selectedWorkout = workouts.find(w => w.id === heatWorkoutId);
     const generatedHeatsList: { number: number; warmup: string; fila: string; inicio: string; final: string; }[] = [];
     if (heatWorkoutId) {
       let currentStartTime = hhmmToMinutes(heatStartTime);
@@ -3313,14 +3456,30 @@ export default function AdminPage() {
     };
 
     const divisionId = selectedWorkout?.divisionId;
-    // Se o WOD tem categoria vinculada, filtra atletas dessa categoria
-    // Se não, mostra todos os atletas das divisões do evento (fallback)
-    const categoryAthletes = divisionId
-      ? athletes.filter(a => a.divisionId === divisionId)
-      : (() => {
-          const eventDivisionIds = (selectedEventToManage?.divisions || []).map(d => d.id);
-          return athletes.filter(a => eventDivisionIds.includes(a.divisionId));
-        })();
+    const isFitnessRacingTotal = selectedEventToManage?.eventType === 'fitness_racing' && selectedWorkout?.code === 'TOTAL';
+    // Se o WOD tem categoria vinculada e não é Fitness Racing TOTAL, filtra atletas dessa categoria
+    // Se for Fitness Racing TOTAL ou WOD geral, mostra todos os atletas das divisões do evento
+    const categoryAthletes = isFitnessRacingTotal
+      ? (() => {
+          // As divisões que compartilham o mesmo layout que a selecionada
+          const activeDiv = (selectedEventToManage?.divisions || []).find(d => d.id === selectedWorkout?.divisionId);
+          const activeLayout = activeDiv?.courseLayout || [];
+          const equivalentDivisionIds = (selectedEventToManage?.divisions || [])
+            .filter(d => {
+              if (d.id === selectedWorkout?.divisionId) return true;
+              if (!d.courseLayout || d.courseLayout.length !== activeLayout.length) return false;
+              return d.courseLayout.every((stg, idx) => stg.name === activeLayout[idx]?.name && stg.type === activeLayout[idx]?.type);
+            })
+            .map(d => d.id);
+          return athletes.filter(a => equivalentDivisionIds.includes(a.divisionId));
+        })()
+      : (divisionId
+          ? athletes.filter(a => a.divisionId === divisionId)
+          : (() => {
+              const eventDivisionIds = (selectedEventToManage?.divisions || []).map(d => d.id);
+              return athletes.filter(a => eventDivisionIds.includes(a.divisionId));
+            })()
+        );
     const allAllocatedIds = Object.values(heatAllocations).flat();
     const pendingAthletes = categoryAthletes.filter(ath => !allAllocatedIds.includes(ath.id));
 
@@ -3333,15 +3492,14 @@ export default function AdminPage() {
     const isSavedScheduleComplete = savedHeatsForWorkout.length > 0 && savedPendingAthletes.length === 0;
 
     const isPublished = savedHeatsForWorkout.length > 0 && savedHeatsForWorkout.every(h => h.isPublished);
-    const isCallReleased = savedHeatsForWorkout.length > 0 && savedHeatsForWorkout.every(h => h.isCallReleased);
 
-    // Publicar Baterias
+    // Publicar Baterias para o grupo
     const handlePublishHeats = async () => {
       if (!selectedEventToManage || !heatWorkoutId) return;
       if (!isSavedScheduleComplete) return;
 
       const updatedSchedule = (selectedEventToManage.scheduleItems || []).map(item => {
-        if (item.kind === 'heat' && item.workoutId === heatWorkoutId) {
+        if (item.kind === 'heat' && item.workoutId && targetWorkoutIds.includes(item.workoutId)) {
           return { ...item, isPublished: true };
         }
         return item;
@@ -3350,32 +3508,10 @@ export default function AdminPage() {
       try {
         await updateEvent(selectedEventToManage.id, { scheduleItems: updatedSchedule });
         setSelectedEventToManage(prev => prev ? { ...prev, scheduleItems: updatedSchedule } : null);
-        setAdminNotice({ text: 'Baterias publicadas com sucesso!', tone: 'success' });
+        setAdminNotice({ text: 'Baterias publicadas com sucesso para as categorias vinculadas!', tone: 'success' });
       } catch (err) {
         console.error(err);
         setAdminNotice({ text: 'Erro ao publicar baterias.', tone: 'error' });
-      }
-    };
-
-    // Liberar Chamada
-    const handleReleaseCall = async () => {
-      if (!selectedEventToManage || !heatWorkoutId) return;
-      if (!isSavedScheduleComplete) return;
-
-      const updatedSchedule = (selectedEventToManage.scheduleItems || []).map(item => {
-        if (item.kind === 'heat' && item.workoutId === heatWorkoutId) {
-          return { ...item, isCallReleased: true };
-        }
-        return item;
-      });
-
-      try {
-        await updateEvent(selectedEventToManage.id, { scheduleItems: updatedSchedule });
-        setSelectedEventToManage(prev => prev ? { ...prev, scheduleItems: updatedSchedule } : null);
-        setAdminNotice({ text: 'Chamada dos atletas liberada com sucesso!', tone: 'success' });
-      } catch (err) {
-        console.error(err);
-        setAdminNotice({ text: 'Erro ao liberar chamada dos atletas.', tone: 'error' });
       }
     };
 
@@ -3670,14 +3806,48 @@ export default function AdminPage() {
                     className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"
                   >
                     <option value="">Selecione...</option>
-                    {workouts.map((w) => {
-                      const divName = (selectedEventToManage?.divisions || []).find(d => d.id === w.divisionId)?.name;
-                      return (
-                        <option key={w.id} value={w.id}>
-                          {w.code} - {w.name}{divName ? ` [${divName}]` : ' [Geral]'}
-                        </option>
-                      );
-                    })}
+                    {(() => {
+                      const renderedTotalLayouts: string[] = [];
+                      const options: React.ReactNode[] = [];
+
+                      workouts.forEach((w) => {
+                        const isFRTotal = selectedEventToManage?.eventType === 'fitness_racing' && w.code === 'TOTAL';
+
+                        if (isFRTotal) {
+                          const div = (selectedEventToManage?.divisions || []).find(d => d.id === w.divisionId);
+                          const layout = div?.courseLayout || [];
+                          const layoutSignature = layout.map(stg => `${stg.name}:${stg.type}`).join('|');
+
+                          if (renderedTotalLayouts.includes(layoutSignature)) {
+                            return;
+                          }
+                          renderedTotalLayouts.push(layoutSignature);
+
+                          const equivalentDivs = (selectedEventToManage?.divisions || []).filter(d => {
+                            if (d.id === w.divisionId) return true;
+                            if (!d.courseLayout || d.courseLayout.length !== layout.length) return false;
+                            return d.courseLayout.every((stg, idx) => stg.name === layout[idx]?.name && stg.type === layout[idx]?.type);
+                          });
+
+                          const divNames = equivalentDivs.map(d => d.name).join(', ');
+
+                          options.push(
+                            <option key={w.id} value={w.id}>
+                              {w.code} - {w.name} [{divNames}]
+                            </option>
+                          );
+                        } else {
+                          const divName = (selectedEventToManage?.divisions || []).find(d => d.id === w.divisionId)?.name;
+                          options.push(
+                            <option key={w.id} value={w.id}>
+                              {w.code} - {w.name}{divName ? ` [${divName}]` : ' [Geral]'}
+                            </option>
+                          );
+                        }
+                      });
+
+                      return options;
+                    })()}
                   </select>
                 </div>
 
@@ -4214,46 +4384,26 @@ export default function AdminPage() {
                               Publicado ✅
                             </span>
                           )}
-                          {isCallReleased && (
-                            <span className="rounded border border-blue-500/30 bg-blue-500/10 px-2 py-0.5 text-[9px] font-bold text-blue-400 uppercase">
-                              Chamada Liberada 📢
-                            </span>
-                          )}
                         </div>
                       </div>
 
                       {!isSavedScheduleComplete ? (
                         <p className="text-[10px] text-amber-400 font-bold bg-amber-500/10 border border-amber-500/20 px-3 py-2 rounded-lg">
-                          ⚠️ O cronograma salvo possui competidores pendentes de alocação. Aloque todos os competidores e salve para habilitar as ações de publicação e chamada.
+                          ⚠️ O cronograma salvo possui competidores pendentes de alocação. Aloque todos os competidores e salve para habilitar as ações de publicação.
                         </p>
                       ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <button
-                            type="button"
-                            onClick={handlePublishHeats}
-                            disabled={isPublished}
-                            className={`flex min-h-10 items-center justify-center gap-1.5 rounded-md px-3 sm:px-4 py-2 text-[10px] sm:text-xs font-bold uppercase tracking-wider leading-tight transition-colors ${
-                              isPublished
-                                ? 'bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 cursor-not-allowed'
-                                : 'bg-primary hover:bg-primary-hover text-ink'
-                            }`}
-                          >
-                            {isPublished ? 'Baterias Publicadas' : 'Publicar Baterias'}
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={handleReleaseCall}
-                            disabled={isCallReleased}
-                            className={`flex min-h-10 items-center justify-center gap-1.5 rounded-md border px-3 sm:px-4 py-2 text-[10px] sm:text-xs font-bold uppercase tracking-wider leading-tight transition-colors ${
-                              isCallReleased
-                                ? 'bg-blue-500/10 border border-blue-500/25 text-blue-400 cursor-not-allowed'
-                                : 'border-card-border bg-dark-gray hover:border-primary hover:text-primary text-muted'
-                            }`}
-                          >
-                            {isCallReleased ? 'Chamada Liberada' : 'Liberar Chamada'}
-                          </button>
-                        </div>
+                        <button
+                          type="button"
+                          onClick={handlePublishHeats}
+                          disabled={isPublished}
+                          className={`w-full flex min-h-10 items-center justify-center gap-1.5 rounded-md px-3 sm:px-4 py-2 text-[10px] sm:text-xs font-bold uppercase tracking-wider leading-tight transition-colors ${
+                            isPublished
+                              ? 'bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 cursor-not-allowed'
+                              : 'bg-primary hover:bg-primary-hover text-ink'
+                          }`}
+                        >
+                          {isPublished ? 'Baterias Publicadas' : 'Publicar Baterias'}
+                        </button>
                       )}
                     </div>
                   )}
@@ -6619,60 +6769,128 @@ export default function AdminPage() {
                   <div className="flex justify-center items-center py-12">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                   </div>
-                ) : mpAccount ? (
+                ) : (
                   <div className="space-y-6">
-                    <div className="rounded-lg border border-primary/20 bg-primary/5 p-5">
-                      <div className="flex items-start gap-4">
-                        <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg text-primary">
-                          <CreditCard className="h-6 w-6" aria-hidden="true" />
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-xs font-bold uppercase text-primary font-sans">Status: Conectado</p>
-                          <p className="text-sm font-semibold text-white">Sua conta do Mercado Pago está ativa e pronta para receber pagamentos.</p>
-                          <div className="pt-2 text-xs text-muted space-y-1">
-                            <p><strong>ID da Conta MP:</strong> {mpAccount.mercadopago_user_id}</p>
-                            <p><strong>Status de Integração:</strong> Marketplace Ativo</p>
+                    {mpAccount && (
+                      <div className="rounded-lg border border-primary/20 bg-primary/5 p-5">
+                        <div className="flex items-start gap-4">
+                          <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg text-primary">
+                            <CreditCard className="h-6 w-6" aria-hidden="true" />
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-xs font-bold uppercase text-primary font-sans">Status: Conectado</p>
+                            <p className="text-sm font-semibold text-white">
+                              {mpAccount.mercadopago_user_id.startsWith('manual-')
+                                ? 'Sua conta está integrada manualmente via credenciais de API v2.'
+                                : 'Sua conta do Mercado Pago está ativa e pronta via conexão automática.'}
+                            </p>
+                            <div className="pt-2 text-xs text-muted space-y-1">
+                              <p><strong>Tipo de Integração:</strong> {mpAccount.mercadopago_user_id.startsWith('manual-') ? 'Manual (Chaves de Produção)' : 'Automática (OAuth)'}</p>
+                              {!mpAccount.mercadopago_user_id.startsWith('manual-') && (
+                                <p><strong>ID da Conta MP:</strong> {mpAccount.mercadopago_user_id}</p>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
+                    )}
 
-                    <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                      <a
-                        href={`https://auth.mercadopago.com/authorization?client_id=${process.env.NEXT_PUBLIC_MERCADOPAGO_CLIENT_ID || '5059936541987710'}&response_type=code&platform_id=mp&redirect_uri=${encodeURIComponent(redirectUri)}&state=${currentUser?.id || ''}`}
-                        className="flex min-h-11 items-center justify-center rounded-md border border-card-border bg-dark-gray hover:bg-dark-gray/80 px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-white transition-colors font-sans"
-                      >
-                        Reconectar Conta
-                      </a>
-                      <button
-                        type="button"
-                        onClick={handleDisconnectMp}
-                        className="flex min-h-11 items-center justify-center rounded-md bg-red-600 hover:bg-red-700 text-white px-6 py-2.5 text-xs font-bold uppercase tracking-wider transition-colors font-sans"
-                      >
-                        Desconectar Conta
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    <div className="rounded-lg border border-card-border bg-dark-gray/30 p-6 text-center space-y-4">
-                      <CreditCard className="mx-auto h-12 w-12 text-muted" aria-hidden="true" />
-                      <div className="space-y-2">
-                        <h4 className="text-sm font-bold text-white uppercase tracking-wider font-sans">Mercado Pago não conectado</h4>
-                        <p className="text-xs text-muted max-w-md mx-auto leading-relaxed">
-                          Conecte sua conta do Mercado Pago para receber pagamentos de inscrições. As comissões da plataforma serão retidas automaticamente e o saldo líquido será enviado à sua conta.
-                        </p>
+                    {(!mpAccount || mpAccount.mercadopago_user_id.startsWith('manual-')) ? (
+                      <div className="space-y-6">
+                        {!mpAccount && (
+                          <div className="rounded-lg border border-card-border bg-dark-gray/30 p-6 space-y-4">
+                            <div className="flex items-center gap-3">
+                              <CreditCard className="h-6 w-6 text-primary" aria-hidden="true" />
+                              <h4 className="text-sm font-bold text-white uppercase tracking-wider font-sans">Conexão Express (OAuth)</h4>
+                            </div>
+                            <p className="text-xs text-muted leading-relaxed">
+                              Recomendado. Autorize nossa aplicação com um clique e integre sua conta de forma totalmente automatizada.
+                            </p>
+                            <div className="pt-2">
+                              <a
+                                href={`https://auth.mercadopago.com/authorization?client_id=${process.env.NEXT_PUBLIC_MERCADOPAGO_CLIENT_ID || '5059936541987710'}&response_type=code&platform_id=mp&redirect_uri=${encodeURIComponent(redirectUri)}&state=${currentUser?.id || ''}`}
+                                className="inline-flex min-h-11 items-center justify-center rounded-md bg-primary hover:bg-primary-hover text-ink px-8 py-3 text-sm font-bold uppercase tracking-wider transition-colors font-sans"
+                              >
+                                Conectar Mercado Pago
+                              </a>
+                            </div>
+                          </div>
+                        )}
+
+                        <form onSubmit={handleSaveManualMp} className="rounded-lg border border-card-border p-6 bg-dark-gray/10 space-y-4">
+                          <div className="border-b border-card-border pb-3">
+                            <h4 className="text-sm font-bold text-white uppercase tracking-wider font-sans">Integração Financeira Manual (Chaves API v2)</h4>
+                            <p className="text-[11px] text-muted leading-relaxed mt-1">
+                              Cole suas credenciais de produção do Mercado Pago. Útil caso prefira não utilizar a autorização automática do fluxo OAuth.
+                            </p>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                              <label htmlFor="manual-mp-public-key" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Public Key (Chave Pública)</label>
+                              <input
+                                id="manual-mp-public-key"
+                                type="text"
+                                required
+                                placeholder="APP_USR-..."
+                                value={manualPublicKey}
+                                onChange={(e) => setManualPublicKey(e.target.value.trim())}
+                                className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2.5 text-sm text-white focus:border-primary/50 focus:outline-none font-mono"
+                              />
+                            </div>
+                            <div>
+                              <label htmlFor="manual-mp-access-token" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Access Token (Token de Acesso)</label>
+                              <input
+                                id="manual-mp-access-token"
+                                type="password"
+                                required
+                                placeholder="APP_USR-..."
+                                value={manualAccessToken}
+                                onChange={(e) => setManualAccessToken(e.target.value.trim())}
+                                className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2.5 text-sm text-white focus:border-primary/50 focus:outline-none font-mono"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="flex justify-between items-center pt-3 border-t border-card-border/60">
+                            <div>
+                              {mpAccount && (
+                                <button
+                                  type="button"
+                                  onClick={handleDisconnectMp}
+                                  className="flex min-h-10 items-center justify-center rounded-md bg-red-600 hover:bg-red-700 text-white px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors font-sans"
+                                >
+                                  Desconectar Conta
+                                </button>
+                              )}
+                            </div>
+                            <button
+                              type="submit"
+                              disabled={savingManualMp}
+                              className="flex min-h-10 items-center justify-center rounded-md bg-primary hover:bg-primary-hover text-ink px-6 py-2 text-xs font-bold uppercase tracking-wider transition-colors font-sans"
+                            >
+                              {savingManualMp ? 'Salvando...' : 'Salvar Alterações'}
+                            </button>
+                          </div>
+                        </form>
                       </div>
-                    </div>
-
-                    <div className="flex pt-2">
-                      <a
-                        href={`https://auth.mercadopago.com/authorization?client_id=${process.env.NEXT_PUBLIC_MERCADOPAGO_CLIENT_ID || '5059936541987710'}&response_type=code&platform_id=mp&redirect_uri=${encodeURIComponent(redirectUri)}&state=${currentUser?.id || ''}`}
-                        className="flex min-h-11 items-center justify-center rounded-md bg-primary hover:bg-primary-hover text-ink px-8 py-3 text-sm font-bold uppercase tracking-wider transition-colors font-sans"
-                      >
-                        Conectar Mercado Pago
-                      </a>
-                    </div>
+                    ) : (
+                      <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                        <a
+                          href={`https://auth.mercadopago.com/authorization?client_id=${process.env.NEXT_PUBLIC_MERCADOPAGO_CLIENT_ID || '5059936541987710'}&response_type=code&platform_id=mp&redirect_uri=${encodeURIComponent(redirectUri)}&state=${currentUser?.id || ''}`}
+                          className="flex min-h-11 items-center justify-center rounded-md border border-card-border bg-dark-gray hover:bg-dark-gray/80 px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-white transition-colors font-sans"
+                        >
+                          Reconectar via OAuth
+                        </a>
+                        <button
+                          type="button"
+                          onClick={handleDisconnectMp}
+                          className="flex min-h-11 items-center justify-center rounded-md bg-red-600 hover:bg-red-700 text-white px-6 py-2.5 text-xs font-bold uppercase tracking-wider transition-colors font-sans"
+                        >
+                          Desconectar Conta
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

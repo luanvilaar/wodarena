@@ -133,6 +133,7 @@ export interface Event {
   scheduleItems?: EventScheduleItem[];
   mpPublicKey?: string;
   mpAccessToken?: string;
+  marketplace_fee?: number;
 }
 
 export interface Registration {

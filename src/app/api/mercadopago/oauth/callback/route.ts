@@ -51,21 +51,37 @@ export async function GET(request: Request) {
 
     console.log(`[OAuth Callback] Token obtido. Gravando na tabela mercadopago_accounts para o usuário: ${userId}...`);
 
-    const { error: dbError } = await supabase
+    // 1. Gravar dados públicos
+    const { error: dbPublicError } = await supabase
       .from('mercadopago_accounts')
       .upsert({
         user_id: userId,
         mercadopago_user_id: String(tokenData.user_id),
-        access_token: tokenData.access_token,
-        refresh_token: tokenData.refresh_token,
         public_key: tokenData.public_key,
         expires_at: expiresAt,
         status: 'connected',
         updated_at: new Date().toISOString()
       }, { onConflict: 'user_id' });
 
-    if (dbError) {
-      console.error('[OAuth Callback] Erro ao gravar conta no Supabase:', dbError);
+    if (dbPublicError) {
+      console.error('[OAuth Callback] Erro ao gravar dados públicos no Supabase:', dbPublicError);
+      return NextResponse.redirect(`${origin}/admin?tab=payments&error=db_error`);
+    }
+
+    // 2. Gravar segredos na tabela privada
+    const { error: dbSecretError } = await supabase
+      .from('mercadopago_secrets')
+      .upsert({
+        user_id: userId,
+        access_token: tokenData.access_token,
+        refresh_token: tokenData.refresh_token,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id' });
+
+    if (dbSecretError) {
+      console.error('[OAuth Callback] Erro ao gravar segredos no Supabase:', dbSecretError);
+      // Remove a conta pública recém-criada para manter consistência
+      await supabase.from('mercadopago_accounts').delete().eq('user_id', userId);
       return NextResponse.redirect(`${origin}/admin?tab=payments&error=db_error`);
     }
 

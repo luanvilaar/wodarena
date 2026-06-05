@@ -23,15 +23,14 @@ export async function POST(request: Request) {
 
         if (dbEvent) {
           // 1. Tenta carregar a credencial da conta conectada via OAuth do Gestor
-          const { data: mpAccount } = await supabase
-            .from('mercadopago_accounts')
+          const { data: mpSecret } = await supabase
+            .from('mercadopago_secrets')
             .select('access_token')
             .eq('user_id', dbEvent.organizer_id)
-            .eq('status', 'connected')
             .maybeSingle();
 
-          if (mpAccount?.access_token) {
-            accessToken = mpAccount.access_token;
+          if (mpSecret?.access_token) {
+            accessToken = mpSecret.access_token;
             console.log(`[MercadoPago Preference API] Usando Access Token OAuth do organizador ${dbEvent.organizer_id} para o evento ${registrationData.eventId}`);
           } else if (dbEvent.mp_access_token) {
             // Fallback de compatibilidade caso o evento ainda use o token legado do evento
