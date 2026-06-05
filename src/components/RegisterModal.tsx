@@ -35,6 +35,11 @@ type CheckoutStatusResponse = {
   cpf?: string;
 };
 
+type CheckoutConfigResponse = {
+  publicKey?: string;
+  error?: string;
+};
+
 const createEmptyParticipant = (): ParticipantForm => ({
   name: '',
   email: '',
@@ -49,6 +54,19 @@ const createEmptyParticipant = (): ParticipantForm => ({
 
 const generateUniqueId = (prefix: string) => {
   return `${prefix}-${Date.now()}`;
+};
+
+const resolveCheckoutPublicKey = async (eventId: string, eventPublicKey?: string) => {
+  if (eventPublicKey) return eventPublicKey;
+
+  const response = await fetch(`/api/checkout/config?event_id=${eventId}`);
+  const data: CheckoutConfigResponse = await response.json();
+
+  if (!response.ok || !data.publicKey) {
+    throw new Error(data.error || 'Conta Mercado Pago do evento não configurada.');
+  }
+
+  return data.publicKey;
 };
 
 export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterModalProps) {
@@ -401,7 +419,16 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
           return;
         }
 
-        const publicKey = event.mpPublicKey || process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY || 'APP_USR-0d64556d-2758-423f-b21e-3fc5b43a674f';
+        let publicKey;
+        try {
+          publicKey = await resolveCheckoutPublicKey(event.id, event.mpPublicKey);
+        } catch (configErr) {
+          console.error("[Checkout Card Config] Erro ao carregar Public Key Mercado Pago:", configErr);
+          alert(configErr instanceof Error ? configErr.message : 'Conta Mercado Pago do evento não configurada.');
+          setIsProcessing(false);
+          return;
+        }
+
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const mp = new (window as any).MercadoPago(publicKey);
 

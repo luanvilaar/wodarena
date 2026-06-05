@@ -9,6 +9,7 @@ const pixRoute = read('../src/app/api/checkout/pix/route.ts');
 const cardRoute = read('../src/app/api/checkout/card/route.ts');
 const statusRoute = read('../src/app/api/checkout/status/route.ts');
 const preferenceRoute = read('../src/app/api/checkout/preference/route.ts');
+const configRoute = read('../src/app/api/checkout/config/route.ts');
 const webhookRoute = read('../src/app/api/webhooks/mercadopago/route.ts');
 const oauthCallback = read('../src/app/api/mercadopago/oauth/callback/route.ts');
 const registerModal = read('../src/components/RegisterModal.tsx');
@@ -26,6 +27,14 @@ test('event payment routes use the centralized Mercado Pago credential resolver'
     assert.match(route, /resolveMercadoPagoCheckoutConfig/);
     assert.doesNotMatch(route, /let accessToken = process\.env\.MERCADOPAGO_ACCESS_TOKEN/);
   }
+});
+
+test('card checkout resolves public key from the event owner instead of global fallback', () => {
+  assert.match(helper, /resolveMercadoPagoPublicConfig/);
+  assert.match(configRoute, /resolveMercadoPagoPublicConfig/);
+  assert.match(registerModal, /resolveCheckoutPublicKey\(event\.id, event\.mpPublicKey\)/);
+  assert.doesNotMatch(registerModal, /NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY/);
+  assert.doesNotMatch(registerModal, /APP_USR-0d64556d/);
 });
 
 test('transparent checkout sends marketplace application fee and payer CPF', () => {
