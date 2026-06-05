@@ -44,6 +44,7 @@ interface AppContextType {
   coupons: Coupon[];
   addCoupon: (coupon: Omit<Coupon, 'id' | 'usageCount' | 'createdAt'>) => Promise<void>;
   incrementCouponUsage: (eventId: string, code: string) => Promise<void>;
+  changePassword: (userId: string, newPassword: string) => Promise<boolean>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -192,7 +193,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 isActive: d.is_active !== undefined && d.is_active !== null ? Boolean(d.is_active) : true,
                 useAgeGroups: d.use_age_groups || false,
                 ageGroups: d.age_groups ? (typeof d.age_groups === 'string' ? JSON.parse(d.age_groups) : d.age_groups) : [],
-                courseLayout: d.course_layout ? (typeof d.course_layout === 'string' ? JSON.parse(d.course_layout) : d.course_layout) : []
+                courseLayout: d.course_layout ? (typeof d.course_layout === 'string' ? JSON.parse(d.course_layout) : d.course_layout) : [],
+                isCoursePublished: d.is_course_published || false
               }));
             
             const evWods: Workout[] = dbWorkouts
@@ -669,6 +671,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (updatedData.useAgeGroups !== undefined) dbPayload.use_age_groups = updatedData.useAgeGroups;
     if (updatedData.ageGroups !== undefined) dbPayload.age_groups = updatedData.ageGroups;
     if (updatedData.courseLayout !== undefined) dbPayload.course_layout = updatedData.courseLayout;
+    if (updatedData.isCoursePublished !== undefined) dbPayload.is_course_published = updatedData.isCoursePublished;
 
     const { error } = await supabase
       .from('divisions')
@@ -918,6 +921,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (error) {
         console.error("Erro ao atualizar uso do cupom no Supabase:", error);
       }
+    }
+  };
+
+  // Alterar senha do usuário
+  const changePassword = async (userId: string, newPassword: string): Promise<boolean> => {
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ password: newPassword })
+        .eq('id', userId);
+
+      if (error) {
+        console.error("Erro ao atualizar senha no Supabase:", error);
+        return false;
+      }
+
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, password: newPassword } : u));
+
+      if (currentUser && currentUser.id === userId) {
+        setCurrentUser({ ...currentUser, password: newPassword });
+      }
+
+      return true;
+    } catch (err) {
+      console.error("Erro inesperado ao alterar senha:", err);
+      return false;
     }
   };
 
@@ -1336,7 +1365,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         updateEvent,
         saveCourseLayout,
         addCoupon,
-        incrementCouponUsage
+        incrementCouponUsage,
+        changePassword
       }}
     >
       {children}

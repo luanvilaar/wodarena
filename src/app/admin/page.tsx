@@ -7,10 +7,11 @@ import { supabase } from '@/lib/supabase';
 
 import { BrandLogo } from '@/components/BrandLogo';
 import { RegistrationVoucher } from '@/components/RegistrationVoucher';
-import { 
-  LayoutDashboard, Calendar, Trophy, 
+import {
+  LayoutDashboard, Calendar, Trophy,
   ClipboardCheck, LogIn, LogOut, DollarSign, Users, Ticket, Settings,
-  Upload, X, Trash2, Plus, ShieldAlert, Pencil, Copy, GripVertical, ArrowDown, ArrowUp, Library, Compass, ReceiptText, Mail, CreditCard
+  Upload, X, Trash2, Plus, ShieldAlert, Pencil, Copy, GripVertical, ArrowDown, ArrowUp, Library, Compass, ReceiptText, Mail, CreditCard,
+  Lock
 } from 'lucide-react';
 
 const InstagramIcon = ({ className = 'h-3.5 w-3.5' }: { className?: string }) => (
@@ -61,9 +62,12 @@ const minutesToHhmm = (minutes: number): string => {
 
 // Formata data por extenso (ex: sábado, 30 de maio de 2026)
 const formatLongDate = (dateStr: string): string => {
-  if (!dateStr) return 'Selecione uma data...';
+  if (!dateStr || dateStr === 'undefined' || dateStr === 'null') return 'Selecione uma data...';
   try {
     const date = new Date(dateStr + 'T00:00:00');
+    if (isNaN(date.getTime())) {
+      return dateStr;
+    }
     return date.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   } catch {
     return dateStr;
@@ -75,7 +79,7 @@ export default function AdminPage() {
     events, athletes, scores, registrations, coupons, users, currentUser,
     login, logout, addEvent, addDivision, updateDivision,
     addWorkout, deleteDivision, deleteWorkout, submitScore, submitScoresBulk, updateEvent, getLeaderboard, registerTicket, saveCourseLayout,
-    addCoupon, incrementCouponUsage
+    addCoupon, incrementCouponUsage, changePassword
   } = useApp();
 
   // 1. Estados de Login (vinculado ao currentUser do contexto)
@@ -86,13 +90,19 @@ export default function AdminPage() {
   const [adminNotice, setAdminNotice] = useState<{ text: string; tone: 'success' | 'error' } | null>(null);
 
   // 2. Abas Administrativas Principais
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'my-events' | 'event' | 'payments'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'my-events' | 'event' | 'payments' | 'security'>('dashboard');
 
   // Estados para integração do Mercado Pago Marketplace
   const [mpAccount, setMpAccount] = useState<{ id: string; mercadopago_user_id: string; status: string } | null>(null);
   const [loadingMp, setLoadingMp] = useState(false);
 
-  const redirectUri = process.env.NEXT_PUBLIC_MERCADOPAGO_REDIRECT_URI || 
+  // Estados para aba de Segurança
+  const [securityCurrentPassword, setSecurityCurrentPassword] = useState('');
+  const [securityNewPassword, setSecurityNewPassword] = useState('');
+  const [securityConfirmPassword, setSecurityConfirmPassword] = useState('');
+  const [securitySubmitting, setSecuritySubmitting] = useState(false);
+
+  const redirectUri = process.env.NEXT_PUBLIC_MERCADOPAGO_REDIRECT_URI ||
     (typeof window !== 'undefined' ? `${window.location.origin}/api/mercadopago/oauth/callback` : 'http://localhost:3000/api/mercadopago/oauth/callback');
 
   // Efeito para buscar a conta conectada do Mercado Pago e escutar query parameters
@@ -103,7 +113,7 @@ export default function AdminPage() {
       const success = params.get('success');
       const errorParam = params.get('error');
 
-      if (tab === 'dashboard' || tab === 'my-events' || tab === 'event' || tab === 'payments') {
+      if (tab === 'dashboard' || tab === 'my-events' || tab === 'event' || tab === 'payments' || tab === 'security') {
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setActiveTab(tab);
       }
@@ -172,6 +182,49 @@ export default function AdminPage() {
     }
   };
 
+  const handleSecuritySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAdminNotice(null);
+
+    if (!currentUser) return;
+
+    const userInDb = users.find(u => u.id === currentUser.id);
+    const actualPassword = userInDb?.password || currentUser.password;
+
+    if (securityCurrentPassword !== actualPassword) {
+      setAdminNotice({ text: 'A senha atual está incorreta.', tone: 'error' });
+      return;
+    }
+
+    if (securityNewPassword.length < 6) {
+      setAdminNotice({ text: 'A nova senha deve ter pelo menos 6 caracteres.', tone: 'error' });
+      return;
+    }
+
+    if (securityNewPassword !== securityConfirmPassword) {
+      setAdminNotice({ text: 'A confirmação de senha não coincide com a nova senha.', tone: 'error' });
+      return;
+    }
+
+    setSecuritySubmitting(true);
+    try {
+      const success = await changePassword(currentUser.id, securityNewPassword);
+      if (success) {
+        setAdminNotice({ text: 'Senha atualizada com sucesso!', tone: 'success' });
+        setSecurityCurrentPassword('');
+        setSecurityNewPassword('');
+        setSecurityConfirmPassword('');
+      } else {
+        setAdminNotice({ text: 'Erro ao atualizar a senha. Tente novamente.', tone: 'error' });
+      }
+    } catch (err) {
+      console.error(err);
+      setAdminNotice({ text: 'Erro ao atualizar a senha. Tente novamente.', tone: 'error' });
+    } finally {
+      setSecuritySubmitting(false);
+    }
+  };
+
   // Estado do evento sendo gerenciado internamente
   const [selectedEventToManage, setSelectedEventToManage] = useState<Event | null>(null);
   const [activeEventTab, setActiveEventTab] = useState<'info' | 'categories' | 'wods' | 'schedule' | 'registrations' | 'scores' | 'leaderboard'>('info');
@@ -225,7 +278,7 @@ export default function AdminPage() {
   const [isStationLibraryOpen, setIsStationLibraryOpen] = useState(false);
   const [libraryInsertAfterStage, setLibraryInsertAfterStage] = useState<CourseStage | null>(null);
   const [courseSelectedDivId, setCourseSelectedDivId] = useState('');
-  
+
   // Estados para nova Etapa do Percurso (Aba: Configuração do Percurso)
   const [stageName, setStageName] = useState('');
   const [stageType, setStageType] = useState<'run' | 'station'>('run');
@@ -236,6 +289,11 @@ export default function AdminPage() {
   const [stageFemaleWeight, setStageFemaleWeight] = useState('');
   const [editingStageId, setEditingStageId] = useState('');
   const [draggedStageId, setDraggedStageId] = useState('');
+
+  // Estados para Publicação e Replicação do Percurso de Fitness Racing
+  const [isReplicateModalOpen, setIsReplicateModalOpen] = useState(false);
+  const [replicateTargetDivIds, setReplicateTargetDivIds] = useState<string[]>([]);
+  const [isReplicating, setIsReplicating] = useState(false);
 
   // Estados para Lançamento de Splits Avançado (Drawer)
   const [isSplitsDrawerOpen, setIsSplitsDrawerOpen] = useState(false);
@@ -372,12 +430,12 @@ export default function AdminPage() {
     if (scoreFilterCatId && scoreFilterWodId) {
       const categoryAthletes = athletes.filter(a => a.divisionId === scoreFilterCatId);
       const initialInputs: Record<string, string> = {};
-      
+
       categoryAthletes.forEach(ath => {
         const existingScore = scores.find(s => s.athleteId === ath.id && s.workoutId === scoreFilterWodId);
         initialInputs[ath.id] = existingScore ? existingScore.result : '';
       });
-      
+
       return initialInputs;
     }
     return {};
@@ -395,14 +453,14 @@ export default function AdminPage() {
     const activeEventsCount = managerEvents.filter(e => e.status === 'live').length;
     const finishedEventsCount = managerEvents.filter(e => e.status === 'finished').length;
     const upcomingEventsCount = managerEvents.filter(e => e.status === 'upcoming').length;
-    
+
     const managerRegs = registrations.filter(r => eventIds.includes(r.eventId));
     const grossRevenue = managerRegs.reduce((sum, r) => sum + r.totalPaid, 0);
     const netRevenue = grossRevenue * 0.9;
     const platformFee = grossRevenue * 0.1;
     const totalTicketsSold = managerRegs.reduce((sum, r) => sum + r.quantity, 0);
-    
-    const managerAthletes = athletes.filter(a => 
+
+    const managerAthletes = athletes.filter(a =>
       managerEvents.some(e => e.divisions.some(d => d.id === a.divisionId))
     );
     const totalTeams = managerAthletes.filter(a => a.isTeam || (a.teamMembers && a.teamMembers.length > 0)).length;
@@ -467,7 +525,7 @@ export default function AdminPage() {
       setLoginError('E-mail ou senha incorretos. Dica: use org1@wodarena.com e manager1.');
     }
   };
-  
+
   // Tratar upload e conversão de imagem para Base64
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'banner') => {
     const file = e.target.files?.[0];
@@ -525,7 +583,7 @@ export default function AdminPage() {
   const handleBilheteriaSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedEventToManage) return;
-    
+
     const div = selectedEventToManage.divisions.find(d => d.id === bilCatId);
     if (!div) {
       setAdminNotice({ text: 'Por favor, selecione uma categoria válida.', tone: 'error' });
@@ -719,7 +777,7 @@ export default function AdminPage() {
     });
 
     setAdminNotice({ text: `Cupom "${formattedCode}" cadastrado com sucesso!`, tone: 'success' });
-    
+
     // Limpar formulário de cupom
     setNewCouponCode('');
     setNewCouponDiscountValue('');
@@ -1196,7 +1254,7 @@ export default function AdminPage() {
 
     Object.entries(mergedInputs).forEach(([athleteId, resultStr]) => {
       if (resultStr === undefined || resultStr === null) return;
-      
+
       const trimmed = resultStr.trim();
       const hasExisting = scores.some(s => s.athleteId === athleteId && s.workoutId === scoreFilterWodId);
 
@@ -1238,16 +1296,16 @@ export default function AdminPage() {
   // Exportações do Leaderboard
   const handleExportCSV = (catName: string) => {
     const overallList = getLeaderboard(selectedEventToManage?.id || '', leaderboardFilterCatId);
-    
+
     let csvContent = '';
-    
+
     if (selectedEventToManage?.eventType === 'fitness_racing') {
       const division = selectedEventToManage.divisions.find(d => d.id === leaderboardFilterCatId);
       const stages = division?.courseLayout || [];
       const stageHeaders = stages.map(s => s.name).join(',');
-      
+
       const headers = `Posição,Competidor,Box/Academia,Faixa Etária,Tempo Oficial,Diferença${stageHeaders ? ',' + stageHeaders : ''}\n`;
-      
+
       const validTimes = overallList.filter(item => item.totalPoints < 999999);
       const leaderTime = validTimes[0]?.totalPoints || 0;
 
@@ -1257,7 +1315,7 @@ export default function AdminPage() {
         const diffStr = hasTime && diffSecs > 0 ? `+${secondsToTimeStr(diffSecs)}` : (hasTime && item.rank === 1 ? 'Líder' : '-');
         const timeStr = hasTime ? secondsToTimeStr(item.totalPoints) : '-';
         const ageGroup = getAgeGroupFromDate(item.athlete.birthDate, division?.ageGroups);
-        
+
         // Obter splits correspondentes
         const totalWorkout = selectedEventToManage.workouts.find(w => w.divisionId === leaderboardFilterCatId && w.code === 'TOTAL');
         const score = scores.find(s => s.athleteId === item.athlete.id && s.workoutId === totalWorkout?.id);
@@ -1265,7 +1323,7 @@ export default function AdminPage() {
 
         return `${item.rank || '-'},"${item.athlete.name}","${item.athlete.box}","${ageGroup}","${timeStr}","${diffStr}"${stageTimes ? ',' + stageTimes : ''}`;
       }).join('\n');
-      
+
       csvContent = headers + rows;
     } else {
       const headers = 'Posição,Nome,Box,Pontos Totais\n';
@@ -1444,7 +1502,7 @@ export default function AdminPage() {
 
         <div className="space-y-4">
           <p className="text-xs font-bold uppercase tracking-wider text-primary">Informações Básicas</p>
-          
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label htmlFor="edit-event-name" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Nome do Evento *</label>
@@ -1648,7 +1706,7 @@ export default function AdminPage() {
 
         <div className="space-y-4 border-t border-card-border pt-5">
           <p className="text-xs font-bold uppercase tracking-wider text-primary">Configurações &amp; Bilheteria</p>
-          
+
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
             <div>
               <label htmlFor="edit-event-price" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Valor Inscrição (R$)</label>
@@ -2110,13 +2168,13 @@ export default function AdminPage() {
   // --- FITNESS RACING COURSE MANAGEMENT ---
   const handleLoadDefaultHyroxCourse = async () => {
     if (!selectedEventToManage || !courseSelectedDivId) return;
-    
+
     const division = selectedEventToManage.divisions.find(d => d.id === courseSelectedDivId);
     if (!division) return;
-    
+
     const isPro = division.name.toLowerCase().includes('pro');
     const isFemale = division.name.toLowerCase().includes('fem') || division.category === 'female';
-    
+
     // Configurar cargas com base na divisão
     const defaultStages: CourseStage[] = [
       { id: 'run-1', name: 'Run 1', type: 'run', orderIndex: 1, distance: '1000m' },
@@ -2139,7 +2197,7 @@ export default function AdminPage() {
 
     try {
       await saveCourseLayout(courseSelectedDivId, defaultStages);
-      
+
       // Atualizar localmente o selectedEventToManage
       setSelectedEventToManage(prev => {
         if (!prev) return null;
@@ -2148,7 +2206,7 @@ export default function AdminPage() {
           divisions: prev.divisions.map(d => d.id === courseSelectedDivId ? { ...d, courseLayout: defaultStages } : d)
         };
       });
-      
+
       setAdminNotice({ text: 'Percurso padrão HYROX carregado com sucesso.', tone: 'success' });
     } catch (err) {
       console.error(err);
@@ -2331,10 +2389,77 @@ export default function AdminPage() {
     }
   };
 
+  const handlePublishAndReplicateCourse = async () => {
+    if (!selectedEventToManage || !courseSelectedDivId) return;
+    const currentDivision = selectedEventToManage.divisions.find(d => d.id === courseSelectedDivId);
+    if (!currentDivision) return;
+    const currentLayout = currentDivision.courseLayout || [];
+
+    setIsReplicating(true);
+    try {
+      await updateDivision(selectedEventToManage.id, courseSelectedDivId, {
+        isCoursePublished: true
+      });
+
+      for (const targetDivId of replicateTargetDivIds) {
+        await saveCourseLayout(targetDivId, currentLayout);
+        await updateDivision(selectedEventToManage.id, targetDivId, {
+          isCoursePublished: true
+        });
+      }
+
+      setSelectedEventToManage(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          divisions: prev.divisions.map(d => {
+            if (d.id === courseSelectedDivId || replicateTargetDivIds.includes(d.id)) {
+              return { ...d, courseLayout: currentLayout, isCoursePublished: true };
+            }
+            return d;
+          })
+        };
+      });
+
+      setAdminNotice({
+        text: replicateTargetDivIds.length > 0
+          ? `Percurso publicado e replicado com sucesso para ${replicateTargetDivIds.length} categoria(s).`
+          : 'Percurso publicado com sucesso.',
+        tone: 'success'
+      });
+
+      setIsReplicateModalOpen(false);
+      setReplicateTargetDivIds([]);
+    } catch (err) {
+      console.error(err);
+      setAdminNotice({ text: 'Erro ao publicar e replicar o percurso.', tone: 'error' });
+    } finally {
+      setIsReplicating(false);
+    }
+  };
+
   const renderAbaFitnessRaceCourse = () => {
     const divisions = selectedEventToManage?.divisions || [];
     const division = divisions.find(d => d.id === courseSelectedDivId);
     const layout = division?.courseLayout || [];
+
+    // Auditoria em tempo real
+    const courseAuditAlerts: string[] = [];
+    if (division) {
+      if (layout.length !== 16) {
+        courseAuditAlerts.push('O percurso de Fitness Racing deve conter exatamente 16 etapas.');
+      }
+      let hasConsecutiveSameType = false;
+      for (let i = 0; i < layout.length - 1; i++) {
+        if (layout[i].type === layout[i + 1].type) {
+          hasConsecutiveSameType = true;
+          break;
+        }
+      }
+      if (hasConsecutiveSameType) {
+        courseAuditAlerts.push('O percurso deve alternar entre Corridas e Estações de Exercício.');
+      }
+    }
 
     return (
       <div className="space-y-6 text-white">
@@ -2365,11 +2490,32 @@ export default function AdminPage() {
         {division ? (
           <div className="bg-card border border-card-border rounded-xl p-6 space-y-6">
             <div className="border-b border-card-border pb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <div>
-                <h4 className="text-sm font-black text-primary uppercase tracking-wider">Percurso Ativo: {division.name}</h4>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="text-sm font-black text-primary uppercase tracking-wider">Percurso Ativo: {division.name}</h4>
+                  <span className={`rounded px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider border ${
+                    division.isCoursePublished
+                      ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-400'
+                      : 'bg-amber-500/10 border-amber-500/25 text-amber-400'
+                  }`}>
+                    {division.isCoursePublished ? 'Publicado ✅' : 'Rascunho 📝'}
+                  </span>
+                </div>
                 <p className="text-xs text-muted">Linha do tempo oficial com as etapas da competição.</p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
+                {layout.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReplicateTargetDivIds([]);
+                      setIsReplicateModalOpen(true);
+                    }}
+                    className="flex min-h-9 items-center justify-center rounded bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors"
+                  >
+                    📢 Publicar & Replicar
+                  </button>
+                )}
                 {layout.length === 0 && (
                   <button
                     type="button"
@@ -2398,6 +2544,17 @@ export default function AdminPage() {
                 </button>
               </div>
             </div>
+
+            {courseAuditAlerts.length > 0 && (
+              <div className="space-y-2">
+                {courseAuditAlerts.map((alertText, idx) => (
+                  <div key={idx} className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 flex items-start gap-2.5 text-amber-200">
+                    <ShieldAlert className="h-4 w-4 shrink-0 text-amber-400 mt-0.5" />
+                    <span className="text-xs font-semibold leading-relaxed">{alertText}</span>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {layout.length === 0 ? (
               <div className="text-center py-16 space-y-6 rounded-xl border border-dashed border-card-border bg-dark-gray/10">
@@ -2800,6 +2957,100 @@ export default function AdminPage() {
             </div>
           </div>
         )}
+
+        {/* Modal de Publicação e Replicação do Percurso */}
+        {isReplicateModalOpen && division && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-fade-in">
+            <div className="w-full max-w-md rounded-xl border border-card-border bg-card text-white flex flex-col overflow-hidden relative animate-scale-up" role="dialog" aria-modal="true" aria-labelledby="modal-replicate-title">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsReplicateModalOpen(false);
+                  setReplicateTargetDivIds([]);
+                }}
+                className="absolute right-4 top-4 text-muted hover:text-white transition-colors"
+                aria-label="Fechar modal"
+              >
+                <X className="h-5 w-5" />
+              </button>
+
+              <div className="p-6 border-b border-card-border">
+                <h4 id="modal-replicate-title" className="text-base font-black text-white uppercase tracking-wider">
+                  Publicar e Replicar Percurso
+                </h4>
+                <p className="text-xs text-muted font-medium mt-1">
+                  O percurso atual de <strong className="text-primary">{division.name}</strong> será marcado como publicado. Selecione outras categorias do evento para aplicar o mesmo layout de percurso.
+                </p>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 space-y-4 max-h-[50vh]">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-primary font-sans">Categorias do Evento</p>
+
+                {divisions.filter(d => d.id !== division.id).length === 0 ? (
+                  <p className="text-xs text-muted">Não há outras categorias cadastradas neste evento.</p>
+                ) : (
+                  <div className="space-y-2.5">
+                    {divisions
+                      .filter(d => d.id !== division.id)
+                      .map((d) => {
+                        const isChecked = replicateTargetDivIds.includes(d.id);
+                        return (
+                          <label
+                            key={d.id}
+                            className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                              isChecked
+                                ? 'bg-primary/5 border-primary text-white'
+                                : 'bg-dark-gray/30 border-card-border hover:border-muted text-muted hover:text-white'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setReplicateTargetDivIds(prev => [...prev, d.id]);
+                                } else {
+                                  setReplicateTargetDivIds(prev => prev.filter(id => id !== d.id));
+                                }
+                              }}
+                              className="rounded border-card-border bg-dark-gray text-primary focus:ring-primary h-4 w-4"
+                            />
+                            <div className="flex-1">
+                              <p className="text-xs font-bold uppercase tracking-wider">{d.name}</p>
+                              {d.isCoursePublished && (
+                                <span className="text-[9px] text-emerald-400 font-bold uppercase mt-0.5 block">Já possui percurso publicado</span>
+                              )}
+                            </div>
+                          </label>
+                        );
+                      })}
+                  </div>
+                )}
+              </div>
+
+              <div className="p-6 border-t border-card-border flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsReplicateModalOpen(false);
+                    setReplicateTargetDivIds([]);
+                  }}
+                  className="flex-1 min-h-10 flex items-center justify-center rounded-md border border-card-border bg-dark-gray text-xs font-bold uppercase tracking-wider transition-colors hover:border-muted text-muted hover:text-white"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePublishAndReplicateCourse}
+                  disabled={isReplicating}
+                  className="flex-1 min-h-10 flex items-center justify-center rounded-md bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black uppercase tracking-wider transition-colors disabled:opacity-50"
+                >
+                  {isReplicating ? 'Replicando...' : 'Confirmar e Publicar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -2825,12 +3076,19 @@ export default function AdminPage() {
       return 'Evento';
     };
 
-    // Função para salvar baterias geradas no banco de dados
     const handleSaveWorkoutHeats = async () => {
       if (!selectedEventToManage || !heatWorkoutId) return;
 
       const selectedWorkout = workouts.find(w => w.id === heatWorkoutId);
       if (!selectedWorkout) return;
+
+      // Descobrir se as baterias já existiam e estavam publicadas/chamadas
+      const wasPublishedBefore = (selectedEventToManage.scheduleItems || []).some(
+        item => item.kind === 'heat' && item.workoutId === heatWorkoutId && item.isPublished
+      );
+      const wasCallReleasedBefore = (selectedEventToManage.scheduleItems || []).some(
+        item => item.kind === 'heat' && item.workoutId === heatWorkoutId && item.isCallReleased
+      );
 
       // 1. Gerar as novas baterias
       const newHeatItems: EventScheduleItem[] = [];
@@ -2861,7 +3119,9 @@ export default function AdminPage() {
           checkinTime: checkinStr,
           endTime: endStr,
           athleteIds: heatAllocations[`heat-${heatWorkoutId}-${i}`] || [],
-          capacity: heatCapacity
+          capacity: heatCapacity,
+          isPublished: wasPublishedBefore,
+          isCallReleased: wasCallReleasedBefore
         });
 
         currentStartTime = endMin + heatIntervalDuration;
@@ -3036,6 +3296,22 @@ export default function AdminPage() {
 
     const { isLocked: isWorkoutLocked, previousWorkout } = getPreviousWorkoutLockStatus();
 
+    const getDivisionName = (divId: string) => {
+      return (selectedEventToManage?.divisions || []).find(d => d.id === divId)?.name || 'Geral';
+    };
+
+    const groupAthletesByDivision = (athletesList: Athlete[]) => {
+      const groups: Record<string, Athlete[]> = {};
+      athletesList.forEach(ath => {
+        const divName = getDivisionName(ath.divisionId);
+        if (!groups[divName]) {
+          groups[divName] = [];
+        }
+        groups[divName].push(ath);
+      });
+      return groups;
+    };
+
     const divisionId = selectedWorkout?.divisionId;
     // Se o WOD tem categoria vinculada, filtra atletas dessa categoria
     // Se não, mostra todos os atletas das divisões do evento (fallback)
@@ -3047,6 +3323,61 @@ export default function AdminPage() {
         })();
     const allAllocatedIds = Object.values(heatAllocations).flat();
     const pendingAthletes = categoryAthletes.filter(ath => !allAllocatedIds.includes(ath.id));
+
+    // Baterias salvas no banco de dados para a prova selecionada
+    const savedHeatsForWorkout = (selectedEventToManage?.scheduleItems || []).filter(
+      item => item.kind === 'heat' && item.workoutId === heatWorkoutId
+    );
+    const savedAllocatedIds = savedHeatsForWorkout.flatMap(h => h.athleteIds || []);
+    const savedPendingAthletes = categoryAthletes.filter(ath => !savedAllocatedIds.includes(ath.id));
+    const isSavedScheduleComplete = savedHeatsForWorkout.length > 0 && savedPendingAthletes.length === 0;
+
+    const isPublished = savedHeatsForWorkout.length > 0 && savedHeatsForWorkout.every(h => h.isPublished);
+    const isCallReleased = savedHeatsForWorkout.length > 0 && savedHeatsForWorkout.every(h => h.isCallReleased);
+
+    // Publicar Baterias
+    const handlePublishHeats = async () => {
+      if (!selectedEventToManage || !heatWorkoutId) return;
+      if (!isSavedScheduleComplete) return;
+
+      const updatedSchedule = (selectedEventToManage.scheduleItems || []).map(item => {
+        if (item.kind === 'heat' && item.workoutId === heatWorkoutId) {
+          return { ...item, isPublished: true };
+        }
+        return item;
+      });
+
+      try {
+        await updateEvent(selectedEventToManage.id, { scheduleItems: updatedSchedule });
+        setSelectedEventToManage(prev => prev ? { ...prev, scheduleItems: updatedSchedule } : null);
+        setAdminNotice({ text: 'Baterias publicadas com sucesso!', tone: 'success' });
+      } catch (err) {
+        console.error(err);
+        setAdminNotice({ text: 'Erro ao publicar baterias.', tone: 'error' });
+      }
+    };
+
+    // Liberar Chamada
+    const handleReleaseCall = async () => {
+      if (!selectedEventToManage || !heatWorkoutId) return;
+      if (!isSavedScheduleComplete) return;
+
+      const updatedSchedule = (selectedEventToManage.scheduleItems || []).map(item => {
+        if (item.kind === 'heat' && item.workoutId === heatWorkoutId) {
+          return { ...item, isCallReleased: true };
+        }
+        return item;
+      });
+
+      try {
+        await updateEvent(selectedEventToManage.id, { scheduleItems: updatedSchedule });
+        setSelectedEventToManage(prev => prev ? { ...prev, scheduleItems: updatedSchedule } : null);
+        setAdminNotice({ text: 'Chamada dos atletas liberada com sucesso!', tone: 'success' });
+      } catch (err) {
+        console.error(err);
+        setAdminNotice({ text: 'Erro ao liberar chamada dos atletas.', tone: 'error' });
+      }
+    };
 
     const handleAddAthleteToHeat = (heatId: string, athleteId: string) => {
       setHeatAllocations(prev => {
@@ -3286,7 +3617,7 @@ export default function AdminPage() {
                         setHeatAllocations({});
                         return;
                       }
-                      
+
                       const w = workouts.find(work => work.id === wId);
                       if (w && w.timeCap) {
                         const match = w.timeCap.match(/^(\d+)/);
@@ -3294,15 +3625,15 @@ export default function AdminPage() {
                           setHeatWorkoutDuration(Number(match[1]));
                         }
                       }
-                      
+
                       const allocations: Record<string, string[]> = {};
                       let foundCapacity = 5;
                       let foundCount = 3;
-                      
+
                       const existingHeats = (selectedEventToManage?.scheduleItems || []).filter(
                         item => item.kind === 'heat' && item.workoutId === wId
                       );
-                      
+
                       if (existingHeats.length > 0) {
                         existingHeats.forEach(item => {
                           allocations[item.id] = item.athleteIds || [];
@@ -3311,7 +3642,7 @@ export default function AdminPage() {
                           }
                         });
                         foundCount = existingHeats.length;
-                        
+
                         const firstHeat = existingHeats[0];
                         if (firstHeat.date) setHeatDate(firstHeat.date);
                         if (firstHeat.time) setHeatStartTime(firstHeat.time);
@@ -3487,6 +3818,36 @@ export default function AdminPage() {
                 )}
               </div>
 
+              {/* Status do Cronograma da Prova */}
+              <div className={`rounded-xl border p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                pendingAthletes.length === 0 && categoryAthletes.length > 0
+                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+                  : 'border-red-500/30 bg-red-500/10 text-red-200'
+              }`}>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className={`h-2.5 w-2.5 rounded-full ${
+                      pendingAthletes.length === 0 && categoryAthletes.length > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'
+                    }`} />
+                    <h4 className="text-xs font-bold uppercase tracking-wider font-sans">
+                      {pendingAthletes.length === 0 && categoryAthletes.length > 0
+                        ? 'Cronograma Concluído'
+                        : 'Cronograma Incompleto'}
+                    </h4>
+                  </div>
+                  <p className="text-xs text-muted-soft">
+                    {pendingAthletes.length === 0 && categoryAthletes.length > 0
+                      ? 'Todos os atletas foram alocados nas baterias.'
+                      : `Falta alocar ${pendingAthletes.length} atleta(s) de um total de ${categoryAthletes.length}.`}
+                  </p>
+                </div>
+                {pendingAthletes.length > 0 && (
+                  <span className="text-xs font-bold font-number bg-red-500/20 text-red-400 border border-red-500/20 px-2.5 py-1 rounded-md self-start sm:self-center">
+                    {pendingAthletes.length} pendentes
+                  </span>
+                )}
+              </div>
+
               {!heatWorkoutId ? (
                 <p className="text-xs text-muted text-center py-16">Selecione uma prova no formulário para gerar o cronograma.</p>
               ) : (
@@ -3504,7 +3865,7 @@ export default function AdminPage() {
                   )}
                   {/* Excel Style Table Container */}
                   <div className="w-full min-w-[340px] border-collapse border border-white text-center font-sans">
-                    
+
                     {/* Header: Data por Extenso */}
                     <div className="bg-black text-white py-3 text-sm font-black border-b border-white uppercase tracking-widest">
                       {formatLongDate(heatDate)}
@@ -3550,10 +3911,10 @@ export default function AdminPage() {
                         const isEvenLine = idx % 2 === 1;
                         const lineBgClass = isEvenLine ? 'bg-white text-black' : 'bg-black text-white';
                         const colBorderClass = isEvenLine ? 'border-l border-black' : 'border-l border-white';
-                        
+
                         // Célula do INICIO com estilo condicional conforme Excel
-                        const inicioCellClass = isEvenLine 
-                          ? `font-number font-black text-primary ${colBorderClass}` 
+                        const inicioCellClass = isEvenLine
+                          ? `font-number font-black text-primary ${colBorderClass}`
                           : `bg-primary text-ink font-number font-black ${colBorderClass}`;
 
                         return (
@@ -3607,10 +3968,10 @@ export default function AdminPage() {
 
                     {/* Layout Lado a Lado (xl:grid-cols-3) no Desktop */}
                     <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6">
-                      
+
                       {/* Coluna da Esquerda (Baterias e Pendentes) */}
                       <div className="xl:col-span-2 space-y-4 sm:space-y-6">
-                        
+
                         {/* Grid de Baterias (Cards de Alocação) */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
                           {generatedHeatsList.map((heat) => {
@@ -3701,42 +4062,50 @@ export default function AdminPage() {
                           {pendingAthletes.length === 0 ? (
                             <p className="text-[10px] text-muted text-center py-3 italic">Todos alocados!</p>
                           ) : (
-                            <div className="flex flex-wrap gap-1.5 max-h-[120px] overflow-y-auto">
-                              {pendingAthletes.map(ath => (
-                                <div 
-                                  key={ath.id} 
-                                  className="group relative flex items-center gap-1 rounded border border-card-border/50 bg-dark-gray/40 px-2 py-1 text-[10px] text-white"
-                                >
-                                  <span className="font-bold truncate max-w-[100px]">{ath.name}</span>
-                                  
-                                  {/* Popover de alocação rápida ao passar o mouse */}
-                                  {!isWorkoutLocked && (
-                                    <div className="hidden group-hover:flex absolute left-0 bottom-full mb-1 bg-black border border-card-border rounded-lg p-1.5 z-50 flex-col gap-1 w-32">
-                                      <span className="text-[8px] text-muted font-bold text-center block pb-1 border-b border-card-border/40">Mover para:</span>
-                                      {generatedHeatsList.map(h => {
-                                        const hId = `heat-${heatWorkoutId}-${h.number}`;
-                                        const currentCount = (heatAllocations[hId] || []).length;
-                                        const isFull = currentCount >= heatCapacity;
-                                        return (
-                                          <button
-                                            key={hId}
-                                            type="button"
-                                            disabled={isFull}
-                                            onClick={() => handleAddAthleteToHeat(hId, ath.id)}
-                                            className={`text-[9px] font-bold text-left px-2 py-1 rounded transition-colors ${
-                                              isFull 
-                                                ? 'text-muted cursor-not-allowed bg-red-950/20' 
-                                                : 'text-white hover:bg-primary hover:text-ink'
-                                            }`}
-                                          >
-                                            Bateria {h.number} ({currentCount}/{heatCapacity})
-                                          </button>
-                                        );
-                                      })}
+                            <div className="space-y-3 max-h-[160px] overflow-y-auto">
+                              {Object.entries(groupAthletesByDivision(pendingAthletes)).map(([divName, list]) => {
+                                if (list.length === 0) return null;
+                                return (
+                                  <div key={divName} className="space-y-1">
+                                    <span className="text-[8px] font-bold text-primary/80 uppercase tracking-wider block mb-0.5">{divName}</span>
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {list.map(ath => (
+                                        <div
+                                          key={ath.id}
+                                          className="group relative flex items-center gap-1 rounded border border-card-border/50 bg-dark-gray/40 px-2 py-1 text-[10px] text-white hover:border-primary/50 transition-colors"
+                                        >
+                                          <span className="font-bold truncate max-w-[100px]">{ath.name}</span>
+                                          {!isWorkoutLocked && (
+                                            <div className="hidden group-hover:flex absolute left-0 bottom-full mb-1 bg-black border border-card-border rounded-lg p-1.5 z-50 flex-col gap-1 w-32">
+                                              <span className="text-[8px] text-muted font-bold text-center block pb-1 border-b border-card-border/40">Mover para:</span>
+                                              {generatedHeatsList.map(h => {
+                                                const hId = `heat-${heatWorkoutId}-${h.number}`;
+                                                const currentCount = (heatAllocations[hId] || []).length;
+                                                const isFull = currentCount >= heatCapacity;
+                                                return (
+                                                  <button
+                                                    key={hId}
+                                                    type="button"
+                                                    disabled={isFull}
+                                                    onClick={() => handleAddAthleteToHeat(hId, ath.id)}
+                                                    className={`text-[9px] font-bold text-left px-2 py-1 rounded transition-colors ${
+                                                      isFull
+                                                        ? 'text-muted cursor-not-allowed bg-red-950/20'
+                                                        : 'text-white hover:bg-primary hover:text-ink'
+                                                    }`}
+                                                  >
+                                                    Bateria {h.number} ({currentCount}/{heatCapacity})
+                                                  </button>
+                                                );
+                                              })}
+                                            </div>
+                                          )}
+                                        </div>
+                                      ))}
                                     </div>
-                                  )}
-                                </div>
-                              ))}
+                                  </div>
+                                );
+                              })}
                             </div>
                           )}
                         </div>
@@ -3766,47 +4135,66 @@ export default function AdminPage() {
                         </div>
 
                         {/* Lista Geral de Alocação */}
-                        <div className="space-y-1.5 max-h-[350px] overflow-y-auto pr-1">
+                        <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1">
                           {categoryAthletes.length === 0 ? (
-                            <p className="text-xs text-muted text-center py-8 italic">Nenhum competidor cadastrado nesta categoria.</p>
+                            <p className="text-xs text-muted text-center py-8 italic">Nenhum competidor cadastrado nesta prova.</p>
                           ) : (
-                            categoryAthletes
-                              .filter(ath => {
+                            (() => {
+                              const filtered = categoryAthletes.filter(ath => {
                                 if (!heatAthleteSearchQuery) return true;
                                 return ath.name.toLowerCase().includes(heatAthleteSearchQuery.toLowerCase());
-                              })
-                              .map(ath => {
-                                let allocatedHeatNumber: number | null = null;
-                                let allocatedHeatTime: string | null = null;
-                                
-                                generatedHeatsList.forEach(h => {
-                                  const hId = `heat-${heatWorkoutId}-${h.number}`;
-                                  if ((heatAllocations[hId] || []).includes(ath.id)) {
-                                    allocatedHeatNumber = h.number;
-                                    allocatedHeatTime = h.inicio;
-                                  }
-                                });
+                              });
 
+                              if (filtered.length === 0) {
+                                return <p className="text-xs text-muted text-center py-8 italic">Nenhum competidor correspondente à busca.</p>;
+                              }
+
+                              return Object.entries(groupAthletesByDivision(filtered)).map(([divName, list]) => {
+                                if (list.length === 0) return null;
                                 return (
-                                  <div key={ath.id} className="flex items-center justify-between bg-black/30 border border-card-border/40 rounded px-2 py-1.5 text-[10px] transition-colors hover:bg-black/50">
-                                    <div className="flex flex-col truncate pr-2">
-                                      <span className="font-bold text-white truncate">{ath.name}</span>
-                                      {ath.box && <span className="text-[9px] text-muted truncate">{ath.box}</span>}
+                                  <div key={divName} className="space-y-1.5">
+                                    <div className="bg-dark-gray/40 px-2 py-1 rounded border border-card-border/30 flex items-center justify-between font-sans">
+                                      <span className="text-[9px] font-extrabold text-primary uppercase tracking-wider">{divName}</span>
+                                      <span className="text-[9px] font-bold text-muted font-number">{list.length} atletas</span>
                                     </div>
-                                    <div className="shrink-0">
-                                      {allocatedHeatNumber !== null ? (
-                                        <span className="inline-flex rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold">
-                                          Bateria {allocatedHeatNumber} ({allocatedHeatTime})
-                                        </span>
-                                      ) : (
-                                        <span className="inline-flex rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 px-2 py-0.5 text-[9px] font-bold">
-                                          Pendente
-                                        </span>
-                                      )}
+                                    <div className="space-y-1">
+                                      {list.map(ath => {
+                                        let allocatedHeatNumber: number | null = null;
+                                        let allocatedHeatTime: string | null = null;
+
+                                        generatedHeatsList.forEach(h => {
+                                          const hId = `heat-${heatWorkoutId}-${h.number}`;
+                                          if ((heatAllocations[hId] || []).includes(ath.id)) {
+                                            allocatedHeatNumber = h.number;
+                                            allocatedHeatTime = h.inicio;
+                                          }
+                                        });
+
+                                        return (
+                                          <div key={ath.id} className="flex items-center justify-between bg-black/30 border border-card-border/40 rounded px-2 py-1.5 text-[10px] transition-colors hover:bg-black/50 font-sans w-full min-w-0">
+                                            <div className="flex flex-col flex-1 min-w-0 pr-2">
+                                              <span className="font-bold text-white truncate block">{ath.name}</span>
+                                              {ath.box && <span className="text-[9px] text-muted truncate block">{ath.box}</span>}
+                                            </div>
+                                            <div className="shrink-0">
+                                              {allocatedHeatNumber !== null ? (
+                                                <span className="inline-flex rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold">
+                                                  Bateria {allocatedHeatNumber} ({allocatedHeatTime})
+                                                </span>
+                                              ) : (
+                                                <span className="inline-flex rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 px-2 py-0.5 text-[9px] font-bold">
+                                                  Pendente
+                                                </span>
+                                              )}
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
                                     </div>
                                   </div>
                                 );
-                              })
+                              });
+                            })()
                           )}
                         </div>
 
@@ -3814,6 +4202,61 @@ export default function AdminPage() {
 
                     </div>
                   </div>
+
+                  {/* Seção de Ações de Publicação e Chamada */}
+                  {hasSavedHeats && (
+                    <div className="border-t border-card-border/60 pt-4 space-y-3 font-sans">
+                      <div className="flex items-center justify-between">
+                        <h5 className="text-[10px] font-extrabold text-white uppercase tracking-wider">Ações de Controle de Prova</h5>
+                        <div className="flex gap-2">
+                          {isPublished && (
+                            <span className="rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[9px] font-bold text-emerald-400 uppercase">
+                              Publicado ✅
+                            </span>
+                          )}
+                          {isCallReleased && (
+                            <span className="rounded border border-blue-500/30 bg-blue-500/10 px-2 py-0.5 text-[9px] font-bold text-blue-400 uppercase">
+                              Chamada Liberada 📢
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {!isSavedScheduleComplete ? (
+                        <p className="text-[10px] text-amber-400 font-bold bg-amber-500/10 border border-amber-500/20 px-3 py-2 rounded-lg">
+                          ⚠️ O cronograma salvo possui competidores pendentes de alocação. Aloque todos os competidores e salve para habilitar as ações de publicação e chamada.
+                        </p>
+                      ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <button
+                            type="button"
+                            onClick={handlePublishHeats}
+                            disabled={isPublished}
+                            className={`flex min-h-10 items-center justify-center gap-1.5 rounded-md px-3 sm:px-4 py-2 text-[10px] sm:text-xs font-bold uppercase tracking-wider leading-tight transition-colors ${
+                              isPublished
+                                ? 'bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 cursor-not-allowed'
+                                : 'bg-primary hover:bg-primary-hover text-ink'
+                            }`}
+                          >
+                            {isPublished ? 'Baterias Publicadas' : 'Publicar Baterias'}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={handleReleaseCall}
+                            disabled={isCallReleased}
+                            className={`flex min-h-10 items-center justify-center gap-1.5 rounded-md border px-3 sm:px-4 py-2 text-[10px] sm:text-xs font-bold uppercase tracking-wider leading-tight transition-colors ${
+                              isCallReleased
+                                ? 'bg-blue-500/10 border border-blue-500/25 text-blue-400 cursor-not-allowed'
+                                : 'border-card-border bg-dark-gray hover:border-primary hover:text-primary text-muted'
+                            }`}
+                          >
+                            {isCallReleased ? 'Chamada Liberada' : 'Liberar Chamada'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Ações */}
                   <div className="flex flex-col sm:flex-row gap-3 pt-3 sm:pt-4 border-t border-card-border/60">
@@ -4027,10 +4470,10 @@ export default function AdminPage() {
                     <div className="sm:text-right space-y-2 flex flex-col justify-center items-start sm:items-end">
                       <p className="text-xs font-semibold text-muted uppercase text-[10px]">Pontuação</p>
                       <span className="text-xs font-bold text-white uppercase">
-                        {wod.type === 'fortime' ? 'Tempo (Cap: ' + (wod.timeCap || 'Sem limite') + ')' 
-                          : wod.type === 'amrap' ? 'AMRAP' 
-                          : wod.type === 'maxweight' ? 'Carga Máxima' 
-                          : wod.type === 'reps' ? 'Repetições' 
+                        {wod.type === 'fortime' ? 'Tempo (Cap: ' + (wod.timeCap || 'Sem limite') + ')'
+                          : wod.type === 'amrap' ? 'AMRAP'
+                          : wod.type === 'maxweight' ? 'Carga Máxima'
+                          : wod.type === 'reps' ? 'Repetições'
                           : wod.type === 'distance' ? 'Distância'
                           : 'Pontos'}
                       </span>
@@ -4268,7 +4711,7 @@ export default function AdminPage() {
                   {isTeamCat && (
                     <div className="space-y-4 border-t border-card-border/60 pt-4">
                       <p className="text-xs font-bold uppercase tracking-wider text-primary font-sans">Integrantes da Equipe</p>
-                      
+
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {Array.from({ length: selectedCat.type === 'duo' ? 2 : selectedCat.type === 'trio' ? 3 : 4 }).map((_, idx) => (
                           <div key={idx} className="bg-dark-gray/25 border border-card-border/60 rounded-xl p-3 space-y-3">
@@ -4496,7 +4939,7 @@ export default function AdminPage() {
                             <div className="space-y-1">
                               <p className="font-bold text-white uppercase">{reg.athleteName}</p>
                               <p className="text-[10px] text-muted">{reg.athleteEmail} &middot; {reg.athletePhone}</p>
-                              
+
                               {athleteInfo && athleteInfo.isTeam && athleteInfo.teamMembers && athleteInfo.teamMembers.length > 0 && (
                                 <div className="mt-1 bg-dark-gray/30 border border-card-border/50 rounded-lg p-2 space-y-1 max-w-sm">
                                   <p className="text-[9px] font-bold uppercase text-primary font-sans">Integrantes:</p>
@@ -4665,8 +5108,8 @@ export default function AdminPage() {
                               {coupon.discountType === 'percentage' ? 'Porcentagem (%)' : 'Fixo (R$)'}
                             </td>
                             <td className="py-3 px-2 font-bold font-number text-white">
-                              {coupon.discountType === 'percentage' 
-                                ? `${coupon.discountValue}%` 
+                              {coupon.discountType === 'percentage'
+                                ? `${coupon.discountValue}%`
                                 : currencyFormatter.format(coupon.discountValue)
                               }
                             </td>
@@ -4715,7 +5158,7 @@ export default function AdminPage() {
       if (!timeStr) return;
       const secs = timeToSeconds(timeStr);
       const formattedTime = secondsToTimeStr(secs);
-      
+
       const existingScore = scores.find(s => s.athleteId === athleteId && s.workoutId === workoutId);
       const existingSplits = existingScore?.splits || {};
 
@@ -4740,7 +5183,7 @@ export default function AdminPage() {
   const renderAbaFitnessRaceScores = () => {
     const divisions = selectedEventToManage?.divisions || [];
     const categoryAthletes = athletes.filter(a => a.divisionId === scoreFilterCatId);
-    
+
     const totalWorkout = selectedEventToManage?.workouts.find(w => w.divisionId === scoreFilterCatId && w.code === 'TOTAL');
     const workoutId = totalWorkout?.id || `wod-${scoreFilterCatId}-total`;
 
@@ -4800,7 +5243,7 @@ export default function AdminPage() {
               <tbody className="divide-y divide-card-border/30 text-xs">
                 {categoryAthletes.map((ath) => {
                   const score = scores.find(s => s.athleteId === ath.id && s.workoutId === workoutId);
-                  
+
                   return (
                     <tr key={ath.id} className="hover:bg-dark-gray/30 transition-colors">
                       <td className="py-3 px-2">
@@ -4917,9 +5360,9 @@ export default function AdminPage() {
               </h4>
               <p className="text-xs text-muted-soft">
                 Formato esperado: {
-                  activeWod.type === 'fortime' ? 'Tempo (MM:SS, ex: 12:32)' 
-                  : activeWod.type === 'amrap' ? 'Repetições (ex: 187)' 
-                  : activeWod.type === 'maxweight' ? 'Peso (ex: 125)' 
+                  activeWod.type === 'fortime' ? 'Tempo (MM:SS, ex: 12:32)'
+                  : activeWod.type === 'amrap' ? 'Repetições (ex: 187)'
+                  : activeWod.type === 'maxweight' ? 'Peso (ex: 125)'
                   : activeWod.type === 'distance' ? 'Distância (ex: 1500)'
                   : 'Pontos (ex: 100)'
                 }
@@ -4946,10 +5389,10 @@ export default function AdminPage() {
                         id={`score-input-${ath.id}`}
                         type="text"
                         placeholder={
-                          activeWod.type === 'fortime' ? '12:32' 
-                          : activeWod.type === 'amrap' ? '187' 
-                          : activeWod.type === 'maxweight' ? '125' 
-                          : activeWod.type === 'distance' ? '1500' 
+                          activeWod.type === 'fortime' ? '12:32'
+                          : activeWod.type === 'amrap' ? '187'
+                          : activeWod.type === 'maxweight' ? '125'
+                          : activeWod.type === 'distance' ? '1500'
                           : '100'
                         }
                         value={(scoreInputs[ath.id] !== undefined ? scoreInputs[ath.id] : derivedScoreInputs[ath.id]) || ''}
@@ -4963,10 +5406,10 @@ export default function AdminPage() {
                         className="w-full sm:w-44 rounded-md border border-card-border bg-dark-gray px-3 py-1.5 text-sm text-white placeholder:text-muted-soft focus:border-primary/50 focus:outline-none font-number text-center font-bold"
                       />
                       <span className="text-xs font-bold text-primary text-[10px] uppercase w-12 font-sans">
-                        {activeWod.type === 'fortime' ? 'Min' 
-                          : activeWod.type === 'amrap' ? 'Reps' 
-                          : activeWod.type === 'maxweight' ? 'Kg' 
-                          : activeWod.type === 'distance' ? 'Mts' 
+                        {activeWod.type === 'fortime' ? 'Min'
+                          : activeWod.type === 'amrap' ? 'Reps'
+                          : activeWod.type === 'maxweight' ? 'Kg'
+                          : activeWod.type === 'distance' ? 'Mts'
                           : 'Pts'}
                       </span>
                     </div>
@@ -4993,8 +5436,8 @@ export default function AdminPage() {
     const divisions = selectedEventToManage?.divisions || [];
     const workouts = selectedEventToManage?.workouts || [];
     const categoryWods = workouts.filter(w => !w.divisionId || w.divisionId === leaderboardFilterCatId);
-    
-    const rawLeaderboard = leaderboardFilterCatId 
+
+    const rawLeaderboard = leaderboardFilterCatId
       ? getLeaderboard(selectedEventToManage?.id || '', leaderboardFilterCatId)
       : [];
 
@@ -5009,16 +5452,16 @@ export default function AdminPage() {
         if (selectedCat?.useAgeGroups && leaderboardAgeGroupFilter) {
           data = data.filter(item => getAgeGroupFromDate(item.athlete.birthDate, selectedCat?.ageGroups) === leaderboardAgeGroupFilter);
         }
-        
+
         // Filtro de busca textual (nome, equipe ou box)
         if (leaderboardSearchFilter) {
           const search = leaderboardSearchFilter.toLowerCase();
-          data = data.filter(item => 
-            item.athlete.name.toLowerCase().includes(search) || 
+          data = data.filter(item =>
+            item.athlete.name.toLowerCase().includes(search) ||
             item.athlete.box.toLowerCase().includes(search)
           );
         }
-        
+
         // No Fitness Racing, a lista já vem pré-ordenada do getLeaderboard de forma crescente
         return data;
       }
@@ -5160,15 +5603,15 @@ export default function AdminPage() {
                     const finalRank = item.rank;
                     const hasTime = item.totalPoints < 999999;
                     const diffSecs = hasTime ? item.totalPoints - leaderTime : 0;
-                    
+
                     return (
                       <tr key={ath.id} className="hover:bg-dark-gray/30 transition-colors">
                         <td className="py-3 px-2 text-center font-bold">
                           {finalRank > 0 ? (
                             <span className={`inline-flex items-center justify-center h-6 w-6 rounded-full font-number ${
-                              finalRank === 1 ? 'bg-yellow-500/20 text-yellow-500 border border-yellow-500/30' 
-                              : finalRank === 2 ? 'bg-slate-300/20 text-slate-300 border border-slate-300/30' 
-                              : finalRank === 3 ? 'bg-amber-700/20 text-amber-700 border border-amber-700/30' 
+                              finalRank === 1 ? 'bg-yellow-500/20 text-yellow-500 border border-yellow-500/30'
+                              : finalRank === 2 ? 'bg-slate-300/20 text-slate-300 border border-slate-300/30'
+                              : finalRank === 3 ? 'bg-amber-700/20 text-amber-700 border border-amber-700/30'
                               : 'text-muted'
                             }`}>
                               {finalRank}
@@ -5271,9 +5714,9 @@ export default function AdminPage() {
                     <tr key={ath.id} className="hover:bg-dark-gray/30 transition-colors">
                       <td className="py-3 px-2 text-center font-bold">
                         <span className={`inline-flex items-center justify-center h-6 w-6 rounded-full font-number ${
-                          finalRank === 1 ? 'bg-yellow-500/20 text-yellow-500 border border-yellow-500/30' 
-                          : finalRank === 2 ? 'bg-slate-300/20 text-slate-300 border border-slate-300/30' 
-                          : finalRank === 3 ? 'bg-amber-700/20 text-amber-700 border border-amber-700/30' 
+                          finalRank === 1 ? 'bg-yellow-500/20 text-yellow-500 border border-yellow-500/30'
+                          : finalRank === 2 ? 'bg-slate-300/20 text-slate-300 border border-slate-300/30'
+                          : finalRank === 3 ? 'bg-amber-700/20 text-amber-700 border border-amber-700/30'
                           : 'text-muted'
                         }`}>
                           {finalRank}
@@ -5372,7 +5815,7 @@ export default function AdminPage() {
               <p className="text-xs text-muted font-medium">Controle de eventos, categorias, baterias e pontuações.</p>
             </div>
           </div>
-          <button 
+          <button
             onClick={logout}
             className="flex min-h-11 items-center gap-1.5 rounded-md border border-card-border bg-dark-gray px-4 py-2 text-xs font-bold text-muted transition-colors hover:border-muted hover:text-white"
           >
@@ -5391,7 +5834,8 @@ export default function AdminPage() {
               { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
               { id: 'my-events', label: 'Meus Eventos', icon: Settings },
               { id: 'event', label: 'Novo Evento', icon: Calendar },
-              { id: 'payments', label: 'Pagamentos', icon: CreditCard }
+              { id: 'payments', label: 'Pagamentos', icon: CreditCard },
+              { id: 'security', label: 'Segurança', icon: Lock }
             ].map(tab => {
               const Icon = tab.icon;
               return (
@@ -5443,7 +5887,7 @@ export default function AdminPage() {
                     Resumo das Operações
                   </h3>
                 </div>
-                
+
                 {/* Grid de Métricas Principais (7 Cards) */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   {/* Receita Estimada */}
@@ -5700,7 +6144,7 @@ export default function AdminPage() {
                               }`}>
                                 {evt.status === 'live' ? 'Ao Vivo' : evt.status === 'finished' ? 'Finalizado' : 'Em Breve'}
                               </span>
-                              
+
                               <button
                                 type="button"
                                 onClick={() => {
@@ -5842,7 +6286,7 @@ export default function AdminPage() {
 
                 <div className="space-y-4">
                   <p className="text-xs font-bold uppercase tracking-[0.14em] text-primary font-sans">Informações Básicas</p>
-                  
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="sm:col-span-2">
                       <label htmlFor="event-type" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans">Tipo de Evento *</label>
@@ -6060,7 +6504,7 @@ export default function AdminPage() {
 
                 <div className="space-y-4 border-t border-card-border pt-5">
                   <p className="text-xs font-bold uppercase tracking-[0.14em] text-primary font-sans">Configurações & Publicação</p>
-                  
+
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
                       <label htmlFor="event-price" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans">Valor da Inscrição (R$)</label>
@@ -6231,6 +6675,75 @@ export default function AdminPage() {
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* ABA: Segurança */}
+            {activeTab === 'security' && (
+              <div className="space-y-6 bg-background text-white">
+                <div className="border-b border-card-border pb-4">
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary font-sans">Segurança da Conta</p>
+                  <h3 className="mt-1 text-2xl font-bold tracking-tight text-white uppercase">
+                    Configurações de Acesso
+                  </h3>
+                </div>
+
+                <div className="max-w-md bg-card border border-card-border rounded-xl p-6 space-y-6">
+                  <form onSubmit={handleSecuritySubmit} className="space-y-4">
+                    <div>
+                      <label htmlFor="current-password" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans">
+                        Senha Atual
+                      </label>
+                      <input
+                        id="current-password"
+                        type="password"
+                        required
+                        value={securityCurrentPassword}
+                        onChange={(e) => setSecurityCurrentPassword(e.target.value)}
+                        className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2.5 text-sm text-white focus:border-primary/50 focus:outline-none"
+                        placeholder="••••••••"
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="new-password" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans">
+                        Nova Senha
+                      </label>
+                      <input
+                        id="new-password"
+                        type="password"
+                        required
+                        value={securityNewPassword}
+                        onChange={(e) => setSecurityNewPassword(e.target.value)}
+                        className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2.5 text-sm text-white focus:border-primary/50 focus:outline-none"
+                        placeholder="Mínimo 6 caracteres"
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="confirm-new-password" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans">
+                        Confirmar Nova Senha
+                      </label>
+                      <input
+                        id="confirm-new-password"
+                        type="password"
+                        required
+                        value={securityConfirmPassword}
+                        onChange={(e) => setSecurityConfirmPassword(e.target.value)}
+                        className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2.5 text-sm text-white focus:border-primary/50 focus:outline-none"
+                        placeholder="••••••••"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={securitySubmitting}
+                      className="w-full flex min-h-11 items-center justify-center rounded bg-primary hover:bg-primary-hover text-ink px-4 py-2.5 text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-50 font-sans"
+                    >
+                      {securitySubmitting ? 'Salvando...' : 'Salvar Nova Senha'}
+                    </button>
+                  </form>
+                </div>
               </div>
             )}
 
@@ -6700,7 +7213,7 @@ export default function AdminPage() {
                     if (!splitsDrawerAthlete) return;
                     const totalWorkout = selectedEventToManage?.workouts.find(w => w.divisionId === splitsDrawerAthlete.divisionId && w.code === 'TOTAL');
                     const workoutId = totalWorkout?.id || `wod-${splitsDrawerAthlete.divisionId}-total`;
-                    
+
                     let totalSecs = 0;
                     Object.values(splitsInputs).forEach(val => {
                       totalSecs += timeToSeconds(val);

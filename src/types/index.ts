@@ -33,6 +33,7 @@ export interface Division {
   useAgeGroups?: boolean;
   ageGroups?: string[];
   courseLayout?: CourseStage[];
+  isCoursePublished?: boolean;
 }
 
 export interface Workout {
@@ -66,6 +67,8 @@ export interface EventScheduleItem {
   endTime?: string;
   athleteIds?: string[];
   capacity?: number;
+  isPublished?: boolean;
+  isCallReleased?: boolean;
 }
 
 export interface Athlete {
