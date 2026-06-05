@@ -1,0 +1,1101 @@
+'use client';
+
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
+import { Check, CreditCard, ShieldCheck, Ticket, X } from 'lucide-react';
+import Script from 'next/script';
+import Link from 'next/link';
+import { Event, Division, Registration, Athlete } from '@/types';
+import { useApp } from '@/context/AppContext';
+import { normalizeInstagram } from '@/lib/fitnessRacing';
+
+interface RegisterModalProps {
+  event: Event;
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess?: (registration: Registration, athlete: Athlete, cpf: string) => void;
+}
+
+type ParticipantForm = {
+  name: string;
+  email: string;
+  phone: string;
+  gender: 'male' | 'female';
+  birthDate: string;
+  city: string;
+  state: string;
+  instagram: string;
+  photoUrl: string;
+};
+
+const createEmptyParticipant = (): ParticipantForm => ({
+  name: '',
+  email: '',
+  phone: '',
+  gender: 'male',
+  birthDate: '',
+  city: '',
+  state: '',
+  instagram: '',
+  photoUrl: ''
+});
+
+const generateUniqueId = (prefix: string) => {
+  return `${prefix}-${Date.now()}`;
+};
+
+export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterModalProps) {
+  const { coupons, registerTicket, incrementCouponUsage } = useApp();
+  const [selectedDivisionId, setSelectedDivisionId] = useState(event.divisions[0]?.id || '');
+  const [box, setBox] = useState('');
+  const [teamName, setTeamName] = useState('');
+  const [teamInstagram, setTeamInstagram] = useState('');
+  const [participants, setParticipants] = useState<ParticipantForm[]>([createEmptyParticipant()]);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isSuccess] = useState(false);
+  const [couponCode, setCouponCode] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
+  const [discountApplied, setDiscountApplied] = useState(0);
+  const [couponNotice, setCouponNotice] = useState<{ text: string; tone: 'success' | 'error' } | null>(null);
+  const [redirectUrl, setRedirectUrl] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'pix' | 'credit_card'>('pix');
+  const [cpf, setCpf] = useState('');
+  const [pixData, setPixData] = useState<{ qr_code: string; qr_code_base64: string; paymentId: string } | null>(null);
+  const [copiado, setCopiado] = useState(false);
+  const [cardNumber, setCardNumber] = useState('');
+  const [cardholderName, setCardholderName] = useState('');
+  const [expirationDate, setExpirationDate] = useState('');
+  const [securityCode, setSecurityCode] = useState('');
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
+  if (isOpen !== prevIsOpen) {
+    setPrevIsOpen(isOpen);
+    setAcceptedTerms(false);
+  }
+
+  // Redirecionamento de forma controlada via Effect
+  useEffect(() => {
+    if (redirectUrl) {
+      window.location.href = redirectUrl;
+    }
+  }, [redirectUrl]);
+
+  // Polling para verificar status do pagamento Pix
+  useEffect(() => {
+    if (!pixData?.paymentId) return;
+
+    let active = true;
+    const intervalId = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/checkout/status?payment_id=${pixData.paymentId}&event_id=${event.id}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.status === 'approved' && active) {
+          active = false; // Bloqueia reentradas concorrentes
+          clearInterval(intervalId);
+          
+          // Registrar localmente
+          const pendingRegStr = sessionStorage.getItem('pending_registration');
+          let createdReg = null;
+          let parsedAthlete = null;
+          let parsedCpf = cpf;
+          
+          if (pendingRegStr) {
+            try {
+              const { registrationData, athleteProfile, cpf: savedCpf } = JSON.parse(pendingRegStr);
+              createdReg = registerTicket(registrationData, athleteProfile);
+              parsedAthlete = athleteProfile;
+              parsedCpf = savedCpf || cpf;
+              if (registrationData.couponCode) {
+                incrementCouponUsage(event.id, registrationData.couponCode);
+              }
+            } catch (err) {
+              console.error("[RegisterModal Pix success] Erro ao registrar localmente:", err);
+            } finally {
+              sessionStorage.removeItem('pending_registration');
+            }
+          }
+          
+          if (onSuccess && createdReg && parsedAthlete) {
+            // Disparar envio de e-mail local em background
+            fetch('/api/checkout/email', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ registrationId: createdReg.id, cpf: parsedCpf })
+            }).catch(err => console.error("[Local Email Trigger] Erro ao disparar e-mail:", err));
+
+            onSuccess(createdReg, parsedAthlete, parsedCpf);
+            onClose();
+          } else {
+            setRedirectUrl(`${window.location.pathname}?payment=success`);
+          }
+        }
+      } catch (err) {
+        console.error("[Checkout Status Polling] Erro ao verificar status:", err);
+      }
+    }, 5000);
+
+    return () => {
+      active = false;
+      clearInterval(intervalId);
+    };
+  }, [pixData, event.id, registerTicket, incrementCouponUsage, onSuccess, onClose, cpf]);
+
+  const isValidCPF = (val: string) => {
+    const clean = val.replace(/\D/g, '');
+    if (clean.length !== 11) return false;
+    if (/^(\d)\1{10}$/.test(clean)) return false;
+    return true;
+  };
+
+  const selectedDivision = event.divisions.find(d => d.id === selectedDivisionId);
+  const participantCount = useMemo(() => {
+    if (!selectedDivision) return 1;
+    if (selectedDivision.type === 'duo') return 2;
+    if (selectedDivision.type === 'trio') return 3;
+    if (selectedDivision.type === 'team') return 4;
+    return 1;
+  }, [selectedDivision]);
+
+  const visibleParticipants = useMemo(
+    () => Array.from({ length: participantCount }, (_, index) => participants[index] || createEmptyParticipant()),
+    [participantCount, participants]
+  );
+
+  // Preços dinâmicos baseados no ticketPrice do evento e formato
+  const getPrice = (div: Division | undefined) => {
+    const basePrice = event.ticketPrice ?? 150;
+    if (!div) return basePrice;
+    return div.price ?? basePrice;
+  };
+
+  const ticketPrice = getPrice(selectedDivision);
+  const totalPaid = Math.max(0, ticketPrice - discountApplied);
+  const isTeamCategory = participantCount > 1;
+  const primaryParticipant = visibleParticipants[0] || createEmptyParticipant();
+  const isFitnessRacing = event.eventType === 'fitness_racing';
+
+  const handleApplyCoupon = () => {
+    if (!selectedDivision) return;
+    const code = couponCode.trim().toUpperCase();
+    if (!code) {
+      setAppliedCoupon(null);
+      setDiscountApplied(0);
+      setCouponNotice(null);
+      return;
+    }
+
+    const coupon = coupons.find(c => c.eventId === event.id && c.code.toUpperCase() === code);
+    if (!coupon) {
+      setCouponNotice({ text: 'Cupom inválido ou inexistente para este evento.', tone: 'error' });
+      setAppliedCoupon(null);
+      setDiscountApplied(0);
+      return;
+    }
+
+    if (coupon.usageLimit > 0 && coupon.usageCount >= coupon.usageLimit) {
+      setCouponNotice({ text: 'Este cupom já atingiu o limite de utilização.', tone: 'error' });
+      setAppliedCoupon(null);
+      setDiscountApplied(0);
+      return;
+    }
+
+    let discount = 0;
+    if (coupon.discountType === 'percentage') {
+      discount = (ticketPrice * coupon.discountValue) / 100;
+    } else {
+      discount = coupon.discountValue;
+    }
+
+    setDiscountApplied(discount);
+    setAppliedCoupon(coupon.code);
+    setCouponNotice({ text: `Cupom "${coupon.code}" aplicado com sucesso!`, tone: 'success' });
+  };
+
+  const updateParticipant = (index: number, field: keyof ParticipantForm, value: string) => {
+    setParticipants((current) => {
+      const expanded = Array.from({ length: Math.max(current.length, participantCount) }, (_, participantIndex) => current[participantIndex] || createEmptyParticipant());
+      return expanded.map((participant, participantIndex) => (
+        participantIndex === index ? { ...participant, [field]: value } : participant
+      ));
+    });
+  };
+
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!acceptedTerms) {
+      alert('Você precisa aceitar os Termos e Políticas de Compra para prosseguir.');
+      return;
+    }
+
+    const hasMissingRequiredParticipantData = visibleParticipants.some((participant) => {
+      if (!participant.name || !participant.gender) return true;
+      if (!isFitnessRacing) return !participant.email || !participant.phone;
+      return !participant.birthDate || !participant.city || !participant.state || !participant.instagram;
+    });
+
+    if (hasMissingRequiredParticipantData || (isFitnessRacing && !box)) {
+      alert(isFitnessRacing
+        ? 'Preencha nome, nascimento, sexo, cidade, estado, box e Instagram.'
+        : 'Por favor, preencha todos os campos obrigatórios.');
+      return;
+    }
+
+    if (paymentMethod === 'pix' && !isValidCPF(cpf)) {
+      alert('Por favor, informe um CPF válido para gerar o Pix.');
+      return;
+    }
+
+    setIsProcessing(true);
+
+    const athleteNames = visibleParticipants.map((participant) => participant.name.trim());
+    const finalCompetidorName = isTeamCategory
+      ? `${teamName.trim() || selectedDivision?.name || 'Equipe'} (${athleteNames.join(' / ')})`
+      : primaryParticipant.name.trim();
+    const teamMembers = isTeamCategory
+      ? visibleParticipants.map((participant) => ({
+          name: participant.name.trim(),
+          instagram: normalizeInstagram(participant.instagram)
+        }))
+      : [];
+
+    const regId = generateUniqueId('reg');
+    const athleteId = generateUniqueId('ath');
+
+    const registrationData = {
+      id: regId,
+      eventId: event.id,
+      divisionId: selectedDivisionId,
+      athleteName: finalCompetidorName,
+      athleteEmail: primaryParticipant.email || 'nao-informado@wodarena.com',
+      athletePhone: primaryParticipant.phone || 'Não informado',
+      box: box || 'Independente',
+      gender: primaryParticipant.gender,
+      ticketType: selectedDivision?.name || 'Inscrição Geral',
+      ticketPrice,
+      quantity: 1,
+      totalPaid,
+      couponCode: appliedCoupon || undefined
+    };
+
+    const athleteProfile = {
+      id: athleteId,
+      name: finalCompetidorName,
+      box: box || 'Independente',
+      country: 'BR',
+      divisionId: selectedDivisionId,
+      birthDate: primaryParticipant.birthDate,
+      city: primaryParticipant.city,
+      state: primaryParticipant.state,
+      photoUrl: primaryParticipant.photoUrl,
+      email: primaryParticipant.email,
+      phone: primaryParticipant.phone,
+      gender: primaryParticipant.gender,
+      instagram: isTeamCategory ? normalizeInstagram(teamInstagram || primaryParticipant.instagram) : normalizeInstagram(primaryParticipant.instagram),
+      isTeam: isTeamCategory,
+      teamMembers
+    };
+
+    try {
+      if (totalPaid === 0) {
+        console.log("[Checkout WODArena] Inscrição gratuita (totalPaid === 0). Aprovando imediatamente...");
+        const createdReg = registerTicket(registrationData, athleteProfile);
+        if (registrationData.couponCode) {
+          incrementCouponUsage(event.id, registrationData.couponCode);
+        }
+
+        const finalReg = createdReg || {
+          ...registrationData,
+          id: registrationData.id || `reg-${Date.now()}`,
+          createdAt: new Date().toISOString()
+        };
+
+        // Enviar e-mail de confirmação via Resend em background
+        fetch('/api/checkout/email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ registrationId: finalReg.id, cpf })
+        }).catch(err => console.error("[Local Email Trigger] Erro ao disparar e-mail gratuito:", err));
+
+        if (onSuccess) {
+          onSuccess(finalReg, athleteProfile, cpf);
+          onClose();
+        } else {
+          sessionStorage.setItem('pending_registration', JSON.stringify({ registrationData, athleteProfile, cpf }));
+          setRedirectUrl(`${window.location.pathname}?payment=success`);
+        }
+        setIsProcessing(false);
+        return;
+      }
+
+      if (paymentMethod === 'pix') {
+        console.log("[Checkout WODArena] Criando pagamento Pix no Mercado Pago...");
+        const response = await fetch('/api/checkout/pix', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            registrationData,
+            athleteProfile,
+            cpf
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error('Erro ao criar cobrança Pix.');
+        }
+
+        const data = await response.json();
+        
+        sessionStorage.setItem('pending_registration', JSON.stringify({ registrationData, athleteProfile, cpf }));
+
+        setPixData({
+          qr_code: data.qr_code,
+          qr_code_base64: data.qr_code_base64,
+          paymentId: data.paymentId
+        });
+        setIsProcessing(false);
+
+      } else {
+        // Valida CPF e campos do cartão
+        if (!isValidCPF(cpf)) {
+          alert('Por favor, informe um CPF válido.');
+          setIsProcessing(false);
+          return;
+        }
+
+        if (!cardNumber || !cardholderName || !expirationDate || !securityCode) {
+          alert('Por favor, preencha todos os campos do cartão de crédito.');
+          setIsProcessing(false);
+          return;
+        }
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if (!(window as any).MercadoPago) {
+          alert('O gateway de pagamento do Mercado Pago está carregando. Por favor, tente novamente em alguns segundos.');
+          setIsProcessing(false);
+          return;
+        }
+
+        const publicKey = event.mpPublicKey || process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY || 'APP_USR-0d64556d-2758-423f-b21e-3fc5b43a674f';
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const mp = new (window as any).MercadoPago(publicKey);
+
+        // Tokeniza o cartão
+        const expirationParts = expirationDate.split('/');
+        const month = expirationParts[0]?.trim();
+        const year = '20' + expirationParts[1]?.trim();
+
+        let cardToken;
+        try {
+          cardToken = await mp.createCardToken({
+            cardNumber: cardNumber.replace(/\s/g, ''),
+            cardholderName: cardholderName,
+            cardExpirationMonth: month,
+            cardExpirationYear: year,
+            securityCode: securityCode,
+            identificationType: 'CPF',
+            identificationNumber: cpf.replace(/\D/g, '')
+          });
+        } catch (tokenErr) {
+          console.error("[Checkout Card Tokenizer] Erro ao criar token:", tokenErr);
+          alert('Dados do cartão inválidos. Verifique os campos e tente novamente.');
+          setIsProcessing(false);
+          return;
+        }
+
+        if (!cardToken || !cardToken.id) {
+          alert('Não foi possível validar os dados do cartão. Verifique os números informados.');
+          setIsProcessing(false);
+          return;
+        }
+
+        // Obtém o método do cartão com base no bin
+        let paymentMethodId = 'visa';
+        try {
+          const bin = cardNumber.replace(/\s/g, '').substring(0, 6);
+          const paymentMethods = await mp.getPaymentMethods({ bin });
+          paymentMethodId = paymentMethods[0]?.id || 'visa';
+        } catch (binErr) {
+          console.warn("[Checkout Card Method Detector] Erro ao detectar bandeira, usando visa fallback:", binErr);
+        }
+
+        console.log("[Checkout WODArena] Criando pagamento com Cartão no Mercado Pago...");
+        const response = await fetch('/api/checkout/card', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            registrationData,
+            athleteProfile,
+            token: cardToken.id,
+            payment_method_id: paymentMethodId,
+            installments: 1
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error('Erro ao processar pagamento com cartão.');
+        }
+
+        const data = await response.json();
+
+        if (data.status === 'approved') {
+          const createdReg = registerTicket(registrationData, athleteProfile);
+          if (registrationData.couponCode) {
+            incrementCouponUsage(event.id, registrationData.couponCode);
+          }
+          
+          const finalReg = createdReg || {
+            ...registrationData,
+            id: registrationData.id || `reg-${Date.now()}`,
+            createdAt: new Date().toISOString()
+          };
+
+          // Disparar envio de e-mail local em background
+          fetch('/api/checkout/email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ registrationId: finalReg.id, cpf })
+          }).catch(err => console.error("[Local Email Trigger] Erro ao disparar e-mail:", err));
+
+          if (onSuccess) {
+            onSuccess(
+              finalReg,
+              athleteProfile,
+              cpf
+            );
+            onClose();
+          } else {
+            sessionStorage.setItem('pending_registration', JSON.stringify({ registrationData, athleteProfile, cpf }));
+            setRedirectUrl(`${window.location.pathname}?payment=success`);
+          }
+        } else if (data.status === 'in_process') {
+          alert('Seu pagamento está sendo analisado pelo Mercado Pago. Acompanhe a confirmação no painel do atleta.');
+          onClose();
+        } else {
+          alert(`O pagamento não foi aprovado (Status: ${data.status}). Por favor, tente com outro cartão.`);
+          setIsProcessing(false);
+        }
+      }
+
+    } catch (err) {
+      console.error("[Checkout WODArena] Erro no processamento do checkout:", err);
+      alert('Houve um erro ao processar o seu checkout. Por favor, tente novamente.');
+      setIsProcessing(false);
+    }
+  }, [
+    visibleParticipants,
+    isFitnessRacing,
+    box,
+    isTeamCategory,
+    teamName,
+    selectedDivision,
+    primaryParticipant,
+    event.id,
+    selectedDivisionId,
+    ticketPrice,
+    totalPaid,
+    appliedCoupon,
+    teamInstagram,
+    paymentMethod,
+    cpf,
+    cardNumber,
+    cardholderName,
+    expirationDate,
+    securityCode,
+    onClose,
+    registerTicket,
+    incrementCouponUsage,
+    onSuccess,
+    event.mpPublicKey,
+    acceptedTerms
+  ]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4">
+      <div className="transactional-surface relative flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-xl" role="dialog" aria-modal="true" aria-labelledby="registration-title">
+        <div className="flex items-center justify-between border-b border-hairline-light px-5 py-4">
+          <div className="flex items-center gap-2">
+            <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary">
+              <Ticket className="h-4 w-4 text-ink" aria-hidden="true" />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#9a7200]">Checkout WODArena</p>
+              <h3 id="registration-title" className="text-base font-bold text-ink">Confirmar inscrição</h3>
+            </div>
+          </div>
+          <button 
+            onClick={onClose} 
+            className="flex h-11 w-11 items-center justify-center rounded-md text-muted-soft transition-colors hover:bg-surface-soft-light hover:text-ink"
+            aria-label="Fechar modal de inscrição"
+          >
+            <X className="h-5 w-5" aria-hidden="true" />
+          </button>
+        </div>
+
+        <div className="flex-1 space-y-6 overflow-y-auto overscroll-contain p-6">
+          {isSuccess ? (
+            <div className="text-center py-10 space-y-4" role="status" aria-live="polite">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary">
+                <Check className="h-8 w-8 text-ink" aria-hidden="true" />
+              </div>
+              <h4 className="text-2xl font-black tracking-tight text-ink">Inscrição confirmada</h4>
+              <p className="mx-auto max-w-sm text-sm leading-6 text-muted-soft">
+                Parabéns! Seus dados foram computados. O organizador e os atletas foram notificados e o ranking foi sincronizado com seu nome.
+              </p>
+              <div className="inline-block w-full rounded-lg border border-hairline-light bg-surface-soft-light p-4 text-left">
+                <p className="text-xs text-muted-soft">Resumo do ingresso</p>
+                <p className="text-sm font-bold text-ink">{event.name}</p>
+                <div className="mt-2 flex justify-between text-xs text-muted-soft">
+                  <span>{isTeamCategory ? 'Equipe' : 'Atleta'}: {isTeamCategory ? (teamName || primaryParticipant.name) : primaryParticipant.name}</span>
+                  <span>Divisão: {selectedDivision?.name}</span>
+                </div>
+                <div className="mt-1 flex justify-between text-xs text-muted-soft">
+                  <span>Inscrição Individual {appliedCoupon && `(Cupom: ${appliedCoupon})`}</span>
+                  <span className="font-number font-bold text-ink">Total: R$ {totalPaid.toFixed(2)}</span>
+                </div>
+              </div>
+              <button
+                onClick={onClose}
+                className="h-12 w-full rounded-md bg-primary font-bold text-ink transition-colors hover:bg-primary-hover"
+              >
+                Voltar aos eventos
+              </button>
+            </div>
+          ) : pixData ? (
+            <div className="space-y-6 py-4" role="region" aria-label="Pagamento Pix">
+              <div className="text-center space-y-2">
+                <p className="text-xs font-bold uppercase tracking-widest text-[#9a7200]">Inscrição Pré-registrada</p>
+                <h4 className="text-lg font-black text-ink uppercase">Pague com Pix</h4>
+                <p className="text-xs text-muted-soft leading-relaxed">Escaneie o QR Code ou copie o código Pix abaixo no aplicativo do seu banco para confirmar a sua inscrição.</p>
+              </div>
+
+              {/* QR Code */}
+              <div className="flex justify-center items-center p-4 bg-white rounded-xl border border-hairline-light max-w-[220px] mx-auto shadow-sm">
+                <img 
+                  src={`data:image/png;base64,${pixData.qr_code_base64}`} 
+                  alt="QR Code Pix"
+                  className="w-full h-auto object-contain"
+                />
+              </div>
+
+              {/* Código Pix Copia e Cola */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-ink">Código Copia e Cola Pix</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={pixData.qr_code}
+                    className="flex-1 rounded-md border border-hairline-light bg-surface-soft-light px-3 py-2 text-xs font-mono text-ink focus:outline-none"
+                    onClick={(e) => (e.target as HTMLInputElement).select()}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(pixData.qr_code);
+                      setCopiado(true);
+                      setTimeout(() => setCopiado(false), 2000);
+                    }}
+                    className="px-4 py-2 bg-primary font-bold text-ink text-xs rounded-md uppercase tracking-wider hover:bg-primary-hover active:scale-95 transition-colors"
+                  >
+                    {copiado ? 'Copiado!' : 'Copiar'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Status de Confirmação */}
+              <div className="flex items-center justify-center gap-2 rounded-lg border border-primary/20 bg-primary/5 p-4 text-center">
+                <div className="w-2.5 h-2.5 bg-primary rounded-full animate-ping shrink-0"></div>
+                <p className="text-xs font-bold text-ink uppercase tracking-wider">Aguardando pagamento Pix...</p>
+              </div>
+
+              {/* Botões de Ação */}
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPixData(null);
+                  }}
+                  className="w-full h-11 border border-hairline-light hover:border-muted-soft text-muted-soft text-xs font-bold uppercase rounded-md transition-colors"
+                >
+                  Alterar Forma de Pagamento
+                </button>
+              </div>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-[#9a7200]">Você está se inscrevendo em</p>
+                <h4 className="mt-1 text-lg font-bold text-ink">{event.name}</h4>
+                <p className="mt-1 text-xs text-muted-soft">{event.location}</p>
+              </div>
+
+              <div className="my-4 border-t border-hairline-light"></div>
+
+              {/* Escolha da Divisão */}
+              <div>
+                <label htmlFor="registration-division" className="mb-2 block text-xs font-bold text-ink">Categoria / divisão *</label>
+                <select
+                  id="registration-division"
+                  name="division"
+                  value={selectedDivisionId}
+                  onChange={(e) => setSelectedDivisionId(e.target.value)}
+                  className="w-full rounded-md border border-hairline-light bg-white px-4 py-3 text-sm font-medium text-ink focus:border-primary focus:outline-none"
+                >
+                  {event.divisions.map((div) => (
+                    <option key={div.id} value={div.id}>
+                      {div.name} - R$ {getPrice(div).toFixed(2)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Cupom de Desconto */}
+              <div>
+                <label htmlFor="checkout-coupon" className="mb-2 block text-xs font-bold text-ink">Cupom de desconto</label>
+                <div className="flex gap-2">
+                  <input
+                    id="checkout-coupon"
+                    type="text"
+                    placeholder="Digite seu cupom..."
+                    value={couponCode}
+                    onChange={(e) => setCouponCode(e.target.value)}
+                    className="flex-1 rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none uppercase"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleApplyCoupon}
+                    className="rounded-md bg-ink px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white transition-colors hover:bg-ink/90"
+                  >
+                    Aplicar
+                  </button>
+                </div>
+                {couponNotice && (
+                  <p className={`mt-1.5 text-xs font-semibold ${couponNotice.tone === 'success' ? 'text-[#00875A]' : 'text-[#DE350B]'}`}>
+                    {couponNotice.text}
+                  </p>
+                )}
+              </div>
+
+              {/* Dados do Atleta */}
+              <div className="space-y-4">
+                <p className="mt-2 text-[10px] font-bold uppercase tracking-widest text-[#9a7200]">
+                  {isTeamCategory ? `Dados dos ${participantCount} atletas` : 'Dados do participante'}
+                </p>
+                
+                {/* Nome da Equipe (para duplas/trios/equipes) */}
+                {isTeamCategory && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="team-name" className="mb-1 block text-xs font-bold text-ink">Nome da equipe</label>
+                      <input
+                        id="team-name"
+                        name="teamName"
+                        type="text"
+                        placeholder="Ex: Equipe Brutus, Dupla WODArena"
+                        value={teamName}
+                        onChange={(e) => setTeamName(e.target.value)}
+                        className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="team-instagram" className="mb-1 block text-xs font-bold text-ink">Instagram da equipe</label>
+                      <input
+                        id="team-instagram"
+                        name="teamInstagram"
+                        type="text"
+                        placeholder="Ex: @equipe"
+                        value={teamInstagram}
+                        onChange={(e) => setTeamInstagram(e.target.value)}
+                        className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {visibleParticipants.map((participant, index) => (
+                  <fieldset key={index} className="space-y-3 rounded-lg border border-hairline-light bg-surface-soft-light p-4">
+                    <legend className="px-1 text-[10px] font-bold uppercase tracking-widest text-[#9a7200]">
+                      {isTeamCategory ? `Atleta ${index + 1}${index === 0 ? ' / Capitão' : ''}` : 'Atleta'}
+                    </legend>
+
+                    <div>
+                      <label htmlFor={`athlete-${index}-name`} className="mb-1 block text-xs font-bold text-ink">Nome completo *</label>
+                      <input
+                        id={`athlete-${index}-name`}
+                        name={`participants.${index}.name`}
+                        autoComplete={index === 0 ? 'name' : 'off'}
+                        type="text"
+                        required
+                        placeholder="Ex: Lucas Silva"
+                        value={participant.name}
+                        onChange={(e) => updateParticipant(index, 'name', e.target.value)}
+                        className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label htmlFor={`athlete-${index}-email`} className="mb-1 block text-xs font-bold text-ink">E-mail {isFitnessRacing ? '(opcional)' : '*'}</label>
+                        <input
+                          id={`athlete-${index}-email`}
+                          name={`participants.${index}.email`}
+                          autoComplete={index === 0 ? 'email' : 'off'}
+                          spellCheck="false"
+                          type="email"
+                          required={!isFitnessRacing}
+                          placeholder="Ex: lucas@email.com"
+                          value={participant.email}
+                          onChange={(e) => updateParticipant(index, 'email', e.target.value)}
+                          className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor={`athlete-${index}-phone`} className="mb-1 block text-xs font-bold text-ink">Telefone {isFitnessRacing ? '(opcional)' : '*'}</label>
+                        <input
+                          id={`athlete-${index}-phone`}
+                          name={`participants.${index}.phone`}
+                          autoComplete={index === 0 ? 'tel' : 'off'}
+                          type="tel"
+                          required={!isFitnessRacing}
+                          placeholder="Ex: (11) 99999-9999"
+                          value={participant.phone}
+                          onChange={(e) => updateParticipant(index, 'phone', e.target.value)}
+                          className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <fieldset>
+                        <legend className="mb-1 block text-xs font-bold text-ink">Gênero *</legend>
+                        <div className="flex gap-2 h-[42px]">
+                          <button
+                            type="button"
+                            onClick={() => updateParticipant(index, 'gender', 'male')}
+                            className={`flex-1 rounded-xl text-xs uppercase font-bold tracking-wider transition-colors border ${
+                              participant.gender === 'male'
+                                ? 'border-primary bg-primary text-ink'
+                                : 'border-hairline-light bg-white text-muted-soft hover:border-primary hover:text-ink'
+                            }`}
+                          >
+                            Masculino
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => updateParticipant(index, 'gender', 'female')}
+                            className={`flex-1 rounded-xl text-xs uppercase font-bold tracking-wider transition-colors border ${
+                              participant.gender === 'female'
+                                ? 'border-primary bg-primary text-ink'
+                                : 'border-hairline-light bg-white text-muted-soft hover:border-primary hover:text-ink'
+                            }`}
+                          >
+                            Feminino
+                          </button>
+                        </div>
+                      </fieldset>
+                      <div>
+                        <label htmlFor={`athlete-${index}-instagram`} className="mb-1 block text-xs font-bold text-ink">Instagram {isFitnessRacing ? '*' : ''}</label>
+                        <input
+                          id={`athlete-${index}-instagram`}
+                          name={`participants.${index}.instagram`}
+                          type="text"
+                          placeholder="Ex: @atleta"
+                          value={participant.instagram}
+                          onChange={(e) => updateParticipant(index, 'instagram', e.target.value)}
+                          className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    {isFitnessRacing && (
+                      <>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                          <div>
+                            <label htmlFor={`athlete-${index}-birth-date`} className="mb-1 block text-xs font-bold text-ink">Data de nascimento *</label>
+                            <input
+                              id={`athlete-${index}-birth-date`}
+                              name={`participants.${index}.birthDate`}
+                              type="date"
+                              required
+                              value={participant.birthDate}
+                              onChange={(e) => updateParticipant(index, 'birthDate', e.target.value)}
+                              className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label htmlFor={`athlete-${index}-city`} className="mb-1 block text-xs font-bold text-ink">Cidade *</label>
+                            <input
+                              id={`athlete-${index}-city`}
+                              name={`participants.${index}.city`}
+                              type="text"
+                              required
+                              value={participant.city}
+                              onChange={(e) => updateParticipant(index, 'city', e.target.value)}
+                              className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label htmlFor={`athlete-${index}-state`} className="mb-1 block text-xs font-bold text-ink">Estado *</label>
+                            <input
+                              id={`athlete-${index}-state`}
+                              name={`participants.${index}.state`}
+                              type="text"
+                              required
+                              maxLength={2}
+                              placeholder="UF"
+                              value={participant.state}
+                              onChange={(e) => updateParticipant(index, 'state', e.target.value.toUpperCase())}
+                              className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm uppercase text-ink focus:border-primary focus:outline-none"
+                            />
+                          </div>
+                        </div>
+                        {index === 0 && (
+                          <div>
+                            <label htmlFor={`athlete-${index}-photo`} className="mb-1 block text-xs font-bold text-ink">Foto do atleta (opcional)</label>
+                            <input
+                              id={`athlete-${index}-photo`}
+                              name={`participants.${index}.photoUrl`}
+                              type="url"
+                              placeholder="URL da foto"
+                              value={participant.photoUrl}
+                              onChange={(e) => updateParticipant(index, 'photoUrl', e.target.value)}
+                              className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none"
+                            />
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </fieldset>
+                ))}
+
+                {/* Box / Afiliado */}
+                <div>
+                  <label htmlFor="athlete-box" className="mb-1 block text-xs font-bold text-ink">Box / afiliado {isFitnessRacing ? '*' : ''}</label>
+                  <input
+                    id="athlete-box"
+                    name="box"
+                    autoComplete="organization"
+                    type="text"
+                    required={isFitnessRacing}
+                    placeholder="Ex: CrossFit Imperium"
+                    value={box}
+                    onChange={(e) => setBox(e.target.value)}
+                    className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none"
+                  />
+                </div>
+
+                {/* Seleção do Método de Pagamento */}
+                <div className="space-y-3 pt-2">
+                  <span className="block text-xs font-bold text-ink">Forma de Pagamento</span>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('pix')}
+                      className={`flex items-center justify-center gap-2 rounded-md border py-3 text-xs font-bold uppercase transition-colors ${
+                        paymentMethod === 'pix'
+                          ? 'border-primary bg-primary/5 text-ink'
+                          : 'border-hairline-light bg-white text-muted-soft hover:border-muted-soft'
+                      }`}
+                    >
+                      <span className="h-2 w-2 rounded-full bg-primary" />
+                      Pix (QR Code)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('credit_card')}
+                      className={`flex items-center justify-center gap-2 rounded-md border py-3 text-xs font-bold uppercase transition-colors ${
+                        paymentMethod === 'credit_card'
+                          ? 'border-primary bg-primary/5 text-ink'
+                          : 'border-hairline-light bg-white text-muted-soft hover:border-muted-soft'
+                      }`}
+                    >
+                      <span className="h-2 w-2 rounded-full bg-muted" />
+                      Cartão / Outros
+                    </button>
+                  </div>
+                </div>
+
+                {/* CPF do Pagador (obrigatório para Pix e Cartão) */}
+                <div>
+                  <label htmlFor="athlete-cpf" className="mb-1 block text-xs font-bold text-ink">CPF do Pagador *</label>
+                  <input
+                    id="athlete-cpf"
+                    name="cpf"
+                    type="text"
+                    required
+                    placeholder="000.000.000-00"
+                    value={cpf}
+                    onChange={(e) => {
+                      let val = e.target.value.replace(/\D/g, '');
+                      if (val.length > 11) val = val.substring(0, 11);
+                      if (val.length > 9) {
+                        val = `${val.substring(0, 3)}.${val.substring(3, 6)}.${val.substring(6, 9)}-${val.substring(9)}`;
+                      } else if (val.length > 6) {
+                        val = `${val.substring(0, 3)}.${val.substring(3, 6)}.${val.substring(6)}`;
+                      } else if (val.length > 3) {
+                        val = `${val.substring(0, 3)}.${val.substring(3)}`;
+                      }
+                      setCpf(val);
+                    }}
+                    className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none font-mono"
+                  />
+                </div>
+
+                {/* Campos de Cartão de Crédito */}
+                {paymentMethod === 'credit_card' && (
+                  <div className="space-y-3 pt-2 border-t border-hairline-light">
+                    <span className="block text-xs font-bold text-ink uppercase tracking-wider text-muted-soft">Dados do Cartão de Crédito</span>
+                    
+                    <div>
+                      <label htmlFor="card-number" className="mb-1 block text-xs font-bold text-ink">Número do Cartão *</label>
+                      <input
+                        id="card-number"
+                        type="text"
+                        required
+                        placeholder="0000 0000 0000 0000"
+                        value={cardNumber}
+                        onChange={(e) => {
+                          let val = e.target.value.replace(/\D/g, '');
+                          if (val.length > 16) val = val.substring(0, 16);
+                          const matches = val.match(/.{1,4}/g);
+                          setCardNumber(matches ? matches.join(' ') : val);
+                        }}
+                        className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none font-mono"
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="card-holder" className="mb-1 block text-xs font-bold text-ink">Nome do Titular (como no cartão) *</label>
+                      <input
+                        id="card-holder"
+                        type="text"
+                        required
+                        placeholder="NOME COMPLETO"
+                        value={cardholderName}
+                        onChange={(e) => setCardholderName(e.target.value.toUpperCase())}
+                        className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label htmlFor="card-expiry" className="mb-1 block text-xs font-bold text-ink">Validade (MM/AA) *</label>
+                        <input
+                          id="card-expiry"
+                          type="text"
+                          required
+                          placeholder="MM/AA"
+                          value={expirationDate}
+                          onChange={(e) => {
+                            let val = e.target.value.replace(/\D/g, '');
+                            if (val.length > 4) val = val.substring(0, 4);
+                            if (val.length > 2) {
+                              val = `${val.substring(0, 2)}/${val.substring(2)}`;
+                            }
+                            setExpirationDate(val);
+                          }}
+                          className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none font-mono"
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor="card-cvv" className="mb-1 block text-xs font-bold text-ink">CVV *</label>
+                        <input
+                          id="card-cvv"
+                          type="text"
+                          required
+                          placeholder="123"
+                          value={securityCode}
+                          onChange={(e) => {
+                            let val = e.target.value.replace(/\D/g, '');
+                            if (val.length > 4) val = val.substring(0, 4);
+                            setSecurityCode(val);
+                          }}
+                          className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none font-mono"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Resumo do Pedido e Pagamento */}
+              <div className="space-y-3 rounded-lg border border-hairline-light bg-surface-soft-light p-4">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="font-medium text-muted-soft">Inscrição ({selectedDivision?.name})</span>
+                  <span className="font-number font-bold text-ink">R$ {ticketPrice.toFixed(2)}</span>
+                </div>
+                {appliedCoupon && discountApplied > 0 && (
+                  <div className="flex justify-between items-center text-sm text-[#00875A]">
+                    <span className="font-semibold">Desconto ({appliedCoupon})</span>
+                    <span className="font-number font-bold">- R$ {discountApplied.toFixed(2)}</span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between border-t border-hairline-light pt-2 text-base">
+                  <span className="font-extrabold uppercase tracking-wider text-ink">Total</span>
+                  <span className="font-number font-black text-ink">R$ {totalPaid.toFixed(2)}</span>
+                </div>
+                <p className="flex items-center gap-1 text-[10px] text-muted-soft">
+                  <ShieldCheck className="h-3.5 w-3.5 text-[#9a7200]" aria-hidden="true" />
+                  Pagamento 100% Seguro. A WODArena realiza a ponte de integração, e a transação financeira é processada com total segurança pelo PagSeguro.
+                </p>
+              </div>
+
+              {/* Checkbox de Aceite dos Termos */}
+              <div className="flex items-start gap-2.5 rounded-lg border border-hairline-light bg-surface-soft-light p-3">
+                <input
+                  id="accept-terms"
+                  type="checkbox"
+                  checked={acceptedTerms}
+                  onChange={(e) => setAcceptedTerms(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 shrink-0 rounded border-hairline-light text-primary focus:ring-primary focus:ring-offset-0 focus:ring-1"
+                />
+                <label htmlFor="accept-terms" className="text-xs leading-relaxed text-muted-soft select-none">
+                  Li e concordo com os{' '}
+                  <Link href="/termos" target="_blank" className="font-bold text-ink underline transition-colors hover:text-[#9a7200]">
+                    Termos e Políticas de Compra
+                  </Link>{' '}
+                  do evento e autorizo o uso de meus dados cadastrais e de imagem em conformidade com as{' '}
+                  <Link href="/termos#privacidade" target="_blank" className="font-bold text-ink underline transition-colors hover:text-[#9a7200]">
+                    Políticas de Privacidade
+                  </Link>
+                  .
+                </label>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isProcessing || !acceptedTerms}
+                className="flex h-12 w-full items-center justify-center gap-2 rounded-md bg-primary font-black text-ink transition-colors hover:bg-primary-hover disabled:bg-[#e0d7a6] disabled:text-muted-soft"
+              >
+                {isProcessing ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
+                    <span>Processando Pagamento...</span>
+                  </>
+                ) : (
+                  <>
+                    <CreditCard className="h-5 w-5" />
+                    <span>Confirmar e Pagar</span>
+                  </>
+                )}
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+      <Script 
+        src="https://sdk.mercadopago.com/js/v2" 
+        strategy="lazyOnload" 
+      />
+    </div>
+  );
+}

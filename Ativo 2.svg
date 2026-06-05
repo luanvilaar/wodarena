@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Camada_2" data-name="Camada 2" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 999.46 966.89">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: url(#Gradiente_sem_nome_108);
+      }
+
+      .cls-2 {
+        fill: url(#Gradiente_sem_nome_108-4);
+      }
+
+      .cls-3 {
+        fill: url(#Gradiente_sem_nome_108-2);
+      }
+
+      .cls-4 {
+        fill: url(#Gradiente_sem_nome_108-3);
+      }
+
+      .cls-5 {
+        fill: url(#Gradiente_sem_nome_108-5);
+      }
+    </style>
+    <linearGradient id="Gradiente_sem_nome_108" data-name="Gradiente sem nome 108" x1="499.73" y1="43.94" x2="499.73" y2="716" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#c48b26"/>
+      <stop offset="1" stop-color="#89601b"/>
+    </linearGradient>
+    <linearGradient id="Gradiente_sem_nome_108-2" data-name="Gradiente sem nome 108" x1="522.15" y1="43.94" x2="522.15" y2="716" xlink:href="#Gradiente_sem_nome_108"/>
+    <linearGradient id="Gradiente_sem_nome_108-3" data-name="Gradiente sem nome 108" x1="498.03" y1="43.94" x2="498.03" y2="716" xlink:href="#Gradiente_sem_nome_108"/>
+    <linearGradient id="Gradiente_sem_nome_108-4" data-name="Gradiente sem nome 108" x1="499.44" y1="43.94" x2="499.44" y2="716" xlink:href="#Gradiente_sem_nome_108"/>
+    <linearGradient id="Gradiente_sem_nome_108-5" data-name="Gradiente sem nome 108" x1="497.44" y1="43.94" x2="497.44" y2="716" xlink:href="#Gradiente_sem_nome_108"/>
+  </defs>
+  <g id="logo_1" data-name="logo 1">
+    <path class="cls-1" d="M506.72,439.9l-171.75-273.2-111.63-.37,97.13,178.81-45.91,89.75L111.35,166.24,0,168.86l270.63,485.17,117.04-185.14,108.92,200.51,102.36-186.52h98.97l-97.64,186.52h116.3l282.87-503.15h-345.8l-146.94,273.66ZM810.05,268.56l-62.33,119.15h-96.54l65.4-119.15h93.47Z"/>
+    <polygon class="cls-3" points="538.88 337.84 602.33 219.35 573 166.24 441.98 166.24 538.88 337.84"/>
+    <polygon class="cls-4" points="821.15 698.7 500.58 903.05 174.27 693.74 175.56 565.51 125.71 481.36 126.99 728.05 498.51 966.89 869.26 729.88 870.36 485.03 821.15 565.33 821.15 698.7"/>
+    <polygon class="cls-2" points="687.15 724.13 311.73 724.13 371.13 772.6 627.06 774.29 687.15 724.13"/>
+    <path class="cls-5" d="M872.37,120.68c.03-16.98-.18-34-.66-51.06-236.74-93.1-512.66-92.8-749.08.76-.21,16.8-.17,33.57.09,50.3,235.52-98.36,514.14-98.35,749.65,0Z"/>
+  </g>
+</svg>

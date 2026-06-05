@@ -1,0 +1,36 @@
+import type { Metadata, Viewport } from "next";
+import "./globals.css";
+import { AppProvider } from "@/context/AppContext";
+import { Navbar } from "@/components/Navbar";
+import { Footer } from "@/components/Footer";
+
+export const metadata: Metadata = {
+  title: "WODArena | Líder em Competições de Functional Fitness",
+  description: "Gerencie e acompanhe rankings, eventos, cronogramas e inscrições de Functional Fitness e Cross Training em tempo real.",
+  keywords: ["crossfit", "functional fitness", "leaderboard", "competição", "wodarena", "box games"],
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0b0e11",
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="pt-BR" data-scroll-behavior="smooth" className="h-full bg-background text-foreground">
+      <body className="flex flex-col min-h-screen antialiased bg-background">
+        <a href="#main-content" className="skip-link">Pular para o conteúdo</a>
+        <AppProvider>
+          <Navbar />
+          <main id="main-content" className="flex-grow flex flex-col">
+            {children}
+          </main>
+          <Footer />
+        </AppProvider>
+      </body>
+    </html>
+  );
+}
