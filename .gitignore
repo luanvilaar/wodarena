@@ -22,6 +22,7 @@ logs/
 Thumbs.db
 .idea/
 *.swp
+.__capcut_export_temp_folder_*/
 
 # Next.js & TypeScript
 .next/
