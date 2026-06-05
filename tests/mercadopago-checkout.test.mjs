@@ -37,6 +37,13 @@ test('card checkout resolves public key from the event owner instead of global f
   assert.doesNotMatch(registerModal, /APP_USR-0d64556d/);
 });
 
+test('checkout surfaces backend payment errors instead of generic alerts', () => {
+  assert.match(registerModal, /getCheckoutErrorMessage/);
+  assert.match(registerModal, /throw new Error\(await getCheckoutErrorMessage\(response, 'Erro ao criar cobrança Pix\.'\)\)/);
+  assert.match(registerModal, /throw new Error\(await getCheckoutErrorMessage\(response, 'Erro ao processar pagamento com cartão\.'\)\)/);
+  assert.match(registerModal, /alert\(err instanceof Error \? err\.message :/);
+});
+
 test('transparent checkout sends marketplace application fee and payer CPF', () => {
   assert.match(pixRoute, /application_fee: getMercadoPagoApplicationFee/);
   assert.match(cardRoute, /application_fee: getMercadoPagoApplicationFee/);

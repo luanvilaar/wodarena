@@ -69,6 +69,16 @@ const resolveCheckoutPublicKey = async (eventId: string, eventPublicKey?: string
   return data.publicKey;
 };
 
+const getCheckoutErrorMessage = async (response: Response, fallback: string) => {
+  try {
+    const data = await response.json();
+    const detail = data.statusDetail ? ` (${data.statusDetail})` : '';
+    return `${data.error || fallback}${detail}`;
+  } catch {
+    return fallback;
+  }
+};
+
 export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterModalProps) {
   const { coupons, registerTicket, incrementCouponUsage } = useApp();
   const [selectedDivisionId, setSelectedDivisionId] = useState(event.divisions[0]?.id || '');
@@ -378,7 +388,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
         });
 
         if (!response.ok) {
-          throw new Error('Erro ao criar cobrança Pix.');
+          throw new Error(await getCheckoutErrorMessage(response, 'Erro ao criar cobrança Pix.'));
         }
 
         const data = await response.json();
@@ -498,7 +508,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
         });
 
         if (!response.ok) {
-          throw new Error('Erro ao processar pagamento com cartão.');
+          throw new Error(await getCheckoutErrorMessage(response, 'Erro ao processar pagamento com cartão.'));
         }
 
         const data = await response.json();
@@ -544,7 +554,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
 
     } catch (err) {
       console.error("[Checkout WODArena] Erro no processamento do checkout:", err);
-      alert('Houve um erro ao processar o seu checkout. Por favor, tente novamente.');
+      alert(err instanceof Error ? err.message : 'Houve um erro ao processar o seu checkout. Por favor, tente novamente.');
       setIsProcessing(false);
     }
   }, [
