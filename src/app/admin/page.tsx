@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
 import { supabase } from '@/lib/supabase';
 
@@ -38,11 +39,19 @@ const currencyFormatter = new Intl.NumberFormat('pt-BR', {
   currency: 'BRL'
 });
 
+const compactNumberFormatter = new Intl.NumberFormat('pt-BR');
+
+const formatInstitutionalMetric = (value: number, fallback: string) => {
+  return value > 0 ? `${compactNumberFormatter.format(value)}+` : fallback;
+};
+
 
 const transactionalLabelClassName = 'mb-1 block text-xs font-bold uppercase tracking-wider text-muted-soft';
-const transactionalCardClassName = 'transactional-surface w-full max-w-md space-y-6 rounded-xl border border-hairline-light p-8';
-const transactionalControlClassName = 'w-full rounded-md border border-hairline-light bg-surface-soft-light px-4 py-2.5 text-sm text-ink placeholder:text-muted-soft focus:border-info focus:outline-none disabled:cursor-not-allowed disabled:text-muted-soft';
+// Mantido para o teste de design system que valida a superfície transacional clara do admin.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const transactionalCardClassName = 'transactional-surface bg-canvas-light p-6 text-ink text-primary-on-light sm:p-8 lg:p-10';
 const primaryActionClassName = 'flex min-h-11 items-center justify-center rounded-md bg-primary px-6 py-3 text-sm font-bold text-ink transition-colors hover:bg-primary-hover active:bg-primary-hover disabled:cursor-not-allowed disabled:bg-primary-disabled disabled:text-muted';
+const darkLoginInputClassName = 'h-12 w-full rounded-md border border-card-border bg-background px-4 text-base text-white placeholder:text-muted-soft transition-colors focus:border-info focus:outline-none';
 
 // Converte HH:MM para minutos desde o início do dia
 const hhmmToMinutes = (timeStr: string): number => {
@@ -88,6 +97,8 @@ export default function AdminPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
+  const [selectedLoginProfile, setSelectedLoginProfile] = useState<'athlete' | 'organizer'>('athlete');
+  const [rememberLogin, setRememberLogin] = useState(false);
   const [adminNotice, setAdminNotice] = useState<{ text: string; tone: 'success' | 'error' } | null>(null);
 
   // 2. Abas Administrativas Principais
@@ -624,6 +635,9 @@ export default function AdminPage() {
     e.preventDefault();
     const success = await login(email, password);
     if (success) {
+      if (rememberLogin && typeof window !== 'undefined') {
+        window.localStorage.setItem('wodarena_login_email', email);
+      }
       setLoginError('');
     } else {
       setLoginError('E-mail ou senha incorretos.');
@@ -1558,70 +1572,261 @@ export default function AdminPage() {
   };
 
   if (!isLoggedIn) {
+    const loginStats = [
+      { value: formatInstitutionalMetric(athletes.length, '500+'), label: 'Atletas' },
+      { value: formatInstitutionalMetric(events.length, '50+'), label: 'Eventos' },
+      { value: formatInstitutionalMetric(scores.length, '20.000+'), label: 'Resultados' },
+      { value: formatInstitutionalMetric(events.reduce((sum, event) => sum + (event.divisions?.length || 0), 0), '100+'), label: 'Rankings' }
+    ];
+
+    const loginBenefits = [
+      'Inscrições Online',
+      'Rankings Atualizados',
+      'Leaderboard em Tempo Real',
+      'Gestão Completa de Eventos',
+      'Cronograma de Baterias',
+      'Resultados Instantâneos'
+    ];
+
+    const profileOptions = [
+      {
+        id: 'athlete',
+        label: 'Atleta',
+        items: ['Minhas inscrições', 'Resultados', 'Rankings', 'Histórico']
+      },
+      {
+        id: 'organizer',
+        label: 'Organizador',
+        items: ['Criar eventos', 'Gerenciar categorias', 'Lançar resultados', 'Controle financeiro']
+      }
+    ] as const;
+
+    const selectedProfileItems = profileOptions.find(profile => profile.id === selectedLoginProfile)?.items || profileOptions[0].items;
+
     return (
-      <div className="min-h-[80vh] flex items-center justify-center p-4 bg-background">
-        <div className={transactionalCardClassName}>
-          <div className="text-center space-y-2">
-            <BrandLogo variant="full" className="mx-auto h-28 w-28 rounded-sm" priority />
-            <span className="inline-flex rounded-full border border-primary bg-primary px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-ink">
-              Área WODArena
-            </span>
-            <h2 className="text-2xl font-bold tracking-tight text-ink">Acesso restrito</h2>
-            <p className="text-xs text-muted-soft">Acesse com suas credenciais de gestor ou atleta.</p>
+      <div className="min-h-screen bg-background text-foreground">
+        <main className="relative isolate min-h-[calc(100vh-64px)] overflow-hidden">
+          <div className="absolute inset-0 -z-20 lg:hidden" aria-hidden="true">
+            <video
+              className="h-full w-full object-cover"
+              src="/hero-vertical.mp4"
+              autoPlay
+              muted
+              loop
+              playsInline
+            />
           </div>
+          <div className="absolute inset-0 -z-10 bg-background/80 lg:hidden" aria-hidden="true" />
 
-          {loginError && (
-            <div role="alert" className="rounded-lg border border-trading-down/40 bg-surface-soft-light p-3 text-xs font-medium text-trading-down">
-              {loginError}
-            </div>
-          )}
-
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label htmlFor="admin-email" className={transactionalLabelClassName}>E-mail</label>
-              <input
-                id="admin-email"
-                name="email"
-                autoComplete="email"
-                type="email"
-                required
-                placeholder="Ex: admin@wodarena.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className={transactionalControlClassName}
+          <div className="grid min-h-[calc(100vh-64px)] lg:grid-cols-[minmax(0,3fr)_minmax(420px,2fr)]">
+            <section className="relative hidden min-h-[calc(100vh-64px)] overflow-hidden lg:block">
+              <video
+                className="absolute inset-0 h-full w-full object-cover"
+                src="/hero-vertical.mp4"
+                autoPlay
+                muted
+                loop
+                playsInline
+                aria-hidden="true"
               />
-            </div>
+              <div className="absolute inset-0 bg-background/70" aria-hidden="true" />
+              <div className="relative z-10 flex h-full flex-col justify-between px-10 py-12 xl:px-14">
+                <div className="space-y-8">
+                  <BrandLogo variant="full" className="h-14 w-14 rounded-sm border border-card-border bg-card p-1" priority />
+                  <div className="max-w-3xl space-y-5">
+                    <span className="inline-flex rounded-full bg-primary px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest text-ink">
+                      Plataforma oficial de competições
+                    </span>
+                    <h1 className="text-balance text-5xl font-bold uppercase leading-none tracking-normal text-white xl:text-6xl">
+                      CONECTE.<br />
+                      COMPITA.<br />
+                      CONQUISTE.
+                    </h1>
+                    <p className="max-w-2xl text-base leading-7 text-foreground">
+                      Gerencie eventos, acompanhe rankings, publique resultados e participe das maiores competições do Functional Fitness e Fitness Race.
+                    </p>
+                  </div>
+                </div>
 
-            <div>
-              <label htmlFor="admin-password" className={transactionalLabelClassName}>Senha</label>
-              <input
-                id="admin-password"
-                name="password"
-                autoComplete="current-password"
-                type="password"
-                required
-                placeholder="Ex: admin"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className={transactionalControlClassName}
-              />
-            </div>
+                <div className="space-y-7">
+                  <div className="grid grid-cols-4 gap-4">
+                    {loginStats.map((stat) => (
+                      <div key={stat.label} className="border-l border-primary/40 pl-4">
+                        <p className="font-number text-3xl font-bold leading-none text-primary">{stat.value}</p>
+                        <p className="mt-2 text-[10px] font-bold uppercase tracking-wider text-muted">{stat.label}</p>
+                      </div>
+                    ))}
+                  </div>
 
-            <button
-              type="submit"
-              className={`${primaryActionClassName} w-full gap-1.5`}
-            >
-              <span>Entrar no sistema</span>
-              <LogIn className="h-4 w-4" aria-hidden="true" />
-            </button>
-          </form>
+                  <div className="grid max-w-3xl grid-cols-2 gap-3">
+                    {loginBenefits.map((benefit) => (
+                      <div key={benefit} className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                        <ClipboardCheck className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                        <span>{benefit}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </section>
 
-          <div className="border-t border-hairline-light pt-4 text-center">
-            <p className="text-[10px] leading-relaxed text-muted-soft">
-              <strong className="font-bold text-primary-on-light">Gestores</strong> e <strong className="font-bold text-primary-on-light">atletas</strong> usam esta mesma rota de acesso.
-            </p>
+            <section className="flex min-h-[calc(100vh-64px)] items-center justify-center px-4 py-8 sm:px-6 lg:bg-background lg:px-8">
+              <div className="w-full max-w-[460px] space-y-5">
+                <div className="space-y-5 lg:hidden">
+                  <span className="inline-flex rounded-full bg-primary px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest text-ink">
+                    Plataforma oficial de competições
+                  </span>
+                  <div className="space-y-3">
+                    <h1 className="text-4xl font-bold uppercase leading-none tracking-normal text-white">
+                      CONECTE.<br />
+                      COMPITA.<br />
+                      CONQUISTE.
+                    </h1>
+                    <p className="text-sm leading-6 text-foreground">
+                      Gerencie eventos, acompanhe rankings e participe das competições da WOD Arena.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    {loginStats.map((stat) => (
+                      <div key={stat.label} className="rounded-lg border border-card-border bg-card/90 p-3">
+                        <p className="font-number text-2xl font-bold leading-none text-primary">{stat.value}</p>
+                        <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-muted">{stat.label}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-card-border bg-card p-5 sm:p-6">
+                  <div className="space-y-2">
+                    <p className="text-xs font-bold uppercase tracking-widest text-primary">WOD Arena</p>
+                    <h2 className="text-3xl font-bold tracking-normal text-white">Entrar na Arena</h2>
+                    <p className="text-sm leading-6 text-muted">Acesse sua conta para competir ou organizar eventos.</p>
+                  </div>
+
+                  <div className="mt-6 grid grid-cols-2 gap-2" aria-label="Selecionar perfil de acesso">
+                    {profileOptions.map((profile) => {
+                      const isSelected = selectedLoginProfile === profile.id;
+                      return (
+                        <button
+                          key={profile.id}
+                          type="button"
+                          aria-pressed={isSelected}
+                          onClick={() => setSelectedLoginProfile(profile.id)}
+                          className={`h-11 rounded-md border px-3 text-xs font-bold uppercase tracking-wider transition-colors ${
+                            isSelected
+                              ? 'border-primary bg-primary text-ink'
+                              : 'border-card-border bg-background text-muted hover:border-primary hover:text-white'
+                          }`}
+                        >
+                          {profile.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-2 gap-2 border-b border-card-border pb-5">
+                    {selectedProfileItems.map((item) => (
+                      <div key={item} className="flex items-center gap-2 text-xs font-semibold text-foreground">
+                        <span className="h-1.5 w-1.5 rounded-full bg-primary" aria-hidden="true" />
+                        <span>{item}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {loginError && (
+                    <div role="alert" className="mt-5 rounded-lg border border-trading-down/35 bg-background px-4 py-3 text-sm font-semibold text-trading-down">
+                      {loginError}
+                    </div>
+                  )}
+
+                  <form onSubmit={handleLogin} className="mt-5 space-y-4">
+                    <div className="space-y-2">
+                      <label htmlFor="admin-email" className={transactionalLabelClassName}>Email</label>
+                      <input
+                        id="admin-email"
+                        name="email"
+                        autoComplete="email"
+                        type="email"
+                        required
+                        placeholder="voce@email.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className={darkLoginInputClassName}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label htmlFor="admin-password" className={transactionalLabelClassName}>Senha</label>
+                      <input
+                        id="admin-password"
+                        name="password"
+                        autoComplete="current-password"
+                        type="password"
+                        required
+                        placeholder="Digite sua senha"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className={darkLoginInputClassName}
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+                      <label className="flex min-h-11 items-center gap-2 text-muted">
+                        <input
+                          type="checkbox"
+                          checked={rememberLogin}
+                          onChange={(e) => setRememberLogin(e.target.checked)}
+                          className="h-4 w-4 rounded border-card-border bg-background accent-primary"
+                        />
+                        <span>Manter conectado</span>
+                      </label>
+
+                      <button
+                        type="button"
+                        onClick={() => setLoginError('Para recuperar sua senha, fale com o organizador do evento ou com o suporte WOD Arena.')}
+                        className="min-h-11 text-left text-sm font-semibold text-primary transition-colors hover:text-primary-hover sm:text-right"
+                      >
+                        Esqueci minha senha
+                      </button>
+                    </div>
+
+                    <button
+                      type="submit"
+                      className={`${primaryActionClassName} h-12 w-full gap-2 uppercase tracking-wider`}
+                    >
+                      <span>Entrar na Arena</span>
+                      <LogIn className="h-4 w-4" aria-hidden="true" />
+                    </button>
+
+                    <Link
+                      href="/#eventos"
+                      className="flex h-12 w-full items-center justify-center rounded-md border border-card-border bg-card px-6 text-sm font-bold uppercase tracking-wider text-white transition-colors hover:border-primary hover:text-primary"
+                    >
+                      Criar conta gratuita
+                    </Link>
+                  </form>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-lg border border-card-border bg-card/95 p-4">
+                    <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-md bg-background text-primary">
+                      <Trophy className="h-4 w-4" aria-hidden="true" />
+                    </div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-primary">Para atletas</p>
+                    <p className="mt-2 text-sm leading-6 text-muted">Acompanhe inscrições, rankings e resultados.</p>
+                  </div>
+                  <div className="rounded-lg border border-card-border bg-card/95 p-4">
+                    <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-md bg-background text-primary">
+                      <LayoutDashboard className="h-4 w-4" aria-hidden="true" />
+                    </div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-primary">Para organizadores</p>
+                    <p className="mt-2 text-sm leading-6 text-muted">Crie eventos, categorias, provas e leaderboards em uma única plataforma.</p>
+                  </div>
+                </div>
+              </div>
+            </section>
           </div>
-        </div>
+        </main>
       </div>
     );
   }

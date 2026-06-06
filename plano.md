@@ -1,415 +1,577 @@
-# Plano: Área do Atleta e Gestão de Inscrição
-
-## Status da Implementação
-
-Implementado em 2026-06-06 pela Story 1.7: `docs/stories/1.7.story.md`.
+# Plano: Redesign Premium da Tela de Login WOD Arena
 
 ## Objetivo
 
-Criar uma área do atleta na plataforma WODArena para que cada atleta consiga acessar suas inscrições, acompanhar o status do pagamento, visualizar ou solicitar a 2ª via da inscrição e receber avisos claros quando o pagamento por cartão de crédito não for processado.
+Redesenhar completamente a tela de login da WOD Arena mantendo a identidade visual atual da plataforma e elevando a percepção de produto para uma entrada oficial de competições esportivas premium.
 
-O fluxo de inscrição também deve ser ajustado para registrar o atleta mesmo quando o pagamento falhar, garantindo que ele tenha acesso ao painel e consiga resolver pendências sem depender do gestor.
+A tela deve comunicar imediatamente:
 
----
+- Competição.
+- Performance.
+- Tecnologia.
+- Organização profissional.
+- Credibilidade.
 
-## Contexto do Problema
-
-Hoje o sistema possui:
-
-- Página pública de evento em `src/app/event/[id]/page.tsx`.
-- Login de gestores em `/admin`, usando `src/app/api/auth/login/route.ts`.
-- Registro de inscrições em `registrations`.
-- Cadastro de atletas em `athletes`.
-- Checkout Mercado Pago por Pix, cartão e preferência.
-- Webhook Mercado Pago em `src/app/api/webhooks/mercadopago/route.ts`.
-- Componente de comprovante/inscrição `RegistrationVoucher`.
-
-Problema atual identificado:
-
-- O webhook grava a inscrição apenas quando o pagamento chega como `approved`.
-- Em falhas de cartão, alguns atletas ficam sem registro persistido.
-- Como não há painel do atleta, ele não consegue ver a tentativa, a pendência ou solicitar uma 2ª via.
+O resultado esperado é uma experiência que pareça a entrada da plataforma oficial de eventos esportivos do Brasil, sem aparência de sistema administrativo genérico, academia comum, ERP corporativo ou landing page SaaS.
 
 ---
 
-## Princípios de Implementação
+## Referências e Restrições de Design
 
-Seguir a Constitution do projeto:
+### Referência principal
 
-1. **CLI First**: criar primeiro o comportamento de dados/API e validação automatizada.
-2. **Observability Second**: registrar estados de inscrição e pagamento para auditoria.
-3. **UI Third**: criar a área visual do atleta depois que o fluxo estiver persistindo corretamente.
-4. **Story-Driven Development**: antes da implementação, criar uma story em `docs/stories/`.
-5. **No Invention**: este plano cobre apenas os requisitos informados: painel do atleta, 2ª via, aviso de falha no cartão, mesma rota de login `/admin`, senha no ato da inscrição e persistência mesmo com erro de pagamento.
+Usar a estrutura visual da Binance como inspiração de sistema:
+
+- Header denso e premium.
+- Fundo escuro institucional.
+- Cards escuros com borda fina.
+- Amarelo como cor primária de ação.
+- Tipografia forte.
+- Estatísticas grandes e confiáveis.
+- Pouca decoração.
+- Separação por superfícies, não por sombras ou efeitos.
+
+### Adaptação obrigatória para WOD Arena
+
+O visual deve ser esportivo e competitivo, conectado aos universos de:
+
+- Functional Fitness.
+- Fitness Race.
+- HYROX.
+- Corridas.
+- Eventos esportivos.
+- Arena de competição.
+- Rankings e leaderboards ao vivo.
+
+### O que evitar
+
+- Não criar página genérica de academia.
+- Não criar visual corporativo de ERP.
+- Não usar glassmorphism excessivo.
+- Não usar gradientes modernos de startup SaaS.
+- Não usar sombras pesadas.
+- Não usar ilustrações abstratas que não comuniquem competição.
+- Não transformar a tela em landing page explicativa.
 
 ---
 
-## Escopo Funcional
+## Tokens Visuais Obrigatórios
 
-### 1. Cadastro de senha no ato da inscrição
+Manter os tokens já documentados em `desinger-novo.md` e no design system do projeto:
 
-Adicionar no formulário de inscrição:
+- Background principal: `#0B0E11`.
+- Cards: `#1E2329`.
+- Amarelo WOD Arena: `#FCD535`.
+- Texto principal: `#FFFFFF`.
+- Texto secundário: `#EAECEF`.
+- Texto auxiliar: `#707A8A`.
+- Bordas: `#2B3139`.
 
-- Campo `senha`.
-- Campo `confirmar senha`.
-- Validação mínima:
-  - Senha obrigatória.
-  - Mínimo de 6 caracteres.
-  - Confirmação deve ser igual à senha.
+### Regra de implementação
 
-Com isso, ao finalizar o formulário de inscrição, o atleta já terá credenciais para acessar o painel.
+No código React/Tailwind, priorizar classes e tokens já existentes:
 
-### 2. Login do atleta pela rota `/admin`
+- `bg-background`
+- `bg-card`
+- `border-card-border`
+- `text-primary`
+- `text-muted`
+- `text-foreground`
+- `bg-primary`
+- `text-ink`
 
-Manter a mesma rota de login atual:
+Evitar hex direto dentro de `src/app/admin/page.tsx`, porque o teste de design system já valida essa restrição.
+
+---
+
+## Escopo da Tela
+
+A tela de login continua na rota:
 
 - `/admin`
 
-Após autenticar:
+Essa rota deve atender:
 
-- Se `role = owner`, exibir painel do proprietário.
-- Se `role = manager`, exibir painel do gestor.
-- Se `role = athlete`, exibir área do atleta.
+- Atletas.
+- Organizadores/gestores.
+- Proprietários/admins.
 
-Isso evita criar uma segunda tela de login e reaproveita o fluxo existente.
+Após autenticação, o roteamento por perfil continua sendo responsabilidade da lógica atual:
 
-### 3. Área do atleta
-
-Criar uma visão específica para atletas dentro do fluxo autenticado.
-
-Conteúdo mínimo:
-
-- Dados do atleta:
-  - Nome.
-  - E-mail.
-  - Telefone.
-  - Box.
-- Lista de inscrições vinculadas ao e-mail/usuário do atleta.
-- Detalhes da inscrição:
-  - Evento.
-  - Categoria/divisão.
-  - Tipo de inscrição.
-  - Valor.
-  - Data da inscrição.
-  - Status do pagamento.
-  - Código/ID da inscrição.
-- Botão para visualizar a inscrição.
-- Botão para solicitar ou reenviar 2ª via da inscrição.
-
-### 4. 2ª via da inscrição
-
-A 2ª via deve reaproveitar o fluxo já existente do comprovante:
-
-- Usar o componente `RegistrationVoucher` quando possível.
-- Permitir envio por e-mail pela API já existente `src/app/api/checkout/email/route.ts`.
-- Registrar feedback visual no painel:
-  - Enviado com sucesso.
-  - Falha no envio.
-
-A 2ª via deve estar disponível quando a inscrição existir, mesmo que o pagamento ainda esteja pendente ou recusado, desde que o status visual deixe claro que a inscrição não está confirmada financeiramente.
-
-### 5. Registro mesmo com falha no pagamento
-
-Alterar o fluxo de checkout para persistir a intenção de inscrição antes ou durante a tentativa de pagamento.
-
-Novo comportamento esperado:
-
-- O sistema cria uma inscrição assim que o atleta envia o formulário e inicia o pagamento.
-- Essa inscrição nasce com status inicial, por exemplo: `payment_pending`.
-- Se o cartão for aprovado, status muda para `payment_approved`.
-- Se o cartão for recusado ou não processado, status muda para `payment_failed`.
-- Se o pagamento ficar em análise, status muda para `payment_in_review` ou `payment_pending`.
-
-Resultado:
-
-- O atleta sempre terá acesso ao painel.
-- O gestor conseguirá ver tentativas com falha.
-- O atleta conseguirá solicitar 2ª via ou acompanhar pendência.
-
-### 6. Aviso de falha no cartão no painel do atleta
-
-Quando uma inscrição tiver pagamento com falha, exibir aviso destacado:
-
-> Pagamento não processado. Sua inscrição foi registrada, mas ainda não está confirmada. Verifique os dados do cartão ou tente outra forma de pagamento.
-
-O aviso deve aparecer:
-
-- Na visão geral do painel do atleta.
-- No detalhe da inscrição afetada.
-
-O painel também deve indicar que a participação no evento depende da regularização do pagamento.
+- `athlete`: área do atleta.
+- `manager`: painel de gestão.
+- `owner`: painel administrativo completo.
 
 ---
 
-## Modelo de Dados Proposto
+## Estrutura da Tela
 
-### Alterar `users`
+### 1. Header Premium
 
-Adicionar o papel de atleta:
+Manter o header atual da plataforma, mas ajustar para aparência premium inspirada na Binance.
 
-- `role = 'athlete'`
+Elementos:
 
-Atualmente `User.role` aceita apenas:
+- Logo WOD Arena à esquerda.
+- Link `Eventos`.
+- Link `Painel Admin`.
+- Seletor de idioma, se já existir no header atual.
 
-- `owner`
-- `manager`
+Regras visuais:
 
-Será necessário atualizar:
+- Altura máxima: `64px`.
+- Fundo escuro `bg-background`.
+- Borda inferior fina `border-card-border`.
+- Sem sombra.
+- Sem gradiente.
+- Logo com proporção controlada.
+- CTA/links com hover discreto em amarelo.
 
-- Tipo TypeScript `User`.
-- Constraint SQL da tabela `users`.
-- Login e roteamento de painel.
+Observação técnica:
 
-### Criar ou adaptar segredo de senha
+- Verificar se o login em `/admin` renderiza o mesmo header da home. Se hoje a tela de login não usa o header global, decidir entre reutilizar o componente existente ou criar uma barra específica consistente com o header atual.
 
-O login atual usa `users` e `users_secrets`.
+### 2. Hero Full Height
 
-O cadastro do atleta deve:
+Criar uma tela de altura total com layout dividido:
 
-- Criar ou reutilizar usuário pelo e-mail.
-- Criar senha em `users_secrets`.
-- Evitar duplicidade por e-mail.
-- Se o e-mail já existir como atleta, vincular nova inscrição ao mesmo usuário.
+- Esquerda: 60% da largura no desktop.
+- Direita: 40% da largura no desktop.
 
-### Alterar `registrations`
+No mobile:
 
-Adicionar campos para rastrear o estado da inscrição e do pagamento:
+- Remover a divisão lateral.
+- Usar a imagem esportiva como background.
+- Centralizar o card de login.
+- Manter a identidade premium escura.
 
-- `user_id`
-- `athlete_id`
-- `payment_status`
-- `payment_method`
-- `payment_id`
-- `payment_status_detail`
-- `payment_error_message`
-- `updated_at`
+### 3. Área Esquerda: Institucional Esportiva
 
-Status sugeridos:
+Usar imagem ou vídeo esportivo ocupando todo o fundo da área esquerda.
 
-- `payment_pending`
-- `payment_approved`
-- `payment_failed`
-- `payment_in_review`
-- `payment_cancelled`
+Temas permitidos:
 
-Campos importantes:
+- Arena de competição.
+- Fitness Race.
+- Functional Fitness.
+- Corrida.
+- Sled push.
+- Wall balls.
+- Atletas cruzando linha de chegada.
+- Ranking ao vivo.
 
-- `payment_status` define o que aparece no painel.
-- `payment_id` vincula a inscrição ao Mercado Pago.
-- `payment_status_detail` guarda o detalhe técnico retornado pelo Mercado Pago.
-- `payment_error_message` guarda mensagem amigável ou diagnóstico de falha.
+Overlay:
+
+- Aplicar camada escura equivalente a `rgba(0,0,0,0.70)`.
+- Implementar via classe/token ou pseudo-elemento CSS, evitando hex solto no componente se possível.
+
+Conteúdo:
+
+- Logo WOD Arena pequeno, sem exagero.
+- Badge: `PLATAFORMA OFICIAL DE COMPETIÇÕES`.
+- Título:
+
+```text
+CONECTE.
+COMPITA.
+CONQUISTE.
+```
+
+- Subtítulo:
+
+```text
+Gerencie eventos, acompanhe rankings, publique resultados e participe das maiores competições do Functional Fitness e Fitness Race.
+```
+
+Regras de tipografia:
+
+- Título com peso forte, próximo de `700`.
+- Sem sombra em texto.
+- Sem efeito decorativo.
+- Sem letter spacing negativo.
+- Quebra de linha controlada em desktop e mobile.
+
+### 4. Estatísticas
+
+Exibir estatísticas em linha no desktop:
+
+- `500+` Atletas.
+- `50+` Eventos.
+- `20.000+` Resultados.
+- `100+` Rankings.
+
+No mobile:
+
+- Grid `2x2`.
+- Números grandes.
+- Labels curtos.
+
+Observação produtiva:
+
+- Se houver dados reais disponíveis no contexto da aplicação, preferir métricas derivadas de `events`, `athletes`, `registrations` e rankings.
+- Se ainda não houver base suficiente para números reais, usar esses valores como conteúdo institucional temporário, deixando isso explícito na story.
+
+### 5. Benefícios
+
+Adicionar uma lista curta abaixo das estatísticas:
+
+- Inscrições Online.
+- Rankings Atualizados.
+- Leaderboard em Tempo Real.
+- Gestão Completa de Eventos.
+- Cronograma de Baterias.
+- Resultados Instantâneos.
+
+Regras:
+
+- Usar ícone de check discreto.
+- Evitar blocos grandes de texto.
+- Manter leitura rápida.
+- Em mobile, usar grid de uma ou duas colunas conforme espaço.
 
 ---
 
-## Fluxo Técnico Proposto
+## Área Direita: Card de Autenticação
 
-### Fase 1: Story e contrato de dados
+Criar um card premium sem glassmorphism.
+
+Visual:
+
+- Fundo: card escuro.
+- Borda: `1px solid` no token de borda.
+- Radius: `12px`.
+- Sem sombra pesada.
+- Sem blur.
+- Sem transparência exagerada.
+
+### Cabeçalho do card
+
+Título:
+
+```text
+Entrar na Arena
+```
+
+Subtítulo:
+
+```text
+Acesse sua conta para competir ou organizar eventos.
+```
+
+### Seletor de perfil
+
+Adicionar seletor antes do formulário:
+
+- `ATLETA`
+- `ORGANIZADOR`
+
+Comportamento:
+
+- Estado selecionado com amarelo WOD Arena.
+- Estado não selecionado com fundo de card/elevated e borda.
+- Deve ser acessível por teclado.
+- Usar `aria-pressed` ou tabs semânticas.
+
+Ao selecionar `ATLETA`, mostrar benefícios:
+
+- Minhas inscrições.
+- Resultados.
+- Rankings.
+- Histórico.
+
+Ao selecionar `ORGANIZADOR`, mostrar benefícios:
+
+- Criar eventos.
+- Gerenciar categorias.
+- Lançar resultados.
+- Controle financeiro.
+
+Importante:
+
+- Esse seletor não deve alterar a API de login.
+- Ele é uma ajuda contextual e visual.
+- O login continua usando o mesmo fluxo e a role real do usuário autenticado.
+
+### Formulário
+
+Campos:
+
+- Email.
+- Senha.
+
+Adicionar:
+
+- Checkbox `Manter conectado`.
+- Link `Esqueci minha senha`.
+
+Cuidados técnicos:
+
+- Só ativar `Manter conectado` se existir suporte real de sessão persistente. Caso contrário, renderizar como UI planejada e abrir task para implementar persistência.
+- Só ativar `Esqueci minha senha` se houver rota/API de recuperação. Caso contrário, manter o link como item de backlog ou direcionar para suporte/fluxo existente.
+
+### CTA principal
+
+Botão full width:
+
+```text
+ENTRAR NA ARENA
+```
+
+Visual:
+
+- Fundo amarelo `#FCD535` via token/classe.
+- Texto escuro.
+- Altura mínima de 44px.
+- Hover/active em variação amarela já existente.
+- Estado disabled claro.
+
+### CTA secundário
+
+Botão outline:
+
+```text
+CRIAR CONTA GRATUITA
+```
+
+Cuidados técnicos:
+
+- Validar qual fluxo real existe para criar conta.
+- Se a criação de conta for apenas pelo formulário de inscrição de evento, o botão deve direcionar para eventos disponíveis ou abrir uma explicação curta.
+- Não criar rota nova sem story e contrato funcional.
+
+---
+
+## Bloco Diferencial WOD Arena
+
+Abaixo do formulário, adicionar bloco compacto com duas mensagens:
+
+### Para atletas
+
+```text
+Acompanhe inscrições, rankings e resultados.
+```
+
+### Para organizadores
+
+```text
+Crie eventos, categorias, provas e leaderboards em uma única plataforma.
+```
+
+Regras:
+
+- Bloco dentro do card ou logo abaixo dele.
+- Visual escuro com borda fina.
+- Texto curto.
+- Não criar card dentro de card com excesso visual.
+
+---
+
+## Responsividade
+
+### Desktop
+
+- Header com 64px.
+- Layout 60/40.
+- Imagem esportiva à esquerda.
+- Card de login à direita.
+- Estatísticas em linha.
+- Benefícios em grid compacto.
+
+### Tablet
+
+- Reduzir título.
+- Manter split se houver espaço suficiente.
+- Ajustar card para largura máxima confortável.
+
+### Mobile
+
+- Imagem vira background da tela.
+- Overlay escuro aplicado na tela inteira.
+- Card de login centralizado.
+- Estatísticas em grid `2x2`.
+- Benefícios em lista compacta.
+- Header mantém altura controlada e links não podem quebrar de forma desorganizada.
+
+---
+
+## Arquivos Prováveis
+
+Implementação principal:
+
+- `src/app/admin/page.tsx`
+
+Possíveis ajustes:
+
+- `src/components/Navbar.tsx`
+- `src/components/BrandLogo.tsx`
+- `src/app/globals.css`
+- `tests/design-system.test.mjs`
+- `docs/stories/`
+
+Asset esportivo:
+
+- Verificar se já existe imagem adequada em `public/`.
+- Se não existir, adicionar asset aprovado em `public/` com nome descritivo, por exemplo:
+  - `public/login-arena-competition.jpg`
+
+Critério do asset:
+
+- Deve mostrar competição real ou visual claramente esportivo.
+- Não usar imagem genérica de academia.
+- Não usar imagem escura demais que impeça leitura.
+- Não depender de hotlink externo.
+
+---
+
+## Plano de Implementação
+
+### Fase 1: Story e alinhamento técnico
 
 Criar story em `docs/stories/` com:
 
 - Contexto.
-- Acceptance Criteria.
+- Requisitos visuais.
+- Critérios de aceite.
 - Tasks.
-- File List.
-- Change Log.
+- Dev notes.
+- File list.
+- Checklist QA.
 
 Critérios mínimos:
 
-- Atleta cria senha no formulário de inscrição.
-- Inscrição é persistida mesmo com falha no cartão.
-- Atleta consegue logar via `/admin`.
-- Atleta vê suas inscrições.
-- Atleta vê alerta de cartão não processado.
-- Atleta solicita 2ª via da inscrição.
+- `/admin` continua sendo a rota de login.
+- Login de atleta continua funcionando.
+- Login de gestor continua funcionando.
+- Tela usa identidade WOD Arena/Binance-like esportiva.
+- Não há regressão nos testes existentes.
 
-### Fase 2: Banco de dados e tipos
+### Fase 2: Asset e estrutura visual
 
-Criar migration Supabase para:
+Tarefas:
 
-- Permitir `role = 'athlete'` em `users`.
-- Adicionar vínculo de usuário/atleta em `registrations`.
-- Adicionar campos de status de pagamento.
-- Garantir índices por `user_id`, `athlete_email`, `event_id` e `payment_id`.
+- Escolher/adicionar imagem esportiva local.
+- Criar layout full-height.
+- Criar área esquerda institucional.
+- Criar card de autenticação à direita.
+- Garantir overlay escuro legível.
+- Manter header premium com altura máxima de 64px.
 
-Atualizar:
+### Fase 3: Interação do seletor de perfil
 
-- `src/types/index.ts`
-- Mapeamento de `registrations` em `AppContext.tsx`
-- Tipos auxiliares do checkout.
+Tarefas:
 
-### Fase 3: API/CLI-first do registro de inscrição
+- Adicionar estado local `selectedLoginProfile`.
+- Criar botões `ATLETA` e `ORGANIZADOR`.
+- Exibir lista contextual conforme seleção.
+- Garantir acessibilidade por teclado e `aria-pressed`.
+- Não alterar a autenticação real baseada em role.
 
-Criar uma API server-side para iniciar inscrição:
+### Fase 4: Formulário e CTAs
 
-- Sugestão: `POST /api/registrations/start`
+Tarefas:
 
-Responsabilidades:
+- Ajustar labels, placeholders e estados visuais.
+- Alterar CTA principal para `ENTRAR NA ARENA`.
+- Adicionar checkbox `Manter conectado`, com suporte real ou backlog claro.
+- Adicionar link `Esqueci minha senha`, com rota real ou backlog claro.
+- Adicionar CTA secundário `CRIAR CONTA GRATUITA`, apontando para fluxo existente ou backlog.
 
-- Validar dados do atleta.
-- Validar senha.
-- Criar ou recuperar usuário atleta.
-- Criar ou atualizar segredo de senha.
-- Criar atleta em `athletes` se necessário.
-- Criar inscrição com `payment_pending`.
-- Retornar `registrationId` para o checkout.
+### Fase 5: Responsividade e acabamento
 
-Esse endpoint deve ser chamado antes de iniciar Pix/cartão/preferência.
+Tarefas:
 
-### Fase 4: Ajuste do checkout Mercado Pago
+- Validar desktop, tablet e mobile.
+- Garantir que textos não sobreponham.
+- Garantir que o card caiba em telas menores.
+- Garantir que estatísticas fiquem em `2x2` no mobile.
+- Garantir contraste adequado.
+- Remover qualquer sombra/gradiente/glassmorphism indevido.
 
-Atualizar:
+### Fase 6: Testes e qualidade
 
-- `src/app/api/checkout/card/route.ts`
-- `src/app/api/checkout/pix/route.ts`
-- `src/app/api/checkout/preference/route.ts`
-- `src/app/api/checkout/status/route.ts`
-- `src/app/api/webhooks/mercadopago/route.ts`
-
-Novo comportamento:
-
-- Receber `registrationId`.
-- Usar `registrationId` como chave de idempotência.
-- Atualizar a inscrição existente em vez de criar apenas no `approved`.
-- Registrar `payment_id`, `payment_status`, `payment_status_detail` e mensagem de erro.
-
-Para cartão:
-
-- Se Mercado Pago retornar erro HTTP, marcar inscrição como `payment_failed`.
-- Se retornar `rejected`, marcar como `payment_failed`.
-- Se retornar `approved`, marcar como `payment_approved`.
-- Se retornar `in_process` ou `pending`, manter pendente/análise.
-
-### Fase 5: Login e roteamento por perfil
-
-Atualizar login para aceitar atleta:
-
-- `src/app/api/auth/login/route.ts`
-- `src/context/AppContext.tsx`
-- `src/app/admin/page.tsx`
-
-Após login:
-
-- `owner`: painel owner.
-- `manager`: painel gestor.
-- `athlete`: área do atleta.
-
-Não criar nova rota de login. A rota `/admin` continua sendo o ponto de entrada.
-
-### Fase 6: Interface da área do atleta
-
-Dentro de `src/app/admin/page.tsx`, criar renderização específica para `role = athlete`.
-
-Componentes ou blocos sugeridos:
-
-- Cabeçalho do atleta.
-- Cards de status:
-  - Inscrições.
-  - Pagamentos pendentes.
-  - Pagamentos com falha.
-- Lista de inscrições.
-- Detalhe da inscrição.
-- Ação de 2ª via.
-- Alerta de pagamento não processado.
-
-O layout deve seguir a identidade atual do painel, mas sem expor funções de gestor.
-
-### Fase 7: E-mail e 2ª via
-
-Reaproveitar `src/app/api/checkout/email/route.ts` quando possível.
-
-Garantir:
-
-- Atleta só solicita 2ª via das próprias inscrições.
-- Gestor continua podendo reenviar comprovante pelo painel administrativo.
-- Mensagem de e-mail deixa claro quando a inscrição ainda depende de pagamento.
-
----
-
-## Regras de Negócio
-
-- Uma inscrição pode existir sem pagamento aprovado.
-- Inscrição com pagamento falho não deve ser tratada como vaga confirmada financeiramente.
-- O atleta deve conseguir acessar o painel mesmo se o cartão falhar.
-- A 2ª via pode ser exibida para inscrição pendente/falha, mas deve mostrar o status real.
-- O gestor deve conseguir identificar inscrições com pagamento falho.
-- O e-mail deve ser a chave principal para login do atleta.
-- Se o atleta usar o mesmo e-mail em outro evento, o painel deve listar todas as inscrições dele.
-
----
-
-## Acceptance Criteria
-
-- [x] AC1: O formulário de inscrição exige senha e confirmação de senha.
-- [x] AC2: Ao enviar inscrição, o sistema cria usuário atleta com `role = athlete`.
-- [x] AC3: A inscrição é persistida antes da conclusão do pagamento.
-- [x] AC4: Em falha de cartão, a inscrição permanece registrada com `payment_status = payment_failed`.
-- [x] AC5: O atleta consegue acessar `/admin` com e-mail e senha cadastrados na inscrição.
-- [x] AC6: Usuário atleta não acessa telas administrativas de gestor ou owner.
-- [x] AC7: Área do atleta lista inscrições vinculadas ao seu usuário/e-mail.
-- [x] AC8: Área do atleta exibe alerta quando o cartão não foi processado.
-- [x] AC9: Área do atleta permite visualizar a inscrição.
-- [x] AC10: Área do atleta permite solicitar 2ª via da inscrição.
-- [x] AC11: Webhook Mercado Pago atualiza inscrição existente por `registrationId`/`payment_id`.
-- [x] AC12: Gestor continua visualizando inscrições normalmente, com novo status de pagamento.
-
----
-
-## Plano de Validação
-
-Executar:
+Rodar:
 
 - `npm run lint`
 - `npm run typecheck`
 - `npm test`
 - `npm run build`
 
-Testes automatizados sugeridos:
+Também validar manualmente:
 
-- Criar usuário atleta ao iniciar inscrição.
-- Persistir inscrição com `payment_pending`.
-- Atualizar inscrição para `payment_failed` em erro de cartão.
-- Atualizar inscrição para `payment_approved` em pagamento aprovado.
-- Login de atleta pela API existente.
-- Restringir acesso do atleta ao painel administrativo.
-- Listar apenas inscrições do atleta logado.
-- Solicitar 2ª via de inscrição própria.
-
-Testes manuais:
-
-- Inscrição com cartão aprovado.
-- Inscrição com cartão recusado.
-- Inscrição com erro de processamento no cartão.
-- Login do atleta após falha de pagamento.
-- Solicitação de 2ª via.
-- Conferência do painel do gestor com status de pagamento.
+- Acessar `http://localhost:3000/admin`.
+- Testar login como atleta.
+- Testar login como gestor.
+- Testar erro de senha inválida.
+- Testar responsividade no mobile.
+- Conferir se o header não passa de 64px.
 
 ---
 
-## Ordem Recomendada de Execução
+## Critérios de Aceite
 
-1. Criar story em `docs/stories/`.
-2. Criar migration Supabase.
-3. Atualizar tipos TypeScript.
-4. Criar endpoint server-side para iniciar inscrição.
-5. Ajustar checkout para usar inscrição existente.
-6. Ajustar webhook para atualizar status em vez de criar somente no aprovado.
-7. Ajustar login para `role = athlete`.
-8. Criar área do atleta dentro de `/admin`.
-9. Reaproveitar/ajustar 2ª via.
-10. Atualizar testes.
-11. Rodar quality gates.
-12. Atualizar checklist e File List da story.
+A implementação será considerada concluída quando:
+
+- A rota `/admin` exibir uma tela de login premium com identidade WOD Arena.
+- A tela não parecer academia genérica, ERP ou SaaS genérico.
+- A área esquerda tiver imagem esportiva com overlay escuro.
+- O card de login usar fundo escuro, borda fina e radius de 12px.
+- O CTA principal estiver em amarelo WOD Arena.
+- O seletor `ATLETA / ORGANIZADOR` funcionar visualmente e sem quebrar a autenticação.
+- O login continuar roteando o usuário pelo papel real da conta.
+- O mobile tiver experiência própria, sem layout espremido.
+- Não houver uso indevido de shadow, gradiente ou glassmorphism.
+- Os testes do projeto passarem.
 
 ---
 
-## Fora de Escopo Neste Plano
+## Riscos e Decisões Pendentes
 
-- Carteira financeira completa do atleta.
-- Reembolso automático.
-- Troca de categoria pelo atleta.
-- Upload de documentos.
-- Chat com organizador.
-- Criação de nova rota pública separada para login do atleta.
-- Regras automáticas de liberação de vaga por pagamento aprovado.
+### Recuperação de senha
 
-Esses itens podem virar novas stories depois que a área básica do atleta estiver funcionando.
+O prompt pede `Esqueci minha senha`, mas é necessário confirmar se já existe API/rota de recuperação.
+
+Decisão produtiva:
+
+- Se não existir, não implementar recuperação fake.
+- Criar item de backlog para API de reset de senha.
+- O link pode ficar oculto ou apontar para suporte até a funcionalidade existir.
+
+### Criar conta gratuita
+
+O prompt pede `CRIAR CONTA GRATUITA`, mas hoje a criação de atleta está ligada ao fluxo de inscrição em evento.
+
+Decisão produtiva:
+
+- Se não existir cadastro autônomo, o CTA deve levar para a listagem de eventos.
+- Não criar conta sem vínculo com evento sem uma story própria.
+
+### Estatísticas institucionais
+
+Os números `500+`, `50+`, `20.000+`, `100+` podem ser institucionais.
+
+Decisão produtiva:
+
+- Preferir dados reais quando disponíveis.
+- Se forem números de marketing, documentar como conteúdo institucional temporário.
+
+### Header
+
+O prompt pede manter o header atual, mas a tela `/admin` pode estar isolada do header global.
+
+Decisão produtiva:
+
+- Reutilizar componente existente se ele não quebrar o fluxo de login.
+- Caso contrário, criar header local visualmente compatível.
+
+---
+
+## Resultado Esperado
+
+A nova tela deve fazer o usuário perceber que está entrando em uma plataforma esportiva profissional, com foco em competição, resultados e organização.
+
+O primeiro impacto deve ser:
+
+```text
+Esta é a arena oficial onde atletas competem e organizadores operam eventos.
+```
+
