@@ -722,11 +722,14 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                         />
                       ))}
                     </div>
-                    <span className="block text-[8px] font-mono tracking-[0.25em] text-neutral-500 uppercase">
-                      SECURE TICKET ID: {sessionStorage.getItem('pending_registration') 
-                        ? JSON.parse(sessionStorage.getItem('pending_registration') || '{}')?.registrationData?.id || 'WODA-REG-OK'
-                        : 'WODA-REG-OK'}
-                    </span>
+                    <div className="flex items-center justify-between pt-1">
+                      <span className="block text-[8px] font-mono tracking-[0.25em] text-neutral-500 uppercase">
+                        SECURE TICKET ID: {sessionStorage.getItem('pending_registration') 
+                          ? JSON.parse(sessionStorage.getItem('pending_registration') || '{}')?.registrationData?.id || 'WODA-REG-OK'
+                          : 'WODA-REG-OK'}
+                      </span>
+                      <img src="/mercadopago-logo.png" alt="Mercado Pago" className="h-3.5 w-auto object-contain opacity-40 grayscale invert" />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1070,7 +1073,10 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
 
                 {/* Seleção do Método de Pagamento */}
                 <div className="space-y-3 pt-2">
-                  <span className="block text-xs font-bold text-ink">Forma de Pagamento</span>
+                  <div className="flex items-center justify-between">
+                    <span className="block text-xs font-bold text-ink">Forma de Pagamento</span>
+                    <img src="/mercadopago-logo.png" alt="Mercado Pago" className="h-4.5 w-auto object-contain opacity-80" />
+                  </div>
                   <div className="grid grid-cols-2 gap-3">
                     <button
                       type="button"
@@ -1219,10 +1225,14 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                   <span className="font-extrabold uppercase tracking-wider text-ink">Total</span>
                   <span className="font-number font-black text-ink">R$ {totalPaid.toFixed(2)}</span>
                 </div>
-                <p className="flex items-center gap-1 text-[10px] text-muted-soft">
-                  <ShieldCheck className="h-3.5 w-3.5 text-[#9a7200]" aria-hidden="true" />
-                  Pagamento 100% Seguro. A WODArena realiza a ponte de integração, e a transação financeira é processada com total segurança pelo PagSeguro.
-                </p>
+                <div className="flex items-start gap-2 border-t border-hairline-light pt-3 text-[10px] text-muted-soft leading-normal">
+                  <ShieldCheck className="h-4 w-4 text-[#9a7200] shrink-0 mt-0.5" aria-hidden="true" />
+                  <div className="flex-1">
+                    <p className="font-bold text-ink">Pagamento processado pelo Mercado Pago</p>
+                    <p className="mt-0.5">Transação 100% criptografada e segura. A WODArena garante a integridade de sua inscrição.</p>
+                  </div>
+                  <img src="/mercadopago-logo.png" alt="Mercado Pago" className="h-4.5 w-auto object-contain shrink-0 ml-auto" />
+                </div>
               </div>
 
               {/* Checkbox de Aceite dos Termos */}
