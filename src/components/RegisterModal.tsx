@@ -607,32 +607,142 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
 
         <div className="flex-1 space-y-6 overflow-y-auto overscroll-contain p-6">
           {isSuccess ? (
-            <div className="text-center py-10 space-y-4" role="status" aria-live="polite">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary">
-                <Check className="h-8 w-8 text-ink" aria-hidden="true" />
-              </div>
-              <h4 className="text-2xl font-black tracking-tight text-ink">Inscrição confirmada</h4>
-              <p className="mx-auto max-w-sm text-sm leading-6 text-muted-soft">
-                Parabéns! Seus dados foram computados. O organizador e os atletas foram notificados e o ranking foi sincronizado com seu nome.
-              </p>
-              <div className="inline-block w-full rounded-lg border border-hairline-light bg-surface-soft-light p-4 text-left">
-                <p className="text-xs text-muted-soft">Resumo do ingresso</p>
-                <p className="text-sm font-bold text-ink">{event.name}</p>
-                <div className="mt-2 flex justify-between text-xs text-muted-soft">
-                  <span>{isTeamCategory ? 'Equipe' : 'Atleta'}: {isTeamCategory ? (teamName || primaryParticipant.name) : primaryParticipant.name}</span>
-                  <span>Divisão: {selectedDivision?.name}</span>
+            <div className="text-center py-4 space-y-6" role="status" aria-live="polite">
+              <div className="space-y-2">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 border border-primary/20">
+                  <Check className="h-6 w-6 text-primary" aria-hidden="true" />
                 </div>
-                <div className="mt-1 flex justify-between text-xs text-muted-soft">
-                  <span>Inscrição Individual {appliedCoupon && `(Cupom: ${appliedCoupon})`}</span>
-                  <span className="font-number font-bold text-ink">Total: R$ {totalPaid.toFixed(2)}</span>
+                <h4 className="text-xl font-black tracking-tight text-white uppercase">Inscrição Confirmada!</h4>
+                <p className="mx-auto max-w-sm text-xs leading-relaxed text-muted-soft">
+                  Você está garantido na arena. Tire um print do seu ticket abaixo para postar nos seus Stories do Instagram! 🚀
+                </p>
+              </div>
+
+              {/* TICKET DIGITAL PREMIUM */}
+              <div className="relative mx-auto w-full rounded-2xl overflow-hidden border border-neutral-800 bg-[#16181e] shadow-2xl text-left">
+                {/* Cabeçalho do Ticket com Banner de Fundo */}
+                <div className="relative h-28 p-5 flex flex-col justify-end overflow-hidden">
+                  {event.bannerUrl ? (
+                    <>
+                      <img 
+                        src={event.bannerUrl} 
+                        alt="Banner do Evento" 
+                        className="absolute inset-0 w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-[#16181e] via-[#16181e]/85 to-black/40" />
+                    </>
+                  ) : (
+                    <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-neutral-900 to-black" />
+                  )}
+                  
+                  <div className="relative z-10 flex items-end justify-between">
+                    <div className="flex items-center gap-2">
+                      {event.logoUrl && (
+                        <img 
+                          src={event.logoUrl} 
+                          alt="Logo do Evento" 
+                          className="h-10 w-10 rounded-full border border-neutral-700 bg-[#16181e] p-0.5 object-cover"
+                        />
+                      )}
+                      <div>
+                        <span className="text-[9px] font-black uppercase tracking-wider text-primary">WODArena ticket</span>
+                        <h5 className="text-sm font-black text-white truncate max-w-[220px] uppercase">{event.name}</h5>
+                      </div>
+                    </div>
+                    <div className="rounded bg-primary px-2 py-0.5 text-[9px] font-black tracking-widest text-ink uppercase shadow-sm">
+                      CONFIRMADO
+                    </div>
+                  </div>
+                </div>
+
+                {/* Picote Divisor do Ticket (Ticket Cutout) */}
+                <div className="relative h-4 flex items-center bg-[#16181e]">
+                  <div className="absolute -left-3 w-6 h-6 rounded-full bg-black/90 z-20 border-r border-neutral-800" />
+                  <div className="absolute -right-3 w-6 h-6 rounded-full bg-black/90 z-20 border-l border-neutral-800" />
+                  <div className="w-full border-t border-dashed border-neutral-700/60 mx-3" />
+                </div>
+
+                {/* Corpo do Ticket com as Informações */}
+                <div className="p-5 space-y-5 bg-[#16181e]">
+                  <div className="grid grid-cols-2 gap-y-4 gap-x-6">
+                    <div>
+                      <span className="text-[9px] font-bold uppercase tracking-widest text-muted-soft">Atleta / Equipe</span>
+                      <p className="text-sm font-extrabold text-white truncate uppercase">
+                        {isTeamCategory 
+                          ? (teamName || primaryParticipant.name) 
+                          : primaryParticipant.name}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-[9px] font-bold uppercase tracking-widest text-muted-soft">Divisão / Categoria</span>
+                      <p className="text-sm font-extrabold text-white truncate uppercase">
+                        {selectedDivision?.name || 'Inscrição Geral'}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-[9px] font-bold uppercase tracking-widest text-muted-soft">Arena / Local</span>
+                      <p className="text-[11px] font-medium text-white truncate uppercase">
+                        {event.location}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-[9px] font-bold uppercase tracking-widest text-muted-soft">Data do Evento</span>
+                      <p className="text-[11px] font-medium text-white uppercase">
+                        {event.date}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-neutral-800/80 pt-4 flex justify-between items-end">
+                    <div>
+                      <span className="text-[9px] font-bold uppercase tracking-widest text-muted-soft">Forma de Pagamento</span>
+                      <p className="text-xs font-bold text-white uppercase">
+                        {totalPaid === 0 ? 'Inscrição Gratuita' : paymentMethod === 'pix' ? 'Pix (Confirmado)' : 'Cartão de Crédito'}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[9px] font-bold uppercase tracking-widest text-muted-soft">Valor Pago</span>
+                      <p className="text-base font-black text-primary font-number">
+                        R$ {totalPaid.toFixed(2)}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Código de Barras Decorativo */}
+                  <div className="border-t border-neutral-800/80 pt-4 text-center space-y-2">
+                    <div className="flex items-center justify-center gap-[1.5px] h-9 opacity-60">
+                      {[1, 3, 1, 2, 4, 1, 3, 2, 1, 4, 1, 2, 3, 1, 2, 4, 1, 3, 1, 2, 4, 1, 2, 1, 3].map((w, i) => (
+                        <div 
+                          key={i} 
+                          className="bg-white rounded-sm" 
+                          style={{ 
+                            width: `${w}px`, 
+                            height: i % 4 === 0 ? '26px' : '36px' 
+                          }} 
+                        />
+                      ))}
+                    </div>
+                    <span className="block text-[8px] font-mono tracking-[0.25em] text-neutral-500 uppercase">
+                      SECURE TICKET ID: {sessionStorage.getItem('pending_registration') 
+                        ? JSON.parse(sessionStorage.getItem('pending_registration') || '{}')?.registrationData?.id || 'WODA-REG-OK'
+                        : 'WODA-REG-OK'}
+                    </span>
+                  </div>
                 </div>
               </div>
-              <button
-                onClick={onClose}
-                className="h-12 w-full rounded-md bg-primary font-bold text-ink transition-colors hover:bg-primary-hover"
-              >
-                Voltar aos eventos
-              </button>
+
+              {/* Botões de Ação */}
+              <div className="space-y-3 pt-2">
+                <button
+                  onClick={onClose}
+                  className="h-12 w-full rounded-md bg-primary font-black uppercase text-ink tracking-wider text-xs transition-colors hover:bg-primary-hover shadow-lg cursor-pointer"
+                >
+                  Voltar aos eventos
+                </button>
+                <p className="text-[10px] text-muted-soft italic">
+                  📸 Não esqueça de marcar o instagram oficial **@wodarena** na sua postagem!
+                </p>
+              </div>
             </div>
           ) : pixData ? (
             <div className="space-y-6 py-4" role="region" aria-label="Pagamento Pix">
