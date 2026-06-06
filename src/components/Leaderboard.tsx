@@ -219,17 +219,6 @@ export function Leaderboard({ event }: LeaderboardProps) {
 
                   return (
                     <React.Fragment key={row.athlete.id}>
-                      {/* Linha Divisória de Qualificados (Games Qualifier) após o Top 5 */}
-                      {idx === 5 && filteredLeaderboard.length > 5 && (
-                        <tr className="bg-primary/5 border-y border-primary/20">
-                          <td colSpan={activeCategory?.useAgeGroups ? 4 : 3} className="px-4 py-2 text-center">
-                            <span className="text-[10px] font-black tracking-widest text-primary uppercase font-sans">
-                              --- Games Qualifier Cutline ---
-                            </span>
-                          </td>
-                        </tr>
-                      )}
-                      
                       <tr 
                         onClick={() => {
                           if (row.athlete.isTeam) {
@@ -410,17 +399,6 @@ export function Leaderboard({ event }: LeaderboardProps) {
                 {filteredLeaderboard.map((row, idx) => {
                   return (
                     <React.Fragment key={row.athlete.id}>
-                      {/* Linha Divisória de Qualificados (Games Qualifier) após o Top 5 */}
-                      {idx === 5 && filteredLeaderboard.length > 5 && (
-                        <tr className="bg-primary/5 border-y border-primary/20">
-                          <td colSpan={event.workouts.length + 2} className="px-4 py-2 text-center">
-                            <span className="text-[10px] font-black tracking-widest text-primary uppercase font-sans">
-                              --- Games Qualifier Cutline ---
-                            </span>
-                          </td>
-                        </tr>
-                      )}
-                      
                       <tr className="border-b border-card-border transition-colors last:border-b-0 hover:bg-elevated/50">
                         {/* Participant Cell */}
                         <td className="p-0">
