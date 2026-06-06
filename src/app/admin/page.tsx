@@ -76,7 +76,7 @@ const formatLongDate = (dateStr: string): string => {
 
 export default function AdminPage() {
   const {
-    events, athletes, scores, registrations, coupons, users, currentUser,
+    events, athletes, scores, registrations, coupons, currentUser,
     login, logout, addEvent, addDivision, updateDivision,
     addWorkout, deleteDivision, deleteWorkout, submitScore, submitScoresBulk, updateEvent, getLeaderboard, registerTicket, saveCourseLayout, updateWorkout,
     addCoupon, incrementCouponUsage, changePassword
@@ -624,15 +624,9 @@ export default function AdminPage() {
     e.preventDefault();
     const success = await login(email, password);
     if (success) {
-      const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
-      if (user && user.role === 'manager') {
-        setLoginError('');
-      } else {
-        logout();
-        setLoginError('Acesso negado. Esta conta não possui privilégios de gestor.');
-      }
+      setLoginError('');
     } else {
-      setLoginError('E-mail ou senha incorretos. Dica: use org1@wodarena.com e manager1.');
+      setLoginError('E-mail ou senha incorretos.');
     }
   };
 
@@ -1570,10 +1564,10 @@ export default function AdminPage() {
           <div className="text-center space-y-2">
             <BrandLogo variant="full" className="mx-auto h-28 w-28 rounded-sm" priority />
             <span className="inline-flex rounded-full border border-primary bg-primary px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-ink">
-              Área do Organizador
+              Área WODArena
             </span>
             <h2 className="text-2xl font-bold tracking-tight text-ink">Acesso restrito</h2>
-            <p className="text-xs text-muted-soft">Acesse com suas credenciais de administrador da WODArena.</p>
+            <p className="text-xs text-muted-soft">Acesse com suas credenciais de gestor ou atleta.</p>
           </div>
 
           {loginError && (
@@ -1584,7 +1578,7 @@ export default function AdminPage() {
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label htmlFor="admin-email" className={transactionalLabelClassName}>E-mail administrativo</label>
+              <label htmlFor="admin-email" className={transactionalLabelClassName}>E-mail</label>
               <input
                 id="admin-email"
                 name="email"
@@ -1624,8 +1618,7 @@ export default function AdminPage() {
 
           <div className="border-t border-hairline-light pt-4 text-center">
             <p className="text-[10px] leading-relaxed text-muted-soft">
-              Dica rápida de demonstração:<br />
-              Use <strong className="font-bold text-primary-on-light">org1@wodarena.com</strong> e senha <strong className="font-bold text-primary-on-light">manager1</strong> para entrar.
+              <strong className="font-bold text-primary-on-light">Gestores</strong> e <strong className="font-bold text-primary-on-light">atletas</strong> usam esta mesma rota de acesso.
             </p>
           </div>
         </div>

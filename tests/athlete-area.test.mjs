@@ -56,6 +56,7 @@ test('athlete area is rendered inside admin route without manager controls', () 
   assert.match(adminPage, /Solicitar 2ª via/);
   assert.match(adminPage, /Pagamento não processado/);
   assert.match(adminPage, /currentUser\.role === 'manager' \|\| currentUser\.role === 'athlete'/);
+  assert.doesNotMatch(adminPage, /Acesso negado\. Esta conta não possui privilégios de gestor/);
 });
 
 test('voucher reflects non-approved payment status', () => {
@@ -63,4 +64,3 @@ test('voucher reflects non-approved payment status', () => {
   assert.match(voucher, /Inscrição registrada/);
   assert.match(voucher, /não confirma a vaga financeiramente/);
 });
-
