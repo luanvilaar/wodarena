@@ -70,7 +70,8 @@ export async function POST(request: Request) {
     if (!response.ok) {
       const errorData = await response.json();
       console.error("[MercadoPago Pix API] Erro ao criar pagamento Pix no Mercado Pago:", errorData);
-      return NextResponse.json({ error: 'Erro ao gerar cobrança Pix.' }, { status: 500 });
+      const errorMessage = errorData?.cause?.[0]?.description || errorData?.message || 'Erro ao gerar cobrança Pix.';
+      return NextResponse.json({ error: errorMessage }, { status: response.status });
     }
 
     const paymentData = await response.json();

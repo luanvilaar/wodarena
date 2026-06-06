@@ -87,12 +87,11 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
   const [teamInstagram, setTeamInstagram] = useState('');
   const [participants, setParticipants] = useState<ParticipantForm[]>([createEmptyParticipant()]);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [isSuccess] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
   const [couponCode, setCouponCode] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
   const [discountApplied, setDiscountApplied] = useState(0);
   const [couponNotice, setCouponNotice] = useState<{ text: string; tone: 'success' | 'error' } | null>(null);
-  const [redirectUrl, setRedirectUrl] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'pix' | 'credit_card'>('pix');
   const [cpf, setCpf] = useState('');
   const [pixData, setPixData] = useState<{ qr_code: string; qr_code_base64: string; paymentId: string } | null>(null);
@@ -107,14 +106,13 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
   if (isOpen !== prevIsOpen) {
     setPrevIsOpen(isOpen);
     setAcceptedTerms(false);
+    setIsSuccess(false);
+    setPixData(null);
+    setCardNumber('');
+    setCardholderName('');
+    setExpirationDate('');
+    setSecurityCode('');
   }
-
-  // Redirecionamento de forma controlada via Effect
-  useEffect(() => {
-    if (redirectUrl) {
-      window.location.href = redirectUrl;
-    }
-  }, [redirectUrl]);
 
   // Polling para verificar status do pagamento Pix
   useEffect(() => {
@@ -160,7 +158,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
             }
           }
 
-          if (onSuccess && createdReg && parsedAthlete) {
+          if (createdReg && parsedAthlete) {
             // Disparar envio de e-mail local em background
             fetch('/api/checkout/email', {
               method: 'POST',
@@ -168,10 +166,12 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
               body: JSON.stringify({ registrationId: createdReg.id, cpf: parsedCpf })
             }).catch(err => console.error("[Local Email Trigger] Erro ao disparar e-mail:", err));
 
-            onSuccess(createdReg, parsedAthlete, parsedCpf);
-            onClose();
+            if (onSuccess) {
+              onSuccess(createdReg, parsedAthlete, parsedCpf);
+            }
+            setIsSuccess(true);
           } else {
-            setRedirectUrl(`${window.location.pathname}?payment=success`);
+            setIsSuccess(true);
           }
         }
       } catch (err) {
@@ -364,11 +364,8 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
 
         if (onSuccess) {
           onSuccess(finalReg, athleteProfile, cpf);
-          onClose();
-        } else {
-          sessionStorage.setItem('pending_registration', JSON.stringify({ registrationData, athleteProfile, cpf }));
-          setRedirectUrl(`${window.location.pathname}?payment=success`);
         }
+        setIsSuccess(true);
         setIsProcessing(false);
         return;
       }
@@ -538,11 +535,8 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
               athleteProfile,
               cpf
             );
-            onClose();
-          } else {
-            sessionStorage.setItem('pending_registration', JSON.stringify({ registrationData, athleteProfile, cpf }));
-            setRedirectUrl(`${window.location.pathname}?payment=success`);
           }
+          setIsSuccess(true);
         } else if (data.status === 'in_process') {
           alert('Seu pagamento está sendo analisado pelo Mercado Pago. Acompanhe a confirmação no painel do atleta.');
           onClose();
