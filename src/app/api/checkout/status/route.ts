@@ -1,8 +1,22 @@
 import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 import {
   MercadoPagoConfigError,
   resolveMercadoPagoCheckoutConfig
 } from '@/lib/mercadopagoServer';
+
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || 'https://momigbtnsswoldqnadmc.supabase.co',
+  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+);
+
+const toRegistrationPaymentStatus = (status?: string) => {
+  if (status === 'approved') return 'payment_approved';
+  if (status === 'in_process') return 'payment_in_review';
+  if (status === 'cancelled') return 'payment_cancelled';
+  if (status === 'rejected') return 'payment_failed';
+  return 'payment_pending';
+};
 
 export async function GET(request: Request) {
   try {
@@ -42,6 +56,21 @@ export async function GET(request: Request) {
       } catch (parseErr) {
         console.warn("[MercadoPago Status API] Metadados de inscrição inválidos:", parseErr);
       }
+    }
+
+    const registrationId = registrationPayload?.registrationData?.id;
+    if (registrationId) {
+      await supabaseAdmin
+        .from('registrations')
+        .update({
+          payment_status: toRegistrationPaymentStatus(paymentData.status),
+          payment_method: paymentData.payment_method_id || null,
+          payment_id: String(paymentData.id),
+          payment_status_detail: paymentData.status_detail || null,
+          payment_error_message: paymentData.status === 'rejected' ? 'Pagamento não processado.' : null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', registrationId);
     }
 
     return NextResponse.json({

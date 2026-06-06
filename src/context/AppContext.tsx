@@ -158,6 +158,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             id: r.id,
             eventId: r.event_id,
             divisionId: r.division_id,
+            userId: r.user_id || undefined,
+            athleteId: r.athlete_id || undefined,
             athleteName: r.athlete_name,
             athleteEmail: r.athlete_email,
             athletePhone: r.athlete_phone,
@@ -168,7 +170,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             quantity: r.quantity,
             totalPaid: Number(r.total_paid),
             createdAt: r.created_at,
-            couponCode: r.coupon_code || undefined
+            couponCode: r.coupon_code || undefined,
+            paymentStatus: r.payment_status || 'payment_approved',
+            paymentMethod: r.payment_method || undefined,
+            paymentId: r.payment_id || undefined,
+            paymentStatusDetail: r.payment_status_detail || undefined,
+            paymentErrorMessage: r.payment_error_message || undefined,
+            updatedAt: r.updated_at || undefined
           }));
           setRegistrations(mappedRegs);
         } else {
@@ -860,7 +868,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     // Salvar no Supabase em background
     const savePromise = async () => {
       if (newAthlete) {
-        await supabase.from('athletes').insert({
+        await supabase.from('athletes').upsert({
           id: newAthlete.id,
           name: newAthlete.name,
           box: newAthlete.box,
@@ -876,13 +884,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           phone: newAthlete.phone || null,
           is_team: newAthlete.isTeam || false,
           team_members: newAthlete.teamMembers ? JSON.stringify(newAthlete.teamMembers) : '[]'
-        });
+        }, { onConflict: 'id' });
       }
 
-      await supabase.from('registrations').insert({
+      await supabase.from('registrations').upsert({
         id: newRegistration.id,
         event_id: newRegistration.eventId,
         division_id: newRegistration.divisionId,
+        user_id: newRegistration.userId || null,
+        athlete_id: newRegistration.athleteId || newAthlete?.id || null,
         athlete_name: newRegistration.athleteName,
         athlete_email: newRegistration.athleteEmail,
         athlete_phone: newRegistration.athletePhone,
@@ -893,8 +903,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         quantity: newRegistration.quantity,
         total_paid: newRegistration.totalPaid,
         created_at: newRegistration.createdAt,
-        coupon_code: newRegistration.couponCode || null
-      });
+        coupon_code: newRegistration.couponCode || null,
+        payment_status: newRegistration.paymentStatus || 'payment_approved',
+        payment_method: newRegistration.paymentMethod || null,
+        payment_id: newRegistration.paymentId || null,
+        payment_status_detail: newRegistration.paymentStatusDetail || null,
+        payment_error_message: newRegistration.paymentErrorMessage || null,
+        updated_at: newRegistration.updatedAt || new Date().toISOString()
+      }, { onConflict: 'id' });
     };
 
     savePromise().catch(err => console.error("Erro ao registrar ticket no Supabase:", err));
@@ -902,7 +918,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (newAthlete) {
       setAthletes(prev => [...prev, newAthlete as Athlete]);
     }
-    setRegistrations(prev => [...prev, newRegistration]);
+    setRegistrations(prev => {
+      const existsInState = prev.some(r => r.id === newRegistration.id);
+      return existsInState
+        ? prev.map(r => r.id === newRegistration.id ? newRegistration : r)
+        : [...prev, newRegistration];
+    });
     return newRegistration;
   };
 

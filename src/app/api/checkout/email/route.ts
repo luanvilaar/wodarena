@@ -37,6 +37,8 @@ export async function POST(request: Request) {
       id: dbReg.id,
       eventId: dbReg.event_id,
       divisionId: dbReg.division_id,
+      userId: dbReg.user_id || undefined,
+      athleteId: dbReg.athlete_id || undefined,
       athleteName: dbReg.athlete_name,
       athleteEmail: dbReg.athlete_email,
       athletePhone: dbReg.athlete_phone,
@@ -47,7 +49,13 @@ export async function POST(request: Request) {
       quantity: dbReg.quantity,
       totalPaid: dbReg.total_paid,
       createdAt: dbReg.created_at,
-      couponCode: dbReg.coupon_code || undefined
+      couponCode: dbReg.coupon_code || undefined,
+      paymentStatus: dbReg.payment_status || 'payment_approved',
+      paymentMethod: dbReg.payment_method || undefined,
+      paymentId: dbReg.payment_id || undefined,
+      paymentStatusDetail: dbReg.payment_status_detail || undefined,
+      paymentErrorMessage: dbReg.payment_error_message || undefined,
+      updatedAt: dbReg.updated_at || undefined
     };
 
     // 2. Buscar o evento
@@ -111,7 +119,9 @@ export async function POST(request: Request) {
       email: dbAthlete?.email || registration.athleteEmail,
       phone: dbAthlete?.phone || registration.athletePhone,
       isTeam: dbAthlete?.is_team || false,
-      teamMembers: dbAthlete?.team_members ? JSON.parse(dbAthlete.team_members) : []
+      teamMembers: dbAthlete?.team_members
+        ? (typeof dbAthlete.team_members === 'string' ? JSON.parse(dbAthlete.team_members) : dbAthlete.team_members)
+        : []
     };
 
     // 4. Disparar e-mail via Resend

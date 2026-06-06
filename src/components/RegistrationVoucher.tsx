@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Image from 'next/image';
-import { Calendar, CheckCircle2, MapPin, Printer, ShieldCheck, TicketCheck, User, X } from 'lucide-react';
+import { AlertTriangle, Calendar, CheckCircle2, MapPin, Printer, ShieldCheck, TicketCheck, User, X } from 'lucide-react';
 import { Registration, Athlete, Event } from '@/types';
 
 interface RegistrationVoucherProps {
@@ -52,6 +52,18 @@ export function RegistrationVoucher({
 
   const hasBanner = Boolean(event.bannerUrl);
   const hasLogo = Boolean(event.logoUrl);
+  const paymentStatus = registration.paymentStatus || 'payment_approved';
+  const isPaymentApproved = paymentStatus === 'payment_approved';
+  const statusLabel = paymentStatus === 'payment_failed'
+    ? 'Pagamento não processado'
+    : paymentStatus === 'payment_in_review'
+      ? 'Pagamento em análise'
+      : paymentStatus === 'payment_cancelled'
+        ? 'Pagamento cancelado'
+        : paymentStatus === 'payment_pending'
+          ? 'Pagamento pendente'
+          : 'Inscrição confirmada';
+  const StatusIcon = isPaymentApproved ? CheckCircle2 : AlertTriangle;
 
   return (
     <div
@@ -99,8 +111,8 @@ export function RegistrationVoucher({
       <div className="w-full max-w-[430px] space-y-3">
         <div className="no-print flex items-center justify-between rounded-lg border border-[#2b3139] bg-[#1e2329] px-3 py-2 text-white">
           <div className="flex min-w-0 items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 shrink-0 text-[#0ecb81]" aria-hidden="true" />
-            <span className="truncate text-xs font-bold uppercase">Inscrição confirmada</span>
+            <StatusIcon className={`h-4 w-4 shrink-0 ${isPaymentApproved ? 'text-[#0ecb81]' : 'text-[#FCD535]'}`} aria-hidden="true" />
+            <span className="truncate text-xs font-bold uppercase">{statusLabel}</span>
           </div>
           <button
             onClick={onClose}
@@ -156,7 +168,7 @@ export function RegistrationVoucher({
                 </div>
               )}
               <div className="absolute left-4 top-4 rounded-md border border-[#FCD535]/50 bg-[#0b0e11] px-3 py-1">
-                <span className="text-[10px] font-black uppercase text-[#FCD535]">Comprovante oficial</span>
+                <span className="text-[10px] font-black uppercase text-[#FCD535]">{isPaymentApproved ? 'Comprovante oficial' : 'Registro de inscrição'}</span>
               </div>
             </section>
 
@@ -182,18 +194,25 @@ export function RegistrationVoucher({
               <VoucherInfo label="Local" value={event.location} icon={<MapPin className="h-4 w-4" />} />
               <VoucherInfo label="Box" value={registration.box || 'Independente'} icon={<User className="h-4 w-4" />} />
               <VoucherInfo label="Emissão" value={formattedIssueDate} />
+              <VoucherInfo label="Status" value={statusLabel} wide={!cpf} />
               {cpf && <VoucherInfo label="CPF" value={getMaskedCPF(cpf)} />}
-              <VoucherInfo label="ID" value={registration.id} mono wide={!cpf} />
+              <VoucherInfo label="ID" value={registration.id} mono wide={false} />
             </section>
 
             <footer className="mt-auto space-y-4 bg-[#0b0e11] px-5 py-5">
               <div className="rounded-lg border border-[#2b3139] bg-[#1e2329] p-4">
                 <div className="flex items-start gap-3">
-                  <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[#0ecb81]" aria-hidden="true" />
+                  {isPaymentApproved ? (
+                    <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[#0ecb81]" aria-hidden="true" />
+                  ) : (
+                    <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-[#FCD535]" aria-hidden="true" />
+                  )}
                   <div>
-                    <p className="text-xs font-bold uppercase text-white">Inscrição validada</p>
+                    <p className="text-xs font-bold uppercase text-white">{isPaymentApproved ? 'Inscrição validada' : 'Inscrição registrada'}</p>
                     <p className="mt-1 text-[11px] leading-relaxed text-[#929aa5]">
-                      Este comprovante confirma a inscrição no evento e pode ser salvo ou compartilhado pelo atleta.
+                      {isPaymentApproved
+                        ? 'Este comprovante confirma a inscrição no evento e pode ser salvo ou compartilhado pelo atleta.'
+                        : 'Este registro não confirma a vaga financeiramente. A participação depende da regularização do pagamento.'}
                     </p>
                   </div>
                 </div>

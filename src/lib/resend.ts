@@ -26,6 +26,18 @@ export async function sendRegistrationEmail(
     currency: 'BRL'
   }).format(registration.totalPaid);
 
+  const paymentStatus = registration.paymentStatus || 'payment_approved';
+  const isPaymentApproved = paymentStatus === 'payment_approved';
+  const statusLabel = paymentStatus === 'payment_failed'
+    ? 'Pagamento não processado'
+    : paymentStatus === 'payment_in_review'
+      ? 'Pagamento em análise'
+      : paymentStatus === 'payment_cancelled'
+        ? 'Pagamento cancelado'
+        : paymentStatus === 'payment_pending'
+          ? 'Pagamento pendente'
+          : 'Pagamento aprovado';
+
   const isTeam = athlete.isTeam || false;
   const teamMembersList = isTeam && athlete.teamMembers && athlete.teamMembers.length > 0
     ? athlete.teamMembers.map(m => m.name).join(', ')
@@ -190,10 +202,11 @@ export async function sendRegistrationEmail(
           
           <!-- Body Content -->
           <div class="body">
-            <div class="success-badge">Inscrição Confirmada</div>
-            <h1 class="title">Sua inscrição está confirmada!</h1>
+            <div class="success-badge">${isPaymentApproved ? 'Inscrição Confirmada' : 'Inscrição Registrada'}</div>
+            <h1 class="title">${isPaymentApproved ? 'Sua inscrição está confirmada!' : 'Sua inscrição foi registrada'}</h1>
             <p class="subtitle">
-              Olá, <strong>${registration.athleteName}</strong>. Sua inscrição para o evento <strong>${event.name}</strong> foi confirmada e processada. Abaixo estão os detalhes oficiais da sua vaga.
+              Olá, <strong>${registration.athleteName}</strong>. Sua inscrição para o evento <strong>${event.name}</strong> foi registrada na WODArena. Status atual: <strong>${statusLabel}</strong>.
+              ${isPaymentApproved ? 'Abaixo estão os detalhes oficiais da sua vaga.' : 'A participação no evento depende da regularização do pagamento.'}
             </p>
             
             <div class="divider"></div>
@@ -240,15 +253,22 @@ export async function sendRegistrationEmail(
                 <td class="label">Total Pago</td>
                 <td class="value" style="color: #0ecb81; font-size: 15px;">${totalPaidFormatted}</td>
               </tr>
+              <tr>
+                <td class="label">Status do Pagamento</td>
+                <td class="value">${statusLabel}</td>
+              </tr>
             </table>
             
             <div class="dashed-divider"></div>
             
             <!-- Validação da Inscrição -->
             <div class="validation-section">
-              <div class="validation-title">INSCRIÇÃO VALIDADA</div>
+              <div class="validation-title">${isPaymentApproved ? 'INSCRIÇÃO VALIDADA' : 'INSCRIÇÃO REGISTRADA'}</div>
               <p class="validation-text">
-                Este comprovante confirma a sua inscrição no evento. Guarde o ID da inscrição para consultas com a organização.
+                ${isPaymentApproved
+                  ? 'Este comprovante confirma a sua inscrição no evento.'
+                  : 'Este registro não confirma a vaga financeiramente até a regularização do pagamento.'}
+                Guarde o ID da inscrição para consultas com a organização.
               </p>
             </div>
             

@@ -1,8 +1,14 @@
 import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 import {
   MercadoPagoConfigError,
   resolveMercadoPagoCheckoutConfig
 } from '@/lib/mercadopagoServer';
+
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || 'https://momigbtnsswoldqnadmc.supabase.co',
+  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+);
 
 export async function POST(request: Request) {
   try {
@@ -75,6 +81,18 @@ export async function POST(request: Request) {
     }
 
     const preferenceData = await mpResponse.json();
+    await supabaseAdmin
+      .from('registrations')
+      .update({
+        payment_status: 'payment_pending',
+        payment_method: 'mercadopago_preference',
+        payment_id: preferenceData.id ? String(preferenceData.id) : null,
+        payment_status_detail: null,
+        payment_error_message: null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', registrationData.id);
+
     return NextResponse.json({
       id: preferenceData.id,
       init_point: preferenceData.init_point,

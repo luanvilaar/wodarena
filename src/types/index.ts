@@ -7,9 +7,16 @@ export interface User {
   name: string;
   email: string;
   password?: string; // Opcional no client-side por segurança conceitual
-  role: 'owner' | 'manager';
+  role: 'owner' | 'manager' | 'athlete';
   organization?: string;
 }
+
+export type RegistrationPaymentStatus =
+  | 'payment_pending'
+  | 'payment_approved'
+  | 'payment_failed'
+  | 'payment_in_review'
+  | 'payment_cancelled';
 
 export interface CourseStage {
   id: string;
@@ -140,6 +147,8 @@ export interface Registration {
   id: string;
   eventId: string;
   divisionId: string;
+  userId?: string;
+  athleteId?: string;
   athleteName: string;
   athleteEmail: string;
   athletePhone: string;
@@ -151,6 +160,12 @@ export interface Registration {
   totalPaid: number;
   createdAt: string;
   couponCode?: string;
+  paymentStatus?: RegistrationPaymentStatus;
+  paymentMethod?: string;
+  paymentId?: string;
+  paymentStatusDetail?: string;
+  paymentErrorMessage?: string;
+  updatedAt?: string;
 }
 
 export interface Coupon {

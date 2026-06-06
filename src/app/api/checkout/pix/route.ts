@@ -1,9 +1,15 @@
 import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 import {
   getMercadoPagoApplicationFee,
   MercadoPagoConfigError,
   resolveMercadoPagoCheckoutConfig
 } from '@/lib/mercadopagoServer';
+
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || 'https://momigbtnsswoldqnadmc.supabase.co',
+  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+);
 
 export async function POST(request: Request) {
   try {
@@ -81,6 +87,18 @@ export async function POST(request: Request) {
       console.error("[MercadoPago Pix API] Dados da transação Pix ausentes na resposta:", paymentData);
       return NextResponse.json({ error: 'Dados da transação Pix não gerados.' }, { status: 500 });
     }
+
+    await supabaseAdmin
+      .from('registrations')
+      .update({
+        payment_status: paymentData.status === 'approved' ? 'payment_approved' : 'payment_pending',
+        payment_method: 'pix',
+        payment_id: paymentData.id ? String(paymentData.id) : null,
+        payment_status_detail: paymentData.status_detail || null,
+        payment_error_message: null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', registrationData.id);
 
     return NextResponse.json({
       paymentId: paymentData.id,

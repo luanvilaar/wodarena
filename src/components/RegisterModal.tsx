@@ -35,6 +35,13 @@ type CheckoutStatusResponse = {
   cpf?: string;
 };
 
+type RegistrationStartResponse = {
+  success?: boolean;
+  registrationData?: CheckoutRegistrationData;
+  athleteProfile?: Athlete;
+  error?: string;
+};
+
 type CheckoutConfigResponse = {
   publicKey?: string;
   error?: string;
@@ -103,6 +110,8 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
   const [expirationDate, setExpirationDate] = useState('');
   const [securityCode, setSecurityCode] = useState('');
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [athletePassword, setAthletePassword] = useState('');
+  const [athletePasswordConfirmation, setAthletePasswordConfirmation] = useState('');
 
   const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
   if (isOpen !== prevIsOpen) {
@@ -114,6 +123,8 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
     setCardholderName('');
     setExpirationDate('');
     setSecurityCode('');
+    setAthletePassword('');
+    setAthletePasswordConfirmation('');
   }
 
   // Polling para verificar status do pagamento Pix
@@ -267,6 +278,35 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
     });
   };
 
+  const startRegistration = useCallback(async (
+    registrationData: CheckoutRegistrationData,
+    athleteProfile: Athlete,
+    initialPaymentStatus?: string
+  ) => {
+    const response = await fetch('/api/registrations/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        registrationData,
+        athleteProfile,
+        password: athletePassword,
+        passwordConfirmation: athletePasswordConfirmation,
+        paymentMethod: totalPaid === 0 ? 'free' : paymentMethod,
+        initialPaymentStatus
+      })
+    });
+    const payload: RegistrationStartResponse = await response.json().catch(() => ({}));
+
+    if (!response.ok || !payload.registrationData || !payload.athleteProfile) {
+      throw new Error(payload.error || 'Erro ao iniciar inscrição do atleta.');
+    }
+
+    return {
+      registrationData: payload.registrationData,
+      athleteProfile: payload.athleteProfile
+    };
+  }, [athletePassword, athletePasswordConfirmation, paymentMethod, totalPaid]);
+
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -277,6 +317,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
 
     const hasMissingRequiredParticipantData = visibleParticipants.some((participant) => {
       if (!participant.name || !participant.gender) return true;
+      if (participant === primaryParticipant && (!participant.email || !participant.phone)) return true;
       if (!isFitnessRacing) return !participant.email || !participant.phone;
       return !participant.birthDate || !participant.city || !participant.state || !participant.instagram;
     });
@@ -285,6 +326,21 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
       alert(isFitnessRacing
         ? 'Preencha nome, nascimento, sexo, cidade, estado, box e Instagram.'
         : 'Por favor, preencha todos os campos obrigatórios.');
+      return;
+    }
+
+    if (!primaryParticipant.email || !primaryParticipant.email.includes('@')) {
+      alert('Informe um e-mail válido para criar o painel do atleta.');
+      return;
+    }
+
+    if (!athletePassword || athletePassword.length < 6) {
+      alert('Crie uma senha de pelo menos 6 caracteres para o painel do atleta.');
+      return;
+    }
+
+    if (athletePassword !== athletePasswordConfirmation) {
+      alert('A confirmação de senha não confere.');
       return;
     }
 
@@ -344,9 +400,37 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
     };
 
     try {
+      if (paymentMethod === 'credit_card') {
+        if (!isValidCPF(cpf)) {
+          alert('Por favor, informe um CPF válido.');
+          setIsProcessing(false);
+          return;
+        }
+
+        if (!cardNumber || !cardholderName || !expirationDate || !securityCode) {
+          alert('Por favor, preencha todos os campos do cartão de crédito.');
+          setIsProcessing(false);
+          return;
+        }
+
+        if (!/^\d{2}\/\d{2}$/.test(expirationDate)) {
+          alert('Informe a validade do cartão no formato MM/AA.');
+          setIsProcessing(false);
+          return;
+        }
+      }
+
+      const started = await startRegistration(
+        registrationData,
+        athleteProfile,
+        totalPaid === 0 ? 'payment_approved' : 'payment_pending'
+      );
+      const activeRegistrationData = started.registrationData;
+      const activeAthleteProfile = started.athleteProfile;
+
       if (totalPaid === 0) {
         console.log("[Checkout WODArena] Inscrição gratuita (totalPaid === 0). Aprovando imediatamente...");
-        const createdReg = registerTicket(registrationData, athleteProfile);
+        const createdReg = registerTicket(activeRegistrationData, activeAthleteProfile);
         if (registrationData.couponCode) {
           incrementCouponUsage(event.id, registrationData.couponCode);
         }
@@ -365,7 +449,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
         }).catch(err => console.error("[Local Email Trigger] Erro ao disparar e-mail gratuito:", err));
 
         if (onSuccess) {
-          onSuccess(finalReg, athleteProfile, cpf);
+          onSuccess(finalReg, activeAthleteProfile, cpf);
         }
         setIsSuccess(true);
         setIsProcessing(false);
@@ -380,8 +464,8 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            registrationData,
-            athleteProfile,
+            registrationData: activeRegistrationData,
+            athleteProfile: activeAthleteProfile,
             cpf
           })
         });
@@ -392,7 +476,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
 
         const data = await response.json();
         
-        sessionStorage.setItem('pending_registration', JSON.stringify({ registrationData, athleteProfile, cpf }));
+        sessionStorage.setItem('pending_registration', JSON.stringify({ registrationData: activeRegistrationData, athleteProfile: activeAthleteProfile, cpf }));
 
         setPixData({
           qr_code: data.qr_code,
@@ -402,25 +486,6 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
         setIsProcessing(false);
 
       } else {
-        // Valida CPF e campos do cartão
-        if (!isValidCPF(cpf)) {
-          alert('Por favor, informe um CPF válido.');
-          setIsProcessing(false);
-          return;
-        }
-
-        if (!cardNumber || !cardholderName || !expirationDate || !securityCode) {
-          alert('Por favor, preencha todos os campos do cartão de crédito.');
-          setIsProcessing(false);
-          return;
-        }
-
-        if (!/^\d{2}\/\d{2}$/.test(expirationDate)) {
-          alert('Informe a validade do cartão no formato MM/AA.');
-          setIsProcessing(false);
-          return;
-        }
-
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         if (!(window as any).MercadoPago) {
           alert('O gateway de pagamento do Mercado Pago está carregando. Por favor, tente novamente em alguns segundos.');
@@ -497,8 +562,8 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            registrationData,
-            athleteProfile,
+            registrationData: activeRegistrationData,
+            athleteProfile: activeAthleteProfile,
             token: cardToken.id,
             payment_method_id: paymentMethodId,
             installments: 1,
@@ -513,7 +578,13 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
         const data = await response.json();
 
         if (data.status === 'approved') {
-          const createdReg = registerTicket(registrationData, athleteProfile);
+          const createdReg = registerTicket({
+            ...activeRegistrationData,
+            paymentStatus: 'payment_approved',
+            paymentMethod: 'credit_card',
+            paymentId: data.paymentId,
+            paymentStatusDetail: data.statusDetail
+          }, activeAthleteProfile);
           if (registrationData.couponCode) {
             incrementCouponUsage(event.id, registrationData.couponCode);
           }
@@ -534,7 +605,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
           if (onSuccess) {
             onSuccess(
               finalReg,
-              athleteProfile,
+              activeAthleteProfile,
               cpf
             );
           }
@@ -543,7 +614,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
           alert('Seu pagamento está sendo analisado pelo Mercado Pago. Acompanhe a confirmação no painel do atleta.');
           onClose();
         } else {
-          alert(`O pagamento não foi aprovado (Status: ${data.status}). Por favor, tente com outro cartão.`);
+          alert(`Pagamento não processado. Sua inscrição foi registrada e você pode acompanhar no painel do atleta pela rota /admin. Status: ${data.status}.`);
           setIsProcessing(false);
         }
       }
@@ -578,7 +649,10 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
     incrementCouponUsage,
     onSuccess,
     event.mpPublicKey,
-    acceptedTerms
+    acceptedTerms,
+    athletePassword,
+    athletePasswordConfirmation,
+    startRegistration
   ]);
 
   if (!isOpen) return null;
@@ -1069,6 +1143,48 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                     onChange={(e) => setBox(e.target.value)}
                     className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none"
                   />
+                </div>
+
+                {/* Senha do painel do atleta */}
+                <div className="space-y-3 rounded-lg border border-hairline-light bg-white p-4">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-[#9a7200]">Acesso do atleta</p>
+                    <p className="mt-1 text-xs text-muted-soft">
+                      Use esta senha para acessar suas inscrições e 2ª via em /admin.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="athlete-panel-password" className="mb-1 block text-xs font-bold text-ink">Senha do painel *</label>
+                      <input
+                        id="athlete-panel-password"
+                        name="athletePanelPassword"
+                        type="password"
+                        autoComplete="new-password"
+                        required
+                        minLength={6}
+                        placeholder="Mínimo 6 caracteres"
+                        value={athletePassword}
+                        onChange={(e) => setAthletePassword(e.target.value)}
+                        className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="athlete-panel-password-confirmation" className="mb-1 block text-xs font-bold text-ink">Confirmar senha *</label>
+                      <input
+                        id="athlete-panel-password-confirmation"
+                        name="athletePanelPasswordConfirmation"
+                        type="password"
+                        autoComplete="new-password"
+                        required
+                        minLength={6}
+                        placeholder="Repita a senha"
+                        value={athletePasswordConfirmation}
+                        onChange={(e) => setAthletePasswordConfirmation(e.target.value)}
+                        className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none"
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 {/* Seleção do Método de Pagamento */}

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { sendRegistrationEmail } from '@/lib/resend';
+import { Athlete, Event, Registration, RegistrationPaymentStatus } from '@/types';
 import {
   MercadoPagoConfigError,
   resolveMercadoPagoCheckoutConfig
@@ -11,6 +12,14 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_URL || 'https://momigbtnsswoldqnadmc.supabase.co',
   process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 );
+
+const toRegistrationPaymentStatus = (status?: string): RegistrationPaymentStatus => {
+  if (status === 'approved') return 'payment_approved';
+  if (status === 'in_process') return 'payment_in_review';
+  if (status === 'cancelled') return 'payment_cancelled';
+  if (status === 'rejected') return 'payment_failed';
+  return 'payment_pending';
+};
 
 export async function POST(request: Request) {
   try {
@@ -64,6 +73,27 @@ export async function POST(request: Request) {
     const { status, metadata } = paymentData;
 
     console.log(`[MercadoPago Webhook] Pagamento ${paymentId} com status: ${status}`);
+
+    if (metadata?.registration_json) {
+      try {
+        const { registrationData } = JSON.parse(metadata.registration_json);
+        if (registrationData?.id) {
+          await supabaseAdmin
+            .from('registrations')
+            .update({
+              payment_status: toRegistrationPaymentStatus(status),
+              payment_method: paymentData.payment_method_id || null,
+              payment_id: String(paymentData.id),
+              payment_status_detail: paymentData.status_detail || null,
+              payment_error_message: status === 'rejected' ? 'Pagamento não processado.' : null,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', registrationData.id);
+        }
+      } catch (paymentUpdateErr) {
+        console.warn('[MercadoPago Webhook] Não foi possível atualizar status da inscrição:', paymentUpdateErr);
+      }
+    }
 
     if (status === 'approved' && metadata && metadata.registration_json) {
       const { registrationData, athleteProfile } = JSON.parse(metadata.registration_json);
@@ -133,6 +163,8 @@ export async function POST(request: Request) {
         id: regId,
         event_id: registrationData.eventId,
         division_id: registrationData.divisionId,
+        user_id: registrationData.userId || null,
+        athlete_id: athleteId,
         athlete_name: registrationData.athleteName,
         athlete_email: registrationData.athleteEmail,
         athlete_phone: registrationData.athletePhone,
@@ -143,7 +175,13 @@ export async function POST(request: Request) {
         quantity: Number(registrationData.quantity),
         total_paid: Number(registrationData.totalPaid),
         created_at: new Date().toISOString(),
-        coupon_code: registrationData.couponCode || null
+        coupon_code: registrationData.couponCode || null,
+        payment_status: 'payment_approved',
+        payment_method: paymentData.payment_method_id || null,
+        payment_id: String(paymentData.id),
+        payment_status_detail: paymentData.status_detail || null,
+        payment_error_message: null,
+        updated_at: new Date().toISOString()
       });
 
       if (regErr) {
@@ -179,7 +217,7 @@ export async function POST(request: Request) {
           .maybeSingle();
 
         if (dbEvent) {
-          const event = {
+          const event: Event = {
             id: dbEvent.id,
             name: dbEvent.name,
             logoUrl: dbEvent.logo_url,
@@ -205,10 +243,12 @@ export async function POST(request: Request) {
             eventType: dbEvent.event_type || 'functional_fitness'
           };
 
-          const registration = {
+          const registration: Registration = {
             id: regId,
             eventId: registrationData.eventId,
             divisionId: registrationData.divisionId,
+            userId: registrationData.userId || undefined,
+            athleteId,
             athleteName: registrationData.athleteName,
             athleteEmail: registrationData.athleteEmail,
             athletePhone: registrationData.athletePhone,
@@ -219,10 +259,15 @@ export async function POST(request: Request) {
             quantity: Number(registrationData.quantity),
             totalPaid: Number(registrationData.totalPaid),
             createdAt: new Date().toISOString(),
-            couponCode: registrationData.couponCode || undefined
+            couponCode: registrationData.couponCode || undefined,
+            paymentStatus: 'payment_approved',
+            paymentMethod: paymentData.payment_method_id || undefined,
+            paymentId: String(paymentData.id),
+            paymentStatusDetail: paymentData.status_detail || undefined,
+            updatedAt: new Date().toISOString()
           };
 
-          const athlete = {
+          const athlete: Athlete = {
             id: athleteId,
             name: registrationData.athleteName,
             box: athleteProfile.box || 'Independente',

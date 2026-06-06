@@ -83,7 +83,8 @@ export default function AdminPage() {
   } = useApp();
 
   // 1. Estados de Login (vinculado ao currentUser do contexto)
-  const isLoggedIn = currentUser && currentUser.role === 'manager';
+  const isAthleteLoggedIn = currentUser?.role === 'athlete';
+  const isLoggedIn = Boolean(currentUser && (currentUser.role === 'manager' || currentUser.role === 'athlete'));
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
@@ -1522,6 +1523,46 @@ export default function AdminPage() {
     }
   };
 
+  const getPaymentStatusMeta = (status?: Registration['paymentStatus']) => {
+    switch (status) {
+      case 'payment_approved':
+        return { label: 'Aprovado', tone: 'success' as const };
+      case 'payment_failed':
+        return { label: 'Pagamento falhou', tone: 'danger' as const };
+      case 'payment_in_review':
+        return { label: 'Em análise', tone: 'warning' as const };
+      case 'payment_cancelled':
+        return { label: 'Cancelado', tone: 'danger' as const };
+      case 'payment_pending':
+      default:
+        return { label: 'Pendente', tone: 'warning' as const };
+    }
+  };
+
+  const getPaymentStatusClassName = (tone: 'success' | 'danger' | 'warning') => {
+    if (tone === 'success') return 'border-trading-up/25 bg-trading-up/10 text-trading-up';
+    if (tone === 'danger') return 'border-trading-down/30 bg-trading-down/10 text-trading-down';
+    return 'border-primary/25 bg-primary/10 text-primary';
+  };
+
+  const getRegistrationEvent = (registration: Registration) => {
+    return events.find(evt => evt.id === registration.eventId);
+  };
+
+  const handleOpenAthleteVoucher = (registration: Registration) => {
+    const event = getRegistrationEvent(registration);
+    if (!event) {
+      setAdminNotice({ text: 'Evento da inscrição não encontrado.', tone: 'error' });
+      return;
+    }
+
+    setSelectedRegistrationVoucher({
+      registration,
+      athlete: getRegistrationAthlete(registration),
+      event
+    });
+  };
+
   if (!isLoggedIn) {
     return (
       <div className="min-h-[80vh] flex items-center justify-center p-4 bg-background">
@@ -1588,6 +1629,160 @@ export default function AdminPage() {
             </p>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  if (isAthleteLoggedIn && currentUser) {
+    const athleteRegistrations = registrations
+      .filter(reg => reg.userId === currentUser.id || reg.athleteEmail.toLowerCase() === currentUser.email.toLowerCase())
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    const failedPayments = athleteRegistrations.filter(reg => reg.paymentStatus === 'payment_failed');
+    const pendingPayments = athleteRegistrations.filter(reg => reg.paymentStatus === 'payment_pending' || reg.paymentStatus === 'payment_in_review');
+
+    return (
+      <div className="min-h-screen bg-background text-white">
+        <section className="bg-card border-b border-card-border py-6">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <BrandLogo className="h-12 w-12 rounded-sm border border-card-border" priority />
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary font-sans">Área do Atleta</p>
+                <h2 className="text-xl font-bold text-white uppercase tracking-wider">{currentUser.name}</h2>
+                <p className="text-xs text-muted font-medium">{currentUser.email}</p>
+              </div>
+            </div>
+            <button
+              onClick={logout}
+              className="flex min-h-11 items-center gap-1.5 rounded-md border border-card-border bg-dark-gray px-4 py-2 text-xs font-bold text-muted transition-colors hover:border-muted hover:text-white"
+            >
+              <span>Desconectar</span>
+              <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          </div>
+        </section>
+
+        <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+          {adminNotice && (
+            <div
+              role={adminNotice.tone === 'error' ? 'alert' : 'status'}
+              aria-live="polite"
+              className={`flex items-start justify-between gap-4 rounded-lg border px-4 py-3 text-sm ${
+                adminNotice.tone === 'error'
+                  ? 'border-trading-down/40 bg-card text-trading-down'
+                  : 'border-primary/40 bg-card text-primary'
+              }`}
+            >
+              <span>{adminNotice.text}</span>
+              <button type="button" onClick={() => setAdminNotice(null)} className="shrink-0 text-muted transition-colors hover:text-white" aria-label="Fechar aviso">
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+          )}
+
+          {failedPayments.length > 0 && (
+            <div className="rounded-xl border border-trading-down/35 bg-trading-down/10 p-5">
+              <div className="flex items-start gap-3">
+                <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-trading-down" aria-hidden="true" />
+                <div className="space-y-1">
+                  <p className="text-sm font-bold uppercase tracking-wider text-trading-down font-sans">Pagamento não processado</p>
+                  <p className="text-sm leading-6 text-white">
+                    Sua inscrição foi registrada, mas ainda não está confirmada. Verifique os dados do cartão ou tente outra forma de pagamento.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="rounded-xl border border-card-border bg-card p-5">
+              <p className="text-[10px] uppercase font-bold text-muted tracking-wider font-sans">Inscrições</p>
+              <h3 className="mt-2 text-2xl font-bold font-number text-white">{athleteRegistrations.length}</h3>
+            </div>
+            <div className="rounded-xl border border-card-border bg-card p-5">
+              <p className="text-[10px] uppercase font-bold text-muted tracking-wider font-sans">Pendentes</p>
+              <h3 className="mt-2 text-2xl font-bold font-number text-primary">{pendingPayments.length}</h3>
+            </div>
+            <div className="rounded-xl border border-card-border bg-card p-5">
+              <p className="text-[10px] uppercase font-bold text-muted tracking-wider font-sans">Falhas no cartão</p>
+              <h3 className="mt-2 text-2xl font-bold font-number text-trading-down">{failedPayments.length}</h3>
+            </div>
+          </div>
+
+          <section className="rounded-xl border border-card-border bg-card p-5 sm:p-6 space-y-5">
+            <div className="border-b border-card-border pb-4">
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary font-sans">Minhas inscrições</p>
+              <h3 className="mt-1 text-2xl font-bold tracking-tight text-white uppercase">Registros de evento</h3>
+            </div>
+
+            {athleteRegistrations.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted">Nenhuma inscrição encontrada para este e-mail.</p>
+            ) : (
+              <div className="space-y-4">
+                {athleteRegistrations.map(reg => {
+                  const event = getRegistrationEvent(reg);
+                  const division = event?.divisions.find(div => div.id === reg.divisionId);
+                  const statusMeta = getPaymentStatusMeta(reg.paymentStatus);
+                  return (
+                    <article key={reg.id} className="rounded-lg border border-card-border bg-dark-gray/30 p-4 space-y-4">
+                      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                        <div className="space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h4 className="text-base font-bold uppercase tracking-wider text-white">{event?.name || 'Evento não encontrado'}</h4>
+                            <span className={`rounded border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${getPaymentStatusClassName(statusMeta.tone)}`}>
+                              {statusMeta.label}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs text-muted">
+                            <p><span className="font-bold text-white">Atleta:</span> {reg.athleteName}</p>
+                            <p><span className="font-bold text-white">Categoria:</span> {division?.name || reg.ticketType}</p>
+                            <p><span className="font-bold text-white">Valor:</span> {currencyFormatter.format(reg.totalPaid)}</p>
+                            <p><span className="font-bold text-white">Inscrição:</span> {reg.id}</p>
+                            <p><span className="font-bold text-white">Data:</span> {new Date(reg.createdAt).toLocaleDateString('pt-BR')}</p>
+                            <p><span className="font-bold text-white">Pagamento:</span> {reg.paymentMethod || 'Não informado'}</p>
+                          </div>
+                          {reg.paymentStatus === 'payment_failed' && (
+                            <p className="rounded-md border border-trading-down/30 bg-trading-down/10 px-3 py-2 text-xs leading-5 text-trading-down">
+                              {reg.paymentErrorMessage || 'Pagamento não processado. Sua participação depende da regularização do pagamento.'}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex flex-col sm:flex-row lg:flex-col gap-2 lg:min-w-44">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenAthleteVoucher(reg)}
+                            className="flex min-h-10 items-center justify-center gap-1.5 rounded-md border border-card-border bg-card px-4 py-2 text-xs font-bold uppercase tracking-wider text-white transition-colors hover:border-primary"
+                          >
+                            <ReceiptText className="h-3.5 w-3.5" aria-hidden="true" />
+                            <span>Visualizar</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleResendRegistrationVoucher(reg)}
+                            disabled={resendingRegistrationId === reg.id}
+                            className="flex min-h-10 items-center justify-center gap-1.5 rounded-md bg-primary px-4 py-2 text-xs font-bold uppercase tracking-wider text-ink transition-colors hover:bg-primary-hover disabled:opacity-60"
+                          >
+                            <Mail className="h-3.5 w-3.5" aria-hidden="true" />
+                            <span>{resendingRegistrationId === reg.id ? 'Enviando...' : 'Solicitar 2ª via'}</span>
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        </main>
+
+        {selectedRegistrationVoucher && (
+          <RegistrationVoucher
+            registration={selectedRegistrationVoucher.registration}
+            athlete={selectedRegistrationVoucher.athlete}
+            event={selectedRegistrationVoucher.event}
+            onClose={() => setSelectedRegistrationVoucher(null)}
+          />
+        )}
       </div>
     );
   }
@@ -4664,7 +4859,7 @@ export default function AdminPage() {
     // Filtrar
     const filteredRegs = eventRegs.filter(reg => {
       if (regFilterCatId && reg.divisionId !== regFilterCatId) return false;
-      if (regFilterStatus && regFilterStatus !== 'paid') return false;
+      if (regFilterStatus && (reg.paymentStatus || 'payment_approved') !== regFilterStatus) return false;
       if (regFilterName && !reg.athleteName.toLowerCase().includes(regFilterName.toLowerCase())) return false;
       if (regFilterBox && !reg.box.toLowerCase().includes(regFilterBox.toLowerCase())) return false;
       return true;
@@ -5038,7 +5233,11 @@ export default function AdminPage() {
                   className="w-full rounded-md border border-card-border bg-dark-gray px-3 py-2 text-xs text-white focus:border-primary/50 focus:outline-none"
                 >
                   <option value="">Todos</option>
-                  <option value="paid">Pago / Aprovado</option>
+                  <option value="payment_approved">Pago / Aprovado</option>
+                  <option value="payment_pending">Pendente</option>
+                  <option value="payment_in_review">Em análise</option>
+                  <option value="payment_failed">Falha no cartão</option>
+                  <option value="payment_cancelled">Cancelado</option>
                 </select>
               </div>
 
@@ -5086,6 +5285,7 @@ export default function AdminPage() {
                   <tbody className="divide-y divide-card-border/30 text-xs font-normal">
                     {filteredRegs.map((reg) => {
                       const div = divisions.find(d => d.id === reg.divisionId);
+                      const statusMeta = getPaymentStatusMeta(reg.paymentStatus);
                       const athleteInfo = athletes.find(
                         a => a.name.toLowerCase() === reg.athleteName.toLowerCase() && a.divisionId === reg.divisionId
                       );
@@ -5124,9 +5324,12 @@ export default function AdminPage() {
                             {currencyFormatter.format(reg.totalPaid)}
                           </td>
                           <td className="py-3 px-2 text-right">
-                            <span className="text-[9px] font-bold bg-trading-up/10 text-trading-up px-1.5 py-0.5 rounded border border-trading-up/20 uppercase font-sans">
-                              Pago
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase font-sans ${getPaymentStatusClassName(statusMeta.tone)}`}>
+                              {statusMeta.label}
                             </span>
+                            {reg.paymentStatus === 'payment_failed' && (
+                              <p className="mt-1 text-[9px] text-trading-down">{reg.paymentErrorMessage || 'Pagamento não processado.'}</p>
+                            )}
                           </td>
                           <td className="py-3 px-2">
                             <div className="flex flex-col items-end gap-2">
@@ -6150,16 +6353,21 @@ export default function AdminPage() {
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-card-border/30 text-xs font-normal">
-                            {dashboardStats.latestRegistrations.map(reg => (
-                              <tr key={reg.id} className="hover:bg-dark-gray/30 transition-colors">
-                                <td className="py-2.5 font-semibold text-white">{reg.athleteName}</td>
-                                <td className="py-2.5 font-number text-primary">{currencyFormatter.format(reg.totalPaid)}</td>
-                                <td className="py-2.5 text-muted">{new Date(reg.createdAt).toLocaleDateString('pt-BR')}</td>
-                                <td className="py-2.5 text-right">
-                                  <span className="text-[9px] font-bold bg-trading-up/10 text-trading-up px-1.5 py-0.5 rounded border border-trading-up/20 uppercase font-sans">Aprovada</span>
-                                </td>
-                              </tr>
-                            ))}
+                            {dashboardStats.latestRegistrations.map(reg => {
+                              const statusMeta = getPaymentStatusMeta(reg.paymentStatus);
+                              return (
+                                <tr key={reg.id} className="hover:bg-dark-gray/30 transition-colors">
+                                  <td className="py-2.5 font-semibold text-white">{reg.athleteName}</td>
+                                  <td className="py-2.5 font-number text-primary">{currencyFormatter.format(reg.totalPaid)}</td>
+                                  <td className="py-2.5 text-muted">{new Date(reg.createdAt).toLocaleDateString('pt-BR')}</td>
+                                  <td className="py-2.5 text-right">
+                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase font-sans ${getPaymentStatusClassName(statusMeta.tone)}`}>
+                                      {statusMeta.label}
+                                    </span>
+                                  </td>
+                                </tr>
+                              );
+                            })}
                           </tbody>
                         </table>
                       </div>
