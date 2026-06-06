@@ -174,19 +174,26 @@ export default function AdminPage() {
     if (!confirm('Deseja realmente desconectar sua conta do Mercado Pago? As inscrições online para seus eventos serão suspensas.')) return;
     setLoadingMp(true);
     try {
-      const { error } = await supabase
-        .from('mercadopago_accounts')
-        .update({ status: 'disconnected', access_token: '', refresh_token: '', public_key: '' })
-        .eq('user_id', currentUser.id);
+      const response = await fetch('/api/admin/mercadopago', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ userId: currentUser.id })
+      });
 
-      if (error) throw error;
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || 'Erro ao desconectar conta no servidor.');
+      }
+
       setMpAccount(null);
       setManualPublicKey('');
       setManualAccessToken('');
       setAdminNotice({ text: 'Conta do Mercado Pago desconectada com sucesso.', tone: 'success' });
     } catch (err) {
       console.error('Erro ao desconectar:', err);
-      setAdminNotice({ text: 'Erro ao desconectar conta do Mercado Pago.', tone: 'error' });
+      setAdminNotice({ text: err instanceof Error ? err.message : 'Erro ao desconectar conta do Mercado Pago.', tone: 'error' });
     } finally {
       setLoadingMp(false);
     }

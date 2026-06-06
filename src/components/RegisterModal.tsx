@@ -57,16 +57,18 @@ const generateUniqueId = (prefix: string) => {
 };
 
 const resolveCheckoutPublicKey = async (eventId: string, eventPublicKey?: string) => {
-  if (eventPublicKey) return eventPublicKey;
-
-  const response = await fetch(`/api/checkout/config?event_id=${eventId}`);
-  const data: CheckoutConfigResponse = await response.json();
-
-  if (!response.ok || !data.publicKey) {
-    throw new Error(data.error || 'Conta Mercado Pago do evento não configurada.');
+  try {
+    const response = await fetch(`/api/checkout/config?event_id=${eventId}`);
+    const data: CheckoutConfigResponse = await response.json();
+    if (response.ok && data.publicKey) {
+      return data.publicKey;
+    }
+  } catch (err) {
+    console.warn("[resolveCheckoutPublicKey] Erro ao buscar do servidor, usando fallback:", err);
   }
 
-  return data.publicKey;
+  if (eventPublicKey) return eventPublicKey;
+  throw new Error('Conta Mercado Pago do evento não configurada.');
 };
 
 const getCheckoutErrorMessage = async (response: Response, fallback: string) => {

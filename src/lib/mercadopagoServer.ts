@@ -79,9 +79,9 @@ export const resolveMercadoPagoCheckoutConfig = async (eventId: string): Promise
 
   const { data: mpSecret, error: secretError } = await supabaseAdmin
     .from('mercadopago_secrets')
-    .select('access_token')
+    .select('access_token, refresh_token')
     .eq('user_id', dbEvent.organizer_id)
-    .maybeSingle<MercadoPagoSecretRow>();
+    .maybeSingle<{ access_token: string | null; refresh_token: string | null }>();
 
   if (secretError) {
     console.error('[MercadoPago Config] Erro ao buscar credenciais privadas do organizador:', secretError);
@@ -93,9 +93,10 @@ export const resolveMercadoPagoCheckoutConfig = async (eventId: string): Promise
     : defaultMarketplaceFee;
 
   if (mpSecret?.access_token) {
+    const isManual = mpSecret.refresh_token === 'manual';
     return {
       accessToken: mpSecret.access_token,
-      marketplaceFee,
+      marketplaceFee: isManual ? 0 : marketplaceFee,
       organizerId: dbEvent.organizer_id,
       source: 'organizer_secret'
     };
@@ -104,7 +105,7 @@ export const resolveMercadoPagoCheckoutConfig = async (eventId: string): Promise
   if (dbEvent.mp_access_token) {
     return {
       accessToken: dbEvent.mp_access_token,
-      marketplaceFee,
+      marketplaceFee: 0, // Fallback legado é sempre de configuração manual
       organizerId: dbEvent.organizer_id,
       source: 'event_legacy'
     };

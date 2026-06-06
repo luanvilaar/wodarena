@@ -99,3 +99,61 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Erro crítico interno no servidor.' }, { status: 500 });
   }
 }
+
+export async function DELETE(request: Request) {
+  try {
+    if (!supabaseServiceKey) {
+      console.error('[API Admin MercadoPago DELETE] SUPABASE_SERVICE_ROLE_KEY não configurada no servidor.');
+      return NextResponse.json({ error: 'Configuração do servidor ausente.' }, { status: 500 });
+    }
+
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    });
+
+    const body = await request.json();
+    const { userId } = body;
+
+    if (!userId) {
+      return NextResponse.json({ error: 'Parâmetro userId é obrigatório.' }, { status: 400 });
+    }
+
+    console.log(`[API Admin MercadoPago DELETE] Desconectando conta Mercado Pago do gestor: ${userId}...`);
+
+    // 1. Atualiza dados públicos na tabela pública
+    const { error: publicError } = await supabaseAdmin
+      .from('mercadopago_accounts')
+      .update({
+        public_key: '',
+        status: 'disconnected',
+        updated_at: new Date().toISOString()
+      })
+      .eq('user_id', userId);
+
+    if (publicError) {
+      console.error('[API Admin MercadoPago DELETE] Erro ao limpar mercadopago_accounts:', publicError);
+      return NextResponse.json({ error: 'Erro ao desconectar conta pública no banco de dados.' }, { status: 500 });
+    }
+
+    // 2. Limpa segredos na tabela privada
+    const { error: secretError } = await supabaseAdmin
+      .from('mercadopago_secrets')
+      .delete()
+      .eq('user_id', userId);
+
+    if (secretError) {
+      console.error('[API Admin MercadoPago DELETE] Erro ao remover segredos de mercadopago_secrets:', secretError);
+      return NextResponse.json({ error: 'Erro ao desconectar credenciais privadas no banco de dados.' }, { status: 500 });
+    }
+
+    console.log(`[API Admin MercadoPago DELETE] Conta desconectada com sucesso para o usuário ${userId}`);
+    return NextResponse.json({ success: true });
+
+  } catch (err) {
+    console.error('[API Admin MercadoPago DELETE] Erro crítico inesperado:', err);
+    return NextResponse.json({ error: 'Erro crítico interno no servidor.' }, { status: 500 });
+  }
+}
