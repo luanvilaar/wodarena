@@ -80,7 +80,18 @@ export async function POST(request: Request) {
 
       if (userError) {
         console.error('[Registration Start] Erro ao criar usuário atleta:', userError);
-        return NextResponse.json({ error: 'Erro ao criar painel do atleta.' }, { status: 500 });
+        const isRoleConstraintError =
+          userError.code === '23514' ||
+          String(userError.message || '').includes('users_role_check') ||
+          String(userError.details || '').includes('athlete');
+
+        return NextResponse.json({
+          error: isRoleConstraintError
+            ? 'Banco de dados ainda não aceita o papel de atleta. Aplique a migration da Área do Atleta no Supabase antes de testar o pagamento.'
+            : 'Erro ao criar painel do atleta.',
+          statusDetail: userError.message,
+          code: userError.code
+        }, { status: 500 });
       }
     }
 
@@ -199,4 +210,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Erro crítico ao iniciar inscrição.' }, { status: 500 });
   }
 }
-
