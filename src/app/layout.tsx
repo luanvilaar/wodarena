@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AppProvider } from "@/context/AppContext";
+import { AppLoadingWrapper } from "@/components/AppLoadingWrapper";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 
@@ -24,11 +25,13 @@ export default function RootLayout({
       <body className="flex flex-col min-h-screen antialiased bg-background">
         <a href="#main-content" className="skip-link">Pular para o conteúdo</a>
         <AppProvider>
-          <Navbar />
-          <main id="main-content" className="flex-grow flex flex-col">
-            {children}
-          </main>
-          <Footer />
+          <AppLoadingWrapper>
+            <Navbar />
+            <main id="main-content" className="flex-grow flex flex-col">
+              {children}
+            </main>
+            <Footer />
+          </AppLoadingWrapper>
         </AppProvider>
       </body>
     </html>

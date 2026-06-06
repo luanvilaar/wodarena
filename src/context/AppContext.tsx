@@ -23,6 +23,7 @@ type AthleteProfileDraft = {
 };
 
 interface AppContextType {
+  isLoading: boolean;
   events: Event[];
   athletes: Athlete[];
   scores: Score[];
@@ -66,6 +67,7 @@ type WorkoutDbUpdate = Partial<{
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
+  const [isLoading, setIsLoading] = useState(true);
   const [events, setEvents] = useState<Event[]>([]);
   const [athletes, setAthletes] = useState<Athlete[]>([]);
   const [scores, setScores] = useState<Score[]>([]);
@@ -78,6 +80,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const fetchAllData = async () => {
       try {
+        setIsLoading(true);
         // 1. Carregar usuários
         const { data: dbUsers } = await supabase.from('users').select('*');
         if (dbUsers && dbUsers.length > 0) {
@@ -274,6 +277,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setAthletes(INITIAL_ATHLETES);
         setScores(INITIAL_SCORES);
         setEvents(INITIAL_EVENTS);
+      } finally {
+        setIsLoading(false);
       }
     };
 
@@ -1402,6 +1407,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   return (
     <AppContext.Provider
       value={{
+        isLoading,
         events,
         athletes,
         scores,

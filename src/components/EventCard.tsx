@@ -128,7 +128,7 @@ export function EventCard({ event, priority = false }: EventCardProps) {
               </button>
             ) : event.status === 'live' ? (
               <Link 
-                href={`/event/${event.id}?tab=leaderboard`}
+                href={`/event/${event.id}/leaderboard`}
                 className="flex min-h-11 items-center justify-center gap-1.5 rounded-md bg-primary px-3 py-2.5 text-xs font-black uppercase text-ink transition-colors hover:bg-primary-hover active:bg-primary-hover"
               >
                 <Trophy className="h-3 w-3 text-black" />
@@ -136,7 +136,7 @@ export function EventCard({ event, priority = false }: EventCardProps) {
               </Link>
             ) : (
               <Link 
-                href={`/event/${event.id}?tab=leaderboard`}
+                href={`/event/${event.id}/leaderboard`}
                 className="flex min-h-11 items-center justify-center gap-1.5 rounded-md border border-card-border bg-dark-gray px-3 py-2.5 text-xs font-bold text-muted transition-colors hover:border-primary hover:text-white"
               >
                 <span>Resultados</span>

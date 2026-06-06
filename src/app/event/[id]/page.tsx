@@ -3,7 +3,6 @@
 import React, { useState, use, useEffect } from 'react';
 import Image from 'next/image';
 import { useApp } from '@/context/AppContext';
-import { Leaderboard } from '@/components/Leaderboard';
 import { RegisterModal } from '@/components/RegisterModal';
 import { RegistrationVoucher } from '@/components/RegistrationVoucher';
 import { 
@@ -22,7 +21,7 @@ export default function EventPage({ params }: PageProps) {
   const eventId = resolvedParams.id;
   
   const { events, athletes, registerTicket, incrementCouponUsage } = useApp();
-  const [activeTab, setActiveTab] = useState<'details' | 'divisions' | 'schedule' | 'workouts' | 'leaderboard'>('details');
+  const [activeTab, setActiveTab] = useState<'details' | 'divisions' | 'schedule' | 'workouts'>('details');
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
   const [shareFeedback, setShareFeedback] = useState(false);
   const [paymentNotice, setPaymentNotice] = useState<{ text: string; tone: 'success' | 'error' } | null>(null);
@@ -44,12 +43,12 @@ export default function EventPage({ params }: PageProps) {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(minPrice);
   }, [minPrice]);
 
-  // Permitir trocar aba via query parameter se fornecido (ex: ?tab=leaderboard)
+  // Permitir trocar aba via query parameter se fornecido.
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const searchParams = new URLSearchParams(window.location.search);
       const tabParam = searchParams.get('tab');
-      if (tabParam && ['details', 'divisions', 'schedule', 'workouts', 'leaderboard'].includes(tabParam)) {
+      if (tabParam && ['details', 'divisions', 'schedule', 'workouts'].includes(tabParam)) {
         // Sync the initial tab from the external URL after mount.
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setActiveTab(tabParam as typeof activeTab);
@@ -307,22 +306,39 @@ export default function EventPage({ params }: PageProps) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex overflow-x-auto gap-2 py-3 scrollbar-none">
             {[
-              { id: 'details', label: 'Detalhes', icon: AlignLeft },
-              { id: 'divisions', label: 'Divisões', icon: Trophy },
-              { id: 'schedule', label: 'Horário', icon: Clock },
-              { id: 'workouts', label: 'Exercícios', icon: Dumbbell },
-              { id: 'leaderboard', label: 'Leaderboard', icon: Medal }
+              { id: 'details', label: 'Detalhes', icon: AlignLeft, isLink: false },
+              { id: 'divisions', label: 'Divisões', icon: Trophy, isLink: false },
+              { id: 'schedule', label: 'Horário', icon: Clock, isLink: false },
+              { id: 'workouts', label: 'Exercícios', icon: Dumbbell, isLink: false },
+              { id: 'leaderboard', label: 'Leaderboard', icon: Medal, isLink: true }
             ].map((tab) => {
               const Icon = tab.icon;
+              const classes = `flex min-h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border px-4 py-2 text-xs font-extrabold uppercase tracking-wider transition-colors ${
+                activeTab === tab.id
+                  ? 'bg-primary/10 border-primary text-primary font-black'
+                  : 'bg-transparent text-muted border-transparent hover:text-white hover:border-card-border'
+              }`;
+
+              if (tab.isLink) {
+                return (
+                  <a
+                    key={tab.id}
+                    href={`/event/${event.id}/leaderboard`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={classes}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                    <span>{tab.label}</span>
+                  </a>
+                );
+              }
+
               return (
                 <button
                   key={tab.id}
                   onClick={() => handleTabChange(tab.id as typeof activeTab)}
-                  className={`flex min-h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border px-4 py-2 text-xs font-extrabold uppercase tracking-wider transition-colors ${
-                    activeTab === tab.id
-                      ? 'bg-primary/10 border-primary text-primary font-black'
-                      : 'bg-transparent text-muted border-transparent hover:text-white hover:border-card-border'
-                  }`}
+                  className={classes}
                 >
                   <Icon className="h-3.5 w-3.5" />
                   <span>{tab.label}</span>
@@ -571,22 +587,6 @@ export default function EventPage({ params }: PageProps) {
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
-
-            {/* Aba 5: Leaderboard */}
-            {activeTab === 'leaderboard' && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between border-b border-card-border pb-3 mb-2">
-                  <h3 className="text-lg font-black text-white uppercase tracking-wider">
-                    Placar de Líderes
-                  </h3>
-                  <div className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-primary"></span>
-                    <span className="text-[10px] font-black uppercase tracking-widest text-primary">Atualizado em tempo real</span>
-                  </div>
-                </div>
-                <Leaderboard event={event} />
               </div>
             )}
 
