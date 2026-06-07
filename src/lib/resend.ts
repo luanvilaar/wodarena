@@ -1,7 +1,13 @@
 import { Registration, Athlete, Event } from '@/types';
 
-const getResendApiKey = () => process.env.RESENDAPI_KEY;
-const resendFrom = 'WODArena <onboarding@resend.dev>';
+type ResendApiError = {
+  status: number;
+  body: unknown;
+  message: string;
+};
+
+const getResendApiKey = () => process.env.RESEND_API_KEY || process.env.RESENDAPI_KEY;
+const getResendFrom = () => process.env.RESEND_FROM_EMAIL || 'WODArena <noreply@wodarena.com.br>';
 
 const escapeHtml = (value: string) => value
   .replace(/&/g, '&amp;')
@@ -9,6 +15,27 @@ const escapeHtml = (value: string) => value
   .replace(/>/g, '&gt;')
   .replace(/"/g, '&quot;')
   .replace(/'/g, '&#039;');
+
+const parseResendError = async (res: Response): Promise<ResendApiError> => {
+  const rawBody = await res.text();
+  let body: unknown = rawBody;
+
+  try {
+    body = rawBody ? JSON.parse(rawBody) : null;
+  } catch {
+    body = rawBody || null;
+  }
+
+  const bodyMessage = typeof body === 'object' && body && 'message' in body
+    ? String((body as { message?: unknown }).message || '')
+    : '';
+
+  return {
+    status: res.status,
+    body,
+    message: bodyMessage || `Resend retornou HTTP ${res.status}`
+  };
+};
 
 export async function sendPasswordResetEmail(params: {
   toEmail: string;
@@ -85,7 +112,7 @@ export async function sendPasswordResetEmail(params: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: resendFrom,
+        from: getResendFrom(),
         to: params.toEmail,
         subject: 'Recuperação de senha - WODArena',
         html: htmlContent,
@@ -93,7 +120,7 @@ export async function sendPasswordResetEmail(params: {
     });
 
     if (!res.ok) {
-      const errorData = await res.json();
+      const errorData = await parseResendError(res);
       console.error('[Resend Password Reset] Erro na API do Resend:', errorData);
       return { success: false, error: errorData };
     }
@@ -414,7 +441,7 @@ export async function sendRegistrationEmail(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: resendFrom,
+        from: getResendFrom(),
         to: toEmail,
         subject: `Inscrição Confirmada - ${event.name}`,
         html: htmlContent,
@@ -422,7 +449,7 @@ export async function sendRegistrationEmail(
     });
 
     if (!res.ok) {
-      const errorData = await res.json();
+      const errorData = await parseResendError(res);
       console.error('[Resend Email Service] Erro na API do Resend:', errorData);
       return { success: false, error: errorData };
     }

@@ -40,6 +40,14 @@ test('password reset email uses a dedicated HTML template and CTA', () => {
   assert.match(resend, /expiresInMinutes/);
 });
 
+test('resend integration supports production sender configuration and readable API errors', () => {
+  assert.match(resend, /process\.env\.RESEND_API_KEY \|\| process\.env\.RESENDAPI_KEY/);
+  assert.match(resend, /process\.env\.RESEND_FROM_EMAIL \|\| 'WODArena <noreply@wodarena\.com\.br>'/);
+  assert.match(resend, /const parseResendError = async \(res: Response\)/);
+  assert.match(resend, /rawBody \? JSON\.parse\(rawBody\) : null/);
+  assert.match(requestRoute, /detail: emailResult\.error/);
+});
+
 test('admin login exposes request and reset password forms', () => {
   assert.match(adminPage, /authMode/);
   assert.match(adminPage, /handleRequestPasswordReset/);
@@ -47,4 +55,5 @@ test('admin login exposes request and reset password forms', () => {
   assert.match(adminPage, /\/api\/auth\/request-password-reset/);
   assert.match(adminPage, /\/api\/auth\/reset-password/);
   assert.match(adminPage, /reset_token/);
+  assert.match(adminPage, /data\.detail\?\.message/);
 });

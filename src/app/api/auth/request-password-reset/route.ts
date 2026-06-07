@@ -78,7 +78,10 @@ export async function POST(request: Request) {
 
     if (!emailResult.success) {
       console.error('[API Auth RequestPasswordReset] Falha ao enviar e-mail:', emailResult.error);
-      return NextResponse.json({ error: 'Não foi possível enviar o e-mail de recuperação.' }, { status: 500 });
+      return NextResponse.json({
+        error: 'Não foi possível enviar o e-mail de recuperação.',
+        ...(process.env.NODE_ENV !== 'production' ? { detail: emailResult.error } : {})
+      }, { status: 500 });
     }
 
     return NextResponse.json({ success: true });

@@ -756,7 +756,7 @@ export default function AdminPage() {
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        throw new Error(data.error || 'Não foi possível solicitar recuperação de senha.');
+        throw new Error(data.detail?.message || data.error || 'Não foi possível solicitar recuperação de senha.');
       }
 
       setForgotPasswordNotice('Se o e-mail estiver cadastrado como atleta ou gestor, enviaremos um link de recuperação em alguns instantes.');
