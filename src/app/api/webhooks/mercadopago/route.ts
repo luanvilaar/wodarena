@@ -109,12 +109,12 @@ export async function POST(request: Request) {
       // Evita duplicação caso o webhook seja disparado mais de uma vez para o mesmo pagamento
       const { data: existingReg } = await supabaseAdmin
         .from('registrations')
-        .select('id')
+        .select('id, payment_status, created_at')
         .eq('id', regId)
         .maybeSingle();
 
-      if (existingReg) {
-        console.log(`[MercadoPago Webhook] Inscrição ${regId} já existe no banco. Encerrando webhook.`);
+      if (existingReg && existingReg.payment_status === 'payment_approved') {
+        console.log(`[MercadoPago Webhook] Inscrição ${regId} já existe no banco e está APROVADA. Encerrando webhook.`);
         return NextResponse.json({ received: true, message: 'Inscrição já processada.' });
       }
 
@@ -158,8 +158,8 @@ export async function POST(request: Request) {
         }
       }
 
-      // Insere o ticket de inscrição na tabela 'registrations'
-      const { error: regErr } = await supabaseAdmin.from('registrations').insert({
+      // Insere ou atualiza o ticket de inscrição na tabela 'registrations'
+      const { error: regErr } = await supabaseAdmin.from('registrations').upsert({
         id: regId,
         event_id: registrationData.eventId,
         division_id: registrationData.divisionId,
@@ -174,7 +174,7 @@ export async function POST(request: Request) {
         ticket_price: Number(registrationData.ticketPrice),
         quantity: Number(registrationData.quantity),
         total_paid: Number(registrationData.totalPaid),
-        created_at: new Date().toISOString(),
+        created_at: existingReg?.created_at || registrationData.createdAt || new Date().toISOString(),
         coupon_code: registrationData.couponCode || null,
         payment_status: 'payment_approved',
         payment_method: paymentData.payment_method_id || null,
@@ -182,7 +182,7 @@ export async function POST(request: Request) {
         payment_status_detail: paymentData.status_detail || null,
         payment_error_message: null,
         updated_at: new Date().toISOString()
-      });
+      }, { onConflict: 'id' });
 
       if (regErr) {
         console.error("[MercadoPago Webhook] Erro ao cadastrar inscrição no banco:", regErr);

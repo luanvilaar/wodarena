@@ -76,6 +76,8 @@ export async function POST(request: Request) {
       installments: Number(installments || 1),
       transaction_amount: Number(registrationData.totalPaid),
       payment_method_id: payment_method_id,
+      description: `Inscrição: ${registrationData.ticketType} - WODArena`,
+      statement_descriptor: 'WODARENA',
       application_fee: getMercadoPagoApplicationFee(Number(registrationData.totalPaid), checkoutConfig.marketplaceFee),
       payer: {
         email: athleteProfile.email || registrationData.athleteEmail || 'atleta@wodarena.com',

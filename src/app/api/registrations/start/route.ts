@@ -95,6 +95,30 @@ export async function POST(request: Request) {
       }
     }
 
+    // Verifica se já existe uma inscrição ativa com o mesmo e-mail para o mesmo evento
+    const { data: existingRegEvent, error: regCheckError } = await supabaseAdmin
+      .from('registrations')
+      .select('id, payment_status')
+      .eq('event_id', registrationData.eventId)
+      .eq('athlete_email', email)
+      .not('payment_status', 'eq', 'payment_cancelled')
+      .maybeSingle();
+
+    if (regCheckError) {
+      console.error('[Registration Start] Erro ao verificar inscrições existentes:', regCheckError);
+    }
+
+    if (existingRegEvent) {
+      if (existingRegEvent.payment_status === 'payment_failed') {
+        return NextResponse.json({
+          error: 'Este e-mail já está inscrito neste evento, mas o pagamento anterior não foi processado. Por favor, acesse a Área do Atleta em /admin para regularizar o pagamento.'
+        }, { status: 400 });
+      }
+      return NextResponse.json({
+        error: 'Este e-mail já possui uma inscrição ativa para este evento.'
+      }, { status: 400 });
+    }
+
     const { error: secretError } = await supabaseAdmin
       .from('users_secrets')
       .upsert({

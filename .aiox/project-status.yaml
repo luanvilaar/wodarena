@@ -1,15 +1,19 @@
 status:
   branch: main
-  modifiedFiles: []
-  modifiedFilesTotalCount: 0
+  modifiedFiles:
+    - next-env.d.ts
+    - plano.md
+    - src/app/admin/page.tsx
+    - docs/stories/1.8.story.md
+    - problema.png
+  modifiedFilesTotalCount: 5
   recentCommits:
-    - >-
-      feat: implementar integracao mercado pago marketplace oauth e correcoes de
-      layout
+    - Allow athlete login on admin route
+    - Improve athlete registration schema error
   currentEpic: null
   currentStory: null
-  lastUpdate: '2026-06-05T00:12:03.341Z'
+  lastUpdate: '2026-06-06T17:06:59.450Z'
   isGitRepo: true
-timestamp: 1780618323349
+timestamp: 1780765619455
 ttl: 60
-gitFingerprint: 1780618055577.6655:1780618087085.3877
+gitFingerprint: 1780618055577.6655:1780763091862.0117
