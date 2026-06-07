@@ -9,7 +9,6 @@ import { supabase } from '@/lib/supabase';
 
 import { BrandLogo } from '@/components/BrandLogo';
 import { RegistrationVoucher } from '@/components/RegistrationVoucher';
-import CardPaymentModal from '@/components/CardPaymentModal';
 import PixPaymentModal from '@/components/PixPaymentModal';
 import {
   LayoutDashboard, Calendar, Trophy,
@@ -152,18 +151,8 @@ export default function AdminPage() {
   const [manualAccessToken, setManualAccessToken] = useState('');
   const [savingManualMp, setSavingManualMp] = useState(false);
 
-  // Estados para re-tentativa de pagamento por cartão e Pix
-  const [payingRegistration, setPayingRegistration] = useState<{ reg: Registration; event: Event; athlete: Athlete } | null>(null);
+  // Estados para re-tentativa de pagamento por Pix
   const [payingPixRegistration, setPayingPixRegistration] = useState<{ reg: Registration; event: Event; athlete: Athlete } | null>(null);
-
-  const handlePaymentSuccess = async (status: string) => {
-    await refreshRegistrations();
-    setAdminNotice({
-      text: `Pagamento atualizado com sucesso! Status: ${status === 'approved' ? 'Aprovado' : 'Em análise'}.`,
-      tone: 'success'
-    });
-    setPayingRegistration(null);
-  };
 
   const handlePixPaymentSuccess = async (status: string) => {
     await refreshRegistrations();
@@ -172,6 +161,80 @@ export default function AdminPage() {
       tone: 'success'
     });
     setPayingPixRegistration(null);
+  };
+
+  const [redirectingRegistrationId, setRedirectingRegistrationId] = useState<string | null>(null);
+
+  const handleRedirectToCardPreference = async (reg: Registration) => {
+    const athlete = getRegistrationAthlete(reg);
+    const event = getRegistrationEvent(reg);
+    if (!event || !athlete) return;
+
+    setRedirectingRegistrationId(reg.id);
+    setAdminNotice(null);
+
+    try {
+      const response = await fetch('/api/checkout/preference', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          registrationData: {
+            id: reg.id,
+            eventId: event.id,
+            divisionId: reg.divisionId,
+            athleteName: reg.athleteName,
+            athleteEmail: reg.athleteEmail,
+            athletePhone: reg.athletePhone,
+            box: reg.box || 'Independente',
+            gender: reg.gender,
+            ticketType: reg.ticketType,
+            ticketPrice: reg.ticketPrice,
+            quantity: reg.quantity,
+            totalPaid: reg.totalPaid,
+            couponCode: reg.couponCode
+          },
+          athleteProfile: {
+            id: athlete.id,
+            name: athlete.name,
+            box: athlete.box,
+            country: athlete.country,
+            divisionId: athlete.divisionId,
+            birthDate: athlete.birthDate,
+            city: athlete.city,
+            state: athlete.state,
+            photoUrl: athlete.photoUrl,
+            email: athlete.email,
+            phone: athlete.phone,
+            gender: athlete.gender,
+            instagram: athlete.instagram,
+            isTeam: athlete.isTeam,
+            teamMembers: athlete.teamMembers
+          },
+          origin: window.location.origin
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Erro ao gerar link de redirecionamento para o cartão.');
+      }
+
+      const data = await response.json();
+      const initPoint = data.init_point;
+      if (!initPoint) {
+        throw new Error('Link de pagamento inválido.');
+      }
+
+      window.location.assign(initPoint);
+    } catch (err) {
+      console.error("[Card Redirect] Erro:", err);
+      setAdminNotice({
+        text: err instanceof Error ? err.message : 'Não foi possível iniciar o checkout de cartão.',
+        tone: 'error'
+      });
+      setRedirectingRegistrationId(null);
+    }
   };
 
   // Estados para aba de Segurança
@@ -2303,17 +2366,21 @@ export default function AdminPage() {
                               </button>
                               <button
                                 type="button"
-                                onClick={() => {
-                                  const athlete = getRegistrationAthlete(reg);
-                                  const event = getRegistrationEvent(reg);
-                                  if (event) {
-                                    setPayingRegistration({ reg, event, athlete });
-                                  }
-                                }}
-                                className="flex min-h-10 items-center justify-center gap-1.5 rounded-md bg-primary px-4 py-2 text-xs font-bold uppercase tracking-wider text-ink transition-colors hover:bg-primary-hover"
+                                onClick={() => handleRedirectToCardPreference(reg)}
+                                disabled={redirectingRegistrationId === reg.id}
+                                className="flex min-h-10 items-center justify-center gap-1.5 rounded-md bg-primary px-4 py-2 text-xs font-bold uppercase tracking-wider text-ink transition-colors hover:bg-primary-hover disabled:opacity-60"
                               >
-                                <CreditCard className="h-3.5 w-3.5" aria-hidden="true" />
-                                <span>Pagar com Cartão</span>
+                                {redirectingRegistrationId === reg.id ? (
+                                  <>
+                                    <div className="w-3.5 h-3.5 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
+                                    <span>Redirecionando...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <CreditCard className="h-3.5 w-3.5" aria-hidden="true" />
+                                    <span>Pagar com Cartão</span>
+                                  </>
+                                )}
                               </button>
                             </>
                           )}
@@ -2353,16 +2420,7 @@ export default function AdminPage() {
           />
         )}
 
-        {payingRegistration && (
-          <CardPaymentModal
-            isOpen={payingRegistration !== null}
-            onClose={() => setPayingRegistration(null)}
-            registration={payingRegistration.reg}
-            athlete={payingRegistration.athlete}
-            event={payingRegistration.event}
-            onSuccess={handlePaymentSuccess}
-          />
-        )}
+
 
         {payingPixRegistration && (
           <PixPaymentModal

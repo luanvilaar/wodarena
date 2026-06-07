@@ -32,6 +32,11 @@ export async function POST(request: Request) {
 
     const isLocalhost = origin.includes('localhost') || origin.includes('127.0.0.1');
 
+    let transactionAmount = Number(registrationData.totalPaid);
+    if (transactionAmount > 0 && transactionAmount < 1.00) {
+      transactionAmount = 1.00;
+    }
+
     // Monta o payload de preferência para o Mercado Pago com a taxa de comissão
     const preferencePayload = {
       items: [
@@ -41,7 +46,7 @@ export async function POST(request: Request) {
           description: `Inscrição na categoria: ${registrationData.ticketType}`,
           quantity: 1,
           currency_id: 'BRL',
-          unit_price: Number(registrationData.totalPaid)
+          unit_price: transactionAmount
         }
       ],
       payer: {
@@ -89,6 +94,7 @@ export async function POST(request: Request) {
         payment_id: preferenceData.id ? String(preferenceData.id) : null,
         payment_status_detail: null,
         payment_error_message: null,
+        total_paid: transactionAmount,
         updated_at: new Date().toISOString()
       })
       .eq('id', registrationData.id);
