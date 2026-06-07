@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { WorkoutType, Event, Athlete, Division, Score, CourseStage, Coupon, Registration, User, Workout, AthleteOverall, EventScheduleItem } from '../types';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { supabase } from '../lib/supabase';
@@ -41,6 +41,7 @@ interface AppContextType {
   deleteDivision: (eventId: string, divisionId: string) => Promise<void>;
   deleteWorkout: (eventId: string, workoutId: string) => Promise<void>;
   registerTicket: (registration: RegistrationDraft, athleteProfile?: AthleteProfileDraft) => Registration;
+  refreshRegistrations: () => Promise<Registration[]>;
   submitScore: (score: Score) => void;
   submitScoresBulk: (newScores: Score[]) => Promise<void>;
   getLeaderboard: (eventId: string, divisionId: string) => AthleteOverall[];
@@ -67,6 +68,35 @@ type WorkoutDbUpdate = Partial<{
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+type RegistrationDbRow = Record<string, unknown>;
+
+const optionalString = (value: unknown) => typeof value === 'string' && value.length > 0 ? value : undefined;
+
+const mapRegistrationFromDb = (r: RegistrationDbRow): Registration => ({
+  id: String(r.id),
+  eventId: String(r.event_id),
+  divisionId: String(r.division_id),
+  userId: optionalString(r.user_id),
+  athleteId: optionalString(r.athlete_id),
+  athleteName: String(r.athlete_name),
+  athleteEmail: String(r.athlete_email),
+  athletePhone: String(r.athlete_phone),
+  box: String(r.box),
+  gender: r.gender as Registration['gender'],
+  ticketType: String(r.ticket_type),
+  ticketPrice: Number(r.ticket_price),
+  quantity: Number(r.quantity),
+  totalPaid: Number(r.total_paid),
+  createdAt: String(r.created_at),
+  couponCode: optionalString(r.coupon_code),
+  paymentStatus: (r.payment_status || 'payment_approved') as Registration['paymentStatus'],
+  paymentMethod: optionalString(r.payment_method),
+  paymentId: optionalString(r.payment_id),
+  paymentStatusDetail: optionalString(r.payment_status_detail),
+  paymentErrorMessage: optionalString(r.payment_error_message),
+  updatedAt: optionalString(r.updated_at)
+});
+
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [events, setEvents] = useState<Event[]>([]);
@@ -76,6 +106,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [users, setUsers] = useState<User[]>(INITIAL_USERS);
   const [currentUser, setCurrentUser] = useLocalStorage<User | null>('woda_current_user', null);
+
+  const refreshRegistrations = useCallback(async () => {
+    const { data, error } = await supabase.from('registrations').select('*');
+    if (error) {
+      console.error("Erro ao atualizar inscrições do Supabase:", error);
+      throw error;
+    }
+
+    const mappedRegs = (data || []).map(mapRegistrationFromDb);
+    setRegistrations(mappedRegs);
+    return mappedRegs;
+  }, []);
 
   // Carregar dados iniciais do Supabase
   useEffect(() => {
@@ -155,30 +197,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // 4. Carregar inscrições
         const { data: dbRegistrations } = await supabase.from('registrations').select('*');
         if (dbRegistrations && dbRegistrations.length > 0) {
-          const mappedRegs: Registration[] = dbRegistrations.map(r => ({
-            id: r.id,
-            eventId: r.event_id,
-            divisionId: r.division_id,
-            userId: r.user_id || undefined,
-            athleteId: r.athlete_id || undefined,
-            athleteName: r.athlete_name,
-            athleteEmail: r.athlete_email,
-            athletePhone: r.athlete_phone,
-            box: r.box,
-            gender: r.gender,
-            ticketType: r.ticket_type,
-            ticketPrice: Number(r.ticket_price),
-            quantity: r.quantity,
-            totalPaid: Number(r.total_paid),
-            createdAt: r.created_at,
-            couponCode: r.coupon_code || undefined,
-            paymentStatus: r.payment_status || 'payment_approved',
-            paymentMethod: r.payment_method || undefined,
-            paymentId: r.payment_id || undefined,
-            paymentStatusDetail: r.payment_status_detail || undefined,
-            paymentErrorMessage: r.payment_error_message || undefined,
-            updatedAt: r.updated_at || undefined
-          }));
+          const mappedRegs: Registration[] = dbRegistrations.map(mapRegistrationFromDb);
           setRegistrations(mappedRegs);
         } else {
           setRegistrations([]);
@@ -1485,6 +1504,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         deleteDivision,
         deleteWorkout,
         registerTicket,
+        refreshRegistrations,
         submitScore,
         submitScoresBulk,
         getLeaderboard,

@@ -15,6 +15,7 @@ const oauthCallback = read('../src/app/api/mercadopago/oauth/callback/route.ts')
 const adminMercadoPagoRoute = read('../src/app/api/admin/mercadopago/route.ts');
 const registerModal = read('../src/components/RegisterModal.tsx');
 const appContext = read('../src/context/AppContext.tsx');
+const eventPage = read('../src/app/event/[id]/page.tsx');
 
 test('Mercado Pago checkout resolves credentials from organizer secrets', () => {
   assert.match(helper, /from\('events'\)[\s\S]*select\('organizer_id, marketplace_fee, mp_access_token'\)/);
@@ -67,6 +68,12 @@ test('local registration preserves checkout identifiers for webhook and voucher 
   assert.match(appContext, /const regId = registrationData\.id \|\| `reg-\$\{Date\.now\(\)\}`/);
   assert.match(appContext, /createdAt: registrationData\.createdAt \|\| new Date\(\)\.toISOString\(\)/);
   assert.match(appContext, /const newAthleteId = athleteProfile\?\.id \|\| `ath-\$\{Date\.now\(\)\}`/);
+});
+
+test('approved Mercado Pago redirect does not overwrite registration as pending', () => {
+  assert.match(eventPage, /approvedRegistrationData/);
+  assert.match(eventPage, /paymentStatus: 'payment_approved' as const/);
+  assert.match(eventPage, /const createdReg = registerTicket\(approvedRegistrationData, athleteProfile\)/);
 });
 
 test('Mercado Pago OAuth callback persists secrets with Supabase service role', () => {

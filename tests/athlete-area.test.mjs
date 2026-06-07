@@ -59,6 +59,14 @@ test('athlete area is rendered inside admin route without manager controls', () 
   assert.doesNotMatch(adminPage, /Acesso negado\. Esta conta não possui privilégios de gestor/);
 });
 
+test('athlete area refreshes registrations to reflect Mercado Pago status updates', () => {
+  assert.match(adminPage, /refreshRegistrations/);
+  assert.match(adminPage, /pendingAthleteRegistrations/);
+  assert.match(adminPage, /\/api\/checkout\/status\?payment_id=/);
+  assert.match(adminPage, /window\.addEventListener\('focus', syncAthleteRegistrations\)/);
+  assert.match(adminPage, /window\.setInterval\(syncAthleteRegistrations, 15000\)/);
+});
+
 test('voucher reflects non-approved payment status', () => {
   assert.match(voucher, /Pagamento não processado/);
   assert.match(voucher, /Inscrição registrada/);

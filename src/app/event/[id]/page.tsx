@@ -20,7 +20,7 @@ export default function EventPage({ params }: PageProps) {
   const resolvedParams = use(params);
   const eventId = resolvedParams.id;
   
-  const { events, athletes, registerTicket, incrementCouponUsage } = useApp();
+  const { events, athletes, registerTicket, refreshRegistrations, incrementCouponUsage } = useApp();
   const [activeTab, setActiveTab] = useState<'details' | 'divisions' | 'schedule' | 'workouts'>('details');
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
   const [shareFeedback, setShareFeedback] = useState(false);
@@ -68,8 +68,16 @@ export default function EventPage({ params }: PageProps) {
           try {
             const { registrationData, athleteProfile, cpf } = JSON.parse(pendingRegStr);
             console.log("[WODArena Checkout] Pagamento aprovado! Sincronizando inscrição localmente...");
-            
-            const createdReg = registerTicket(registrationData, athleteProfile);
+            const paymentId = searchParams.get('payment_id') || searchParams.get('collection_id') || undefined;
+            const approvedRegistrationData = {
+              ...registrationData,
+              paymentStatus: 'payment_approved' as const,
+              paymentMethod: searchParams.get('payment_type') || 'mercadopago_preference',
+              paymentId,
+              paymentStatusDetail: searchParams.get('status') || 'approved'
+            };
+
+            const createdReg = registerTicket(approvedRegistrationData, athleteProfile);
             
             if (registrationData.couponCode && event) {
               incrementCouponUsage(event.id, registrationData.couponCode);
@@ -78,7 +86,7 @@ export default function EventPage({ params }: PageProps) {
             setTimeout(() => {
               setConfirmedVoucher({
                 registration: createdReg || {
-                  ...registrationData,
+                  ...approvedRegistrationData,
                   id: registrationData.id || `reg-${Date.now()}`,
                   createdAt: new Date().toISOString()
                 },
@@ -97,6 +105,9 @@ export default function EventPage({ params }: PageProps) {
             sessionStorage.removeItem('pending_registration');
           }
         } else {
+          refreshRegistrations().catch((err) => {
+            console.error("[WODArena Checkout] Erro ao atualizar inscrições após retorno aprovado:", err);
+          });
           setTimeout(() => {
             setPaymentNotice({
               text: 'Pagamento confirmado! Sua inscrição foi processada.',
@@ -132,7 +143,34 @@ export default function EventPage({ params }: PageProps) {
         window.history.replaceState(null, '', newUrl);
       }
     }
-  }, [event, registerTicket, incrementCouponUsage]);
+  }, [event, registerTicket, refreshRegistrations, incrementCouponUsage]);
+
+  const scheduleItems = React.useMemo(() => {
+    const seenHeatKeys = new Set<string>();
+
+    return [...(event?.scheduleItems || [])]
+      .filter(item => item.kind !== 'heat' || item.isPublished)
+      .filter(item => {
+        if (item.kind !== 'heat') return true;
+
+        const athleteKey = [...(item.athleteIds || [])].sort().join(',');
+        const heatKey = [
+          item.date,
+          item.time,
+          item.warmupTime || '',
+          item.checkinTime || '',
+          item.endTime || '',
+          item.heatNumber || '',
+          item.title,
+          athleteKey
+        ].join('|');
+
+        if (seenHeatKeys.has(heatKey)) return false;
+        seenHeatKeys.add(heatKey);
+        return true;
+      })
+      .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
+  }, [event?.scheduleItems]);
 
   if (!event) {
     return (
@@ -154,9 +192,6 @@ export default function EventPage({ params }: PageProps) {
       setTimeout(() => setShareFeedback(false), 2000);
     }
   };
-
-  const scheduleItems = [...(event.scheduleItems || [])]
-    .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
 
   const getScheduleKindLabel = (kind: string) => {
     if (kind === 'briefing') return 'Briefing';

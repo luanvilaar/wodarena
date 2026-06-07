@@ -88,7 +88,7 @@ export default function AdminPage() {
     events, athletes, scores, registrations, coupons, currentUser,
     login, logout, addEvent, addDivision, updateDivision,
     addWorkout, deleteEvent, deleteDivision, deleteWorkout, submitScore, submitScoresBulk, updateEvent, getLeaderboard, registerTicket, saveCourseLayout, updateWorkout,
-    addCoupon, incrementCouponUsage, changePassword
+    refreshRegistrations, addCoupon, incrementCouponUsage, changePassword
   } = useApp();
 
   // 1. Estados de Login (vinculado ao currentUser do contexto)
@@ -99,10 +99,48 @@ export default function AdminPage() {
   const [loginError, setLoginError] = useState('');
   const [selectedLoginProfile, setSelectedLoginProfile] = useState<'athlete' | 'organizer'>('athlete');
   const [rememberLogin, setRememberLogin] = useState(false);
-  const [adminNotice, setAdminNotice] = useState<{ text: string; tone: 'success' | 'error' } | null>(null);
+  const [adminNotice, setAdminNotice] = useState<{ text: string; tone: 'success' | 'error' } | null>(() => {
+    if (typeof window === 'undefined') return null;
+
+    const params = new URLSearchParams(window.location.search);
+    const success = params.get('success');
+    const errorParam = params.get('error');
+
+    if (success === 'mp_connected') {
+      return { text: 'Conta do Mercado Pago conectada com sucesso!', tone: 'success' };
+    }
+
+    if (!errorParam) return null;
+
+    let msg = 'Falha ao conectar conta do Mercado Pago.';
+    if (errorParam === 'oauth_failed') msg = 'A autorização do Mercado Pago falhou ou foi recusada.';
+    if (errorParam === 'oauth_mp_error') msg = 'Erro de comunicação com o Mercado Pago durante a troca de tokens.';
+    if (errorParam === 'db_error') msg = 'Erro ao persistir as credenciais de pagamento no banco de dados.';
+    if (errorParam === 'critical_error') msg = 'Ocorreu um erro inesperado no callback do Mercado Pago.';
+
+    return { text: msg, tone: 'error' };
+  });
+  const initialPasswordResetToken = typeof window !== 'undefined'
+    ? new URLSearchParams(window.location.search).get('reset_token') || ''
+    : '';
+  const [authMode, setAuthMode] = useState<'login' | 'forgot' | 'reset'>(initialPasswordResetToken ? 'reset' : 'login');
+  const [passwordResetToken, setPasswordResetToken] = useState(initialPasswordResetToken);
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
+  const [forgotPasswordNotice, setForgotPasswordNotice] = useState('');
+  const [forgotPasswordSubmitting, setForgotPasswordSubmitting] = useState(false);
+  const [resetPasswordNew, setResetPasswordNew] = useState('');
+  const [resetPasswordConfirm, setResetPasswordConfirm] = useState('');
+  const [resetPasswordNotice, setResetPasswordNotice] = useState('');
+  const [resetPasswordSubmitting, setResetPasswordSubmitting] = useState(false);
 
   // 2. Abas Administrativas Principais
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'my-events' | 'event' | 'payments' | 'security'>('dashboard');
+  const initialAdminTab = typeof window !== 'undefined'
+    ? new URLSearchParams(window.location.search).get('tab')
+    : '';
+  const isValidAdminTab = initialAdminTab === 'dashboard' || initialAdminTab === 'my-events' || initialAdminTab === 'event' || initialAdminTab === 'payments' || initialAdminTab === 'security';
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'my-events' | 'event' | 'payments' | 'security'>(
+    isValidAdminTab ? initialAdminTab as 'dashboard' | 'my-events' | 'event' | 'payments' | 'security' : 'dashboard'
+  );
 
   // Estados para integração do Mercado Pago Marketplace
   const [mpAccount, setMpAccount] = useState<{ id: string; mercadopago_user_id: string; status: string; public_key?: string; access_token?: string } | null>(null);
@@ -124,25 +162,10 @@ export default function AdminPage() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
-      const tab = params.get('tab');
       const success = params.get('success');
       const errorParam = params.get('error');
 
-      if (tab === 'dashboard' || tab === 'my-events' || tab === 'event' || tab === 'payments' || tab === 'security') {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setActiveTab(tab);
-      }
-
-      if (success === 'mp_connected') {
-        setAdminNotice({ text: 'Conta do Mercado Pago conectada com sucesso!', tone: 'success' });
-        window.history.replaceState({}, '', window.location.pathname);
-      } else if (errorParam) {
-        let msg = 'Falha ao conectar conta do Mercado Pago.';
-        if (errorParam === 'oauth_failed') msg = 'A autorização do Mercado Pago falhou ou foi recusada.';
-        if (errorParam === 'oauth_mp_error') msg = 'Erro de comunicação com o Mercado Pago durante a troca de tokens.';
-        if (errorParam === 'db_error') msg = 'Erro ao persistir as credenciais de pagamento no banco de dados.';
-        if (errorParam === 'critical_error') msg = 'Ocorreu um erro inesperado no callback do Mercado Pago.';
-        setAdminNotice({ text: msg, tone: 'error' });
+      if (success === 'mp_connected' || errorParam) {
         window.history.replaceState({}, '', window.location.pathname);
       }
     }
@@ -607,6 +630,41 @@ export default function AdminPage() {
     }
   };
 
+  useEffect(() => {
+    if (currentUser?.role !== 'athlete') return;
+
+    const syncAthleteRegistrations = async () => {
+      try {
+        const latestRegistrations = await refreshRegistrations();
+        const pendingAthleteRegistrations = latestRegistrations.filter(reg => {
+          const belongsToAthlete = reg.userId === currentUser.id || reg.athleteEmail.toLowerCase() === currentUser.email.toLowerCase();
+          const canQueryPayment = Boolean(reg.paymentId && reg.paymentMethod !== 'mercadopago_preference');
+          const needsSync = reg.paymentStatus === 'payment_pending' || reg.paymentStatus === 'payment_in_review';
+          return belongsToAthlete && canQueryPayment && needsSync;
+        });
+
+        if (pendingAthleteRegistrations.length === 0) return;
+
+        await Promise.all(pendingAthleteRegistrations.map(reg => (
+          fetch(`/api/checkout/status?payment_id=${encodeURIComponent(reg.paymentId || '')}&event_id=${encodeURIComponent(reg.eventId)}`)
+            .catch((err) => console.error(`Erro ao consultar pagamento ${reg.paymentId}:`, err))
+        )));
+        await refreshRegistrations();
+      } catch (err) {
+        console.error('Erro ao sincronizar inscrições do atleta:', err);
+      }
+    };
+
+    syncAthleteRegistrations();
+    window.addEventListener('focus', syncAthleteRegistrations);
+    const intervalId = window.setInterval(syncAthleteRegistrations, 15000);
+
+    return () => {
+      window.removeEventListener('focus', syncAthleteRegistrations);
+      window.clearInterval(intervalId);
+    };
+  }, [currentUser?.email, currentUser?.id, currentUser?.role, refreshRegistrations]);
+
   // 4. Lógicas de Cálculo do Dashboard
   const dashboardStats = useMemo(() => {
     const eventIds = managerEvents.map(e => e.id);
@@ -680,6 +738,78 @@ export default function AdminPage() {
       setLoginError('');
     } else {
       setLoginError('E-mail ou senha incorretos.');
+    }
+  };
+
+  const handleRequestPasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotPasswordSubmitting(true);
+    setForgotPasswordNotice('');
+    setLoginError('');
+
+    try {
+      const response = await fetch('/api/auth/request-password-reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: forgotPasswordEmail })
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Não foi possível solicitar recuperação de senha.');
+      }
+
+      setForgotPasswordNotice('Se o e-mail estiver cadastrado como atleta ou gestor, enviaremos um link de recuperação em alguns instantes.');
+    } catch (err) {
+      setForgotPasswordNotice(err instanceof Error ? err.message : 'Erro ao solicitar recuperação de senha.');
+    } finally {
+      setForgotPasswordSubmitting(false);
+    }
+  };
+
+  const handleResetPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetPasswordNotice('');
+
+    if (resetPasswordNew.length < 6) {
+      setResetPasswordNotice('A nova senha deve ter pelo menos 6 caracteres.');
+      return;
+    }
+
+    if (resetPasswordNew !== resetPasswordConfirm) {
+      setResetPasswordNotice('A confirmação de senha não confere.');
+      return;
+    }
+
+    setResetPasswordSubmitting(true);
+
+    try {
+      const response = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: passwordResetToken,
+          newPassword: resetPasswordNew
+        })
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Não foi possível redefinir a senha.');
+      }
+
+      setResetPasswordNotice('Senha redefinida com sucesso. Você já pode entrar com a nova senha.');
+      setPasswordResetToken('');
+      setResetPasswordNew('');
+      setResetPasswordConfirm('');
+      if (typeof window !== 'undefined') {
+        window.history.replaceState(null, '', window.location.pathname);
+      }
+      setTimeout(() => setAuthMode('login'), 1200);
+    } catch (err) {
+      setResetPasswordNotice(err instanceof Error ? err.message : 'Erro ao redefinir senha.');
+    } finally {
+      setResetPasswordSubmitting(false);
     }
   };
 
@@ -1772,78 +1902,165 @@ export default function AdminPage() {
                     ))}
                   </div>
 
-                  {loginError && (
+                  {(loginError || forgotPasswordNotice || resetPasswordNotice) && (
                     <div role="alert" className="mt-5 rounded-lg border border-trading-down/35 bg-background px-4 py-3 text-sm font-semibold text-trading-down">
-                      {loginError}
+                      {loginError || forgotPasswordNotice || resetPasswordNotice}
                     </div>
                   )}
 
-                  <form onSubmit={handleLogin} className="mt-5 space-y-4">
-                    <div className="space-y-2">
-                      <label htmlFor="admin-email" className={transactionalLabelClassName}>Email</label>
-                      <input
-                        id="admin-email"
-                        name="email"
-                        autoComplete="email"
-                        type="email"
-                        required
-                        placeholder="voce@email.com"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className={darkLoginInputClassName}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <label htmlFor="admin-password" className={transactionalLabelClassName}>Senha</label>
-                      <input
-                        id="admin-password"
-                        name="password"
-                        autoComplete="current-password"
-                        type="password"
-                        required
-                        placeholder="Digite sua senha"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className={darkLoginInputClassName}
-                      />
-                    </div>
-
-                    <div className="flex flex-col gap-3 text-sm sm:flex-row sm:items-center sm:justify-between">
-                      <label className="flex min-h-11 items-center gap-2 text-muted">
+                  {authMode === 'login' && (
+                    <form onSubmit={handleLogin} className="mt-5 space-y-4">
+                      <div className="space-y-2">
+                        <label htmlFor="admin-email" className={transactionalLabelClassName}>Email</label>
                         <input
-                          type="checkbox"
-                          checked={rememberLogin}
-                          onChange={(e) => setRememberLogin(e.target.checked)}
-                          className="h-4 w-4 rounded border-card-border bg-background accent-primary"
+                          id="admin-email"
+                          name="email"
+                          autoComplete="email"
+                          type="email"
+                          required
+                          placeholder="voce@email.com"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          className={darkLoginInputClassName}
                         />
-                        <span>Manter conectado</span>
-                      </label>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label htmlFor="admin-password" className={transactionalLabelClassName}>Senha</label>
+                        <input
+                          id="admin-password"
+                          name="password"
+                          autoComplete="current-password"
+                          type="password"
+                          required
+                          placeholder="Digite sua senha"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          className={darkLoginInputClassName}
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+                        <label className="flex min-h-11 items-center gap-2 text-muted">
+                          <input
+                            type="checkbox"
+                            checked={rememberLogin}
+                            onChange={(e) => setRememberLogin(e.target.checked)}
+                            className="h-4 w-4 rounded border-card-border bg-background accent-primary"
+                          />
+                          <span>Manter conectado</span>
+                        </label>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAuthMode('forgot');
+                            setLoginError('');
+                            setForgotPasswordNotice('');
+                            setForgotPasswordEmail(email);
+                          }}
+                          className="min-h-11 text-left text-sm font-semibold text-primary transition-colors hover:text-primary-hover sm:text-right"
+                        >
+                          Esqueci minha senha
+                        </button>
+                      </div>
 
                       <button
-                        type="button"
-                        onClick={() => setLoginError('Para recuperar sua senha, fale com o organizador do evento ou com o suporte WOD Arena.')}
-                        className="min-h-11 text-left text-sm font-semibold text-primary transition-colors hover:text-primary-hover sm:text-right"
+                        type="submit"
+                        className={`${primaryActionClassName} h-12 w-full gap-2 uppercase tracking-wider`}
                       >
-                        Esqueci minha senha
+                        <span>Entrar na Arena</span>
+                        <LogIn className="h-4 w-4" aria-hidden="true" />
                       </button>
-                    </div>
 
-                    <button
-                      type="submit"
-                      className={`${primaryActionClassName} h-12 w-full gap-2 uppercase tracking-wider`}
-                    >
-                      <span>Entrar na Arena</span>
-                      <LogIn className="h-4 w-4" aria-hidden="true" />
-                    </button>
+                      <Link
+                        href="/#eventos"
+                        className="flex h-12 w-full items-center justify-center rounded-md border border-card-border bg-card px-6 text-sm font-bold uppercase tracking-wider text-white transition-colors hover:border-primary hover:text-primary"
+                      >
+                        Criar conta gratuita
+                      </Link>
+                    </form>
+                  )}
 
-                    <Link
-                      href="/#eventos"
-                      className="flex h-12 w-full items-center justify-center rounded-md border border-card-border bg-card px-6 text-sm font-bold uppercase tracking-wider text-white transition-colors hover:border-primary hover:text-primary"
-                    >
-                      Criar conta gratuita
-                    </Link>
-                  </form>
+                  {authMode === 'forgot' && (
+                    <form onSubmit={handleRequestPasswordReset} className="mt-5 space-y-4">
+                      <div className="space-y-2">
+                        <label htmlFor="forgot-password-email" className={transactionalLabelClassName}>Email cadastrado</label>
+                        <input
+                          id="forgot-password-email"
+                          name="forgot-password-email"
+                          autoComplete="email"
+                          type="email"
+                          required
+                          placeholder="voce@email.com"
+                          value={forgotPasswordEmail}
+                          onChange={(e) => setForgotPasswordEmail(e.target.value)}
+                          className={darkLoginInputClassName}
+                        />
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={forgotPasswordSubmitting}
+                        className={`${primaryActionClassName} h-12 w-full gap-2 uppercase tracking-wider disabled:opacity-60`}
+                      >
+                        <span>{forgotPasswordSubmitting ? 'Enviando...' : 'Enviar link de recuperação'}</span>
+                        <Mail className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAuthMode('login');
+                          setForgotPasswordNotice('');
+                        }}
+                        className="min-h-11 w-full text-sm font-semibold text-muted transition-colors hover:text-white"
+                      >
+                        Voltar para login
+                      </button>
+                    </form>
+                  )}
+
+                  {authMode === 'reset' && (
+                    <form onSubmit={handleResetPasswordSubmit} className="mt-5 space-y-4">
+                      <div className="space-y-2">
+                        <label htmlFor="reset-password-new" className={transactionalLabelClassName}>Nova senha</label>
+                        <input
+                          id="reset-password-new"
+                          name="reset-password-new"
+                          autoComplete="new-password"
+                          type="password"
+                          required
+                          minLength={6}
+                          placeholder="Mínimo 6 caracteres"
+                          value={resetPasswordNew}
+                          onChange={(e) => setResetPasswordNew(e.target.value)}
+                          className={darkLoginInputClassName}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label htmlFor="reset-password-confirm" className={transactionalLabelClassName}>Confirmar senha</label>
+                        <input
+                          id="reset-password-confirm"
+                          name="reset-password-confirm"
+                          autoComplete="new-password"
+                          type="password"
+                          required
+                          minLength={6}
+                          placeholder="Repita a nova senha"
+                          value={resetPasswordConfirm}
+                          onChange={(e) => setResetPasswordConfirm(e.target.value)}
+                          className={darkLoginInputClassName}
+                        />
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={resetPasswordSubmitting}
+                        className={`${primaryActionClassName} h-12 w-full gap-2 uppercase tracking-wider disabled:opacity-60`}
+                      >
+                        <span>{resetPasswordSubmitting ? 'Redefinindo...' : 'Redefinir senha'}</span>
+                        <Lock className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    </form>
+                  )}
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2">
