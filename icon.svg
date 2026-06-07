@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Camada_2" data-name="Camada 2" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1276.23 1276.23">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: url(#Gradiente_sem_nome_27);
+      }
+
+      .cls-2 {
+        fill: url(#Gradiente_sem_nome_108);
+      }
+
+      .cls-3 {
+        fill: #fff;
+      }
+
+      .cls-4 {
+        fill: url(#Gradiente_sem_nome_108-4);
+      }
+
+      .cls-5 {
+        fill: url(#Gradiente_sem_nome_108-2);
+      }
+
+      .cls-6 {
+        fill: url(#Gradiente_sem_nome_108-3);
+      }
+
+      .cls-7 {
+        fill: url(#Gradiente_sem_nome_108-5);
+      }
+    </style>
+    <linearGradient id="Gradiente_sem_nome_27" data-name="Gradiente sem nome 27" x1="548.34" y1="413.22" x2="986.55" y2="1511.01" gradientUnits="userSpaceOnUse">
+      <stop offset=".58" stop-color="#161616"/>
+      <stop offset="1" stop-color="#b48022"/>
+    </linearGradient>
+    <linearGradient id="Gradiente_sem_nome_108" data-name="Gradiente sem nome 108" x1="638.05" y1="198.14" x2="638.05" y2="870.2" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#c48b26"/>
+      <stop offset="1" stop-color="#89601b"/>
+    </linearGradient>
+    <linearGradient id="Gradiente_sem_nome_108-2" data-name="Gradiente sem nome 108" x1="661.54" y1="198.14" x2="661.54" y2="870.2" xlink:href="#Gradiente_sem_nome_108"/>
+    <linearGradient id="Gradiente_sem_nome_108-3" data-name="Gradiente sem nome 108" x1="638.05" y1="198.14" x2="638.05" y2="870.2" xlink:href="#Gradiente_sem_nome_108"/>
+    <linearGradient id="Gradiente_sem_nome_108-4" data-name="Gradiente sem nome 108" x1="638.83" y1="198.14" x2="638.83" y2="870.2" xlink:href="#Gradiente_sem_nome_108"/>
+    <linearGradient id="Gradiente_sem_nome_108-5" data-name="Gradiente sem nome 108" x1="636.82" y1="198.14" x2="636.82" y2="870.2" xlink:href="#Gradiente_sem_nome_108"/>
+  </defs>
+  <g id="Camada_1-2" data-name="Camada 1">
+    <rect class="cls-1" width="1276.23" height="1276.23" rx="100.99" ry="100.99"/>
+    <g>
+      <g>
+        <path class="cls-3" d="M525.66,632.96l-116.98,185.05L129.91,318.25l122.53-2.88,160.07,263.48,40.63-79.43-99.9-183.91,122.82.4,168.64,268.25,144.29-268.72h357.33l-288.5,513.15h-127.49l97.64-186.52h-87.75l-105.35,191.95-109.23-201.07ZM883.01,536.91l57.1-109.15h-82.25l-59.91,109.15h85.06Z"/>
+        <polygon class="cls-3" points="572.8 315.44 715.33 315.44 747.41 373.51 678.38 502.41 572.8 315.44"/>
+        <polygon class="cls-3" points="262.02 884.99 260.62 617.15 320.58 718.37 319.31 845.23 640.6 1051.32 956.16 850.15 956.16 718.12 1015.45 621.37 1014.26 886.83 638.52 1127.03 262.02 884.99"/>
+        <polygon class="cls-3" points="508.72 931.79 437.08 873.33 840.33 873.33 768.24 933.51 508.72 931.79"/>
+        <path class="cls-3" d="M1009.83,279.49c-114.95-48.01-243.9-73.39-372.91-73.39s-257.94,25.37-372.89,73.38l-6.81,2.84-.11-7.38c-.26-16.96-.29-33.93-.09-50.43l.04-3.35,3.12-1.23c58.94-23.32,121.17-41.17,184.96-53.05,63.01-11.73,127.74-17.68,192.4-17.68s128.67,5.88,191.34,17.49c63.46,11.75,125.39,29.4,184.06,52.48l3.08,1.21.09,3.3c.46,16.78.69,34.01.66,51.21v7.49s-6.93-2.89-6.93-2.89Z"/>
+      </g>
+      <g>
+        <path class="cls-2" d="M645.04,594.1l-171.75-273.2-111.63-.37,97.13,178.81-45.91,89.75-163.22-268.66-111.35,2.61,270.63,485.17,117.04-185.14,108.92,200.51,102.36-186.52h98.97l-97.64,186.52h116.3l282.87-503.15h-345.8l-146.94,273.66ZM948.37,422.76l-62.33,119.15h-96.54l65.4-119.15h93.47Z"/>
+        <polygon class="cls-5" points="678.26 492.04 741.72 373.55 712.38 320.44 581.36 320.44 678.26 492.04"/>
+        <polygon class="cls-6" points="961.16 852.9 640.59 1057.25 314.29 847.94 315.57 719.71 265.72 635.56 267 882.25 638.53 1121.09 1009.27 884.08 1010.37 639.23 961.16 719.53 961.16 852.9"/>
+        <polygon class="cls-4" points="826.54 878.33 451.12 878.33 510.52 926.8 766.44 928.49 826.54 878.33"/>
+        <path class="cls-7" d="M1011.76,274.88c.03-16.98-.18-34-.66-51.06-236.74-93.1-512.66-92.8-749.08.76-.21,16.8-.17,33.57.09,50.3,235.52-98.36,514.14-98.35,749.65,0Z"/>
+      </g>
+    </g>
+  </g>
+</svg>

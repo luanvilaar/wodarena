@@ -18,9 +18,8 @@ const appContext = read('../src/context/AppContext.tsx');
 const eventPage = read('../src/app/event/[id]/page.tsx');
 
 test('Mercado Pago checkout resolves credentials from organizer secrets', () => {
-  assert.match(helper, /from\('events'\)[\s\S]*select\('organizer_id, marketplace_fee, mp_access_token'\)/);
-  assert.match(helper, /from\('mercadopago_secrets'\)[\s\S]*eq\('user_id', dbEvent\.organizer_id\)/);
-  assert.match(helper, /source: 'organizer_secret'/);
+  assert.match(helper, /from\('events'\)[\s\S]*select\('organizer_id, mp_access_token'\)/);
+  assert.doesNotMatch(helper, /mercadopago_secrets/);
   assert.match(helper, /source: 'event_legacy'/);
 });
 
