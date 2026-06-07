@@ -69,13 +69,15 @@ const resolveCheckoutPublicKey = async (eventId: string, eventPublicKey?: string
     const data: CheckoutConfigResponse = await response.json();
     if (response.ok && data.publicKey) {
       return data.publicKey;
+    } else {
+      console.error("[resolveCheckoutPublicKey] Erro ao obter Public Key do servidor:", data);
     }
   } catch (err) {
-    console.warn("[resolveCheckoutPublicKey] Erro ao buscar do servidor, usando fallback:", err);
+    console.error("[resolveCheckoutPublicKey] Erro ao buscar do servidor:", err);
   }
 
   if (eventPublicKey) return eventPublicKey;
-  throw new Error('Conta Mercado Pago do evento não configurada.');
+  throw new Error('O pagamento por cartão de crédito está temporariamente indisponível para este evento. Por favor, tente realizar o pagamento via Pix ou entre em contato com os organizadores.');
 };
 
 const getCheckoutErrorMessage = async (response: Response, fallback: string) => {

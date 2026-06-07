@@ -12,17 +12,25 @@ type MercadoPagoPublicEventRow = {
   mp_public_key: string | null;
 };
 
+type MercadoPagoAccountRow = {
+  public_key: string | null;
+};
+
+type MercadoPagoSecretRow = {
+  access_token: string | null;
+};
+
 export type MercadoPagoCheckoutConfig = {
   accessToken: string;
   marketplaceFee: number;
   organizerId: string;
-  source: 'event_legacy';
+  source: 'organizer_secret' | 'event_legacy';
 };
 
 export type MercadoPagoPublicConfig = {
   publicKey: string;
   organizerId: string;
-  source: 'event_legacy';
+  source: 'organizer_account' | 'event_legacy';
 };
 
 export class MercadoPagoConfigError extends Error {
@@ -66,6 +74,25 @@ export const resolveMercadoPagoCheckoutConfig = async (eventId: string): Promise
     throw new MercadoPagoConfigError('Evento não encontrado para processar pagamento.', 404);
   }
 
+  const { data: mpSecret, error: secretError } = await supabaseAdmin
+    .from('mercadopago_secrets')
+    .select('access_token')
+    .eq('user_id', dbEvent.organizer_id)
+    .maybeSingle<MercadoPagoSecretRow>();
+
+  if (secretError) {
+    console.error('[MercadoPago Config] Erro ao buscar credenciais privadas do organizador:', secretError);
+  }
+
+  if (mpSecret?.access_token) {
+    return {
+      accessToken: mpSecret.access_token,
+      marketplaceFee: 0,
+      organizerId: dbEvent.organizer_id,
+      source: 'organizer_secret'
+    };
+  }
+
   if (dbEvent.mp_access_token) {
     return {
       accessToken: dbEvent.mp_access_token,
@@ -97,6 +124,25 @@ export const resolveMercadoPagoPublicConfig = async (eventId: string): Promise<M
   if (eventError || !dbEvent) {
     console.error('[MercadoPago Public Config] Evento não encontrado ou erro ao buscar public key:', eventError);
     throw new MercadoPagoConfigError('Evento não encontrado para carregar checkout.', 404);
+  }
+
+  const { data: mpAccount, error: accountError } = await supabaseAdmin
+    .from('mercadopago_accounts')
+    .select('public_key')
+    .eq('user_id', dbEvent.organizer_id)
+    .eq('status', 'connected')
+    .maybeSingle<MercadoPagoAccountRow>();
+
+  if (accountError) {
+    console.error('[MercadoPago Public Config] Erro ao buscar conta pública do organizador:', accountError);
+  }
+
+  if (mpAccount?.public_key) {
+    return {
+      publicKey: mpAccount.public_key,
+      organizerId: dbEvent.organizer_id,
+      source: 'organizer_account'
+    };
   }
 
   if (dbEvent.mp_public_key) {

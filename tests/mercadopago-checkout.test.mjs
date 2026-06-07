@@ -19,8 +19,8 @@ const eventPage = read('../src/app/event/[id]/page.tsx');
 
 test('Mercado Pago checkout resolves credentials from organizer secrets', () => {
   assert.match(helper, /from\('events'\)[\s\S]*select\('organizer_id, mp_access_token'\)/);
-  assert.doesNotMatch(helper, /mercadopago_secrets/);
-  assert.match(helper, /source: 'event_legacy'/);
+  assert.match(helper, /mercadopago_secrets/);
+  assert.match(helper, /source: 'organizer_secret'/);
 });
 
 test('event payment routes use the centralized Mercado Pago credential resolver', () => {

@@ -89,12 +89,15 @@ export default function CardPaymentModal({
       if (response.ok) {
         const data = await response.json();
         if (data.publicKey) return data.publicKey;
+      } else {
+        const errData = await response.json().catch(() => ({}));
+        console.error("[CardPaymentModal] Erro do servidor ao obter Public Key:", errData);
       }
     } catch (err) {
-      console.warn("[CardPaymentModal] Erro ao buscar Public Key do servidor:", err);
+      console.error("[CardPaymentModal] Erro de rede ao buscar Public Key:", err);
     }
     if (eventPublicKey) return eventPublicKey;
-    throw new Error('Conta Mercado Pago do organizador do evento não configurada.');
+    throw new Error('O pagamento por cartão de crédito está temporariamente indisponível para este evento. Por favor, tente realizar o pagamento via Pix ou entre em contato com os organizadores.');
   };
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
