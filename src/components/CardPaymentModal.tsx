@@ -52,6 +52,8 @@ export default function CardPaymentModal({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
 
+  const activeTotalPaid = registration.totalPaid > 0 && registration.totalPaid < 1.00 ? 1.00 : registration.totalPaid;
+
   // Formata número do cartão: 0000 0000 0000 0000
   const handleCardNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.replace(/\D/g, '');
@@ -198,7 +200,7 @@ export default function CardPaymentModal({
             ticketType: registration.ticketType,
             ticketPrice: registration.ticketPrice,
             quantity: registration.quantity,
-            totalPaid: registration.totalPaid,
+            totalPaid: activeTotalPaid,
             couponCode: registration.couponCode
           },
           athleteProfile: {
@@ -252,7 +254,7 @@ export default function CardPaymentModal({
     } finally {
       setIsProcessing(false);
     }
-  }, [cardNumber, cardholderName, expirationDate, securityCode, cpf, event, registration, athlete, onSuccess]);
+  }, [cardNumber, cardholderName, expirationDate, securityCode, cpf, event, registration, athlete, onSuccess, activeTotalPaid]);
 
   if (!isOpen) return null;
 
@@ -306,7 +308,7 @@ export default function CardPaymentModal({
               </div>
               <div className="flex justify-between border-t border-neutral-800/80 pt-1.5">
                 <span className="text-neutral-400">Total a pagar:</span>
-                <span className="font-bold text-primary font-number">R$ {registration.totalPaid.toFixed(2)}</span>
+                <span className="font-bold text-primary font-number">R$ {activeTotalPaid.toFixed(2)}</span>
               </div>
             </div>
 

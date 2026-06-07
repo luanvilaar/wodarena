@@ -25,20 +25,35 @@ const updateRegistrationPayment = async (
     paymentId?: string | number;
     statusDetail?: string;
     errorMessage?: string;
+    totalPaid?: number;
   }
 ) => {
   if (!registrationId) return;
 
+  const updateFields: {
+    payment_status: string;
+    payment_method: string;
+    payment_id: string | null;
+    payment_status_detail: string | null;
+    payment_error_message: string | null;
+    updated_at: string;
+    total_paid?: number;
+  } = {
+    payment_status: payload.paymentStatus,
+    payment_method: 'credit_card',
+    payment_id: payload.paymentId ? String(payload.paymentId) : null,
+    payment_status_detail: payload.statusDetail || null,
+    payment_error_message: payload.errorMessage || null,
+    updated_at: new Date().toISOString()
+  };
+
+  if (payload.totalPaid !== undefined) {
+    updateFields.total_paid = payload.totalPaid;
+  }
+
   const { error } = await supabaseAdmin
     .from('registrations')
-    .update({
-      payment_status: payload.paymentStatus,
-      payment_method: 'credit_card',
-      payment_id: payload.paymentId ? String(payload.paymentId) : null,
-      payment_status_detail: payload.statusDetail || null,
-      payment_error_message: payload.errorMessage || null,
-      updated_at: new Date().toISOString()
-    })
+    .update(updateFields)
     .eq('id', registrationId);
 
   if (error) {
@@ -71,14 +86,19 @@ export async function POST(request: Request) {
     const origin = request.headers.get('origin') || new URL(request.url).origin;
     const isLocalhost = origin.includes('localhost') || origin.includes('127.0.0.1');
 
+    let transactionAmount = Number(registrationData.totalPaid);
+    if (transactionAmount > 0 && transactionAmount < 1.00) {
+      transactionAmount = 1.00;
+    }
+
     const paymentPayload = {
       token: token,
       installments: Number(installments || 1),
-      transaction_amount: Number(registrationData.totalPaid),
+      transaction_amount: transactionAmount,
       payment_method_id: payment_method_id,
       description: `Inscrição: ${registrationData.ticketType} - WODArena`,
       statement_descriptor: 'WODARENA',
-      application_fee: getMercadoPagoApplicationFee(Number(registrationData.totalPaid), checkoutConfig.marketplaceFee),
+      application_fee: getMercadoPagoApplicationFee(transactionAmount, checkoutConfig.marketplaceFee),
       payer: {
         email: athleteProfile.email || registrationData.athleteEmail || 'atleta@wodarena.com',
         first_name: firstName,
@@ -117,7 +137,8 @@ export async function POST(request: Request) {
       await updateRegistrationPayment(registrationData.id, {
         paymentStatus: 'payment_failed',
         statusDetail,
-        errorMessage: 'Erro ao processar cobrança do cartão.'
+        errorMessage: 'Erro ao processar cobrança do cartão.',
+        totalPaid: transactionAmount
       });
       return NextResponse.json({
         error: 'Erro ao processar cobrança do cartão.',
@@ -131,7 +152,8 @@ export async function POST(request: Request) {
       paymentStatus,
       paymentId: paymentData.id,
       statusDetail: paymentData.status_detail,
-      errorMessage: paymentStatus === 'payment_failed' ? 'Pagamento não processado pelo cartão.' : undefined
+      errorMessage: paymentStatus === 'payment_failed' ? 'Pagamento não processado pelo cartão.' : undefined,
+      totalPaid: transactionAmount
     });
 
     return NextResponse.json({

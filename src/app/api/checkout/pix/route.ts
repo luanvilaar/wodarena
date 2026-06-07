@@ -38,11 +38,16 @@ export async function POST(request: Request) {
     const origin = request.headers.get('origin') || new URL(request.url).origin;
     const isLocalhost = origin.includes('localhost') || origin.includes('127.0.0.1');
 
+    let transactionAmount = Number(registrationData.totalPaid);
+    if (transactionAmount > 0 && transactionAmount < 1.00) {
+      transactionAmount = 1.00;
+    }
+
     const paymentPayload = {
-      transaction_amount: Number(registrationData.totalPaid),
+      transaction_amount: transactionAmount,
       description: `Inscrição: ${registrationData.ticketType} - WODArena`,
       payment_method_id: 'pix',
-      application_fee: getMercadoPagoApplicationFee(Number(registrationData.totalPaid), checkoutConfig.marketplaceFee),
+      application_fee: getMercadoPagoApplicationFee(transactionAmount, checkoutConfig.marketplaceFee),
       payer: {
         email: athleteProfile.email || registrationData.athleteEmail || 'atleta@wodarena.com',
         first_name: firstName,
@@ -96,6 +101,7 @@ export async function POST(request: Request) {
         payment_id: paymentData.id ? String(paymentData.id) : null,
         payment_status_detail: paymentData.status_detail || null,
         payment_error_message: null,
+        total_paid: transactionAmount,
         updated_at: new Date().toISOString()
       })
       .eq('id', registrationData.id);

@@ -10,11 +10,12 @@ import { supabase } from '@/lib/supabase';
 import { BrandLogo } from '@/components/BrandLogo';
 import { RegistrationVoucher } from '@/components/RegistrationVoucher';
 import CardPaymentModal from '@/components/CardPaymentModal';
+import PixPaymentModal from '@/components/PixPaymentModal';
 import {
   LayoutDashboard, Calendar, Trophy,
   ClipboardCheck, LogIn, LogOut, DollarSign, Users, Ticket, Settings,
   Upload, X, Trash2, Plus, ShieldAlert, Pencil, Copy, GripVertical, ArrowDown, ArrowUp, Library, ReceiptText, Mail, CreditCard,
-  Lock
+  Lock, QrCode
 } from 'lucide-react';
 
 const InstagramIcon = ({ className = 'h-3.5 w-3.5' }: { className?: string }) => (
@@ -151,8 +152,9 @@ export default function AdminPage() {
   const [manualAccessToken, setManualAccessToken] = useState('');
   const [savingManualMp, setSavingManualMp] = useState(false);
 
-  // Estados para re-tentativa de pagamento por cartão
+  // Estados para re-tentativa de pagamento por cartão e Pix
   const [payingRegistration, setPayingRegistration] = useState<{ reg: Registration; event: Event; athlete: Athlete } | null>(null);
+  const [payingPixRegistration, setPayingPixRegistration] = useState<{ reg: Registration; event: Event; athlete: Athlete } | null>(null);
 
   const handlePaymentSuccess = async (status: string) => {
     await refreshRegistrations();
@@ -161,6 +163,15 @@ export default function AdminPage() {
       tone: 'success'
     });
     setPayingRegistration(null);
+  };
+
+  const handlePixPaymentSuccess = async (status: string) => {
+    await refreshRegistrations();
+    setAdminNotice({
+      text: 'Pagamento via Pix aprovado com sucesso!',
+      tone: 'success'
+    });
+    setPayingPixRegistration(null);
   };
 
   // Estados para aba de Segurança
@@ -2275,20 +2286,36 @@ export default function AdminPage() {
                         </div>
                         <div className="flex flex-col sm:flex-row lg:flex-col gap-2 lg:min-w-44">
                           {(reg.paymentStatus === 'payment_failed' || reg.paymentStatus === 'payment_pending') && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const athlete = getRegistrationAthlete(reg);
-                                const event = getRegistrationEvent(reg);
-                                if (event) {
-                                  setPayingRegistration({ reg, event, athlete });
-                                }
-                              }}
-                              className="flex min-h-10 items-center justify-center gap-1.5 rounded-md bg-primary px-4 py-2 text-xs font-bold uppercase tracking-wider text-ink transition-colors hover:bg-primary-hover"
-                            >
-                              <CreditCard className="h-3.5 w-3.5" aria-hidden="true" />
-                              <span>Pagar com Cartão</span>
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const athlete = getRegistrationAthlete(reg);
+                                  const event = getRegistrationEvent(reg);
+                                  if (event) {
+                                    setPayingPixRegistration({ reg, event, athlete });
+                                  }
+                                }}
+                                className="flex min-h-10 items-center justify-center gap-1.5 rounded-md bg-trading-up hover:bg-trading-up/90 px-4 py-2 text-xs font-bold uppercase tracking-wider text-ink transition-colors"
+                              >
+                                <QrCode className="h-3.5 w-3.5" aria-hidden="true" />
+                                <span>Pagar com Pix</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const athlete = getRegistrationAthlete(reg);
+                                  const event = getRegistrationEvent(reg);
+                                  if (event) {
+                                    setPayingRegistration({ reg, event, athlete });
+                                  }
+                                }}
+                                className="flex min-h-10 items-center justify-center gap-1.5 rounded-md bg-primary px-4 py-2 text-xs font-bold uppercase tracking-wider text-ink transition-colors hover:bg-primary-hover"
+                              >
+                                <CreditCard className="h-3.5 w-3.5" aria-hidden="true" />
+                                <span>Pagar com Cartão</span>
+                              </button>
+                            </>
                           )}
                           <button
                             type="button"
@@ -2334,6 +2361,17 @@ export default function AdminPage() {
             athlete={payingRegistration.athlete}
             event={payingRegistration.event}
             onSuccess={handlePaymentSuccess}
+          />
+        )}
+
+        {payingPixRegistration && (
+          <PixPaymentModal
+            isOpen={payingPixRegistration !== null}
+            onClose={() => setPayingPixRegistration(null)}
+            registration={payingPixRegistration.reg}
+            athlete={payingPixRegistration.athlete}
+            event={payingPixRegistration.event}
+            onSuccess={handlePixPaymentSuccess}
           />
         )}
 

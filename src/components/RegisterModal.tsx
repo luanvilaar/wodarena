@@ -229,7 +229,8 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
   };
 
   const ticketPrice = getPrice(selectedDivision);
-  const totalPaid = Math.max(0, ticketPrice - discountApplied);
+  const baseTotalPaid = Math.max(0, ticketPrice - discountApplied);
+  const totalPaid = baseTotalPaid > 0 && baseTotalPaid < 1.00 ? 1.00 : baseTotalPaid;
   const isTeamCategory = participantCount > 1;
   const primaryParticipant = visibleParticipants[0] || createEmptyParticipant();
   const isFitnessRacing = event.eventType === 'fitness_racing';
