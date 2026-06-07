@@ -26,6 +26,14 @@ test('request password reset sends a one-time link only for athletes and manager
   assert.match(requestRoute, /\/admin\?reset_token=/);
 });
 
+test('password reset link uses the public production app URL', () => {
+  assert.match(requestRoute, /const getPublicAppUrl = \(\) =>/);
+  assert.match(requestRoute, /process\.env\.NEXT_PUBLIC_APP_URL/);
+  assert.match(requestRoute, /'https:\/\/wodarena\.com\.br'/);
+  assert.match(requestRoute, /const resetUrl = `\$\{getPublicAppUrl\(\)\}\/admin\?reset_token=\$\{token\}`/);
+  assert.doesNotMatch(requestRoute, /new URL\(request\.url\)\.origin/);
+});
+
 test('reset password endpoint validates token and updates users secret', () => {
   assert.match(resetRoute, /password_reset_tokens/);
   assert.match(resetRoute, /Link de recuperação inválido ou expirado/);

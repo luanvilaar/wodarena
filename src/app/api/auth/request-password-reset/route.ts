@@ -9,6 +9,17 @@ const RESET_EXPIRES_MINUTES = 45;
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
 const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
+const getPublicAppUrl = () => {
+  const configuredUrl = process.env.NEXT_PUBLIC_APP_URL
+    || process.env.NEXT_PUBLIC_SITE_URL
+    || process.env.APP_URL
+    || process.env.SITE_URL
+    || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : '')
+    || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '')
+    || 'https://wodarena.com.br';
+
+  return configuredUrl.replace(/\/$/, '');
+};
 
 export async function POST(request: Request) {
   try {
@@ -67,8 +78,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Erro ao gerar token de recuperação.' }, { status: 500 });
     }
 
-    const origin = new URL(request.url).origin;
-    const resetUrl = `${origin}/admin?reset_token=${token}`;
+    const resetUrl = `${getPublicAppUrl()}/admin?reset_token=${token}`;
     const emailResult = await sendPasswordResetEmail({
       toEmail: normalizedEmail,
       userName: user.name || 'WODArena',
