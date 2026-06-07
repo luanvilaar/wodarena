@@ -33,12 +33,13 @@ export default function OwnerPage() {
   // 1. Validar se o usuário atual é o proprietário (role: 'owner')
   const isOwner = currentUser && currentUser.role === 'owner';
 
-  // 2. Estatísticas Consolidadas (Taxa Dinâmica por Evento)
+  // 2. Estatísticas Consolidadas (Taxa Dinâmica por Evento - Apenas Inscrições Pagas)
   const stats = useMemo(() => {
-    const totalVolume = registrations.reduce((sum, r) => sum + r.totalPaid, 0);
+    const approvedRegistrations = registrations.filter(r => r.paymentStatus === 'payment_approved');
+    const totalVolume = approvedRegistrations.reduce((sum, r) => sum + r.totalPaid, 0);
 
-    // Calcula a receita da comissão dinamicamente com base nas taxas de cada evento
-    const platformRevenue = registrations.reduce((sum, r) => {
+    // Calcula a comissão total acumulada por fora para inscrições pagas
+    const platformRevenue = approvedRegistrations.reduce((sum, r) => {
       const event = events.find(e => e.id === r.eventId);
       const fee = event && event.marketplace_fee !== undefined && event.marketplace_fee !== null
         ? Number(event.marketplace_fee)
@@ -57,7 +58,7 @@ export default function OwnerPage() {
     };
   }, [registrations, users, events]);
 
-  // 3. Compilar faturamento e dados por Gestor
+  // 3. Compilar faturamento e dados por Gestor (Apenas Inscrições Pagas)
   const managersList = useMemo(() => {
     const managers = users.filter(u => u.role === 'manager');
 
@@ -68,12 +69,14 @@ export default function OwnerPage() {
 
       // Inscrições dos eventos desse gestor
       const managerRegistrations = registrations.filter(r => eventIds.includes(r.eventId));
+      const approvedRegs = managerRegistrations.filter(r => r.paymentStatus === 'payment_approved');
+      const pendingRegs = managerRegistrations.filter(r => r.paymentStatus !== 'payment_approved');
 
-      // Faturamento Bruto
-      const grossRevenue = managerRegistrations.reduce((sum, r) => sum + r.totalPaid, 0);
+      // Faturamento Bruto (Aprovado)
+      const grossRevenue = approvedRegs.reduce((sum, r) => sum + r.totalPaid, 0);
 
-      // Comissão da Plataforma calculada dinamicamente por evento
-      const platformFee = managerRegistrations.reduce((sum, r) => {
+      // Comissão da Plataforma calculada dinamicamente por evento para inscrições pagas
+      const platformFee = approvedRegs.reduce((sum, r) => {
         const event = events.find(e => e.id === r.eventId);
         const fee = event && event.marketplace_fee !== undefined && event.marketplace_fee !== null
           ? Number(event.marketplace_fee)
@@ -81,7 +84,7 @@ export default function OwnerPage() {
         return sum + fee;
       }, 0);
 
-      // Repasse Líquido (Faturamento Bruto - Comissão da Plataforma)
+      // Repasse Líquido Estimado para o Gestor (Faturamento Bruto - Comissão)
       const netRevenue = Math.max(0, grossRevenue - platformFee);
 
       return {
@@ -89,10 +92,43 @@ export default function OwnerPage() {
         eventsCount: managerEvents.length,
         grossRevenue,
         netRevenue,
-        platformFee
+        platformFee,
+        paidCount: approvedRegs.length,
+        unpaidCount: pendingRegs.length
       };
     });
   }, [users, events, registrations]);
+
+  // 4. Detalhamento financeiro por evento para cobrança manual
+  const eventsFinanceList = useMemo(() => {
+    return events.map(event => {
+      // Filtra inscrições deste evento
+      const eventRegs = registrations.filter(r => r.eventId === event.id);
+      const approvedRegs = eventRegs.filter(r => r.paymentStatus === 'payment_approved');
+      const unpaidRegs = eventRegs.filter(r => r.paymentStatus !== 'payment_approved');
+
+      const grossRevenue = approvedRegs.reduce((sum, r) => sum + r.totalPaid, 0);
+
+      const fee = event.marketplace_fee !== undefined && event.marketplace_fee !== null
+        ? Number(event.marketplace_fee)
+        : 10;
+
+      const totalFeeToCollect = approvedRegs.length * fee;
+
+      // Encontra o gestor do evento
+      const manager = users.find(u => u.id === event.organizerId);
+
+      return {
+        event,
+        managerName: manager?.name || 'Gestor não encontrado',
+        paidCount: approvedRegs.length,
+        unpaidCount: unpaidRegs.length,
+        grossRevenue,
+        feeUnit: fee,
+        totalFeeToCollect
+      };
+    });
+  }, [events, registrations, users]);
 
   // Seletor de Evento para Leaderboard
   const [selectedEventIdLead, setSelectedEventIdLead] = useState(events[0]?.id || '');
@@ -291,7 +327,7 @@ export default function OwnerPage() {
                   {/* Faturamento de Taxas do Site */}
                   <div className="bg-card border border-primary/20 rounded-xl p-5 flex items-center justify-between">
                     <div className="space-y-1">
-                      <p className="text-[10px] uppercase font-bold text-primary tracking-wider">Faturamento do Site (10%)</p>
+                      <p className="text-[10px] uppercase font-bold text-primary tracking-wider">Taxa a Cobrar (Por Fora)</p>
                       <h4 className="text-2xl font-bold font-number text-primary">R$ {stats.platformRevenue.toFixed(2)}</h4>
                     </div>
                     <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg text-primary">
@@ -302,7 +338,7 @@ export default function OwnerPage() {
                   {/* Volume Bruto Processado */}
                   <div className="bg-card border border-card-border rounded-xl p-5 flex items-center justify-between">
                     <div className="space-y-1">
-                      <p className="text-[10px] uppercase font-bold text-muted tracking-wider">Volume Total Processado</p>
+                      <p className="text-[10px] uppercase font-bold text-muted tracking-wider">Volume Total Pago</p>
                       <h4 className="text-2xl font-bold font-number text-white">R$ {stats.totalVolume.toFixed(2)}</h4>
                     </div>
                     <div className="p-3 bg-dark-gray border border-card-border rounded-lg text-white">
@@ -334,16 +370,62 @@ export default function OwnerPage() {
 
                 </div>
 
+                {/* Detalhamento por Evento */}
                 <div className="bg-card border border-card-border rounded-xl p-6 space-y-4">
-                  <h4 className="text-sm font-bold text-white uppercase tracking-wider">Modelo Comercial WODArena (Mercado Pago Split)</h4>
-                  <p className="text-xs text-muted leading-relaxed font-normal">
-                    A WODArena atua com base no modelo de divisão direta de valores (Split de Pagamentos) via gateway de pagamento conectado:
-                  </p>
-                  <ul className="list-disc list-inside text-xs text-muted space-y-1.5 pt-2 border-t border-card-border/50">
-                    <li><strong className="text-white">Taxa de Plataforma (Split)</strong>: Valor fixo em reais debitado automaticamente a cada inscrição paga (padrão de R$ 10,00 ou conforme personalizado por evento).</li>
-                    <li><strong className="text-white">Repasse Imediato via Marketplace</strong>: A transação é enviada diretamente à conta conectada do Gestor do evento, caindo na sua carteira deduzida a comissão da plataforma em tempo real.</li>
-                    <li><strong className="text-white">Autonomia de Contas</strong>: O Gestor conecta seu próprio Mercado Pago para operar de forma transparente, eliminando repasses manuais e centralizados.</li>
-                  </ul>
+                  <div className="border-b border-card-border pb-3">
+                    <h4 className="text-sm font-bold text-white uppercase tracking-wider">Detalhamento Financeiro por Evento</h4>
+                    <p className="text-[10px] text-muted uppercase tracking-wider font-semibold mt-1">Valores informativos para cobrança manual de comissões por fora</p>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse min-w-[700px]">
+                      <thead>
+                        <tr className="border-b border-card-border text-[9px] uppercase tracking-widest text-muted">
+                          <th className="py-3 px-3">Evento</th>
+                          <th className="py-3 px-3">Organizador / Gestor</th>
+                          <th className="py-3 px-3 text-center">Status</th>
+                          <th className="py-3 px-3 text-center">Inscritos Pagos</th>
+                          <th className="py-3 px-3 text-center">Não Pagos</th>
+                          <th className="py-3 px-3 text-right">Faturamento Evento</th>
+                          <th className="py-3 px-3 text-right">Taxa Unitária</th>
+                          <th className="py-3 px-3 text-right text-primary">Comissão a Cobrar</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {eventsFinanceList.map(({ event, managerName, paidCount, unpaidCount, grossRevenue, feeUnit, totalFeeToCollect }) => (
+                          <tr key={event.id} className="border-b border-card-border/50 text-xs hover:bg-dark-gray/10">
+                            <td className="py-3 px-3 flex items-center gap-3">
+                              <div className="w-8 h-8 rounded bg-dark-gray border border-card-border p-0.5 overflow-hidden flex items-center justify-center shrink-0">
+                                {event.logoUrl ? (
+                                  <Image src={event.logoUrl} alt={`Logo do evento ${event.name}`} width={32} height={32} unoptimized className="w-full h-full object-cover rounded" />
+                                ) : (
+                                  <div className="flex h-full w-full items-center justify-center bg-primary/10 text-[10px] font-black uppercase text-primary">
+                                    {event.name.substring(0, 2)}
+                                  </div>
+                                )}
+                              </div>
+                              <span className="font-bold text-white uppercase">{event.name}</span>
+                            </td>
+                            <td className="py-3 px-3 text-muted font-medium">{managerName}</td>
+                            <td className="py-3 px-3 text-center">
+                              {event.status === 'live' ? (
+                                <span className="px-2 py-0.5 bg-primary/10 text-primary text-[9px] font-bold uppercase rounded">Live</span>
+                              ) : event.status === 'upcoming' ? (
+                                <span className="px-2 py-0.5 bg-primary/10 text-primary text-[9px] font-bold uppercase rounded">Upcoming</span>
+                              ) : (
+                                <span className="px-2 py-0.5 bg-dark-gray text-muted text-[9px] font-bold uppercase rounded">Finished</span>
+                              )}
+                            </td>
+                            <td className="py-3 px-3 text-center font-bold text-white font-number">{paidCount}</td>
+                            <td className="py-3 px-3 text-center font-semibold text-red-400 font-number">{unpaidCount}</td>
+                            <td className="py-3 px-3 text-right font-bold text-white font-number">R$ {grossRevenue.toFixed(2)}</td>
+                            <td className="py-3 px-3 text-right font-semibold text-muted font-number">R$ {feeUnit.toFixed(2)}</td>
+                            <td className="py-3 px-3 text-right font-bold text-primary font-number">R$ {totalFeeToCollect.toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             )}
@@ -454,9 +536,10 @@ export default function OwnerPage() {
                           <th className="py-3 px-3">Gestor / E-mail</th>
                           <th className="py-3 px-3">Organização</th>
                           <th className="py-3 px-3 text-center">Eventos</th>
-                          <th className="py-3 px-3 text-right">Volume Bruto</th>
-                          <th className="py-3 px-3 text-right text-primary">Comissão (10%)</th>
-                          <th className="py-3 px-3 text-right text-primary">Repasse Líquido (90%)</th>
+                          <th className="py-3 px-3 text-center">Inscritos (Pagos / Não Pagos)</th>
+                          <th className="py-3 px-3 text-right">Volume Pago</th>
+                          <th className="py-3 px-3 text-right text-primary">Taxa Devida (Manual)</th>
+                          <th className="py-3 px-3 text-right text-primary">Saldo Estimado Gestor</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -468,6 +551,11 @@ export default function OwnerPage() {
                             </td>
                             <td className="py-3 px-3 text-muted font-medium">{item.manager.organization || 'Não informada'}</td>
                             <td className="py-3 px-3 text-center font-bold font-number text-white">{item.eventsCount}</td>
+                            <td className="py-3 px-3 text-center font-bold font-number text-white">
+                              <span className="text-primary">{item.paidCount}</span>
+                              <span className="text-muted mx-1">/</span>
+                              <span className="text-red-400">{item.unpaidCount}</span>
+                            </td>
                             <td className="py-3 px-3 text-right font-bold font-number text-white">R$ {item.grossRevenue.toFixed(2)}</td>
                             <td className="py-3 px-3 text-right font-bold font-number text-primary">R$ {item.platformFee.toFixed(2)}</td>
                             <td className="py-3 px-3 text-right font-bold font-number text-primary">R$ {item.netRevenue.toFixed(2)}</td>

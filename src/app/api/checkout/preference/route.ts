@@ -62,7 +62,6 @@ export async function POST(request: Request) {
         pending: `${origin}/event/${registrationData.eventId}?payment=pending`
       },
       metadata: metadataPayload,
-      marketplace_fee: checkoutConfig.marketplaceFee,
       ...(isLocalhost ? {} : { 
         auto_return: 'approved',
         notification_url: `${origin}/api/webhooks/mercadopago?event_id=${registrationData.eventId}` 

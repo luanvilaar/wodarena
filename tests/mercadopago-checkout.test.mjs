@@ -45,9 +45,9 @@ test('checkout surfaces backend payment errors instead of generic alerts', () =>
   assert.match(registerModal, /alert\(err instanceof Error \? err\.message :/);
 });
 
-test('transparent checkout sends marketplace application fee and payer CPF', () => {
-  assert.match(pixRoute, /application_fee: getMercadoPagoApplicationFee/);
-  assert.match(cardRoute, /application_fee: getMercadoPagoApplicationFee/);
+test('transparent checkout sends payer CPF and does not send application fee', () => {
+  assert.doesNotMatch(pixRoute, /application_fee:/);
+  assert.doesNotMatch(cardRoute, /application_fee:/);
   assert.match(cardRoute, /identification:[\s\S]*type: 'CPF'[\s\S]*number: cleanCpf/);
   assert.match(cardRoute, /payer_cpf: cleanCpf/);
   assert.match(pixRoute, /payer_cpf: cleanCpf/);

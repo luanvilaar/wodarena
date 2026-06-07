@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import {
-  getMercadoPagoApplicationFee,
   MercadoPagoConfigError,
   resolveMercadoPagoCheckoutConfig
 } from '@/lib/mercadopagoServer';
@@ -98,7 +97,6 @@ export async function POST(request: Request) {
       payment_method_id: payment_method_id,
       description: `Inscrição: ${registrationData.ticketType} - WODArena`,
       statement_descriptor: 'WODARENA',
-      application_fee: getMercadoPagoApplicationFee(transactionAmount, checkoutConfig.marketplaceFee),
       payer: {
         email: athleteProfile.email || registrationData.athleteEmail || 'atleta@wodarena.com',
         first_name: firstName,
