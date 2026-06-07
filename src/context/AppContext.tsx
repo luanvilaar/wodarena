@@ -37,6 +37,7 @@ interface AppContextType {
   addDivision: (eventId: string, division: Omit<Division, 'id'>) => void;
   updateDivision: (eventId: string, divisionId: string, updatedData: Partial<Division>) => Promise<void>;
   addWorkout: (eventId: string, workout: Omit<Workout, 'id'>) => void;
+  deleteEvent: (eventId: string) => Promise<void>;
   deleteDivision: (eventId: string, divisionId: string) => Promise<void>;
   deleteWorkout: (eventId: string, workoutId: string) => Promise<void>;
   registerTicket: (registration: RegistrationDraft, athleteProfile?: AthleteProfileDraft) => Registration;
@@ -765,6 +766,43 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Excluir Evento e limpar dados vinculados no estado local
+  const deleteEvent = async (eventId: string) => {
+    const eventToDelete = events.find(e => e.id === eventId);
+    if (!eventToDelete) return;
+
+    const divisionIds = eventToDelete.divisions.map(d => d.id);
+    const workoutIds = eventToDelete.workouts.map(w => w.id);
+    const athleteIds = athletes.filter(a => divisionIds.includes(a.divisionId)).map(a => a.id);
+
+    const previousEvents = events;
+    const previousAthletes = athletes;
+    const previousScores = scores;
+    const previousRegistrations = registrations;
+    const previousCoupons = coupons;
+
+    setEvents(prev => prev.filter(e => e.id !== eventId));
+    setAthletes(prev => prev.filter(a => !divisionIds.includes(a.divisionId)));
+    setRegistrations(prev => prev.filter(r => r.eventId !== eventId));
+    setCoupons(prev => prev.filter(c => c.eventId !== eventId));
+    setScores(prev => prev.filter(s => !athleteIds.includes(s.athleteId) && !workoutIds.includes(s.workoutId)));
+
+    const { error } = await supabase
+      .from('events')
+      .delete()
+      .eq('id', eventId);
+
+    if (error) {
+      setEvents(previousEvents);
+      setAthletes(previousAthletes);
+      setScores(previousScores);
+      setRegistrations(previousRegistrations);
+      setCoupons(previousCoupons);
+      console.error("Erro ao excluir evento no Supabase:", error);
+      throw error;
+    }
+  };
+
   // Excluir Prova/WOD e limpar resultados vinculados no estado local
   const deleteWorkout = async (eventId: string, workoutId: string) => {
     setEvents(prev => prev.map(e => {
@@ -1443,6 +1481,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         addDivision,
         updateDivision,
         addWorkout,
+        deleteEvent,
         deleteDivision,
         deleteWorkout,
         registerTicket,

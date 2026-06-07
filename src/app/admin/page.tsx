@@ -87,7 +87,7 @@ export default function AdminPage() {
   const {
     events, athletes, scores, registrations, coupons, currentUser,
     login, logout, addEvent, addDivision, updateDivision,
-    addWorkout, deleteDivision, deleteWorkout, submitScore, submitScoresBulk, updateEvent, getLeaderboard, registerTicket, saveCourseLayout, updateWorkout,
+    addWorkout, deleteEvent, deleteDivision, deleteWorkout, submitScore, submitScoresBulk, updateEvent, getLeaderboard, registerTicket, saveCourseLayout, updateWorkout,
     addCoupon, incrementCouponUsage, changePassword
   } = useApp();
 
@@ -508,6 +508,10 @@ export default function AdminPage() {
   const [selectedTeamForProfile, setSelectedTeamForProfile] = useState<Athlete | null>(null);
   const [selectedRegistrationVoucher, setSelectedRegistrationVoucher] = useState<{ registration: Registration; athlete: Athlete; event: Event } | null>(null);
   const [resendingRegistrationId, setResendingRegistrationId] = useState<string | null>(null);
+  const [eventPendingDeletion, setEventPendingDeletion] = useState<Event | null>(null);
+  const [deleteEventAcknowledged, setDeleteEventAcknowledged] = useState(false);
+  const [deleteEventConfirmation, setDeleteEventConfirmation] = useState('');
+  const [isDeletingEvent, setIsDeletingEvent] = useState(false);
 
   // Estados locais para filtros de inscrições
   const [regFilterCatId, setRegFilterCatId] = useState('');
@@ -567,6 +571,41 @@ export default function AdminPage() {
     if (!currentUser) return [];
     return events.filter(e => e.organizerId === currentUser.id);
   }, [events, currentUser]);
+
+  const closeDeleteEventDialog = () => {
+    if (isDeletingEvent) return;
+    setEventPendingDeletion(null);
+    setDeleteEventAcknowledged(false);
+    setDeleteEventConfirmation('');
+  };
+
+  const openDeleteEventDialog = (event: Event) => {
+    setEventPendingDeletion(event);
+    setDeleteEventAcknowledged(false);
+    setDeleteEventConfirmation('');
+  };
+
+  const handleDeleteEvent = async () => {
+    if (!eventPendingDeletion) return;
+
+    setIsDeletingEvent(true);
+    setAdminNotice(null);
+
+    try {
+      await deleteEvent(eventPendingDeletion.id);
+      setSelectedEventToManage(null);
+      setActiveTab('my-events');
+      setAdminNotice({ text: `Evento "${eventPendingDeletion.name}" excluído com sucesso.`, tone: 'success' });
+      setEventPendingDeletion(null);
+      setDeleteEventAcknowledged(false);
+      setDeleteEventConfirmation('');
+    } catch (err) {
+      console.error('Erro ao excluir evento:', err);
+      setAdminNotice({ text: 'Não foi possível excluir o evento. Tente novamente.', tone: 'error' });
+    } finally {
+      setIsDeletingEvent(false);
+    }
+  };
 
   // 4. Lógicas de Cálculo do Dashboard
   const dashboardStats = useMemo(() => {
@@ -6697,7 +6736,7 @@ export default function AdminPage() {
                               </div>
                             </div>
 
-                            <div className="flex items-center justify-between border-t border-card-border/30 pt-3">
+                            <div className="flex flex-col gap-3 border-t border-card-border/30 pt-3 sm:flex-row sm:items-center sm:justify-between">
                               <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border font-sans ${
                                 evt.status === 'live'
                                   ? 'border-trading-up bg-trading-up/10 text-trading-up'
@@ -6708,17 +6747,27 @@ export default function AdminPage() {
                                 {evt.status === 'live' ? 'Ao Vivo' : evt.status === 'finished' ? 'Finalizado' : 'Em Breve'}
                               </span>
 
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setSelectedEventToManage(evt);
-                                  initEventEditForm(evt);
-                                  setActiveEventTab('info');
-                                }}
-                                className="inline-flex min-h-9 items-center justify-center rounded bg-primary hover:bg-primary-hover px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-ink transition-colors font-sans"
-                              >
-                                Gerenciar Evento
-                              </button>
+                              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                                <button
+                                  type="button"
+                                  onClick={() => openDeleteEventDialog(evt)}
+                                  className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded border border-trading-down/50 bg-trading-down/10 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-trading-down transition-colors hover:border-trading-down hover:bg-trading-down/20 font-sans"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                                  Excluir
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedEventToManage(evt);
+                                    initEventEditForm(evt);
+                                    setActiveEventTab('info');
+                                  }}
+                                  className="inline-flex min-h-9 items-center justify-center rounded bg-primary hover:bg-primary-hover px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-ink transition-colors font-sans"
+                                >
+                                  Gerenciar Evento
+                                </button>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -7381,6 +7430,93 @@ export default function AdminPage() {
           </div>
         </div>
       </main>
+
+      {eventPendingDeletion && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="delete-event-title">
+          <div className="w-full max-w-lg rounded-xl border border-trading-down/40 bg-card p-6 text-white">
+            <div className="flex items-start justify-between gap-4 border-b border-card-border pb-4">
+              <div className="flex items-start gap-3">
+                <div className="rounded-lg border border-trading-down/40 bg-trading-down/10 p-2 text-trading-down">
+                  <ShieldAlert className="h-5 w-5" aria-hidden="true" />
+                </div>
+                <div>
+                  <h3 id="delete-event-title" className="text-base font-bold uppercase tracking-wider text-white font-sans">
+                    Excluir evento
+                  </h3>
+                  <p className="mt-1 text-xs text-muted">
+                    Esta ação remove o evento e todos os dados vinculados a ele.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={closeDeleteEventDialog}
+                disabled={isDeletingEvent}
+                className="text-muted transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label="Fechar confirmação de exclusão"
+              >
+                <X className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="space-y-4 py-5">
+              <div className="rounded-lg border border-card-border bg-background p-4">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted font-sans">Evento selecionado</p>
+                <p className="mt-1 break-words text-sm font-bold uppercase tracking-wider text-white">{eventPendingDeletion.name}</p>
+                <p className="mt-1 text-xs text-muted">{eventPendingDeletion.location} &middot; {eventPendingDeletion.date}</p>
+              </div>
+
+              <label className="flex items-start gap-3 rounded-lg border border-card-border bg-dark-gray/40 p-3 text-xs text-muted">
+                <input
+                  type="checkbox"
+                  checked={deleteEventAcknowledged}
+                  onChange={(e) => setDeleteEventAcknowledged(e.target.checked)}
+                  disabled={isDeletingEvent}
+                  className="mt-0.5 h-4 w-4 accent-primary"
+                />
+                <span>
+                  Confirmo que entendo que categorias, provas, inscrições, atletas e pontuações deste evento serão removidos.
+                </span>
+              </label>
+
+              <div>
+                <label htmlFor="delete-event-confirmation" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans">
+                  Digite o nome do evento para confirmar
+                </label>
+                <input
+                  id="delete-event-confirmation"
+                  type="text"
+                  value={deleteEventConfirmation}
+                  onChange={(e) => setDeleteEventConfirmation(e.target.value)}
+                  disabled={isDeletingEvent}
+                  className="w-full rounded-md border border-card-border bg-background px-4 py-2.5 text-sm text-white placeholder:text-muted-soft focus:border-trading-down/70 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                  placeholder={eventPendingDeletion.name}
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col-reverse gap-3 border-t border-card-border pt-4 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={closeDeleteEventDialog}
+                disabled={isDeletingEvent}
+                className="inline-flex min-h-10 items-center justify-center rounded-md border border-card-border bg-dark-gray px-4 py-2 text-xs font-bold uppercase tracking-wider text-muted transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50 font-sans"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteEvent}
+                disabled={isDeletingEvent || !deleteEventAcknowledged || deleteEventConfirmation.trim() !== eventPendingDeletion.name}
+                className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-trading-down bg-trading-down px-4 py-2 text-xs font-bold uppercase tracking-wider text-white transition-colors hover:bg-trading-down/80 disabled:cursor-not-allowed disabled:border-card-border disabled:bg-dark-gray disabled:text-muted font-sans"
+              >
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
+                {isDeletingEvent ? 'Excluindo...' : 'Excluir definitivamente'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {selectedRegistrationVoucher && (
         <RegistrationVoucher
