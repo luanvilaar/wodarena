@@ -218,7 +218,9 @@ export default function CardPaymentModal({
           token: cardToken.id,
           payment_method_id: paymentMethodId,
           installments: 1,
-          cpf
+          cpf,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          deviceId: (window as any).MP_DEVICE_SESSION_ID || undefined
         })
       });
 

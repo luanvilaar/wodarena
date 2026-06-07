@@ -49,7 +49,7 @@ const updateRegistrationPayment = async (
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { registrationData, athleteProfile, token, payment_method_id, installments, cpf } = body;
+    const { registrationData, athleteProfile, token, payment_method_id, installments, cpf, deviceId } = body;
 
     if (!registrationData || !athleteProfile || !token || !payment_method_id || !cpf) {
       return NextResponse.json({ error: 'Parâmetros inválidos.' }, { status: 400 });
@@ -102,7 +102,8 @@ export async function POST(request: Request) {
       headers: {
         'Authorization': `Bearer ${checkoutConfig.accessToken}`,
         'Content-Type': 'application/json',
-        'X-Idempotency-Key': `card-${registrationData.id}-${Date.now()}`
+        'X-Idempotency-Key': `card-${registrationData.id}-${Date.now()}`,
+        ...(deviceId ? { 'X-Meli-Session-Id': deviceId } : {})
       },
       body: JSON.stringify(paymentPayload)
     });
