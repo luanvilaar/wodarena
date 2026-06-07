@@ -63,6 +63,11 @@ export async function POST(request: Request) {
     const checkoutConfig = await resolveMercadoPagoCheckoutConfig(registrationData.eventId);
     console.log(`[MercadoPago Card API] Usando credenciais ${checkoutConfig.source} do organizador ${checkoutConfig.organizerId} para o evento ${registrationData.eventId}`);
 
+    const fullName = athleteProfile.name || registrationData.athleteName || 'Atleta WODArena';
+    const names = fullName.trim().split(/\s+/);
+    const firstName = names[0] || 'Atleta';
+    const lastName = names.slice(1).join(' ') || 'WODArena';
+
     const origin = request.headers.get('origin') || new URL(request.url).origin;
     const isLocalhost = origin.includes('localhost') || origin.includes('127.0.0.1');
 
@@ -74,6 +79,8 @@ export async function POST(request: Request) {
       application_fee: getMercadoPagoApplicationFee(Number(registrationData.totalPaid), checkoutConfig.marketplaceFee),
       payer: {
         email: athleteProfile.email || registrationData.athleteEmail || 'atleta@wodarena.com',
+        first_name: firstName,
+        last_name: lastName,
         identification: {
           type: 'CPF',
           number: cleanCpf
@@ -95,7 +102,7 @@ export async function POST(request: Request) {
       headers: {
         'Authorization': `Bearer ${checkoutConfig.accessToken}`,
         'Content-Type': 'application/json',
-        'X-Idempotency-Key': `card-${registrationData.id}`
+        'X-Idempotency-Key': `card-${registrationData.id}-${Date.now()}`
       },
       body: JSON.stringify(paymentPayload)
     });

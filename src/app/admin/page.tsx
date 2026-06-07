@@ -3,11 +3,13 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import Script from 'next/script';
 import { useApp } from '@/context/AppContext';
 import { supabase } from '@/lib/supabase';
 
 import { BrandLogo } from '@/components/BrandLogo';
 import { RegistrationVoucher } from '@/components/RegistrationVoucher';
+import CardPaymentModal from '@/components/CardPaymentModal';
 import {
   LayoutDashboard, Calendar, Trophy,
   ClipboardCheck, LogIn, LogOut, DollarSign, Users, Ticket, Settings,
@@ -148,6 +150,18 @@ export default function AdminPage() {
   const [manualPublicKey, setManualPublicKey] = useState('');
   const [manualAccessToken, setManualAccessToken] = useState('');
   const [savingManualMp, setSavingManualMp] = useState(false);
+
+  // Estados para re-tentativa de pagamento por cartão
+  const [payingRegistration, setPayingRegistration] = useState<{ reg: Registration; event: Event; athlete: Athlete } | null>(null);
+
+  const handlePaymentSuccess = async (status: string) => {
+    await refreshRegistrations();
+    setAdminNotice({
+      text: `Pagamento atualizado com sucesso! Status: ${status === 'approved' ? 'Aprovado' : 'Em análise'}.`,
+      tone: 'success'
+    });
+    setPayingRegistration(null);
+  };
 
   // Estados para aba de Segurança
   const [securityCurrentPassword, setSecurityCurrentPassword] = useState('');
@@ -2202,6 +2216,22 @@ export default function AdminPage() {
                           )}
                         </div>
                         <div className="flex flex-col sm:flex-row lg:flex-col gap-2 lg:min-w-44">
+                          {(reg.paymentStatus === 'payment_failed' || reg.paymentStatus === 'payment_pending') && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const athlete = getRegistrationAthlete(reg);
+                                const event = getRegistrationEvent(reg);
+                                if (event) {
+                                  setPayingRegistration({ reg, event, athlete });
+                                }
+                              }}
+                              className="flex min-h-10 items-center justify-center gap-1.5 rounded-md bg-primary px-4 py-2 text-xs font-bold uppercase tracking-wider text-ink transition-colors hover:bg-primary-hover"
+                            >
+                              <CreditCard className="h-3.5 w-3.5" aria-hidden="true" />
+                              <span>Pagar com Cartão</span>
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => handleOpenAthleteVoucher(reg)}
@@ -2237,6 +2267,22 @@ export default function AdminPage() {
             onClose={() => setSelectedRegistrationVoucher(null)}
           />
         )}
+
+        {payingRegistration && (
+          <CardPaymentModal
+            isOpen={payingRegistration !== null}
+            onClose={() => setPayingRegistration(null)}
+            registration={payingRegistration.reg}
+            athlete={payingRegistration.athlete}
+            event={payingRegistration.event}
+            onSuccess={handlePaymentSuccess}
+          />
+        )}
+
+        <Script
+          src="https://sdk.mercadopago.com/js/v2"
+          strategy="lazyOnload"
+        />
       </div>
     );
   }
