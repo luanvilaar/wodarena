@@ -9,6 +9,28 @@ export const metadata: Metadata = {
   title: "WODArena | Líder em Competições de Functional Fitness",
   description: "Gerencie e acompanhe rankings, eventos, cronogramas e inscrições de Functional Fitness e Cross Training em tempo real.",
   keywords: ["crossfit", "functional fitness", "leaderboard", "competição", "wodarena", "box games"],
+  openGraph: {
+    title: "WODArena | Líder em Competições de Functional Fitness",
+    description: "Gerencie e acompanhe rankings, eventos, cronogramas e inscrições de Functional Fitness e Cross Training em tempo real.",
+    url: "https://wodarena.com",
+    siteName: "WODArena",
+    locale: "pt_BR",
+    type: "website",
+    images: [
+      {
+        url: "/icon.svg",
+        width: 800,
+        height: 800,
+        alt: "WODArena Logo",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "WODArena | Líder em Competições de Functional Fitness",
+    description: "Gerencie e acompanhe rankings, eventos, cronogramas e inscrições de Functional Fitness e Cross Training em tempo real.",
+    images: ["/icon.svg"],
+  },
 };
 
 export const viewport: Viewport = {
