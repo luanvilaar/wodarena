@@ -542,6 +542,7 @@ export default function AdminPage() {
   const [selectedTeamForProfile, setSelectedTeamForProfile] = useState<Athlete | null>(null);
   const [selectedRegistrationVoucher, setSelectedRegistrationVoucher] = useState<{ registration: Registration; athlete: Athlete; event: Event } | null>(null);
   const [resendingRegistrationId, setResendingRegistrationId] = useState<string | null>(null);
+  const [syncingRegistrationId, setSyncingRegistrationId] = useState<string | null>(null);
   const [eventPendingDeletion, setEventPendingDeletion] = useState<Event | null>(null);
   const [deleteEventAcknowledged, setDeleteEventAcknowledged] = useState(false);
   const [deleteEventConfirmation, setDeleteEventConfirmation] = useState('');
@@ -584,10 +585,20 @@ export default function AdminPage() {
   const [, setBilIsGuest] = useState(false);
   const [bilAppliedCouponCode, setBilAppliedCouponCode] = useState('');
 
+  const approvedAthleteIds = (() => {
+    if (!selectedEventToManage?.id) return new Set<string>();
+    return new Set(
+      registrations
+        .filter(r => r.eventId === selectedEventToManage.id && r.paymentStatus === 'payment_approved')
+        .map(r => r.athleteId)
+        .filter(Boolean)
+    );
+  })();
+
   // Score inputs derivados quando filtros mudam
   const derivedScoreInputs = useMemo(() => {
     if (scoreFilterCatId && scoreFilterWodId) {
-      const categoryAthletes = athletes.filter(a => a.divisionId === scoreFilterCatId);
+      const categoryAthletes = athletes.filter(a => a.divisionId === scoreFilterCatId && approvedAthleteIds.has(a.id));
       const initialInputs: Record<string, string> = {};
 
       categoryAthletes.forEach(ath => {
@@ -598,7 +609,7 @@ export default function AdminPage() {
       return initialInputs;
     }
     return {};
-  }, [scoreFilterCatId, scoreFilterWodId, scores, athletes]);
+  }, [scoreFilterCatId, scoreFilterWodId, scores, athletes, approvedAthleteIds]);
 
   // Filtrar eventos do gestor ativo
   const managerEvents = useMemo(() => {
@@ -649,17 +660,22 @@ export default function AdminPage() {
         const latestRegistrations = await refreshRegistrations();
         const pendingAthleteRegistrations = latestRegistrations.filter(reg => {
           const belongsToAthlete = reg.userId === currentUser.id || reg.athleteEmail.toLowerCase() === currentUser.email.toLowerCase();
-          const canQueryPayment = Boolean(reg.paymentId && reg.paymentMethod !== 'mercadopago_preference');
+          const canQueryPayment = Boolean((reg.paymentId || reg.id) && reg.paymentMethod !== 'mercadopago_preference');
           const needsSync = reg.paymentStatus === 'payment_pending' || reg.paymentStatus === 'payment_in_review';
           return belongsToAthlete && canQueryPayment && needsSync;
         });
 
         if (pendingAthleteRegistrations.length === 0) return;
 
-        await Promise.all(pendingAthleteRegistrations.map(reg => (
-          fetch(`/api/checkout/status?payment_id=${encodeURIComponent(reg.paymentId || '')}&event_id=${encodeURIComponent(reg.eventId)}`)
-            .catch((err) => console.error(`Erro ao consultar pagamento ${reg.paymentId}:`, err))
-        )));
+        await Promise.all(pendingAthleteRegistrations.map(reg => {
+          if (reg.paymentId) {
+            return fetch(`/api/checkout/status?payment_id=${encodeURIComponent(reg.paymentId)}&event_id=${encodeURIComponent(reg.eventId)}`)
+              .catch((err) => console.error(`Erro ao consultar pagamento ${reg.paymentId}:`, err));
+          } else {
+            return fetch(`/api/checkout/status?registration_id=${encodeURIComponent(reg.id)}&event_id=${encodeURIComponent(reg.eventId)}`)
+              .catch((err) => console.error(`Erro ao consultar status do pagamento da inscrição ${reg.id}:`, err));
+          }
+        }));
         await refreshRegistrations();
       } catch (err) {
         console.error('Erro ao sincronizar inscrições do atleta:', err);
@@ -684,12 +700,17 @@ export default function AdminPage() {
     const upcomingEventsCount = managerEvents.filter(e => e.status === 'upcoming').length;
 
     const managerRegs = registrations.filter(r => eventIds.includes(r.eventId));
-    const grossRevenue = managerRegs.reduce((sum, r) => sum + r.totalPaid, 0);
+    const approvedRegs = managerRegs.filter(r => r.paymentStatus === 'payment_approved');
+    const grossRevenue = approvedRegs.reduce((sum, r) => sum + r.totalPaid, 0);
     const netRevenue = grossRevenue * 0.9;
     const platformFee = grossRevenue * 0.1;
-    const totalTicketsSold = managerRegs.reduce((sum, r) => sum + r.quantity, 0);
+    const totalTicketsSold = approvedRegs.reduce((sum, r) => sum + r.quantity, 0);
 
+    const approvedAthleteIds = new Set(
+      approvedRegs.map(r => r.athleteId).filter(Boolean)
+    );
     const managerAthletes = athletes.filter(a =>
+      approvedAthleteIds.has(a.id) &&
       managerEvents.some(e => e.divisions.some(d => d.id === a.divisionId))
     );
     const totalTeams = managerAthletes.filter(a => a.isTeam || (a.teamMembers && a.teamMembers.length > 0)).length;
@@ -697,14 +718,14 @@ export default function AdminPage() {
     // Próximos eventos
     const upcomingEvents = managerEvents.filter(e => e.status === 'upcoming').slice(0, 5);
 
-    // Últimas inscrições
-    const latestRegistrations = [...managerRegs]
+    // Últimas inscrições (excluindo falhas)
+    const latestRegistrations = managerRegs.filter(r => r.paymentStatus !== 'payment_failed')
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .slice(0, 5);
 
     // Eventos mais acessados (simulado de forma reativa: acessos = inscritos * 3.5 + 42)
     const eventsByAccess = [...managerEvents].map(e => {
-      const regCount = managerRegs.filter(r => r.eventId === e.id).reduce((sum, r) => sum + r.quantity, 0);
+      const regCount = approvedRegs.filter(r => r.eventId === e.id).reduce((sum, r) => sum + r.quantity, 0);
       return {
         event: e,
         accesses: Math.floor(regCount * 3.5 + 42)
@@ -713,7 +734,7 @@ export default function AdminPage() {
 
     // Eventos com mais inscritos
     const eventsByRegistrations = [...managerEvents].map(e => {
-      const regCount = managerRegs.filter(r => r.eventId === e.id).reduce((sum, r) => sum + r.quantity, 0);
+      const regCount = approvedRegs.filter(r => r.eventId === e.id).reduce((sum, r) => sum + r.quantity, 0);
       return {
         event: e,
         registrationsCount: regCount
@@ -1708,6 +1729,46 @@ export default function AdminPage() {
       });
     } finally {
       setResendingRegistrationId(null);
+    }
+  };
+
+  const handleSyncPaymentStatus = async (registration: Registration) => {
+    setSyncingRegistrationId(registration.id);
+    setAdminNotice(null);
+
+    try {
+      const response = await fetch(`/api/checkout/status?registration_id=${encodeURIComponent(registration.id)}&event_id=${encodeURIComponent(registration.eventId)}`);
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(payload.error || 'Erro ao sincronizar status do pagamento.');
+      }
+
+      if (payload.status === 'approved') {
+        setAdminNotice({
+          text: `Inscrição de ${registration.athleteName} foi conciliada e APROVADA com sucesso!`,
+          tone: 'success'
+        });
+        await refreshRegistrations();
+      } else if (payload.status === 'pending') {
+        setAdminNotice({
+          text: `Nenhum pagamento correspondente localizado no Mercado Pago. Status atual: PENDENTE.`,
+          tone: 'error'
+        });
+      } else {
+        setAdminNotice({
+          text: `Status do pagamento sincronizado: ${payload.status || 'Pendente'}.`,
+          tone: 'success'
+        });
+        await refreshRegistrations();
+      }
+    } catch (err) {
+      setAdminNotice({
+        text: err instanceof Error ? err.message : 'Falha ao sincronizar pagamento.',
+        tone: 'error'
+      });
+    } finally {
+      setSyncingRegistrationId(null);
     }
   };
 
@@ -2859,7 +2920,7 @@ export default function AdminPage() {
                 </thead>
                 <tbody className="divide-y divide-card-border/30 text-xs font-normal">
                   {divisions.map((div) => {
-                    const participantTotal = athletes.filter(a => a.divisionId === div.id).length;
+                    const participantTotal = athletes.filter(a => a.divisionId === div.id && approvedAthleteIds.has(a.id)).length;
                     return (
                       <tr key={div.id} className="hover:bg-dark-gray/30 transition-colors">
                         <td className="py-3 px-2">
@@ -4017,7 +4078,7 @@ export default function AdminPage() {
             const reversedIds = [...divLeaderboard].reverse().map(entry => ({ id: entry.athlete.id }));
             allDivisionsAthletes.push(...reversedIds);
           } else {
-            const divAthletes = athletes.filter(a => a.divisionId === div.id);
+            const divAthletes = athletes.filter(a => a.divisionId === div.id && approvedAthleteIds.has(a.id));
             allDivisionsAthletes.push(...divAthletes.map(a => ({ id: a.id })));
           }
         });
@@ -4034,7 +4095,7 @@ export default function AdminPage() {
       } else {
         // WOD sem categoria vinculada: usar todos os atletas das divisões do evento
         const eventDivisionIds = (selectedEventToManage.divisions || []).map(d => d.id);
-        const eventAthletes = athletes.filter(a => eventDivisionIds.includes(a.divisionId));
+        const eventAthletes = athletes.filter(a => eventDivisionIds.includes(a.divisionId) && approvedAthleteIds.has(a.id));
         if (eventAthletes.length === 0) {
           setAdminNotice({ text: 'Não há competidores inscritos no evento para alocar.', tone: 'error' });
           return;
@@ -4170,13 +4231,13 @@ export default function AdminPage() {
               return d.courseLayout.every((stg, idx) => stg.name === activeLayout[idx]?.name && stg.type === activeLayout[idx]?.type);
             })
             .map(d => d.id);
-          return athletes.filter(a => equivalentDivisionIds.includes(a.divisionId));
+          return athletes.filter(a => equivalentDivisionIds.includes(a.divisionId) && approvedAthleteIds.has(a.id));
         })()
       : (divisionId
-          ? athletes.filter(a => a.divisionId === divisionId)
+          ? athletes.filter(a => a.divisionId === divisionId && approvedAthleteIds.has(a.id))
           : (() => {
               const eventDivisionIds = (selectedEventToManage?.divisions || []).map(d => d.id);
-              return athletes.filter(a => eventDivisionIds.includes(a.divisionId));
+              return athletes.filter(a => eventDivisionIds.includes(a.divisionId) && approvedAthleteIds.has(a.id));
             })()
         );
     const allAllocatedIds = Object.values(heatAllocations).flat();
@@ -5351,7 +5412,7 @@ export default function AdminPage() {
 
   const renderAbaRegistrations = () => {
     const divisions = selectedEventToManage?.divisions || [];
-    const eventRegs = registrations.filter(r => r.eventId === selectedEventToManage?.id);
+    const eventRegs = registrations.filter(r => r.eventId === selectedEventToManage?.id && r.paymentStatus !== 'payment_failed');
 
     // Filtrar
     const filteredRegs = eventRegs.filter(reg => {
@@ -5824,6 +5885,17 @@ export default function AdminPage() {
                             <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase font-sans ${getPaymentStatusClassName(statusMeta.tone)}`}>
                               {statusMeta.label}
                             </span>
+                            {(reg.paymentStatus === 'payment_pending' || reg.paymentStatus === 'payment_in_review' || reg.paymentStatus === 'payment_failed') && (
+                              <button
+                                type="button"
+                                onClick={() => handleSyncPaymentStatus(reg)}
+                                disabled={syncingRegistrationId === reg.id}
+                                className="mt-1 flex min-h-6 items-center justify-center gap-1 ml-auto rounded border border-card-border bg-dark-gray px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-muted-soft transition-colors hover:border-primary/40 hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+                                aria-label={`Sincronizar status do pagamento de ${reg.athleteName}`}
+                              >
+                                {syncingRegistrationId === reg.id ? '...' : 'Sincronizar'}
+                              </button>
+                            )}
                             {reg.paymentStatus === 'payment_failed' && (
                               <p className="mt-1 text-[9px] text-trading-down">{reg.paymentErrorMessage || 'Pagamento não processado.'}</p>
                             )}
@@ -6039,7 +6111,7 @@ export default function AdminPage() {
 
   const renderAbaFitnessRaceScores = () => {
     const divisions = selectedEventToManage?.divisions || [];
-    const categoryAthletes = athletes.filter(a => a.divisionId === scoreFilterCatId);
+    const categoryAthletes = athletes.filter(a => a.divisionId === scoreFilterCatId && approvedAthleteIds.has(a.id));
 
     const totalWorkout = selectedEventToManage?.workouts.find(w => w.divisionId === scoreFilterCatId && w.code === 'TOTAL');
     const workoutId = totalWorkout?.id || `wod-${scoreFilterCatId}-total`;
@@ -6153,7 +6225,7 @@ export default function AdminPage() {
     const divisions = selectedEventToManage?.divisions || [];
     const workouts = selectedEventToManage?.workouts || [];
     const filteredWorkouts = workouts.filter(w => !w.divisionId || w.divisionId === scoreFilterCatId);
-    const categoryAthletes = athletes.filter(a => a.divisionId === scoreFilterCatId);
+    const categoryAthletes = athletes.filter(a => a.divisionId === scoreFilterCatId && approvedAthleteIds.has(a.id));
     const activeWod = workouts.find(w => w.id === scoreFilterWodId);
 
     return (

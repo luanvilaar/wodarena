@@ -1192,8 +1192,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const event = events.find(e => e.id === eventId);
     if (!event) return [];
 
-    // 1. Filtrar atletas da divisão
-    const divisionAthletes = athletes.filter(a => a.divisionId === divisionId);
+    // 1. Filtrar atletas da divisão que possuem pagamento aprovado
+    const approvedAthleteIds = new Set(
+      registrations
+        .filter(r => r.eventId === eventId && r.paymentStatus === 'payment_approved')
+        .map(r => r.athleteId)
+        .filter(Boolean)
+    );
+    const divisionAthletes = athletes.filter(a => a.divisionId === divisionId && approvedAthleteIds.has(a.id));
 
     // Se for Fitness Racing, o leaderboard é baseado estritamente no tempo do workout TOTAL (Percurso Completo)
     if (event.eventType === 'fitness_racing') {
