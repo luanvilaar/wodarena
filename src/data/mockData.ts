@@ -5,7 +5,7 @@ export const INITIAL_USERS: User[] = [
     id: 'user-owner',
     name: 'Luan Vilaar',
     email: 'l.vilaar@gmail.com',
-    password: 'owner',
+    password: 'janela47',
     role: 'owner',
     organization: 'WODArena Corp'
   },
