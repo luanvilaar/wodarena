@@ -141,6 +141,18 @@ export async function POST(request: Request) {
 
     if (existingAthlete) {
       athleteId = existingAthlete.id;
+      const { error: athleteUpdateError } = await supabaseAdmin
+        .from('athletes')
+        .update({
+          shirt_size: athleteProfile.shirtSize || null,
+          team_members: athleteProfile.teamMembers ? JSON.stringify(athleteProfile.teamMembers) : '[]'
+        })
+        .eq('id', athleteId);
+
+      if (athleteUpdateError) {
+        console.error('[Registration Start] Erro ao atualizar tamanho de camisa do atleta:', athleteUpdateError);
+        return NextResponse.json({ error: 'Erro ao atualizar dados do atleta.' }, { status: 500 });
+      }
     } else {
       const { error: athleteError } = await supabaseAdmin
         .from('athletes')
@@ -156,6 +168,7 @@ export async function POST(request: Request) {
           state: athleteProfile.state || null,
           instagram: athleteProfile.instagram || null,
           photo_url: athleteProfile.photoUrl || null,
+          shirt_size: athleteProfile.shirtSize || null,
           email,
           phone: registrationData.athletePhone || athleteProfile.phone || null,
           is_team: athleteProfile.isTeam || false,

@@ -4,6 +4,18 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://momigbtnsswoldqnadmc.supabase.co';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+type SupabaseWriteError = {
+  code?: string;
+  message?: string;
+  details?: string;
+  hint?: string;
+};
+
+const isMercadoPagoUserIdUniqueError = (error: SupabaseWriteError) => {
+  const detail = `${error.code || ''} ${error.message || ''} ${error.details || ''} ${error.hint || ''}`;
+  return error.code === '23505' && detail.includes('mercadopago_user_id');
+};
+
 export async function POST(request: Request) {
   try {
     if (!supabaseServiceKey) {
@@ -89,6 +101,11 @@ export async function POST(request: Request) {
 
     if (publicError) {
       console.error('[API Admin MercadoPago] Erro ao gravar informações públicas no Supabase:', publicError);
+      if (isMercadoPagoUserIdUniqueError(publicError)) {
+        return NextResponse.json({
+          error: 'Esta conta Mercado Pago já existe em outro cadastro. Aplique a migration mais recente do Supabase para permitir reutilizar a mesma conta em gestores diferentes.'
+        }, { status: 409 });
+      }
       return NextResponse.json({ error: 'Erro ao gravar informações públicas no banco de dados.' }, { status: 500 });
     }
 

@@ -25,6 +25,7 @@ type ParticipantForm = {
   state: string;
   instagram: string;
   photoUrl: string;
+  shirtSize: string;
 };
 
 type CheckoutRegistrationData = Omit<Registration, 'createdAt'> & Partial<Pick<Registration, 'createdAt'>>;
@@ -56,8 +57,11 @@ const createEmptyParticipant = (): ParticipantForm => ({
   city: '',
   state: '',
   instagram: '',
-  photoUrl: ''
+  photoUrl: '',
+  shirtSize: ''
 });
+
+const shirtSizeOptions = ['PP', 'P', 'M', 'G', 'GG', 'XG', 'XXG'];
 
 const generateUniqueId = (prefix: string) => {
   return `${prefix}-${Date.now()}`;
@@ -319,7 +323,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
     }
 
     const hasMissingRequiredParticipantData = visibleParticipants.some((participant) => {
-      if (!participant.name || !participant.gender) return true;
+      if (!participant.name || !participant.gender || !participant.shirtSize) return true;
       if (participant === primaryParticipant && (!participant.email || !participant.phone)) return true;
       if (!isFitnessRacing) return !participant.email || !participant.phone;
       return !participant.birthDate || !participant.city || !participant.state || !participant.instagram;
@@ -327,7 +331,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
 
     if (hasMissingRequiredParticipantData || (isFitnessRacing && !box)) {
       alert(isFitnessRacing
-        ? 'Preencha nome, nascimento, sexo, cidade, estado, box e Instagram.'
+        ? 'Preencha nome, nascimento, sexo, cidade, estado, box, Instagram e tamanho da camisa.'
         : 'Por favor, preencha todos os campos obrigatórios.');
       return;
     }
@@ -361,7 +365,8 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
     const teamMembers = isTeamCategory
       ? visibleParticipants.map((participant) => ({
           name: participant.name.trim(),
-          instagram: normalizeInstagram(participant.instagram)
+          instagram: normalizeInstagram(participant.instagram),
+          shirtSize: participant.shirtSize
         }))
       : [];
 
@@ -394,6 +399,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
       city: primaryParticipant.city,
       state: primaryParticipant.state,
       photoUrl: primaryParticipant.photoUrl,
+      shirtSize: primaryParticipant.shirtSize,
       email: primaryParticipant.email,
       phone: primaryParticipant.phone,
       gender: primaryParticipant.gender,
@@ -944,6 +950,22 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                           className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none"
                         />
                       </div>
+                      <div>
+                        <label htmlFor={`athlete-${index}-shirt-size`} className="mb-1 block text-xs font-bold text-ink">Tamanho da camisa *</label>
+                        <select
+                          id={`athlete-${index}-shirt-size`}
+                          name={`participants.${index}.shirtSize`}
+                          required
+                          value={participant.shirtSize}
+                          onChange={(e) => updateParticipant(index, 'shirtSize', e.target.value)}
+                          className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none"
+                        >
+                          <option value="">Selecione...</option>
+                          {shirtSizeOptions.map(size => (
+                            <option key={size} value={size}>{size}</option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
 
                     {isFitnessRacing && (
@@ -988,20 +1010,6 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                             />
                           </div>
                         </div>
-                        {index === 0 && (
-                          <div>
-                            <label htmlFor={`athlete-${index}-photo`} className="mb-1 block text-xs font-bold text-ink">Foto do atleta (opcional)</label>
-                            <input
-                              id={`athlete-${index}-photo`}
-                              name={`participants.${index}.photoUrl`}
-                              type="url"
-                              placeholder="URL da foto"
-                              value={participant.photoUrl}
-                              onChange={(e) => updateParticipant(index, 'photoUrl', e.target.value)}
-                              className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none"
-                            />
-                          </div>
-                        )}
                       </>
                     )}
                   </fieldset>

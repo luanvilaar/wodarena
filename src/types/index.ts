@@ -1,6 +1,7 @@
 export type EventStatus = 'upcoming' | 'live' | 'finished';
 export type WorkoutType = 'fortime' | 'amrap' | 'maxweight' | 'reps' | 'points' | 'distance';
 export type CategoryType = 'male' | 'female' | 'team';
+export type ShirtSize = 'PP' | 'P' | 'M' | 'G' | 'GG' | 'XG' | 'XXG';
 
 export interface User {
   id: string;
@@ -90,10 +91,11 @@ export interface Athlete {
   state?: string;
   instagram?: string;
   photoUrl?: string;
+  shirtSize?: ShirtSize | string;
   email?: string;
   phone?: string;
   isTeam?: boolean;
-  teamMembers?: { name: string; instagram: string; }[];
+  teamMembers?: { name: string; instagram: string; shirtSize?: ShirtSize | string; }[];
 }
 
 export interface Score {

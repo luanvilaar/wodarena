@@ -16,10 +16,11 @@ type AthleteProfileDraft = {
   state?: string;
   instagram?: string;
   photoUrl?: string;
+  shirtSize?: string;
   email?: string;
   phone?: string;
   isTeam?: boolean;
-  teamMembers?: { name: string; instagram: string; }[];
+  teamMembers?: { name: string; instagram: string; shirtSize?: string; }[];
 };
 
 interface AppContextType {
@@ -33,10 +34,10 @@ interface AppContextType {
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
   createManagerAccount: (name: string, email: string, password: string, organization: string) => Promise<boolean>;
-  addEvent: (event: Omit<Event, 'id' | 'organizerId' | 'sponsors' | 'format' | 'ticketPrice' | 'ticketSlots' | 'isTicketingActive'> & { format?: 'individual' | 'duo' | 'trio'; ticketPrice?: number; ticketSlots?: number; isTicketingActive?: boolean; eventType?: 'functional_fitness' | 'fitness_racing'; }) => void;
-  addDivision: (eventId: string, division: Omit<Division, 'id'>) => void;
+  addEvent: (event: Omit<Event, 'id' | 'organizerId' | 'sponsors' | 'format' | 'ticketPrice' | 'ticketSlots' | 'isTicketingActive'> & { format?: 'individual' | 'duo' | 'trio'; ticketPrice?: number; ticketSlots?: number; isTicketingActive?: boolean; eventType?: 'functional_fitness' | 'fitness_racing'; }) => Promise<Event>;
+  addDivision: (eventId: string, division: Omit<Division, 'id'>) => Promise<{ division: Division; autoWorkout: Workout | null }>;
   updateDivision: (eventId: string, divisionId: string, updatedData: Partial<Division>) => Promise<void>;
-  addWorkout: (eventId: string, workout: Omit<Workout, 'id'>) => void;
+  addWorkout: (eventId: string, workout: Omit<Workout, 'id'>) => Promise<Workout>;
   deleteEvent: (eventId: string) => Promise<void>;
   deleteDivision: (eventId: string, divisionId: string) => Promise<void>;
   deleteWorkout: (eventId: string, workoutId: string) => Promise<void>;
@@ -71,6 +72,18 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 type RegistrationDbRow = Record<string, unknown>;
 
 const optionalString = (value: unknown) => typeof value === 'string' && value.length > 0 ? value : undefined;
+
+const slugify = (value: string) => value
+  .toLowerCase()
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/[^a-z0-9]+/g, '-')
+  .replace(/(^-|-$)/g, '');
+
+const createScopedId = (prefix: string, scope: string, name: string) => {
+  const suffix = Math.random().toString(36).slice(2, 8);
+  return `${prefix}-${scope}-${slugify(name) || 'item'}-${Date.now().toString(36)}-${suffix}`;
+};
 
 const mapRegistrationFromDb = (r: RegistrationDbRow): Registration => ({
   id: String(r.id),
@@ -156,6 +169,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               state: a.state || undefined,
               instagram: a.instagram || undefined,
               photoUrl: a.photo_url || undefined,
+              shirtSize: a.shirt_size || undefined,
               email: a.email || undefined,
               phone: a.phone || undefined,
               isTeam: a.is_team !== undefined ? Boolean(a.is_team) : false,
@@ -539,7 +553,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Cadastrar Evento
-  const addEvent = (eventData: Omit<Event, 'id' | 'organizerId' | 'sponsors' | 'format' | 'ticketPrice' | 'ticketSlots' | 'isTicketingActive'> & {
+  const addEvent = async (eventData: Omit<Event, 'id' | 'organizerId' | 'sponsors' | 'format' | 'ticketPrice' | 'ticketSlots' | 'isTicketingActive'> & {
     format?: 'individual' | 'duo' | 'trio';
     ticketPrice?: number;
     ticketSlots?: number;
@@ -551,13 +565,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     instagram?: string;
     website?: string;
     eventType?: 'functional_fitness' | 'fitness_racing';
-  }) => {
+  }): Promise<Event> => {
     if (!currentUser?.id) {
-      alert('Sessão inválida ou expirada. Por favor, faça login novamente para criar o evento.');
-      return;
+      throw new Error('Sessão inválida ou expirada. Por favor, faça login novamente para criar o evento.');
     }
 
-    const newId = eventData.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    const newId = createScopedId('evt', currentUser.id, eventData.name);
     const defaultFitnessRacing = eventData.eventType === 'fitness_racing'
       ? buildFitnessRacingDefaults(newId, eventData.ticketPrice ?? 150.00, eventData.ticketSlots ?? 100)
       : { divisions: eventData.divisions || [], workouts: eventData.workouts || [] };
@@ -585,8 +598,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       mpAccessToken: eventData.mpAccessToken || ''
     };
 
-    // Salvar no Supabase em background
-    supabase.from('events').insert({
+    const { error: eventError } = await supabase.from('events').insert({
       id: newEvent.id,
       name: newEvent.name,
       logo_url: newEvent.logoUrl,
@@ -611,55 +623,65 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       event_schedule: newEvent.scheduleItems,
       mp_public_key: newEvent.mpPublicKey || null,
       mp_access_token: newEvent.mpAccessToken || null
-    }).then(({ error }) => {
-      if (error) {
-        console.error("Erro ao criar evento no Supabase:", error);
-        return;
-      }
-
-      if (eventData.eventType === 'fitness_racing' && defaultFitnessRacing.divisions.length > 0) {
-        supabase.from('divisions').insert(defaultFitnessRacing.divisions.map((division) => ({
-          id: division.id,
-          event_id: newEvent.id,
-          name: division.name,
-          category: division.category,
-          type: division.type,
-          slots_limit: division.slotsLimit,
-          price: division.price,
-          is_active: division.isActive,
-          use_age_groups: division.useAgeGroups || false,
-          age_groups: division.ageGroups || [],
-          course_layout: division.courseLayout || []
-        }))).then(({ error: divError }) => {
-          if (divError) {
-            console.error("Erro ao criar categorias padrão Fitness Racing:", divError);
-            return;
-          }
-
-          supabase.from('workouts').insert(defaultFitnessRacing.workouts.map((workout) => ({
-            id: workout.id,
-            event_id: newEvent.id,
-            name: workout.name,
-            description: workout.description,
-            type: workout.type,
-            code: workout.code,
-            order_index: workout.orderIndex,
-            division_id: workout.divisionId || null,
-            tie_breaker: workout.tieBreaker || ''
-          }))).then(({ error: wodError }) => {
-            if (wodError) console.error("Erro ao criar workouts padrão Fitness Racing:", wodError);
-          });
-        });
-      }
     });
 
-    setEvents([...events, newEvent]);
+    if (eventError) {
+      console.error("Erro ao criar evento no Supabase:", eventError);
+      throw eventError;
+    }
+
+    if (eventData.eventType === 'fitness_racing' && defaultFitnessRacing.divisions.length > 0) {
+      const { error: divError } = await supabase.from('divisions').insert(defaultFitnessRacing.divisions.map((division) => ({
+        id: division.id,
+        event_id: newEvent.id,
+        name: division.name,
+        category: division.category,
+        type: division.type,
+        slots_limit: division.slotsLimit,
+        price: division.price,
+        is_active: division.isActive,
+        use_age_groups: division.useAgeGroups || false,
+        age_groups: division.ageGroups || [],
+        course_layout: division.courseLayout || []
+      })));
+
+      if (divError) {
+        console.error("Erro ao criar categorias padrão Fitness Racing:", divError);
+        await supabase.from('events').delete().eq('id', newEvent.id).eq('organizer_id', currentUser.id);
+        throw divError;
+      }
+
+      const { error: wodError } = await supabase.from('workouts').insert(defaultFitnessRacing.workouts.map((workout) => ({
+        id: workout.id,
+        event_id: newEvent.id,
+        name: workout.name,
+        description: workout.description,
+        type: workout.type,
+        code: workout.code,
+        order_index: workout.orderIndex,
+        division_id: workout.divisionId || null,
+        tie_breaker: workout.tieBreaker || ''
+      })));
+
+      if (wodError) {
+        console.error("Erro ao criar workouts padrão Fitness Racing:", wodError);
+        await supabase.from('events').delete().eq('id', newEvent.id).eq('organizer_id', currentUser.id);
+        throw wodError;
+      }
+    }
+
+    setEvents(prev => [...prev, newEvent]);
+    return newEvent;
   };
 
   // Cadastrar Divisão
-  const addDivision = (eventId: string, divisionData: Omit<Division, 'id'>) => {
-    const divId = `div-${eventId}-${divisionData.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+  const addDivision = async (eventId: string, divisionData: Omit<Division, 'id'>): Promise<{ division: Division; autoWorkout: Workout | null }> => {
     const event = events.find(e => e.id === eventId);
+    if (!event || event.organizerId !== currentUser?.id) {
+      throw new Error('Evento não encontrado para este gestor.');
+    }
+
+    const divId = createScopedId('div', eventId, divisionData.name);
     const newDivision: Division = {
       ...divisionData,
       id: divId,
@@ -684,8 +706,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       };
     }
 
-    // Salvar no Supabase em background
-    supabase.from('divisions').insert({
+    const { error } = await supabase.from('divisions').insert({
       id: newDivision.id,
       event_id: eventId,
       name: newDivision.name,
@@ -697,30 +718,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       use_age_groups: newDivision.useAgeGroups || false,
       age_groups: newDivision.ageGroups || [],
       course_layout: newDivision.courseLayout || []
-    }).then(({ error }) => {
-      if (error) {
-        console.error("Erro ao criar divisão no Supabase:", error);
-        return;
-      }
-
-      if (autoWorkout) {
-        supabase.from('workouts').insert({
-          id: autoWorkout.id,
-          event_id: eventId,
-          name: autoWorkout.name,
-          description: autoWorkout.description,
-          type: autoWorkout.type,
-          code: autoWorkout.code,
-          order_index: autoWorkout.orderIndex,
-          division_id: divId,
-          tie_breaker: ''
-        }).then(({ error: wError }) => {
-          if (wError) console.error("Erro ao criar workout virtual no Supabase:", wError);
-        });
-      }
     });
 
-    setEvents(events.map(e => {
+    if (error) {
+      console.error("Erro ao criar divisão no Supabase:", error);
+      throw error;
+    }
+
+    if (autoWorkout) {
+      const { error: wError } = await supabase.from('workouts').insert({
+        id: autoWorkout.id,
+        event_id: eventId,
+        name: autoWorkout.name,
+        description: autoWorkout.description,
+        type: autoWorkout.type,
+        code: autoWorkout.code,
+        order_index: autoWorkout.orderIndex,
+        division_id: divId,
+        tie_breaker: ''
+      });
+
+      if (wError) {
+        console.error("Erro ao criar workout virtual no Supabase:", wError);
+        await supabase.from('divisions').delete().eq('id', newDivision.id).eq('event_id', eventId);
+        throw wError;
+      }
+    }
+
+    setEvents(prev => prev.map(e => {
       if (e.id === eventId) {
         return {
           ...e,
@@ -730,9 +755,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
       return e;
     }));
+    return { division: newDivision, autoWorkout };
   };
 
   const updateDivision = async (eventId: string, divisionId: string, updatedData: Partial<Division>) => {
+    const event = events.find(e => e.id === eventId);
+    if (!event || event.organizerId !== currentUser?.id || !event.divisions.some(d => d.id === divisionId)) {
+      throw new Error('Categoria não encontrada para este gestor.');
+    }
+
+    const previousEvents = events;
     setEvents(prev => prev.map(e => {
       if (e.id !== eventId) return e;
       return {
@@ -756,19 +788,30 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const { error } = await supabase
       .from('divisions')
       .update(dbPayload)
-      .eq('id', divisionId);
+      .eq('id', divisionId)
+      .eq('event_id', eventId);
 
     if (error) {
+      setEvents(previousEvents);
       console.error("Erro ao atualizar categoria no Supabase:", error);
+      throw error;
     }
   };
 
   // Excluir Divisão/Categoria e limpar dados vinculados no estado local
   const deleteDivision = async (eventId: string, divisionId: string) => {
+    const event = events.find(e => e.id === eventId);
+    if (!event || event.organizerId !== currentUser?.id || !event.divisions.some(d => d.id === divisionId)) {
+      throw new Error('Categoria não encontrada para este gestor.');
+    }
+
     const athleteIds = athletes.filter(a => a.divisionId === divisionId).map(a => a.id);
-    const linkedWorkoutIds = events
-      .find(e => e.id === eventId)
-      ?.workouts.filter(w => w.divisionId === divisionId).map(w => w.id) || [];
+    const linkedWorkoutIds = event.workouts.filter(w => w.divisionId === divisionId).map(w => w.id);
+
+    const previousEvents = events;
+    const previousAthletes = athletes;
+    const previousScores = scores;
+    const previousRegistrations = registrations;
 
     setEvents(prev => prev.map(e => {
       if (e.id !== eventId) return e;
@@ -785,10 +828,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const { error } = await supabase
       .from('divisions')
       .delete()
-      .eq('id', divisionId);
+      .eq('id', divisionId)
+      .eq('event_id', eventId);
 
     if (error) {
+      setEvents(previousEvents);
+      setAthletes(previousAthletes);
+      setScores(previousScores);
+      setRegistrations(previousRegistrations);
       console.error("Erro ao excluir divisão no Supabase:", error);
+      throw error;
     }
   };
 
@@ -796,6 +845,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const deleteEvent = async (eventId: string) => {
     const eventToDelete = events.find(e => e.id === eventId);
     if (!eventToDelete) return;
+    if (eventToDelete.organizerId !== currentUser?.id) {
+      throw new Error('Evento não encontrado para este gestor.');
+    }
 
     const divisionIds = eventToDelete.divisions.map(d => d.id);
     const workoutIds = eventToDelete.workouts.map(w => w.id);
@@ -816,7 +868,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const { error } = await supabase
       .from('events')
       .delete()
-      .eq('id', eventId);
+      .eq('id', eventId)
+      .eq('organizer_id', currentUser.id);
 
     if (error) {
       setEvents(previousEvents);
@@ -831,6 +884,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // Excluir Prova/WOD e limpar resultados vinculados no estado local
   const deleteWorkout = async (eventId: string, workoutId: string) => {
+    const event = events.find(e => e.id === eventId);
+    if (!event || event.organizerId !== currentUser?.id || !event.workouts.some(w => w.id === workoutId)) {
+      throw new Error('Prova não encontrada para este gestor.');
+    }
+
+    const previousEvents = events;
+    const previousScores = scores;
+
     setEvents(prev => prev.map(e => {
       if (e.id !== eventId) return e;
       return {
@@ -843,23 +904,31 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const { error } = await supabase
       .from('workouts')
       .delete()
-      .eq('id', workoutId);
+      .eq('id', workoutId)
+      .eq('event_id', eventId);
 
     if (error) {
+      setEvents(previousEvents);
+      setScores(previousScores);
       console.error("Erro ao excluir prova no Supabase:", error);
+      throw error;
     }
   };
 
   // Cadastrar Prova (Workout)
-  const addWorkout = (eventId: string, workoutData: Omit<Workout, 'id'>) => {
-    const workoutId = `wod-${eventId}-${workoutData.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+  const addWorkout = async (eventId: string, workoutData: Omit<Workout, 'id'>): Promise<Workout> => {
+    const event = events.find(e => e.id === eventId);
+    if (!event || event.organizerId !== currentUser?.id) {
+      throw new Error('Evento não encontrado para este gestor.');
+    }
+
+    const workoutId = createScopedId('wod', eventId, workoutData.name);
     const newWorkout: Workout = {
       ...workoutData,
       id: workoutId
     };
 
-    // Salvar no Supabase em background
-    supabase.from('workouts').insert({
+    const { error } = await supabase.from('workouts').insert({
       id: newWorkout.id,
       event_id: eventId,
       name: newWorkout.name,
@@ -870,11 +939,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       order_index: newWorkout.orderIndex,
       division_id: newWorkout.divisionId || null,
       tie_breaker: newWorkout.tieBreaker || ''
-    }).then(({ error }) => {
-      if (error) console.error("Erro ao criar prova no Supabase:", error);
     });
 
-    setEvents(events.map(e => {
+    if (error) {
+      console.error("Erro ao criar prova no Supabase:", error);
+      throw error;
+    }
+
+    setEvents(prev => prev.map(e => {
       if (e.id === eventId) {
         return {
           ...e,
@@ -883,6 +955,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
       return e;
     }));
+    return newWorkout;
   };
 
   // Comprar Ingresso / Inscrição
@@ -919,12 +992,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         state: athleteProfile?.state || '',
         instagram: normalizeInstagram(athleteProfile?.instagram),
         photoUrl: athleteProfile?.photoUrl || '',
+        shirtSize: athleteProfile?.shirtSize || '',
         email: athleteProfile?.email || '',
         phone: athleteProfile?.phone || '',
         isTeam: athleteProfile?.isTeam || false,
         teamMembers: athleteProfile?.teamMembers?.map(m => ({
           name: m.name,
-          instagram: normalizeInstagram(m.instagram)
+          instagram: normalizeInstagram(m.instagram),
+          shirtSize: m.shirtSize || ''
         })) || []
       };
     }
@@ -944,6 +1019,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           state: newAthlete.state || null,
           instagram: newAthlete.instagram || null,
           photo_url: newAthlete.photoUrl || null,
+          shirt_size: newAthlete.shirtSize || null,
           email: newAthlete.email || null,
           phone: newAthlete.phone || null,
           is_team: newAthlete.isTeam || false,
@@ -993,14 +1069,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // Cadastrar Cupom de Desconto
   const addCoupon = async (couponData: Omit<Coupon, 'id' | 'usageCount' | 'createdAt'>) => {
+    const event = events.find(e => e.id === couponData.eventId);
+    if (!event || event.organizerId !== currentUser?.id) {
+      throw new Error('Evento não encontrado para este gestor.');
+    }
+
     const newCoupon: Coupon = {
       ...couponData,
       id: `coupon-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
       usageCount: 0,
       createdAt: new Date().toISOString()
     };
-
-    setCoupons(prev => [...prev, newCoupon]);
 
     const { error } = await supabase.from('coupons').insert({
       id: newCoupon.id,
@@ -1014,7 +1093,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     if (error) {
       console.error("Erro ao adicionar cupom no Supabase:", error);
+      throw error;
     }
+
+    setCoupons(prev => [...prev, newCoupon]);
   };
 
   // Incrementar o uso de um cupom
@@ -1099,6 +1181,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     newScores.forEach(newScore => {
       const athlete = athletes.find(a => a.id === newScore.athleteId);
       if (athlete) {
+        const event = events.find(e =>
+          e.organizerId === currentUser?.id &&
+          e.divisions.some(d => d.id === athlete.divisionId) &&
+          e.workouts.some(w => w.id === newScore.workoutId)
+        );
+        if (!event) return;
+
         const key = `${newScore.workoutId}|${athlete.divisionId}`;
         if (!affectedKeySet.has(key)) {
           affectedKeySet.add(key);
@@ -1106,6 +1195,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
       }
     });
+
+    if (affectedPairs.length === 0) {
+      console.error("Nenhum score pertence a eventos deste gestor.");
+      return;
+    }
 
     // 3. Recalcular rankings e pontos para as divisões/workouts afetados
     affectedPairs.forEach(({ workoutId, divisionId }) => {
@@ -1384,6 +1478,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     eventId: string,
     config: { format: 'individual' | 'duo' | 'trio'; ticketPrice: number; ticketSlots: number; isTicketingActive: boolean; }
   ) => {
+    const event = events.find(e => e.id === eventId);
+    if (!event || event.organizerId !== currentUser?.id) {
+      throw new Error('Evento não encontrado para este gestor.');
+    }
+
+    const previousEvents = events;
     // 1. Atualizar estado local de forma síncrona
     setEvents(prev => prev.map(e => e.id === eventId ? { ...e, ...config } : e));
 
@@ -1396,15 +1496,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ticket_slots: config.ticketSlots,
         is_ticketing_active: config.isTicketingActive
       })
-      .eq('id', eventId);
+      .eq('id', eventId)
+      .eq('organizer_id', currentUser.id);
 
     if (error) {
+      setEvents(previousEvents);
       console.error("Erro ao atualizar bilheteria no Supabase:", error);
+      throw error;
     }
   };
 
   // Atualizar dados gerais do evento
   const updateEvent = async (eventId: string, updatedData: Partial<Event>) => {
+    const event = events.find(e => e.id === eventId);
+    if (!event || event.organizerId !== currentUser?.id) {
+      throw new Error('Evento não encontrado para este gestor.');
+    }
+
+    const previousEvents = events;
     // 1. Atualizar estado local de forma síncrona
     setEvents(prev => prev.map(e => e.id === eventId ? { ...e, ...updatedData } : e));
 
@@ -1435,15 +1544,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const { error } = await supabase
       .from('events')
       .update(dbPayload)
-      .eq('id', eventId);
+      .eq('id', eventId)
+      .eq('organizer_id', currentUser.id);
 
     if (error) {
+      setEvents(previousEvents);
       console.error("Erro ao atualizar evento no Supabase:", error);
+      throw error;
     }
   };
 
   // Salvar layout de percurso da divisão
   const saveCourseLayout = async (divisionId: string, layout: CourseStage[]) => {
+    const event = events.find(evt => evt.divisions.some(d => d.id === divisionId));
+    if (!event || event.organizerId !== currentUser?.id) {
+      throw new Error('Categoria não encontrada para este gestor.');
+    }
+
+    const previousEvents = events;
     setEvents(prevEvents => prevEvents.map(evt => {
       const hasDiv = evt.divisions.some(d => d.id === divisionId);
       if (hasDiv) {
@@ -1458,14 +1576,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const { error } = await supabase
       .from('divisions')
       .update({ course_layout: layout })
-      .eq('id', divisionId);
+      .eq('id', divisionId)
+      .eq('event_id', event.id);
 
     if (error) {
+      setEvents(previousEvents);
       console.error("Erro ao salvar percurso no Supabase:", error);
+      throw error;
     }
   };
 
   const updateWorkout = async (eventId: string, workoutId: string, updatedData: Partial<Workout>) => {
+    const event = events.find(e => e.id === eventId);
+    if (!event || event.organizerId !== currentUser?.id || !event.workouts.some(w => w.id === workoutId)) {
+      throw new Error('Prova não encontrada para este gestor.');
+    }
+
+    const previousEvents = events;
     setEvents(prev => prev.map(e => {
       if (e.id !== eventId) return e;
       return {
@@ -1487,9 +1614,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const { error } = await supabase
       .from('workouts')
       .update(dbData)
-      .eq('id', workoutId);
+      .eq('id', workoutId)
+      .eq('event_id', eventId);
 
     if (error) {
+      setEvents(previousEvents);
       console.error("Erro ao atualizar prova no Supabase:", error);
       throw error;
     }

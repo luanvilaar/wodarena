@@ -13,6 +13,7 @@ const configRoute = read('../src/app/api/checkout/config/route.ts');
 const webhookRoute = read('../src/app/api/webhooks/mercadopago/route.ts');
 const oauthCallback = read('../src/app/api/mercadopago/oauth/callback/route.ts');
 const adminMercadoPagoRoute = read('../src/app/api/admin/mercadopago/route.ts');
+const relaxMercadoPagoUserMigration = read('../supabase/migrations/20260607230131_relax_mercadopago_user_unique.sql');
 const registerModal = read('../src/components/RegisterModal.tsx');
 const appContext = read('../src/context/AppContext.tsx');
 const eventPage = read('../src/app/event/[id]/page.tsx');
@@ -86,4 +87,11 @@ test('manual Mercado Pago credentials are validated and store the real collector
   assert.match(adminMercadoPagoRoute, /Access Token Mercado Pago inválido/);
   assert.match(adminMercadoPagoRoute, /const mercadopagoUserId = mpUserData\?\.id \? String\(mpUserData\.id\)/);
   assert.match(adminMercadoPagoRoute, /mercadopago_user_id: mercadopagoUserId/);
+});
+
+test('manual Mercado Pago credentials do not require a globally unique collector id', () => {
+  assert.match(relaxMercadoPagoUserMigration, /DROP CONSTRAINT IF EXISTS mercadopago_accounts_mercadopago_user_id_key/);
+  assert.match(relaxMercadoPagoUserMigration, /idx_mercadopago_accounts_mercadopago_user_id/);
+  assert.match(adminMercadoPagoRoute, /isMercadoPagoUserIdUniqueError/);
+  assert.match(adminMercadoPagoRoute, /Aplique a migration mais recente do Supabase/);
 });

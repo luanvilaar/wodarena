@@ -14,7 +14,7 @@ import {
   LayoutDashboard, Calendar, Trophy,
   ClipboardCheck, LogIn, LogOut, DollarSign, Users, Ticket, Settings,
   Upload, X, Trash2, Plus, ShieldAlert, Pencil, Copy, GripVertical, ArrowDown, ArrowUp, Library, ReceiptText, Mail, CreditCard,
-  Lock, QrCode
+  Lock, QrCode, FileSpreadsheet
 } from 'lucide-react';
 
 const InstagramIcon = ({ className = 'h-3.5 w-3.5' }: { className?: string }) => (
@@ -42,6 +42,7 @@ const currencyFormatter = new Intl.NumberFormat('pt-BR', {
 });
 
 const compactNumberFormatter = new Intl.NumberFormat('pt-BR');
+const SHIRT_SIZE_OPTIONS = ['PP', 'P', 'M', 'G', 'GG', 'XG', 'XXG'];
 
 const formatInstitutionalMetric = (value: number, fallback: string) => {
   return value > 0 ? `${compactNumberFormatter.format(value)}+` : fallback;
@@ -205,6 +206,7 @@ export default function AdminPage() {
             city: athlete.city,
             state: athlete.state,
             photoUrl: athlete.photoUrl,
+            shirtSize: athlete.shirtSize,
             email: athlete.email,
             phone: athlete.phone,
             gender: athlete.gender,
@@ -348,7 +350,7 @@ export default function AdminPage() {
         throw new Error(data.error || 'Erro ao salvar credenciais.');
       }
 
-      setMpAccount({
+      setMpAccount(data.account || {
         id: `manual-${currentUser.id}`,
         mercadopago_user_id: `manual-${currentUser.id}`,
         status: 'connected',
@@ -640,11 +642,12 @@ export default function AdminPage() {
   const [bilCity, setBilCity] = useState('');
   const [bilState, setBilState] = useState('');
   const [bilInstagram, setBilInstagram] = useState('');
-  const [bilTeamMembers, setBilTeamMembers] = useState<{ name: string; instagram: string }[]>([
-    { name: '', instagram: '' },
-    { name: '', instagram: '' },
-    { name: '', instagram: '' },
-    { name: '', instagram: '' }
+  const [bilShirtSize, setBilShirtSize] = useState('');
+  const [bilTeamMembers, setBilTeamMembers] = useState<{ name: string; instagram: string; shirtSize: string }[]>([
+    { name: '', instagram: '', shirtSize: '' },
+    { name: '', instagram: '', shirtSize: '' },
+    { name: '', instagram: '', shirtSize: '' },
+    { name: '', instagram: '', shirtSize: '' }
   ]);
 
   // Estados para o Gerenciador de Cupons do Admin
@@ -690,6 +693,14 @@ export default function AdminPage() {
     if (!currentUser) return [];
     return events.filter(e => e.organizerId === currentUser.id);
   }, [events, currentUser]);
+
+  useEffect(() => {
+    if (!selectedEventToManage) return;
+    const freshEvent = managerEvents.find(evt => evt.id === selectedEventToManage.id);
+    queueMicrotask(() => {
+      setSelectedEventToManage(freshEvent || null);
+    });
+  }, [managerEvents, selectedEventToManage]);
 
   const closeDeleteEventDialog = () => {
     if (isDeletingEvent) return;
@@ -959,11 +970,12 @@ export default function AdminPage() {
     setBilCity('');
     setBilState('');
     setBilInstagram('');
+    setBilShirtSize('');
     setBilTeamMembers([
-      { name: '', instagram: '' },
-      { name: '', instagram: '' },
-      { name: '', instagram: '' },
-      { name: '', instagram: '' }
+      { name: '', instagram: '', shirtSize: '' },
+      { name: '', instagram: '', shirtSize: '' },
+      { name: '', instagram: '', shirtSize: '' },
+      { name: '', instagram: '', shirtSize: '' }
     ]);
     setBilCouponCodeInput('');
     setBilDiscountApplied(0);
@@ -1003,12 +1015,13 @@ export default function AdminPage() {
     const cleanInsta = (str: string) => str.trim().replace(/^@/, '');
 
     let finalAthleteName = bilAthleteName;
-    let teamMembersPayload: { name: string; instagram: string }[] = [];
+    let teamMembersPayload: { name: string; instagram: string; shirtSize: string }[] = [];
 
     if (isTeamCategory) {
       teamMembersPayload = bilTeamMembers.slice(0, numIntegrantes).map(m => ({
         name: m.name,
-        instagram: cleanInsta(m.instagram)
+        instagram: cleanInsta(m.instagram),
+        shirtSize: m.shirtSize
       }));
       const membersNames = teamMembersPayload.map(m => m.name).join(' / ');
       finalAthleteName = `${bilAthleteName.trim()} (${membersNames})`;
@@ -1036,6 +1049,7 @@ export default function AdminPage() {
       state: bilState,
       instagram: cleanInsta(bilInstagram),
       photoUrl: '',
+      shirtSize: bilShirtSize,
       email: bilAthleteEmail,
       phone: bilAthletePhone,
       isTeam: isTeamCategory,
@@ -1126,7 +1140,7 @@ export default function AdminPage() {
   };
 
   // Cadastrar novo cupom do evento
-  const handleCreateCoupon = (e: React.FormEvent) => {
+  const handleCreateCoupon = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedEventToManage) return;
 
@@ -1161,72 +1175,82 @@ export default function AdminPage() {
       return;
     }
 
-    addCoupon({
-      eventId: selectedEventToManage.id,
-      code: formattedCode,
-      discountType: newCouponDiscountType,
-      discountValue: val,
-      usageLimit: limit
-    });
+    try {
+      await addCoupon({
+        eventId: selectedEventToManage.id,
+        code: formattedCode,
+        discountType: newCouponDiscountType,
+        discountValue: val,
+        usageLimit: limit
+      });
 
-    setAdminNotice({ text: `Cupom "${formattedCode}" cadastrado com sucesso!`, tone: 'success' });
+      setAdminNotice({ text: `Cupom "${formattedCode}" cadastrado com sucesso!`, tone: 'success' });
 
-    // Limpar formulário de cupom
-    setNewCouponCode('');
-    setNewCouponDiscountValue('');
-    setNewCouponUsageLimit('100');
+      // Limpar formulário de cupom
+      setNewCouponCode('');
+      setNewCouponDiscountValue('');
+      setNewCouponUsageLimit('100');
+    } catch (err) {
+      console.error(err);
+      setAdminNotice({ text: 'Não foi possível cadastrar o cupom. Tente novamente.', tone: 'error' });
+    }
   };
 
   // Enviar formulário de Evento
-  const handleCreateEvent = (e: React.FormEvent) => {
+  const handleCreateEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!eventName || !eventDate || !eventLocation) {
       setAdminNotice({ text: 'Preencha os campos obrigatórios antes de salvar o evento.', tone: 'error' });
       return;
     }
 
-    addEvent({
-      name: eventName,
-      date: eventDate,
-      location: eventLocation,
-      description: eventDescription || 'Sem descrição cadastrada.',
-      status: eventStatus,
-      logoUrl: eventLogo || 'https://images.unsplash.com/photo-1599058917212-d750089bc07e?q=80&w=200&auto=format&fit=crop',
-      bannerUrl: eventBanner || 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?q=80&w=1200&auto=format&fit=crop',
-      time: eventTime,
-      city: eventCity,
-      state: eventState,
-      rules: eventRules,
-      instagram: eventInstagram.trim().replace(/^@/, ''),
-      website: eventWebsite,
-      ticketPrice: eventTicketPrice,
-      ticketSlots: eventTicketSlots,
-      isTicketingActive: eventIsTicketingActive,
-      divisions: [],
-      workouts: [],
-      eventType,
-      scheduleItems: []
-    });
+    try {
+      await addEvent({
+        name: eventName,
+        date: eventDate,
+        location: eventLocation,
+        description: eventDescription || 'Sem descrição cadastrada.',
+        status: eventStatus,
+        logoUrl: eventLogo || 'https://images.unsplash.com/photo-1599058917212-d750089bc07e?q=80&w=200&auto=format&fit=crop',
+        bannerUrl: eventBanner || 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?q=80&w=1200&auto=format&fit=crop',
+        time: eventTime,
+        city: eventCity,
+        state: eventState,
+        rules: eventRules,
+        instagram: eventInstagram.trim().replace(/^@/, ''),
+        website: eventWebsite,
+        ticketPrice: eventTicketPrice,
+        ticketSlots: eventTicketSlots,
+        isTicketingActive: eventIsTicketingActive,
+        divisions: [],
+        workouts: [],
+        eventType,
+        scheduleItems: []
+      });
 
-    setAdminNotice({ text: 'Evento cadastrado com sucesso.', tone: 'success' });
-    // Reset
-    setEventName('');
-    setEventDate('');
-    setEventLocation('');
-    setEventDescription('');
-    setEventLogo('');
-    setEventBanner('');
-    setEventTime('');
-    setEventCity('');
-    setEventState('');
-    setEventRules('');
-    setEventInstagram('');
-    setEventWebsite('');
-    setEventTicketPrice(150);
-    setEventTicketSlots(100);
-    setEventIsTicketingActive(true);
-    setEventType('functional_fitness');
-    setActiveTab('dashboard');
+      setAdminNotice({ text: 'Evento cadastrado com sucesso.', tone: 'success' });
+      // Reset
+      setEventName('');
+      setEventDate('');
+      setEventLocation('');
+      setEventDescription('');
+      setEventLogo('');
+      setEventBanner('');
+      setEventTime('');
+      setEventCity('');
+      setEventState('');
+      setEventRules('');
+      setEventInstagram('');
+      setEventWebsite('');
+      setEventTicketPrice(150);
+      setEventTicketSlots(100);
+      setEventIsTicketingActive(true);
+      setEventType('functional_fitness');
+      setActiveTab('dashboard');
+    } catch (err) {
+      console.error(err);
+      setAdminNotice({ text: 'Não foi possível cadastrar o evento. Verifique sua sessão e tente novamente.', tone: 'error' });
+    }
   };
 
   // Inicializar formulário de edição de evento
@@ -1328,38 +1352,15 @@ export default function AdminPage() {
   };
 
   // Cadastrar Categoria (Divisão) dentro de um evento
-  const handleCreateCategory = (e: React.FormEvent) => {
+  const handleCreateCategory = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedEventToManage || !catName) {
       setAdminNotice({ text: 'Preencha o nome da categoria.', tone: 'error' });
       return;
     }
 
-    addDivision(selectedEventToManage.id, {
-      name: catName,
-      category: catCategory,
-      type: catType,
-      slotsLimit: catSlotsLimit,
-      price: catPrice,
-      isActive: catIsActive,
-      useAgeGroups: catUseAgeGroups,
-      ageGroups: catUseAgeGroups ? [...catAgeGroups] : []
-    });
-
-    setAdminNotice({ text: 'Categoria cadastrada com sucesso.', tone: 'success' });
-    setCatName('');
-    setCatSlotsLimit(100);
-    setCatPrice(150);
-    setCatIsActive(true);
-    setCatUseAgeGroups(false);
-    setCatAgeGroups([...FITNESS_RACING_AGE_GROUPS]);
-    setEditingCategoryId('');
-
-    // Forçar atualização do evento selecionado no estado local adicionando a nova categoria
-    setSelectedEventToManage(prev => {
-      if (!prev) return null;
-      const newDiv: Division = {
-        id: `div-${prev.id}-${catName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+    try {
+      const { division, autoWorkout } = await addDivision(selectedEventToManage.id, {
         name: catName,
         category: catCategory,
         type: catType,
@@ -1367,14 +1368,27 @@ export default function AdminPage() {
         price: catPrice,
         isActive: catIsActive,
         useAgeGroups: catUseAgeGroups,
-        ageGroups: catUseAgeGroups ? [...catAgeGroups] : [],
-        courseLayout: []
-      };
-      return {
+        ageGroups: catUseAgeGroups ? [...catAgeGroups] : []
+      });
+
+      setAdminNotice({ text: 'Categoria cadastrada com sucesso.', tone: 'success' });
+      setCatName('');
+      setCatSlotsLimit(100);
+      setCatPrice(150);
+      setCatIsActive(true);
+      setCatUseAgeGroups(false);
+      setCatAgeGroups([...FITNESS_RACING_AGE_GROUPS]);
+      setEditingCategoryId('');
+
+      setSelectedEventToManage(prev => prev ? {
         ...prev,
-        divisions: [...prev.divisions, newDiv]
-      };
-    });
+        divisions: [...prev.divisions, division],
+        workouts: autoWorkout ? [...prev.workouts, autoWorkout] : prev.workouts
+      } : null);
+    } catch (err) {
+      console.error(err);
+      setAdminNotice({ text: 'Não foi possível cadastrar a categoria. Tente novamente.', tone: 'error' });
+    }
   };
 
   const startEditCategory = (division: Division) => {
@@ -1428,70 +1442,44 @@ export default function AdminPage() {
     setCatAgeGroups([...FITNESS_RACING_AGE_GROUPS]);
   };
 
-  const handleDuplicateCategory = (division: Division) => {
+  const handleDuplicateCategory = async (division: Division) => {
     if (!selectedEventToManage) return;
     const duplicatedName = `${division.name} Cópia`;
-    addDivision(selectedEventToManage.id, {
-      name: duplicatedName,
-      category: division.category,
-      type: division.type,
-      slotsLimit: division.slotsLimit,
-      price: division.price,
-      isActive: division.isActive,
-      useAgeGroups: division.useAgeGroups,
-      ageGroups: division.ageGroups ? [...division.ageGroups] : [],
-      courseLayout: division.courseLayout || buildFitnessRacingCourse(duplicatedName)
-    });
-
-    setSelectedEventToManage(prev => {
-      if (!prev) return null;
-      const newDivId = `div-${prev.id}-${duplicatedName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
-      const newDiv: Division = {
-        ...division,
-        id: newDivId,
+    try {
+      const { division: newDiv, autoWorkout } = await addDivision(selectedEventToManage.id, {
         name: duplicatedName,
+        category: division.category,
+        type: division.type,
+        slotsLimit: division.slotsLimit,
+        price: division.price,
+        isActive: division.isActive,
+        useAgeGroups: division.useAgeGroups,
+        ageGroups: division.ageGroups ? [...division.ageGroups] : [],
         courseLayout: division.courseLayout || buildFitnessRacingCourse(duplicatedName)
-      };
-      return { ...prev, divisions: [...prev.divisions, newDiv] };
-    });
-    setAdminNotice({ text: `Categoria "${division.name}" duplicada.`, tone: 'success' });
+      });
+
+      setSelectedEventToManage(prev => prev ? {
+        ...prev,
+        divisions: [...prev.divisions, newDiv],
+        workouts: autoWorkout ? [...prev.workouts, autoWorkout] : prev.workouts
+      } : null);
+      setAdminNotice({ text: `Categoria "${division.name}" duplicada.`, tone: 'success' });
+    } catch (err) {
+      console.error(err);
+      setAdminNotice({ text: 'Não foi possível duplicar a categoria.', tone: 'error' });
+    }
   };
 
   // Cadastrar Prova (Workout) dentro de um evento
-  const handleCreateWorkout = (e: React.FormEvent) => {
+  const handleCreateWorkout = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedEventToManage || !wodName || !wodCode) {
       setAdminNotice({ text: 'Preencha o nome e o código da prova.', tone: 'error' });
       return;
     }
 
-    const currentWodId = `wod-${selectedEventToManage.id}-${wodName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
-
-    addWorkout(selectedEventToManage.id, {
-      name: wodName,
-      description: wodDescription || 'Sem descrição cadastrada.',
-      type: wodType,
-      timeCap: wodTimeCap || undefined,
-      code: wodCode,
-      orderIndex: Number(wodOrder),
-      divisionId: wodDivisionId || undefined,
-      tieBreaker: wodTieBreaker
-    });
-
-    setAdminNotice({ text: 'Prova cadastrada com sucesso.', tone: 'success' });
-    setWodName('');
-    setWodCode('');
-    setWodOrder(prev => prev + 1);
-    setWodDescription('');
-    setWodTimeCap('');
-    setWodDivisionId('');
-    setWodTieBreaker('');
-
-    // Forçar atualização do evento selecionado no estado local adicionando o novo workout
-    setSelectedEventToManage(prev => {
-      if (!prev) return null;
-      const newWod = {
-        id: currentWodId,
+    try {
+      const newWod = await addWorkout(selectedEventToManage.id, {
         name: wodName,
         description: wodDescription || 'Sem descrição cadastrada.',
         type: wodType,
@@ -1500,12 +1488,25 @@ export default function AdminPage() {
         orderIndex: Number(wodOrder),
         divisionId: wodDivisionId || undefined,
         tieBreaker: wodTieBreaker
-      };
-      return {
+      });
+
+      setAdminNotice({ text: 'Prova cadastrada com sucesso.', tone: 'success' });
+      setWodName('');
+      setWodCode('');
+      setWodOrder(prev => prev + 1);
+      setWodDescription('');
+      setWodTimeCap('');
+      setWodDivisionId('');
+      setWodTieBreaker('');
+
+      setSelectedEventToManage(prev => prev ? {
         ...prev,
         workouts: [...prev.workouts, newWod]
-      };
-    });
+      } : null);
+    } catch (err) {
+      console.error(err);
+      setAdminNotice({ text: 'Não foi possível cadastrar a prova. Tente novamente.', tone: 'error' });
+    }
   };
 
   const handleDeleteCategory = async (division: Division) => {
@@ -5519,6 +5520,92 @@ export default function AdminPage() {
       return true;
     });
 
+    const escapeExcelCell = (value: unknown) => String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+
+    const handleExportShirtSizes = () => {
+      if (!selectedEventToManage) return;
+
+      const rows = filteredRegs.flatMap((reg) => {
+        const div = divisions.find(d => d.id === reg.divisionId);
+        const athleteInfo = athletes.find(a =>
+          (reg.athleteId && a.id === reg.athleteId) ||
+          (a.name.toLowerCase() === reg.athleteName.toLowerCase() && a.divisionId === reg.divisionId)
+        );
+        const statusMeta = getPaymentStatusMeta(reg.paymentStatus);
+        const baseRow = {
+          evento: selectedEventToManage.name,
+          categoria: div?.name || reg.ticketType,
+          inscricao: reg.athleteName,
+          box: reg.box,
+          email: reg.athleteEmail,
+          telefone: reg.athletePhone,
+          status: statusMeta.label,
+          data: new Date(reg.createdAt).toLocaleDateString('pt-BR')
+        };
+
+        if (athleteInfo?.isTeam && athleteInfo.teamMembers && athleteInfo.teamMembers.length > 0) {
+          return athleteInfo.teamMembers.map((member, index) => ({
+            ...baseRow,
+            tipo: 'Integrante',
+            atleta: member.name,
+            instagram: member.instagram || '',
+            camisa: member.shirtSize || (index === 0 ? athleteInfo.shirtSize || '' : '')
+          }));
+        }
+
+        return [{
+          ...baseRow,
+          tipo: 'Atleta',
+          atleta: athleteInfo?.name || reg.athleteName,
+          instagram: athleteInfo?.instagram || '',
+          camisa: athleteInfo?.shirtSize || ''
+        }];
+      });
+
+      const headers = ['Evento', 'Categoria', 'Inscrição/Equipe', 'Tipo', 'Atleta/Integrante', 'Tamanho da Camisa', 'Instagram', 'Box/Academia', 'E-mail', 'Telefone', 'Status', 'Data'];
+      const bodyRows = rows.map(row => [
+        row.evento,
+        row.categoria,
+        row.inscricao,
+        row.tipo,
+        row.atleta,
+        row.camisa,
+        row.instagram,
+        row.box,
+        row.email,
+        row.telefone,
+        row.status,
+        row.data
+      ]);
+
+      const table = `
+        <html>
+          <head><meta charset="UTF-8" /></head>
+          <body>
+            <table border="1">
+              <thead><tr>${headers.map(header => `<th>${escapeExcelCell(header)}</th>`).join('')}</tr></thead>
+              <tbody>
+                ${bodyRows.map(row => `<tr>${row.map(cell => `<td>${escapeExcelCell(cell)}</td>`).join('')}</tr>`).join('')}
+              </tbody>
+            </table>
+          </body>
+        </html>
+      `;
+      const blob = new Blob([table], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `camisas-${selectedEventToManage.name.replace(/[^a-z0-9]+/gi, '-').replace(/(^-|-$)/g, '').toLowerCase() || 'evento'}.xls`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    };
+
     return (
       <div className="bg-card border border-card-border rounded-xl p-6 space-y-6 text-white">
         <div className="border-b border-card-border pb-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -5528,13 +5615,24 @@ export default function AdminPage() {
           </div>
           <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
             {!isBilheteriaOpen && (
-              <button
-                type="button"
-                onClick={() => setIsBilheteriaOpen(true)}
-                className="inline-flex min-h-9 items-center justify-center rounded bg-primary hover:bg-primary-hover px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-ink transition-colors font-sans"
-              >
-                Nova Inscrição (Bilheteria)
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={handleExportShirtSizes}
+                  disabled={filteredRegs.length === 0}
+                  className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded border border-card-border bg-dark-gray px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-white transition-colors hover:border-primary/40 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 font-sans"
+                >
+                  <FileSpreadsheet className="h-3.5 w-3.5" aria-hidden="true" />
+                  Exportar Camisas
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsBilheteriaOpen(true)}
+                  className="inline-flex min-h-9 items-center justify-center rounded bg-primary hover:bg-primary-hover px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-ink transition-colors font-sans"
+                >
+                  Nova Inscrição (Bilheteria)
+                </button>
+              </>
             )}
             <span className="text-xs bg-primary/20 text-primary border border-primary/30 px-3 py-1 rounded font-bold uppercase tracking-wider">
               Total: {filteredRegs.length} de {eventRegs.length}
@@ -5686,7 +5784,7 @@ export default function AdminPage() {
                   </div>
 
                   {/* Informações de contato e pagamento */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
                       <label htmlFor="bil-email" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans">E-mail de Contato *</label>
                       <input
@@ -5710,6 +5808,20 @@ export default function AdminPage() {
                         onChange={(e) => setBilAthletePhone(e.target.value)}
                         className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"
                       />
+                    </div>
+                    <div>
+                      <label htmlFor="bil-shirt-size" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans">Tamanho da Camisa</label>
+                      <select
+                        id="bil-shirt-size"
+                        value={bilShirtSize}
+                        onChange={(e) => setBilShirtSize(e.target.value)}
+                        className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"
+                      >
+                        <option value="">Selecione...</option>
+                        {SHIRT_SIZE_OPTIONS.map(size => (
+                          <option key={size} value={size}>{size}</option>
+                        ))}
+                      </select>
                     </div>
                   </div>
 
@@ -5758,6 +5870,27 @@ export default function AdminPage() {
                                 }}
                                 className="w-full rounded-md border border-card-border bg-dark-gray px-3 py-1.5 text-xs text-white focus:border-primary/50 focus:outline-none font-sans"
                               />
+                            </div>
+                            <div>
+                              <label htmlFor={`bil-member-shirt-${idx}`} className="mb-1 block text-[10px] font-bold uppercase text-muted font-sans">Camisa</label>
+                              <select
+                                id={`bil-member-shirt-${idx}`}
+                                value={bilTeamMembers[idx]?.shirtSize || ''}
+                                onChange={(e) => {
+                                  const shirtVal = e.target.value;
+                                  setBilTeamMembers(prev => {
+                                    const next = [...prev];
+                                    next[idx] = { ...next[idx], shirtSize: shirtVal };
+                                    return next;
+                                  });
+                                }}
+                                className="w-full rounded-md border border-card-border bg-dark-gray px-3 py-1.5 text-xs text-white focus:border-primary/50 focus:outline-none"
+                              >
+                                <option value="">Selecione...</option>
+                                {SHIRT_SIZE_OPTIONS.map(size => (
+                                  <option key={size} value={size}>{size}</option>
+                                ))}
+                              </select>
                             </div>
                           </div>
                         ))}
@@ -5929,6 +6062,7 @@ export default function AdminPage() {
                     <tr className="border-b border-card-border/50 text-[10px] font-bold text-muted uppercase tracking-wider font-sans">
                       <th className="py-3 px-2">Atleta / Equipe</th>
                       <th className="py-3 px-2">Categoria</th>
+                      <th className="py-3 px-2">Camisa</th>
                       <th className="py-3 px-2">Box / Academia</th>
                       <th className="py-3 px-2">Data Inscrição</th>
                       <th className="py-3 px-2 text-right">Valor Pago</th>
@@ -5943,6 +6077,9 @@ export default function AdminPage() {
                       const athleteInfo = athletes.find(
                         a => a.name.toLowerCase() === reg.athleteName.toLowerCase() && a.divisionId === reg.divisionId
                       );
+                      const shirtSizeLabel = athleteInfo?.isTeam && athleteInfo.teamMembers?.length
+                        ? athleteInfo.teamMembers.map(m => `${m.name}: ${m.shirtSize || '-'}`).join(' / ')
+                        : athleteInfo?.shirtSize || '-';
 
                       return (
                         <tr key={reg.id} className="hover:bg-dark-gray/30 transition-colors align-top">
@@ -5967,6 +6104,9 @@ export default function AdminPage() {
                           </td>
                           <td className="py-3 px-2 uppercase font-semibold text-muted text-[10px]">
                             {div ? div.name : 'Outro'}
+                          </td>
+                          <td className="py-3 px-2 text-primary uppercase text-[10px] font-bold">
+                            {shirtSizeLabel}
                           </td>
                           <td className="py-3 px-2 text-muted uppercase text-[10px] font-medium">
                             {reg.box}

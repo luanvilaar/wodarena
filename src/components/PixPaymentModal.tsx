@@ -158,6 +158,7 @@ export default function PixPaymentModal({
             city: athlete.city,
             state: athlete.state,
             photoUrl: athlete.photoUrl,
+            shirtSize: athlete.shirtSize,
             email: athlete.email,
             phone: athlete.phone,
             gender: athlete.gender,

@@ -116,6 +116,7 @@ export async function POST(request: Request) {
       state: dbAthlete?.state || '',
       instagram: dbAthlete?.instagram || '',
       photoUrl: dbAthlete?.photo_url || '',
+      shirtSize: dbAthlete?.shirt_size || '',
       email: dbAthlete?.email || registration.athleteEmail,
       phone: dbAthlete?.phone || registration.athletePhone,
       isTeam: dbAthlete?.is_team || false,
