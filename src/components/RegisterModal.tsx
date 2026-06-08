@@ -341,15 +341,14 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
     }
 
     const hasMissingRequiredParticipantData = visibleParticipants.some((participant) => {
-      if (!participant.name || !participant.gender || !participant.shirtSize) return true;
-      if (participant === primaryParticipant && (!participant.email || !participant.phone)) return true;
-      if (!isFitnessRacing) return !participant.email || !participant.phone;
-      return !participant.birthDate || !participant.city || !participant.state || !participant.instagram;
+      if (!participant.name || !participant.gender || !participant.shirtSize || !participant.email || !participant.phone || !participant.instagram) return true;
+      if (isFitnessRacing) return !participant.birthDate || !participant.city || !participant.state;
+      return false;
     });
 
-    if (hasMissingRequiredParticipantData || (isFitnessRacing && !box)) {
+    if (hasMissingRequiredParticipantData || (isTeamCategory && !teamName.trim()) || (isFitnessRacing && !box)) {
       alert(isFitnessRacing
-        ? 'Preencha nome, nascimento, sexo, cidade, estado, box, Instagram e tamanho da camisa.'
+        ? 'Preencha nome, e-mail, telefone, nascimento, sexo, cidade, estado, box, Instagram e tamanho da camisa.'
         : 'Por favor, preencha todos os campos obrigatórios.');
       return;
     }
@@ -862,11 +861,12 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                 {isTeamCategory && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label htmlFor="team-name" className="mb-1 block text-xs font-bold text-ink">Nome da equipe</label>
+                      <label htmlFor="team-name" className="mb-1 block text-xs font-bold text-ink">Nome da equipe *</label>
                       <input
                         id="team-name"
                         name="teamName"
                         type="text"
+                        required
                         placeholder="Ex: Equipe Brutus, Dupla WODArena"
                         value={teamName}
                         onChange={(e) => setTeamName(e.target.value)}
@@ -899,14 +899,14 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
-                        <label htmlFor={`athlete-${index}-email`} className="mb-1 block text-xs font-bold text-ink">E-mail {isFitnessRacing ? '(opcional)' : '*'}</label>
+                        <label htmlFor={`athlete-${index}-email`} className="mb-1 block text-xs font-bold text-ink">E-mail *</label>
                         <input
                           id={`athlete-${index}-email`}
                           name={`participants.${index}.email`}
                           autoComplete={index === 0 ? 'email' : 'off'}
                           spellCheck="false"
                           type="email"
-                          required={!isFitnessRacing}
+                          required
                           placeholder="Ex: lucas@email.com"
                           value={participant.email}
                           onChange={(e) => updateParticipant(index, 'email', e.target.value)}
@@ -914,13 +914,13 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                         />
                       </div>
                       <div>
-                        <label htmlFor={`athlete-${index}-phone`} className="mb-1 block text-xs font-bold text-ink">Telefone {isFitnessRacing ? '(opcional)' : '*'}</label>
+                        <label htmlFor={`athlete-${index}-phone`} className="mb-1 block text-xs font-bold text-ink">Telefone *</label>
                         <input
                           id={`athlete-${index}-phone`}
                           name={`participants.${index}.phone`}
                           autoComplete={index === 0 ? 'tel' : 'off'}
                           type="tel"
-                          required={!isFitnessRacing}
+                          required
                           placeholder="Ex: (11) 99999-9999"
                           value={participant.phone}
                           onChange={(e) => updateParticipant(index, 'phone', e.target.value)}
@@ -958,11 +958,12 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                         </div>
                       </fieldset>
                       <div>
-                        <label htmlFor={`athlete-${index}-instagram`} className="mb-1 block text-xs font-bold text-ink">Instagram {isFitnessRacing ? '*' : ''}</label>
+                        <label htmlFor={`athlete-${index}-instagram`} className="mb-1 block text-xs font-bold text-ink">Instagram *</label>
                         <input
                           id={`athlete-${index}-instagram`}
                           name={`participants.${index}.instagram`}
                           type="text"
+                          required
                           placeholder="Ex: @atleta"
                           value={participant.instagram}
                           onChange={(e) => updateParticipant(index, 'instagram', e.target.value)}
