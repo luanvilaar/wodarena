@@ -41,7 +41,7 @@ const currencyFormatter = new Intl.NumberFormat('pt-BR', {
 });
 
 const compactNumberFormatter = new Intl.NumberFormat('pt-BR');
-const SHIRT_SIZE_OPTIONS = ['PP', 'P', 'M', 'G', 'GG', 'XG', 'XXG'];
+const SHIRT_SIZE_OPTIONS = ['P', 'M', 'G', 'GG'];
 
 const formatInstitutionalMetric = (value: number, fallback: string) => {
   return value > 0 ? `${compactNumberFormatter.format(value)}+` : fallback;
@@ -5768,7 +5768,7 @@ export default function AdminPage() {
                     </div>
                     <div>
                       <label htmlFor="bil-instagram" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans">
-                        {isTeamCat ? 'Instagram da Equipe' : 'Instagram do Atleta'}
+                        Instagram do Atleta
                       </label>
                       <input
                         id="bil-instagram"

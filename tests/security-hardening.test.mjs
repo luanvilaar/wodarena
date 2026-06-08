@@ -19,8 +19,10 @@ const statusRoute = read('../src/app/api/checkout/status/route.ts');
 const webhookRoute = read('../src/app/api/webhooks/mercadopago/route.ts');
 const oauthCallback = read('../src/app/api/mercadopago/oauth/callback/route.ts');
 const adminPage = read('../src/app/admin/page.tsx');
+const mockData = read('../src/data/mockData.ts');
 const supabaseClient = read('../src/lib/supabase.ts');
 const rlsMigration = read('../supabase/migrations/20260608120000_reenable_rls_security_baseline.sql');
+const schemaMigration = read('../supabase/migrations/20260602164100_supabase_schema.sql');
 
 test('auth routes hash passwords and issue HttpOnly signed sessions', () => {
   assert.match(serverSecurity, /scryptSync/);
@@ -36,6 +38,8 @@ test('auth routes hash passwords and issue HttpOnly signed sessions', () => {
   assert.match(changePasswordRoute, /hashPassword\(String\(newPassword\)\)/);
   assert.match(resetPasswordRoute, /password: hashPassword\(password\)/);
   assert.match(registrationStartRoute, /password: hashPassword\(String\(password\)\)/);
+  assert.match(mockData, /email: 'l\.vilaar@gmail\.com'/);
+  assert.match(schemaMigration, /'l\.vilaar@gmail\.com'/);
 });
 
 test('Mercado Pago admin credentials are scoped to the authenticated session', () => {

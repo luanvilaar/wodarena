@@ -3,8 +3,8 @@ import { Event, Athlete, Score, User } from '../types';
 export const INITIAL_USERS: User[] = [
   {
     id: 'user-owner',
-    name: 'Carlos Proprietário',
-    email: 'owner@wodarena.com',
+    name: 'Luan Vilaar',
+    email: 'l.vilaar@gmail.com',
     password: 'owner',
     role: 'owner',
     organization: 'WODArena Corp'

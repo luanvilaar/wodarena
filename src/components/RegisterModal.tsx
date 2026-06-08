@@ -61,7 +61,8 @@ const createEmptyParticipant = (): ParticipantForm => ({
   shirtSize: ''
 });
 
-const shirtSizeOptions = ['PP', 'P', 'M', 'G', 'GG', 'XG', 'XXG'];
+const shirtSizeOptions = ['P', 'M', 'G', 'GG'];
+const paymentFailureGuidance = 'Sua inscrição foi registrada, mas não foi possível finalizar o pagamento. Acesse a Área do Atleta, faça login com o e-mail usado na inscrição e conclua o pagamento por lá. Se não lembrar a senha, use a recuperação de senha com esse mesmo e-mail.';
 
 const generateUniqueId = (prefix: string) => {
   return `${prefix}-${Date.now()}`;
@@ -99,7 +100,6 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
   const [selectedDivisionId, setSelectedDivisionId] = useState(event.divisions[0]?.id || '');
   const [box, setBox] = useState('');
   const [teamName, setTeamName] = useState('');
-  const [teamInstagram, setTeamInstagram] = useState('');
   const [participants, setParticipants] = useState<ParticipantForm[]>([createEmptyParticipant()]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -125,6 +125,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
     setAcceptedTerms(false);
     setIsSuccess(false);
     setPixData(null);
+    setTeamName('');
     setCardNumber('');
     setCardholderName('');
     setExpirationDate('');
@@ -403,10 +404,12 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
       email: primaryParticipant.email,
       phone: primaryParticipant.phone,
       gender: primaryParticipant.gender,
-      instagram: isTeamCategory ? normalizeInstagram(teamInstagram || primaryParticipant.instagram) : normalizeInstagram(primaryParticipant.instagram),
+      instagram: normalizeInstagram(primaryParticipant.instagram),
       isTeam: isTeamCategory,
       teamMembers
     };
+
+    let paymentAttemptStarted = false;
 
     try {
       const started = await startRegistration(
@@ -414,6 +417,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
         athleteProfile,
         totalPaid === 0 ? 'payment_approved' : 'payment_pending'
       );
+      paymentAttemptStarted = true;
       const activeRegistrationData = started.registrationData;
       const activeAthleteProfile = started.athleteProfile;
 
@@ -489,7 +493,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
         });
 
         if (!response.ok) {
-          throw new Error('Erro ao gerar link de pagamento via Mercado Pago.');
+          throw new Error(await getCheckoutErrorMessage(response, 'Erro ao gerar link de pagamento via Mercado Pago.'));
         }
 
         const data = await response.json();
@@ -505,7 +509,8 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
 
     } catch (err) {
       console.error("[Checkout WODArena] Erro no processamento do checkout:", err);
-      alert(err instanceof Error ? err.message : 'Houve um erro ao processar o seu checkout. Por favor, tente novamente.');
+      const baseMessage = err instanceof Error ? err.message : 'Houve um erro ao processar o seu checkout. Por favor, tente novamente.';
+      alert(paymentAttemptStarted ? `${baseMessage}\n\n${paymentFailureGuidance}` : baseMessage);
       setIsProcessing(false);
     }
   }, [
@@ -521,7 +526,6 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
     ticketPrice,
     totalPaid,
     appliedCoupon,
-    teamInstagram,
     paymentMethod,
     cpf,
     cardNumber,
@@ -839,18 +843,6 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                         placeholder="Ex: Equipe Brutus, Dupla WODArena"
                         value={teamName}
                         onChange={(e) => setTeamName(e.target.value)}
-                        className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="team-instagram" className="mb-1 block text-xs font-bold text-ink">Instagram da equipe</label>
-                      <input
-                        id="team-instagram"
-                        name="teamInstagram"
-                        type="text"
-                        placeholder="Ex: @equipe"
-                        value={teamInstagram}
-                        onChange={(e) => setTeamInstagram(e.target.value)}
                         className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none"
                       />
                     </div>

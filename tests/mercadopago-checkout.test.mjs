@@ -43,7 +43,7 @@ test('checkout surfaces backend payment errors instead of generic alerts', () =>
   assert.match(registerModal, /getCheckoutErrorMessage/);
   assert.match(registerModal, /throw new Error\(await getCheckoutErrorMessage\(response, 'Erro ao criar cobrança Pix\.'\)\)/);
   assert.match(registerModal, /throw new Error\(await getCheckoutErrorMessage\(response, 'Erro ao processar pagamento com cartão\.'\)\)/);
-  assert.match(registerModal, /alert\(err instanceof Error \? err\.message :/);
+  assert.match(registerModal, /paymentAttemptStarted \? `\$\{baseMessage\}\\n\\n\$\{paymentFailureGuidance\}` : baseMessage/);
 });
 
 test('transparent checkout sends payer CPF and does not send application fee', () => {
@@ -74,6 +74,13 @@ test('checkout payment routes apply rate limits by registration and method', () 
   assert.match(cardRoute, /checkout:\$\{getClientIp\(request\)\}:\$\{registrationData\.id\}:card/);
   assert.match(pixRoute, /checkRateLimit/);
   assert.match(pixRoute, /checkout:\$\{getClientIp\(request\)\}:\$\{registrationData\.id\}:pix/);
+});
+
+test('payment failures surface athlete-area recovery guidance', () => {
+  assert.match(registerModal, /paymentFailureGuidance/);
+  assert.match(registerModal, /Área do Atleta/);
+  assert.match(registerModal, /recuperação de senha/);
+  assert.match(registerModal, /paymentAttemptStarted/);
 });
 
 test('local registration preserves checkout identifiers for webhook and voucher consistency', () => {

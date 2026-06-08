@@ -20,6 +20,10 @@ test('registration form collects shirt size instead of athlete photo', () => {
   assert.match(registerModal, /participants\.\$\{index\}\.shirtSize/);
   assert.match(registerModal, /!participant\.shirtSize/);
   assert.doesNotMatch(registerModal, /Foto do atleta \(opcional\)/);
+  assert.doesNotMatch(registerModal, /Instagram da equipe/);
+  assert.doesNotMatch(registerModal, /\bPP\b/);
+  assert.doesNotMatch(registerModal, /\bXG\b/);
+  assert.doesNotMatch(registerModal, /\bXXG\b/);
 });
 
 test('shirt size is persisted in athlete storage and checkout recovery flows', () => {
@@ -42,4 +46,8 @@ test('manager panel exports shirt data in an Excel-compatible file', () => {
   assert.match(admin, /Tamanho da Camisa/);
   assert.match(admin, /member\.shirtSize/);
   assert.match(admin, /athleteInfo\?\.shirtSize/);
+  assert.match(admin, /const SHIRT_SIZE_OPTIONS = \['P', 'M', 'G', 'GG'\]/);
+  assert.doesNotMatch(admin, /\bPP\b/);
+  assert.doesNotMatch(admin, /\bXG\b/);
+  assert.doesNotMatch(admin, /\bXXG\b/);
 });

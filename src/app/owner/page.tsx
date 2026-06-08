@@ -151,7 +151,7 @@ export default function OwnerPage() {
         setLoginError('Acesso negado. Esta conta não possui privilégios de proprietário do site.');
       }
     } else {
-      setLoginError('E-mail ou senha incorretos. Use owner@wodarena.com e owner.');
+      setLoginError('E-mail ou senha incorretos. Use l.vilaar@gmail.com e owner.');
     }
   };
 
@@ -213,7 +213,7 @@ export default function OwnerPage() {
                   autoComplete="email"
                   type="email"
                   required
-                  placeholder="Ex: owner@wodarena.com"
+              placeholder="Ex: l.vilaar@gmail.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full px-4 py-2.5 bg-dark-gray border border-card-border rounded-lg text-white focus:outline-none focus:border-primary/50 text-sm"
@@ -248,7 +248,7 @@ export default function OwnerPage() {
           <div className="pt-4 border-t border-card-border/50 text-center">
             <p className="text-[10px] text-muted leading-relaxed">
               Dica rápida de demonstração:<br />
-              Use <strong className="text-primary font-bold">owner@wodarena.com</strong> e senha <strong className="text-primary font-bold">owner</strong> para entrar.
+              Use <strong className="text-primary font-bold">l.vilaar@gmail.com</strong> e senha <strong className="text-primary font-bold">owner</strong> para entrar.
             </p>
           </div>
         </div>

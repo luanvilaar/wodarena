@@ -87,7 +87,7 @@ CREATE TABLE IF NOT EXISTS registrations (
 -- 8. Inserir contas iniciais para demonstração (se as tabelas estiverem vazias)
 INSERT INTO users (id, name, email, password, role, organization)
 VALUES 
-('owner-1', 'Proprietário WODArena', 'owner@wodarena.com', 'owner', 'owner', 'WODArena Corp'),
+('owner-1', 'Luan Vilaar', 'l.vilaar@gmail.com', 'owner', 'owner', 'WODArena Corp'),
 ('org-1', 'Gestor Carioca', 'org1@wodarena.com', 'manager1', 'manager', 'Carioca Box'),
 ('org-2', 'Gestor Warmup', 'org2@wodarena.com', 'manager2', 'manager', 'Warmup Box')
 ON CONFLICT (id) DO NOTHING;
@@ -135,4 +135,3 @@ ALTER TABLE athletes ADD COLUMN IF NOT EXISTS email TEXT;
 ALTER TABLE athletes ADD COLUMN IF NOT EXISTS phone TEXT;
 ALTER TABLE athletes ADD COLUMN IF NOT EXISTS is_team BOOLEAN DEFAULT FALSE;
 ALTER TABLE athletes ADD COLUMN IF NOT EXISTS team_members JSONB DEFAULT '[]'::JSONB;
-
