@@ -1,7 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || 'https://momigbtnsswoldqnadmc.supabase.co';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+import { createSupabaseAdmin } from '@/lib/serverSecurity';
 type MercadoPagoEventRow = {
   organizer_id: string;
   mp_access_token: string | null;
@@ -44,16 +41,11 @@ export class MercadoPagoConfigError extends Error {
 }
 
 const getSupabaseAdmin = () => {
-  if (!supabaseServiceKey) {
+  try {
+    return createSupabaseAdmin();
+  } catch {
     throw new MercadoPagoConfigError('Configuração administrativa do Supabase ausente.', 500);
   }
-
-  return createClient(supabaseUrl, supabaseServiceKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false
-    }
-  });
 };
 
 export const resolveMercadoPagoCheckoutConfig = async (eventId: string): Promise<MercadoPagoCheckoutConfig> => {

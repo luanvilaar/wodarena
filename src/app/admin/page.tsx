@@ -5,7 +5,6 @@ import Image from 'next/image';
 import Link from 'next/link';
 import Script from 'next/script';
 import { useApp } from '@/context/AppContext';
-import { supabase } from '@/lib/supabase';
 
 import { BrandLogo } from '@/components/BrandLogo';
 import { RegistrationVoucher } from '@/components/RegistrationVoucher';
@@ -263,11 +262,11 @@ export default function AdminPage() {
       if (!currentUser) return;
       setLoadingMp(true);
       try {
-        const { data } = await supabase
-          .from('mercadopago_accounts')
-          .select('id, mercadopago_user_id, status, public_key')
-          .eq('user_id', currentUser.id)
-          .maybeSingle();
+        const response = await fetch('/api/admin/mercadopago');
+        if (!response.ok) {
+          throw new Error('Erro ao buscar conta Mercado Pago.');
+        }
+        const { account: data } = await response.json();
 
         if (data && data.status === 'connected') {
           setMpAccount(data);
@@ -301,7 +300,7 @@ export default function AdminPage() {
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ userId: currentUser.id })
+        body: JSON.stringify({})
       });
 
       if (!response.ok) {
@@ -339,7 +338,6 @@ export default function AdminPage() {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          userId: currentUser.id,
           publicKey: manualPublicKey,
           accessToken: manualAccessToken
         })

@@ -1,10 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createHash, randomBytes } from 'node:crypto';
-import { createClient } from '@supabase/supabase-js';
 import { sendPasswordResetEmail } from '@/lib/resend';
+import { checkRateLimit, createSupabaseAdmin, getClientIp } from '@/lib/serverSecurity';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://momigbtnsswoldqnadmc.supabase.co';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const RESET_EXPIRES_MINUTES = 45;
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
@@ -23,11 +21,6 @@ const getPublicAppUrl = () => {
 
 export async function POST(request: Request) {
   try {
-    if (!supabaseServiceKey) {
-      console.error('[API Auth RequestPasswordReset] SUPABASE_SERVICE_ROLE_KEY não configurada.');
-      return NextResponse.json({ error: 'Configuração do servidor ausente.' }, { status: 500 });
-    }
-
     const { email } = await request.json();
     const normalizedEmail = normalizeEmail(String(email || ''));
 
@@ -35,9 +28,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Informe um e-mail válido.' }, { status: 400 });
     }
 
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { persistSession: false, autoRefreshToken: false }
+    const rateLimited = checkRateLimit({
+      key: `password-reset:${getClientIp(request)}:${normalizedEmail}`,
+      limit: 5,
+      windowMs: 60 * 60 * 1000
     });
+    if (rateLimited) return rateLimited;
+
+    const supabaseAdmin = createSupabaseAdmin();
 
     const { data: user, error: userError } = await supabaseAdmin
       .from('users')

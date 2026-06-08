@@ -1,70 +1,62 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import {
   MercadoPagoConfigError,
   resolveMercadoPagoCheckoutConfig
 } from '@/lib/mercadopagoServer';
+import { loadRegistrationCheckoutSnapshot } from '@/lib/serverCheckout';
+import { createSupabaseAdmin } from '@/lib/serverSecurity';
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || 'https://momigbtnsswoldqnadmc.supabase.co',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-);
+const supabaseAdmin = createSupabaseAdmin();
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { registrationData, athleteProfile, origin } = body;
+    const { registrationData, origin } = body;
 
-    if (!registrationData || !athleteProfile || !origin) {
+    if (!registrationData?.id || !origin) {
       return NextResponse.json({ error: 'Parâmetros inválidos.' }, { status: 400 });
     }
 
-    const checkoutConfig = await resolveMercadoPagoCheckoutConfig(registrationData.eventId);
-    console.log(`[MercadoPago Preference API] Usando credenciais ${checkoutConfig.source} do organizador ${checkoutConfig.organizerId} para o evento ${registrationData.eventId}`);
+    const checkoutSnapshot = await loadRegistrationCheckoutSnapshot(supabaseAdmin, registrationData.id);
+    const { registrationData: safeRegistrationData, athleteProfile, transactionAmount } = checkoutSnapshot;
+    const checkoutConfig = await resolveMercadoPagoCheckoutConfig(checkoutSnapshot.eventId);
+    console.log(`[MercadoPago Preference API] Usando credenciais ${checkoutConfig.source} do organizador ${checkoutConfig.organizerId} para o evento ${checkoutSnapshot.eventId}`);
 
-    // Serializa os dados complexos de inscrição para caberem no metadata plano do Mercado Pago
     const metadataPayload = {
-      registration_json: JSON.stringify({
-        registrationData,
-        athleteProfile
-      })
+      registration_id: checkoutSnapshot.registrationId,
+      event_id: checkoutSnapshot.eventId
     };
 
     const isLocalhost = origin.includes('localhost') || origin.includes('127.0.0.1');
-
-    let transactionAmount = Number(registrationData.totalPaid);
-    if (transactionAmount > 0 && transactionAmount < 1.00) {
-      transactionAmount = 1.00;
-    }
 
     // Monta o payload de preferência para o Mercado Pago com a taxa de comissão
     const preferencePayload = {
       items: [
         {
-          id: registrationData.divisionId,
-          title: `Inscrição: ${registrationData.ticketType} - WODArena`,
-          description: `Inscrição na categoria: ${registrationData.ticketType}`,
+          id: safeRegistrationData.divisionId,
+          title: `Inscrição: ${safeRegistrationData.ticketType} - WODArena`,
+          description: `Inscrição na categoria: ${safeRegistrationData.ticketType}`,
           quantity: 1,
           currency_id: 'BRL',
           unit_price: transactionAmount
         }
       ],
       payer: {
-        name: athleteProfile.name || registrationData.athleteName,
-        email: athleteProfile.email || registrationData.athleteEmail || 'atleta@wodarena.com',
+        name: athleteProfile.name || safeRegistrationData.athleteName,
+        email: athleteProfile.email || safeRegistrationData.athleteEmail || 'atleta@wodarena.com',
         phone: {
-          number: (athleteProfile.phone || registrationData.athletePhone || '').replace(/\D/g, '')
+          number: String(athleteProfile.phone || safeRegistrationData.athletePhone || '').replace(/\D/g, '')
         }
       },
       back_urls: {
-        success: `${origin}/event/${registrationData.eventId}?payment=success`,
-        failure: `${origin}/event/${registrationData.eventId}?payment=failure`,
-        pending: `${origin}/event/${registrationData.eventId}?payment=pending`
+        success: `${origin}/event/${checkoutSnapshot.eventId}?payment=success`,
+        failure: `${origin}/event/${checkoutSnapshot.eventId}?payment=failure`,
+        pending: `${origin}/event/${checkoutSnapshot.eventId}?payment=pending`
       },
       metadata: metadataPayload,
       ...(isLocalhost ? {} : { 
         auto_return: 'approved',
-        notification_url: `${origin}/api/webhooks/mercadopago?event_id=${registrationData.eventId}` 
+        notification_url: `${origin}/api/webhooks/mercadopago?event_id=${checkoutSnapshot.eventId}` 
       })
     };
 
@@ -96,7 +88,7 @@ export async function POST(request: Request) {
         total_paid: transactionAmount,
         updated_at: new Date().toISOString()
       })
-      .eq('id', registrationData.id);
+      .eq('id', checkoutSnapshot.registrationId);
 
     return NextResponse.json({
       id: preferenceData.id,

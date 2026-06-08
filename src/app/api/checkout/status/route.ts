@@ -1,15 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import {
   MercadoPagoConfigError,
   resolveMercadoPagoCheckoutConfig
 } from '@/lib/mercadopagoServer';
+import { loadRegistrationCheckoutSnapshot } from '@/lib/serverCheckout';
+import { createSupabaseAdmin, getRequestSession, SessionUser } from '@/lib/serverSecurity';
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || 'https://momigbtnsswoldqnadmc.supabase.co',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-);
+const supabaseAdmin = createSupabaseAdmin();
 
 const toRegistrationPaymentStatus = (status?: string) => {
   if (status === 'approved') return 'payment_approved';
@@ -19,12 +17,40 @@ const toRegistrationPaymentStatus = (status?: string) => {
   return 'payment_pending';
 };
 
+const canReadRegistrationSnapshot = async (
+  actor: SessionUser | null,
+  registrationId: string,
+  eventId: string
+) => {
+  if (!actor) return false;
+  if (actor.role === 'owner') return true;
+
+  const { data: registration, error } = await supabaseAdmin
+    .from('registrations')
+    .select('id, user_id, event_id')
+    .eq('id', registrationId)
+    .eq('event_id', eventId)
+    .maybeSingle();
+
+  if (error || !registration) return false;
+  if (actor.role === 'athlete') return registration.user_id === actor.id;
+
+  const { data: event } = await supabaseAdmin
+    .from('events')
+    .select('organizer_id')
+    .eq('id', registration.event_id)
+    .maybeSingle();
+
+  return event?.organizer_id === actor.id;
+};
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const paymentId = searchParams.get('payment_id');
     const registrationIdParam = searchParams.get('registration_id');
     const eventId = searchParams.get('event_id');
+    const actor = getRequestSession(request);
 
     if (!eventId) {
       return NextResponse.json({ error: 'Parâmetro event_id obrigatório.' }, { status: 400 });
@@ -61,6 +87,7 @@ export async function GET(request: Request) {
         .from('registrations')
         .select('*')
         .eq('id', registrationIdParam)
+        .eq('event_id', eventId)
         .maybeSingle();
 
       if (regDbErr || !registration) {
@@ -86,15 +113,7 @@ export async function GET(request: Request) {
 
       // Procura transação que corresponda à inscrição no metadata ou dados do pagador
       let foundPayment = results.find((p: any) => {
-        if (p.metadata?.registration_json) {
-          try {
-            const regJson = JSON.parse(p.metadata.registration_json);
-            return regJson.registrationData?.id === registrationIdParam;
-          } catch {
-            return false;
-          }
-        }
-        return false;
+        return p.metadata?.registration_id === registrationIdParam;
       });
 
       if (!foundPayment) {
@@ -102,7 +121,7 @@ export async function GET(request: Request) {
         foundPayment = results.find((p: any) => {
           const payerEmail = p.payer?.email?.trim().toLowerCase();
           const amountMatches = Math.abs((p.transaction_amount || 0) - (registration.total_paid || 0)) < 0.1;
-          const emailMatches = payerEmail === emailToMatch || (p.metadata?.registration_json && String(p.metadata.registration_json).toLowerCase().includes(emailToMatch));
+          const emailMatches = payerEmail === emailToMatch;
           return emailMatches && amountMatches && p.status === 'approved';
         });
       }
@@ -116,16 +135,7 @@ export async function GET(request: Request) {
       paymentData = foundPayment;
     }
     let registrationPayload = null;
-
-    if (paymentData.metadata?.registration_json) {
-      try {
-        registrationPayload = JSON.parse(paymentData.metadata.registration_json);
-      } catch (parseErr) {
-        console.warn("[MercadoPago Status API] Metadados de inscrição inválidos:", parseErr);
-      }
-    }
-
-    const registrationId = registrationPayload?.registrationData?.id;
+    const registrationId = paymentData.metadata?.registration_id || registrationIdParam;
     if (registrationId) {
       await supabaseAdmin
         .from('registrations')
@@ -137,14 +147,27 @@ export async function GET(request: Request) {
           payment_error_message: paymentData.status === 'rejected' ? 'Pagamento não processado.' : null,
           updated_at: new Date().toISOString()
         })
-        .eq('id', registrationId);
+        .eq('id', registrationId)
+        .eq('event_id', eventId);
+
+      if (await canReadRegistrationSnapshot(actor, registrationId, eventId)) {
+        try {
+          const snapshot = await loadRegistrationCheckoutSnapshot(supabaseAdmin, registrationId);
+          registrationPayload = {
+            registrationData: snapshot.registrationData,
+            athleteProfile: snapshot.athleteProfile
+          };
+        } catch (snapshotErr) {
+          console.warn("[MercadoPago Status API] Nao foi possivel carregar snapshot da inscricao:", snapshotErr);
+        }
+      }
     }
 
     return NextResponse.json({
       status: paymentData.status,
       registrationData: registrationPayload?.registrationData || null,
       athleteProfile: registrationPayload?.athleteProfile || null,
-      cpf: paymentData.metadata?.payer_cpf || ''
+      cpf: ''
     });
 
   } catch (err) {

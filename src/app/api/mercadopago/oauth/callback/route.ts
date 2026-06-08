@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || 'https://momigbtnsswoldqnadmc.supabase.co';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+import {
+  canActOnUser,
+  createSupabaseAdmin,
+  requireSession
+} from '@/lib/serverSecurity';
 
 export async function GET(request: Request) {
   const origin = request.headers.get('origin') || new URL(request.url).origin;
@@ -16,21 +17,22 @@ export async function GET(request: Request) {
       return NextResponse.redirect(`${origin}/admin?tab=payments&error=oauth_failed`);
     }
 
+    const auth = requireSession(request, ['manager', 'owner']);
+    if (auth.response || !auth.user || !canActOnUser(auth.user, userId)) {
+      console.error('[OAuth Callback] Sessao invalida ou state nao pertence ao usuario autenticado.');
+      return NextResponse.redirect(`${origin}/admin?tab=payments&error=oauth_forbidden`);
+    }
+
     const clientId = process.env.MERCADOPAGO_CLIENT_ID;
     const clientSecret = process.env.MERCADOPAGO_CLIENT_SECRET;
     const redirectUri = process.env.MERCADOPAGO_REDIRECT_URI || `${origin}/api/mercadopago/oauth/callback`;
 
-    if (!clientId || !clientSecret || !supabaseServiceKey) {
-      console.error('[OAuth Callback] Variáveis de ambiente MERCADOPAGO_CLIENT_ID, MERCADOPAGO_CLIENT_SECRET ou SUPABASE_SERVICE_ROLE_KEY não configuradas.');
+    if (!clientId || !clientSecret) {
+      console.error('[OAuth Callback] Variáveis de ambiente MERCADOPAGO_CLIENT_ID ou MERCADOPAGO_CLIENT_SECRET não configuradas.');
       return NextResponse.redirect(`${origin}/admin?tab=payments&error=critical_error`);
     }
 
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false
-      }
-    });
+    const supabaseAdmin = createSupabaseAdmin();
 
     console.log(`[OAuth Callback] Iniciando troca de token para o gestor: ${userId}...`);
 

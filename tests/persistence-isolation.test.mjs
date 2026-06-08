@@ -4,22 +4,26 @@ import test from 'node:test';
 
 const context = readFileSync(new URL('../src/context/AppContext.tsx', import.meta.url), 'utf8');
 const admin = readFileSync(new URL('../src/app/admin/page.tsx', import.meta.url), 'utf8');
+const persistenceRoute = readFileSync(new URL('../src/app/api/admin/persistence/route.ts', import.meta.url), 'utf8');
 
-test('event and child creation waits for Supabase before updating local state', () => {
+test('event and child creation waits for server persistence before updating local state', () => {
   assert.match(context, /const addEvent = async[\s\S]*Promise<Event>/);
-  assert.match(context, /const \{ error: eventError \} = await supabase\.from\('events'\)\.insert/);
-  assert.match(context, /if \(eventError\)[\s\S]*throw eventError/);
+  assert.match(context, /await adminPersist\('createEvent'/);
+  assert.match(persistenceRoute, /case 'createEvent'/);
+  assert.match(persistenceRoute, /supabaseAdmin\.from\('events'\)\.insert\(event\)/);
   assert.match(context, /setEvents\(prev => \[\.\.\.prev, newEvent\]\)/);
   assert.match(context, /const addDivision = async[\s\S]*Promise<\{ division: Division; autoWorkout: Workout \| null \}>/);
   assert.match(context, /const addWorkout = async[\s\S]*Promise<Workout>/);
 });
 
-test('manager mutations are scoped by organizer and event ids', () => {
+test('manager mutations are routed through authenticated server ownership checks', () => {
   assert.match(context, /createScopedId\('evt', currentUser\.id, eventData\.name\)/);
-  assert.match(context, /\.delete\(\)[\s\S]*\.eq\('id', eventId\)[\s\S]*\.eq\('organizer_id', currentUser\.id\)/);
-  assert.match(context, /\.update\(dbPayload\)[\s\S]*\.eq\('id', eventId\)[\s\S]*\.eq\('organizer_id', currentUser\.id\)/);
-  assert.match(context, /\.update\(dbPayload\)[\s\S]*\.eq\('id', divisionId\)[\s\S]*\.eq\('event_id', eventId\)/);
-  assert.match(context, /\.delete\(\)[\s\S]*\.eq\('id', workoutId\)[\s\S]*\.eq\('event_id', eventId\)/);
+  assert.match(context, /fetch\('\/api\/admin\/persistence'/);
+  assert.doesNotMatch(context, /supabase\.from\(/);
+  assert.match(persistenceRoute, /requireSession\(request, \['manager', 'owner'\]\)/);
+  assert.match(persistenceRoute, /event\.organizer_id !== actor\.id/);
+  assert.match(persistenceRoute, /ensureDivisionOwner\(supabaseAdmin, actor, payload\.divisionId, payload\.eventId\)/);
+  assert.match(persistenceRoute, /ensureWorkoutOwner\(supabaseAdmin, actor, payload\.workoutId, payload\.eventId\)/);
   assert.match(context, /e\.organizerId === currentUser\?\.id/);
 });
 

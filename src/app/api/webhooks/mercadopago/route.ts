@@ -1,17 +1,15 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import { sendRegistrationEmail } from '@/lib/resend';
 import { Athlete, Event, Registration, RegistrationPaymentStatus } from '@/types';
+import { createSupabaseAdmin } from '@/lib/serverSecurity';
 import {
   MercadoPagoConfigError,
   resolveMercadoPagoCheckoutConfig
 } from '@/lib/mercadopagoServer';
 
-// Inicializa o cliente do Supabase com privilégios de Admin para o servidor
-const supabaseAdmin = createClient(
-  process.env.SUPABASE_URL || 'https://momigbtnsswoldqnadmc.supabase.co',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-);
+const supabaseAdmin = createSupabaseAdmin();
 
 const toRegistrationPaymentStatus = (status?: string): RegistrationPaymentStatus => {
   if (status === 'approved') return 'payment_approved';
@@ -19,6 +17,142 @@ const toRegistrationPaymentStatus = (status?: string): RegistrationPaymentStatus
   if (status === 'cancelled') return 'payment_cancelled';
   if (status === 'rejected') return 'payment_failed';
   return 'payment_pending';
+};
+
+const parseSignature = (signature: string | null) => Object.fromEntries(
+  (signature || '')
+    .split(',')
+    .map(part => part.trim().split('='))
+    .filter(([key, value]) => key && value)
+);
+
+const isValidMercadoPagoSignature = (
+  request: Request,
+  paymentId: string,
+  bodyPaymentId?: string
+) => {
+  const secret = process.env.MERCADOPAGO_WEBHOOK_SECRET;
+  if (!secret) return process.env.NODE_ENV !== 'production';
+
+  const requestId = request.headers.get('x-request-id');
+  const signatureParts = parseSignature(request.headers.get('x-signature'));
+  const ts = signatureParts.ts;
+  const v1 = signatureParts.v1;
+  const id = bodyPaymentId || paymentId;
+  if (!requestId || !ts || !v1 || !id) return false;
+
+  const manifest = `id:${id};request-id:${requestId};ts:${ts};`;
+  const expected = createHmac('sha256', secret).update(manifest).digest('hex');
+  const actualBuffer = Buffer.from(v1);
+  const expectedBuffer = Buffer.from(expected);
+  return actualBuffer.length === expectedBuffer.length && timingSafeEqual(actualBuffer, expectedBuffer);
+};
+
+const normalizeTeamMembers = (value: unknown) => {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+};
+
+const sendApprovedRegistrationEmail = async (
+  registrationRow: Record<string, any>,
+  paymentData: Record<string, any>
+) => {
+  const { data: dbEvent } = await supabaseAdmin
+    .from('events')
+    .select('*')
+    .eq('id', registrationRow.event_id)
+    .maybeSingle();
+
+  if (!dbEvent) return;
+
+  const { data: dbAthlete } = await supabaseAdmin
+    .from('athletes')
+    .select('*')
+    .eq('id', registrationRow.athlete_id)
+    .maybeSingle();
+
+  const event: Event = {
+    id: dbEvent.id,
+    name: dbEvent.name,
+    logoUrl: dbEvent.logo_url,
+    bannerUrl: dbEvent.banner_url,
+    status: dbEvent.status,
+    location: dbEvent.location,
+    date: dbEvent.date,
+    description: dbEvent.description,
+    organizerId: dbEvent.organizer_id,
+    sponsors: dbEvent.sponsors || [],
+    divisions: [],
+    workouts: [],
+    format: dbEvent.format || 'individual',
+    ticketPrice: dbEvent.ticket_price,
+    ticketSlots: dbEvent.ticket_slots,
+    isTicketingActive: dbEvent.is_ticketing_active,
+    time: dbEvent.time || '',
+    city: dbEvent.city || '',
+    state: dbEvent.state || '',
+    rules: dbEvent.rules || '',
+    instagram: dbEvent.instagram || '',
+    website: dbEvent.website || '',
+    eventType: dbEvent.event_type || 'functional_fitness'
+  };
+
+  const registration: Registration = {
+    id: registrationRow.id,
+    eventId: registrationRow.event_id,
+    divisionId: registrationRow.division_id,
+    userId: registrationRow.user_id || undefined,
+    athleteId: registrationRow.athlete_id || undefined,
+    athleteName: registrationRow.athlete_name,
+    athleteEmail: registrationRow.athlete_email,
+    athletePhone: registrationRow.athlete_phone,
+    box: registrationRow.box,
+    gender: registrationRow.gender,
+    ticketType: registrationRow.ticket_type,
+    ticketPrice: Number(registrationRow.ticket_price),
+    quantity: Number(registrationRow.quantity),
+    totalPaid: Number(registrationRow.total_paid),
+    createdAt: registrationRow.created_at,
+    couponCode: registrationRow.coupon_code || undefined,
+    paymentStatus: 'payment_approved',
+    paymentMethod: paymentData.payment_method_id || undefined,
+    paymentId: String(paymentData.id),
+    paymentStatusDetail: paymentData.status_detail || undefined,
+    updatedAt: new Date().toISOString()
+  };
+
+  const athlete: Athlete = {
+    id: dbAthlete?.id || registrationRow.athlete_id,
+    name: dbAthlete?.name || registrationRow.athlete_name,
+    box: dbAthlete?.box || registrationRow.box || 'Independente',
+    country: dbAthlete?.country || 'BR',
+    divisionId: registrationRow.division_id,
+    birthDate: dbAthlete?.birth_date || '',
+    gender: dbAthlete?.gender || registrationRow.gender || undefined,
+    city: dbAthlete?.city || '',
+    state: dbAthlete?.state || '',
+    instagram: dbAthlete?.instagram || '',
+    photoUrl: dbAthlete?.photo_url || '',
+    shirtSize: dbAthlete?.shirt_size || '',
+    email: dbAthlete?.email || registrationRow.athlete_email,
+    phone: dbAthlete?.phone || registrationRow.athlete_phone,
+    isTeam: dbAthlete?.is_team || false,
+    teamMembers: normalizeTeamMembers(dbAthlete?.team_members)
+  };
+
+  const result = await sendRegistrationEmail(registration, athlete, event, '');
+  if (!result.success) {
+    console.warn('[MercadoPago Webhook] Falha ao enviar e-mail de confirmação:', result.error);
+  }
 };
 
 export async function POST(request: Request) {
@@ -29,35 +163,33 @@ export async function POST(request: Request) {
 
     let paymentId = id;
     let type = topic;
+    let bodyPaymentId: string | undefined;
 
-    // Tenta obter o ID do pagamento a partir do body (formato JSON do webhook)
     try {
       const body = await request.json();
-      if (body.data && body.data.id) {
+      if (body.data?.id) {
         paymentId = body.data.id;
+        bodyPaymentId = body.data.id;
       }
-      if (body.type) {
-        type = body.type;
-      }
+      if (body.type) type = body.type;
     } catch {
-      // Body vazio ou não JSON
+      // Body vazio ou nao JSON.
     }
 
     if (!paymentId || (type && type !== 'payment')) {
-      // Notificação recebida, mas não é do tipo pagamento (ex: teste ou plano), retorna 200 OK
       return NextResponse.json({ received: true });
+    }
+
+    if (!isValidMercadoPagoSignature(request, paymentId, bodyPaymentId)) {
+      return NextResponse.json({ error: 'Assinatura Mercado Pago invalida.' }, { status: 401 });
     }
 
     const eventId = searchParams.get('event_id');
     if (!eventId) {
-      console.error("[MercadoPago Webhook] event_id ausente na notificação de pagamento.");
-      return NextResponse.json({ error: 'Evento obrigatório para processar webhook.' }, { status: 400 });
+      return NextResponse.json({ error: 'Evento obrigatorio para processar webhook.' }, { status: 400 });
     }
 
     const checkoutConfig = await resolveMercadoPagoCheckoutConfig(eventId);
-    console.log(`[MercadoPago Webhook] Usando credenciais ${checkoutConfig.source} do organizador ${checkoutConfig.organizerId} para o evento ${eventId}`);
-
-    console.log(`[MercadoPago Webhook] Buscando detalhes do pagamento ${paymentId}...`);
     const mpResponse = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
       headers: {
         'Authorization': `Bearer ${checkoutConfig.accessToken}`
@@ -65,138 +197,59 @@ export async function POST(request: Request) {
     });
 
     if (!mpResponse.ok) {
-      console.error(`[MercadoPago Webhook] Erro ao carregar transação ${paymentId} do Mercado Pago.`);
+      console.error(`[MercadoPago Webhook] Erro ao carregar transacao ${paymentId} do Mercado Pago.`);
       return NextResponse.json({ error: 'Erro ao buscar pagamento.' }, { status: 500 });
     }
 
     const paymentData = await mpResponse.json();
     const { status, metadata } = paymentData;
+    const metadataRegistrationId = metadata?.registration_id;
 
-    console.log(`[MercadoPago Webhook] Pagamento ${paymentId} com status: ${status}`);
-
-    if (metadata?.registration_json) {
-      try {
-        const { registrationData } = JSON.parse(metadata.registration_json);
-        if (registrationData?.id) {
-          await supabaseAdmin
-            .from('registrations')
-            .update({
-              payment_status: toRegistrationPaymentStatus(status),
-              payment_method: paymentData.payment_method_id || null,
-              payment_id: String(paymentData.id),
-              payment_status_detail: paymentData.status_detail || null,
-              payment_error_message: status === 'rejected' ? 'Pagamento não processado.' : null,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', registrationData.id);
-        }
-      } catch (paymentUpdateErr) {
-        console.warn('[MercadoPago Webhook] Não foi possível atualizar status da inscrição:', paymentUpdateErr);
-      }
+    if (!metadataRegistrationId) {
+      return NextResponse.json({ error: 'Pagamento sem registration_id vinculado.' }, { status: 400 });
     }
 
-    if (status === 'approved' && metadata && metadata.registration_json) {
-      const { registrationData, athleteProfile } = JSON.parse(metadata.registration_json);
+    const { data: existingRegistration, error: existingError } = await supabaseAdmin
+      .from('registrations')
+      .select('*')
+      .eq('id', metadataRegistrationId)
+      .eq('event_id', eventId)
+      .maybeSingle();
 
-      if (!registrationData || !athleteProfile) {
-        console.error("[MercadoPago Webhook] Dados de inscrição no metadado inválidos.");
-        return NextResponse.json({ error: 'Metadados inválidos.' }, { status: 400 });
-      }
+    if (existingError || !existingRegistration) {
+      return NextResponse.json({ error: 'Inscricao vinculada ao pagamento nao encontrada.' }, { status: 404 });
+    }
 
-      const regId = registrationData.id || `reg-${Date.now()}`;
-      const athleteId = athleteProfile.id || `ath-${Date.now()}`;
+    const nextPaymentStatus = toRegistrationPaymentStatus(status);
+    const wasApproved = existingRegistration.payment_status === 'payment_approved';
 
-      // Evita duplicação caso o webhook seja disparado mais de uma vez para o mesmo pagamento
-      const { data: existingReg } = await supabaseAdmin
-        .from('registrations')
-        .select('id, payment_status, created_at')
-        .eq('id', regId)
-        .maybeSingle();
-
-      if (existingReg && existingReg.payment_status === 'payment_approved') {
-        console.log(`[MercadoPago Webhook] Inscrição ${regId} já existe no banco e está APROVADA. Encerrando webhook.`);
-        return NextResponse.json({ received: true, message: 'Inscrição já processada.' });
-      }
-
-      console.log(`[MercadoPago Webhook] Gravando inscrição ${regId} no Supabase...`);
-
-      // Verifica se o atleta já está no banco de dados para evitar duplicidade
-      const { data: existingAthlete } = await supabaseAdmin
-        .from('athletes')
-        .select('id')
-        .eq('name', registrationData.athleteName)
-        .eq('division_id', registrationData.divisionId)
-        .maybeSingle();
-
-      if (!existingAthlete) {
-        const teamMembersStr = athleteProfile.teamMembers 
-          ? JSON.stringify(athleteProfile.teamMembers) 
-          : '[]';
-
-        const { error: athleteErr } = await supabaseAdmin.from('athletes').insert({
-          id: athleteId,
-          name: registrationData.athleteName,
-          box: registrationData.box || 'Independente',
-          country: 'BR',
-          division_id: registrationData.divisionId,
-          birth_date: athleteProfile.birthDate || null,
-          gender: athleteProfile.gender || null,
-          city: athleteProfile.city || null,
-          state: athleteProfile.state || null,
-          instagram: athleteProfile.instagram || null,
-          photo_url: athleteProfile.photoUrl || null,
-          shirt_size: athleteProfile.shirtSize || null,
-          email: athleteProfile.email || null,
-          phone: athleteProfile.phone || null,
-          is_team: athleteProfile.isTeam || false,
-          team_members: teamMembersStr
-        });
-
-        if (athleteErr) {
-          console.error("[MercadoPago Webhook] Erro ao cadastrar atleta no banco:", athleteErr);
-        } else {
-          console.log(`[MercadoPago Webhook] Atleta ${athleteId} cadastrado com sucesso.`);
-        }
-      }
-
-      // Insere ou atualiza o ticket de inscrição na tabela 'registrations'
-      const { error: regErr } = await supabaseAdmin.from('registrations').upsert({
-        id: regId,
-        event_id: registrationData.eventId,
-        division_id: registrationData.divisionId,
-        user_id: registrationData.userId || null,
-        athlete_id: athleteId,
-        athlete_name: registrationData.athleteName,
-        athlete_email: registrationData.athleteEmail,
-        athlete_phone: registrationData.athletePhone,
-        box: registrationData.box,
-        gender: registrationData.gender,
-        ticket_type: registrationData.ticketType,
-        ticket_price: Number(registrationData.ticketPrice),
-        quantity: Number(registrationData.quantity),
-        total_paid: Number(registrationData.totalPaid),
-        created_at: existingReg?.created_at || registrationData.createdAt || new Date().toISOString(),
-        coupon_code: registrationData.couponCode || null,
-        payment_status: 'payment_approved',
+    const { data: updatedRegistration, error: updateError } = await supabaseAdmin
+      .from('registrations')
+      .update({
+        payment_status: nextPaymentStatus,
         payment_method: paymentData.payment_method_id || null,
         payment_id: String(paymentData.id),
         payment_status_detail: paymentData.status_detail || null,
-        payment_error_message: null,
+        payment_error_message: status === 'rejected' ? 'Pagamento nao processado.' : null,
         updated_at: new Date().toISOString()
-      }, { onConflict: 'id' });
+      })
+      .eq('id', metadataRegistrationId)
+      .eq('event_id', eventId)
+      .select('*')
+      .maybeSingle();
 
-      if (regErr) {
-        console.error("[MercadoPago Webhook] Erro ao cadastrar inscrição no banco:", regErr);
-        return NextResponse.json({ error: 'Erro ao persistir inscrição.' }, { status: 500 });
-      }
+    if (updateError || !updatedRegistration) {
+      console.error('[MercadoPago Webhook] Erro ao atualizar inscricao:', updateError);
+      return NextResponse.json({ error: 'Erro ao atualizar inscricao.' }, { status: 500 });
+    }
 
-      // Incrementa uso do cupom se aplicável
-      if (registrationData.couponCode) {
+    if (nextPaymentStatus === 'payment_approved' && !wasApproved) {
+      if (updatedRegistration.coupon_code) {
         const { data: couponData } = await supabaseAdmin
           .from('coupons')
           .select('id, usage_count')
-          .eq('event_id', registrationData.eventId)
-          .eq('code', registrationData.couponCode.toUpperCase())
+          .eq('event_id', updatedRegistration.event_id)
+          .eq('code', String(updatedRegistration.coupon_code).toUpperCase())
           .maybeSingle();
 
         if (couponData) {
@@ -207,109 +260,18 @@ export async function POST(request: Request) {
         }
       }
 
-      console.log(`[MercadoPago Webhook] Transação aprovada e inscrição registrada com sucesso!`);
-
-      // Disparar envio de e-mail de confirmação via Resend em background
-      try {
-        const { data: dbEvent } = await supabaseAdmin
-          .from('events')
-          .select('*')
-          .eq('id', registrationData.eventId)
-          .maybeSingle();
-
-        if (dbEvent) {
-          const event: Event = {
-            id: dbEvent.id,
-            name: dbEvent.name,
-            logoUrl: dbEvent.logo_url,
-            bannerUrl: dbEvent.banner_url,
-            status: dbEvent.status,
-            location: dbEvent.location,
-            date: dbEvent.date,
-            description: dbEvent.description,
-            organizerId: dbEvent.organizer_id,
-            sponsors: dbEvent.sponsors || [],
-            divisions: [],
-            workouts: [],
-            format: dbEvent.format || 'individual',
-            ticketPrice: dbEvent.ticket_price,
-            ticketSlots: dbEvent.ticket_slots,
-            isTicketingActive: dbEvent.is_ticketing_active,
-            time: dbEvent.time || '',
-            city: dbEvent.city || '',
-            state: dbEvent.state || '',
-            rules: dbEvent.rules || '',
-            instagram: dbEvent.instagram || '',
-            website: dbEvent.website || '',
-            eventType: dbEvent.event_type || 'functional_fitness'
-          };
-
-          const registration: Registration = {
-            id: regId,
-            eventId: registrationData.eventId,
-            divisionId: registrationData.divisionId,
-            userId: registrationData.userId || undefined,
-            athleteId,
-            athleteName: registrationData.athleteName,
-            athleteEmail: registrationData.athleteEmail,
-            athletePhone: registrationData.athletePhone,
-            box: registrationData.box,
-            gender: registrationData.gender,
-            ticketType: registrationData.ticketType,
-            ticketPrice: Number(registrationData.ticketPrice),
-            quantity: Number(registrationData.quantity),
-            totalPaid: Number(registrationData.totalPaid),
-            createdAt: new Date().toISOString(),
-            couponCode: registrationData.couponCode || undefined,
-            paymentStatus: 'payment_approved',
-            paymentMethod: paymentData.payment_method_id || undefined,
-            paymentId: String(paymentData.id),
-            paymentStatusDetail: paymentData.status_detail || undefined,
-            updatedAt: new Date().toISOString()
-          };
-
-          const athlete: Athlete = {
-            id: athleteId,
-            name: registrationData.athleteName,
-            box: athleteProfile.box || 'Independente',
-            country: 'BR',
-            divisionId: registrationData.divisionId,
-            birthDate: athleteProfile.birthDate || '',
-            gender: athleteProfile.gender || undefined,
-            city: athleteProfile.city || '',
-            state: athleteProfile.state || '',
-            instagram: athleteProfile.instagram || '',
-            photoUrl: athleteProfile.photoUrl || '',
-            shirtSize: athleteProfile.shirtSize || '',
-            email: athleteProfile.email || registrationData.athleteEmail,
-            phone: athleteProfile.phone || registrationData.athletePhone,
-            isTeam: athleteProfile.isTeam || false,
-            teamMembers: athleteProfile.teamMembers || []
-          };
-
-          sendRegistrationEmail(registration, athlete, event, metadata.payer_cpf || '')
-            .then(res => {
-              if (res.success) {
-                console.log(`[MercadoPago Webhook] E-mail de confirmação enviado para ${athlete.email}`);
-              } else {
-                console.warn(`[MercadoPago Webhook] Falha ao enviar e-mail de confirmação:`, res.error);
-              }
-            })
-            .catch(err => console.error('[MercadoPago Webhook] Erro assíncrono ao disparar e-mail:', err));
-        }
-      } catch (emailErr) {
-        console.error("[MercadoPago Webhook] Erro ao preparar envio de e-mail:", emailErr);
-      }
+      sendApprovedRegistrationEmail(updatedRegistration, paymentData)
+        .catch(err => console.error('[MercadoPago Webhook] Erro ao disparar e-mail:', err));
     }
 
     return NextResponse.json({ received: true });
   } catch (err) {
     if (err instanceof MercadoPagoConfigError) {
-      console.error("[MercadoPago Webhook] Erro de configuração:", err.message);
+      console.error('[MercadoPago Webhook] Erro de configuracao:', err.message);
       return NextResponse.json({ error: err.message }, { status: err.status });
     }
 
-    console.error("[MercadoPago Webhook] Erro crítico no processamento:", err);
-    return NextResponse.json({ error: 'Erro crítico interno.' }, { status: 500 });
+    console.error('[MercadoPago Webhook] Erro critico no processamento:', err);
+    return NextResponse.json({ error: 'Erro critico interno.' }, { status: 500 });
   }
 }

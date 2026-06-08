@@ -1,22 +1,15 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://momigbtnsswoldqnadmc.supabase.co';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+import {
+  createSupabaseAdmin,
+  hashPassword,
+  maskEmailForLog,
+  requireSession
+} from '@/lib/serverSecurity';
 
 export async function POST(request: Request) {
   try {
-    if (!supabaseServiceKey) {
-      console.error('[API Admin CreateUser] SUPABASE_SERVICE_ROLE_KEY não configurada no servidor.');
-      return NextResponse.json({ error: 'Configuração do servidor ausente.' }, { status: 500 });
-    }
-
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    });
+    const auth = requireSession(request, ['owner']);
+    if (auth.response) return auth.response;
 
     const body = await request.json();
     const { name, email, password, organization } = body;
@@ -25,13 +18,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Todos os campos (name, email, password, organization) são obrigatórios.' }, { status: 400 });
     }
 
-    console.log(`[API Admin CreateUser] Criando novo gestor: ${email}...`);
+    const supabaseAdmin = createSupabaseAdmin();
+    const normalizedEmail = String(email).trim().toLowerCase();
+    console.log(`[API Admin CreateUser] Criando novo gestor: ${maskEmailForLog(normalizedEmail)}...`);
 
     // 1. Verificar se usuário com este e-mail já existe
     const { data: existingUser } = await supabaseAdmin
       .from('users')
       .select('id')
-      .eq('email', email.trim())
+      .eq('email', normalizedEmail)
       .maybeSingle();
 
     if (existingUser) {
@@ -46,7 +41,7 @@ export async function POST(request: Request) {
       .insert({
         id: newUserId,
         name: name.trim(),
-        email: email.trim().toLowerCase(),
+        email: normalizedEmail,
         role: 'manager',
         organization: organization.trim()
       });
@@ -61,7 +56,7 @@ export async function POST(request: Request) {
       .from('users_secrets')
       .insert({
         user_id: newUserId,
-        password: password
+        password: hashPassword(String(password))
       });
 
     if (secretError) {
@@ -71,13 +66,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Erro ao gravar credenciais de acesso.' }, { status: 500 });
     }
 
-    console.log(`[API Admin CreateUser] Gestor ${email} criado com sucesso. ID: ${newUserId}`);
+    console.log(`[API Admin CreateUser] Gestor criado com sucesso. ID: ${newUserId}`);
     return NextResponse.json({
       success: true,
       user: {
         id: newUserId,
         name: name.trim(),
-        email: email.trim().toLowerCase(),
+        email: normalizedEmail,
         role: 'manager',
         organization: organization.trim()
       }

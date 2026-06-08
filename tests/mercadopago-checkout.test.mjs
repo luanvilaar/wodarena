@@ -50,18 +50,30 @@ test('transparent checkout sends payer CPF and does not send application fee', (
   assert.doesNotMatch(pixRoute, /application_fee:/);
   assert.doesNotMatch(cardRoute, /application_fee:/);
   assert.match(cardRoute, /identification:[\s\S]*type: 'CPF'[\s\S]*number: cleanCpf/);
-  assert.match(cardRoute, /payer_cpf: cleanCpf/);
-  assert.match(pixRoute, /payer_cpf: cleanCpf/);
+  assert.match(cardRoute, /metadata:[\s\S]*registration_id: checkoutSnapshot\.registrationId/);
+  assert.match(pixRoute, /metadata:[\s\S]*registration_id: checkoutSnapshot\.registrationId/);
+  assert.doesNotMatch(cardRoute, /payer_cpf: cleanCpf/);
+  assert.doesNotMatch(pixRoute, /payer_cpf: cleanCpf/);
   assert.match(registerModal, /installments: 1,\s*cpf/);
   assert.match(registerModal, /paymentMethodsResponse\?\.results/);
 });
 
 test('Pix approval can render voucher without relying only on sessionStorage', () => {
+  assert.match(statusRoute, /loadRegistrationCheckoutSnapshot/);
+  assert.match(statusRoute, /canReadRegistrationSnapshot/);
+  assert.match(statusRoute, /getRequestSession\(request\)/);
   assert.match(statusRoute, /registrationData: registrationPayload\?\.registrationData \|\| null/);
   assert.match(statusRoute, /athleteProfile: registrationPayload\?\.athleteProfile \|\| null/);
   assert.match(registerModal, /let registrationPayload = data\.registrationData \|\| null/);
   assert.match(registerModal, /let athletePayload = data\.athleteProfile \|\| null/);
   assert.match(registerModal, /createdReg = registerTicket\(registrationPayload, athletePayload\)/);
+});
+
+test('checkout payment routes apply rate limits by registration and method', () => {
+  assert.match(cardRoute, /checkRateLimit/);
+  assert.match(cardRoute, /checkout:\$\{getClientIp\(request\)\}:\$\{registrationData\.id\}:card/);
+  assert.match(pixRoute, /checkRateLimit/);
+  assert.match(pixRoute, /checkout:\$\{getClientIp\(request\)\}:\$\{registrationData\.id\}:pix/);
 });
 
 test('local registration preserves checkout identifiers for webhook and voucher consistency', () => {
@@ -77,8 +89,9 @@ test('approved Mercado Pago redirect does not overwrite registration as pending'
 });
 
 test('Mercado Pago OAuth callback persists secrets with Supabase service role', () => {
-  assert.match(oauthCallback, /SUPABASE_SERVICE_ROLE_KEY/);
-  assert.match(oauthCallback, /createClient\(supabaseUrl, supabaseServiceKey/);
+  assert.match(oauthCallback, /requireSession\(request, \['manager', 'owner'\]\)/);
+  assert.match(oauthCallback, /canActOnUser\(auth\.user, userId\)/);
+  assert.match(oauthCallback, /createSupabaseAdmin\(\)/);
   assert.match(oauthCallback, /from\('mercadopago_secrets'\)/);
 });
 

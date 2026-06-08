@@ -46,8 +46,11 @@ test('credit card failures update existing registrations as failed', () => {
 
 test('webhook updates registration payment status by registration id', () => {
   assert.match(webhookRoute, /toRegistrationPaymentStatus/);
-  assert.match(webhookRoute, /payment_status: toRegistrationPaymentStatus\(status\)/);
-  assert.match(webhookRoute, /\.eq\('id', registrationData\.id\)/);
+  assert.match(webhookRoute, /payment_status: nextPaymentStatus/);
+  assert.match(webhookRoute, /metadataRegistrationId/);
+  assert.match(webhookRoute, /\.eq\('id', metadataRegistrationId\)/);
+  assert.match(webhookRoute, /\.eq\('event_id', eventId\)/);
+  assert.doesNotMatch(webhookRoute, /from\('registrations'\)\.upsert/);
 });
 
 test('athlete area is rendered inside admin route without manager controls', () => {

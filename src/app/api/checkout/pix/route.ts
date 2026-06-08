@@ -1,26 +1,33 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import {
   MercadoPagoConfigError,
   resolveMercadoPagoCheckoutConfig
 } from '@/lib/mercadopagoServer';
+import { loadRegistrationCheckoutSnapshot } from '@/lib/serverCheckout';
+import { checkRateLimit, createSupabaseAdmin, getClientIp } from '@/lib/serverSecurity';
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || 'https://momigbtnsswoldqnadmc.supabase.co',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-);
+const supabaseAdmin = createSupabaseAdmin();
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { registrationData, athleteProfile, cpf } = body;
+    const { registrationData, cpf } = body;
 
-    if (!registrationData || !athleteProfile || !cpf) {
+    if (!registrationData?.id || !cpf) {
       return NextResponse.json({ error: 'Parâmetros inválidos.' }, { status: 400 });
     }
 
-    const checkoutConfig = await resolveMercadoPagoCheckoutConfig(registrationData.eventId);
-    console.log(`[MercadoPago Pix API] Usando credenciais ${checkoutConfig.source} do organizador ${checkoutConfig.organizerId} para o evento ${registrationData.eventId}`);
+    const rateLimited = checkRateLimit({
+      key: `checkout:${getClientIp(request)}:${registrationData.id}:pix`,
+      limit: 12,
+      windowMs: 15 * 60 * 1000
+    });
+    if (rateLimited) return rateLimited;
+
+    const checkoutSnapshot = await loadRegistrationCheckoutSnapshot(supabaseAdmin, registrationData.id);
+    const { registrationData: safeRegistrationData, athleteProfile, transactionAmount } = checkoutSnapshot;
+    const checkoutConfig = await resolveMercadoPagoCheckoutConfig(checkoutSnapshot.eventId);
+    console.log(`[MercadoPago Pix API] Usando credenciais ${checkoutConfig.source} do organizador ${checkoutConfig.organizerId} para o evento ${checkoutSnapshot.eventId}`);
 
     // Limpa o CPF para ter apenas números
     const cleanCpf = cpf.replace(/\D/g, '');
@@ -29,7 +36,7 @@ export async function POST(request: Request) {
     }
 
     // Divide o nome do atleta para first_name e last_name
-    const fullName = athleteProfile.name || registrationData.athleteName || 'Atleta WODArena';
+    const fullName = String(athleteProfile.name || safeRegistrationData.athleteName || 'Atleta WODArena');
     const names = fullName.trim().split(/\s+/);
     const firstName = names[0] || 'Atleta';
     const lastName = names.slice(1).join(' ') || 'WODArena';
@@ -37,17 +44,12 @@ export async function POST(request: Request) {
     const origin = request.headers.get('origin') || new URL(request.url).origin;
     const isLocalhost = origin.includes('localhost') || origin.includes('127.0.0.1');
 
-    let transactionAmount = Number(registrationData.totalPaid);
-    if (transactionAmount > 0 && transactionAmount < 1.00) {
-      transactionAmount = 1.00;
-    }
-
     const paymentPayload = {
       transaction_amount: transactionAmount,
-      description: `Inscrição: ${registrationData.ticketType} - WODArena`,
+      description: `Inscrição: ${safeRegistrationData.ticketType} - WODArena`,
       payment_method_id: 'pix',
       payer: {
-        email: athleteProfile.email || registrationData.athleteEmail || 'atleta@wodarena.com',
+        email: athleteProfile.email || safeRegistrationData.athleteEmail || 'atleta@wodarena.com',
         first_name: firstName,
         last_name: lastName,
         identification: {
@@ -56,13 +58,10 @@ export async function POST(request: Request) {
         }
       },
       metadata: {
-        payer_cpf: cleanCpf,
-        registration_json: JSON.stringify({
-          registrationData,
-          athleteProfile
-        })
+        registration_id: checkoutSnapshot.registrationId,
+        event_id: checkoutSnapshot.eventId
       },
-      ...(!isLocalhost ? { notification_url: `${origin}/api/webhooks/mercadopago?event_id=${registrationData.eventId}` } : {})
+      ...(!isLocalhost ? { notification_url: `${origin}/api/webhooks/mercadopago?event_id=${checkoutSnapshot.eventId}` } : {})
     };
 
     console.log("[MercadoPago Pix API] Enviando requisição de pagamento Pix para Mercado Pago...");
@@ -71,7 +70,7 @@ export async function POST(request: Request) {
       headers: {
         'Authorization': `Bearer ${checkoutConfig.accessToken}`,
         'Content-Type': 'application/json',
-        'X-Idempotency-Key': `pix-${registrationData.id}`
+        'X-Idempotency-Key': `pix-${checkoutSnapshot.registrationId}`
       },
       body: JSON.stringify(paymentPayload)
     });
@@ -102,7 +101,7 @@ export async function POST(request: Request) {
         total_paid: transactionAmount,
         updated_at: new Date().toISOString()
       })
-      .eq('id', registrationData.id);
+      .eq('id', checkoutSnapshot.registrationId);
 
     return NextResponse.json({
       paymentId: paymentData.id,

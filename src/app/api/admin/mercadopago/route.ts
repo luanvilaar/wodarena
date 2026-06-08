@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://momigbtnsswoldqnadmc.supabase.co';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+import {
+  canActOnUser,
+  createSupabaseAdmin,
+  loadUserById,
+  requireSession
+} from '@/lib/serverSecurity';
 
 type SupabaseWriteError = {
   code?: string;
@@ -16,37 +18,61 @@ const isMercadoPagoUserIdUniqueError = (error: SupabaseWriteError) => {
   return error.code === '23505' && detail.includes('mercadopago_user_id');
 };
 
-export async function POST(request: Request) {
+export async function GET(request: Request) {
   try {
-    if (!supabaseServiceKey) {
-      console.error('[API Admin MercadoPago] SUPABASE_SERVICE_ROLE_KEY não configurada no servidor.');
-      return NextResponse.json({ error: 'Configuração do servidor ausente.' }, { status: 500 });
+    const auth = requireSession(request, ['manager', 'owner']);
+    if (auth.response) return auth.response;
+    const actor = auth.user;
+    const supabaseAdmin = createSupabaseAdmin();
+
+    const { searchParams } = new URL(request.url);
+    const requestedUserId = searchParams.get('userId');
+    const userId = requestedUserId || actor.id;
+
+    if (!canActOnUser(actor, userId)) {
+      return NextResponse.json({ error: 'Acesso negado para este gestor.' }, { status: 403 });
     }
 
-    // Inicializa o cliente do Supabase com privilégios administrativos (bypassa RLS)
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    });
-
-    const body = await request.json();
-    const { userId, publicKey, accessToken } = body;
-
-    if (!userId || !publicKey || !accessToken) {
-      return NextResponse.json({ error: 'Parâmetros userId, publicKey e accessToken são obrigatórios.' }, { status: 400 });
+    const checkUser = await loadUserById(supabaseAdmin, userId);
+    if (!checkUser || (checkUser.role !== 'manager' && checkUser.role !== 'owner')) {
+      return NextResponse.json({ error: 'Usuário inválido ou sem permissão.' }, { status: 403 });
     }
 
-    // Validação de segurança: verificar se o usuário existe e é um gestor/proprietário
-    const { data: checkUser, error: checkUserError } = await supabaseAdmin
-      .from('users')
-      .select('role')
-      .eq('id', userId)
+    const { data, error } = await supabaseAdmin
+      .from('mercadopago_accounts')
+      .select('id, mercadopago_user_id, status, public_key')
+      .eq('user_id', userId)
       .maybeSingle();
 
-    if (checkUserError || !checkUser) {
-      console.error('[API Admin MercadoPago] Usuário não encontrado ou erro de banco:', checkUserError);
+    if (error) {
+      console.error('[API Admin MercadoPago GET] Erro ao buscar conta Mercado Pago:', error);
+      return NextResponse.json({ error: 'Erro ao buscar conta Mercado Pago.' }, { status: 500 });
+    }
+
+    return NextResponse.json({ account: data || null });
+  } catch (err) {
+    console.error('[API Admin MercadoPago GET] Erro crítico inesperado:', err);
+    return NextResponse.json({ error: 'Erro crítico interno no servidor.' }, { status: 500 });
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const auth = requireSession(request, ['manager', 'owner']);
+    if (auth.response) return auth.response;
+    const actor = auth.user;
+    const supabaseAdmin = createSupabaseAdmin();
+
+    const body = await request.json();
+    const { publicKey, accessToken } = body;
+    const userId = actor.id;
+
+    if (!publicKey || !accessToken) {
+      return NextResponse.json({ error: 'Parâmetros publicKey e accessToken são obrigatórios.' }, { status: 400 });
+    }
+
+    const checkUser = await loadUserById(supabaseAdmin, userId);
+    if (!checkUser) {
       return NextResponse.json({ error: 'Usuário inválido ou não encontrado.' }, { status: 403 });
     }
 
@@ -135,34 +161,21 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    if (!supabaseServiceKey) {
-      console.error('[API Admin MercadoPago DELETE] SUPABASE_SERVICE_ROLE_KEY não configurada no servidor.');
-      return NextResponse.json({ error: 'Configuração do servidor ausente.' }, { status: 500 });
-    }
-
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    });
+    const auth = requireSession(request, ['manager', 'owner']);
+    if (auth.response) return auth.response;
+    const actor = auth.user;
+    const supabaseAdmin = createSupabaseAdmin();
 
     const body = await request.json();
-    const { userId } = body;
+    const { userId: requestedUserId } = body;
+    const userId = requestedUserId || actor.id;
 
-    if (!userId) {
-      return NextResponse.json({ error: 'Parâmetro userId é obrigatório.' }, { status: 400 });
+    if (!canActOnUser(actor, userId)) {
+      return NextResponse.json({ error: 'Acesso negado para este gestor.' }, { status: 403 });
     }
 
-    // Validação de segurança: verificar se o usuário existe e é um gestor/proprietário
-    const { data: checkUser, error: checkUserError } = await supabaseAdmin
-      .from('users')
-      .select('role')
-      .eq('id', userId)
-      .maybeSingle();
-
-    if (checkUserError || !checkUser) {
-      console.error('[API Admin MercadoPago DELETE] Usuário não encontrado ou erro de banco:', checkUserError);
+    const checkUser = await loadUserById(supabaseAdmin, userId);
+    if (!checkUser) {
       return NextResponse.json({ error: 'Usuário inválido ou não encontrado.' }, { status: 403 });
     }
 

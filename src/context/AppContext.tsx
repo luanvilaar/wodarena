@@ -3,7 +3,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { WorkoutType, Event, Athlete, Division, Score, CourseStage, Coupon, Registration, User, Workout, AthleteOverall, EventScheduleItem } from '../types';
 import { useLocalStorage } from '../hooks/useLocalStorage';
-import { supabase } from '../lib/supabase';
 import { INITIAL_EVENTS, INITIAL_ATHLETES, INITIAL_SCORES, INITIAL_USERS } from '../data/mockData';
 import { buildFitnessRacingCourse, buildFitnessRacingDefaults, normalizeInstagram } from '@/lib/fitnessRacing';
 
@@ -70,6 +69,27 @@ type WorkoutDbUpdate = Partial<{
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 type RegistrationDbRow = Record<string, unknown>;
+type BootstrapPayload = {
+  currentUser?: User | null;
+  // Supabase rows are normalized immediately below; keeping this flexible avoids duplicating DB row types.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  users: any[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  athletes: any[];
+  registrations: RegistrationDbRow[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  scores: any[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  coupons: any[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  events: any[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  divisions: any[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  workouts: any[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  mercadopagoAccounts: any[];
+};
 
 const optionalString = (value: unknown) => typeof value === 'string' && value.length > 0 ? value : undefined;
 
@@ -110,6 +130,20 @@ const mapRegistrationFromDb = (r: RegistrationDbRow): Registration => ({
   updatedAt: optionalString(r.updated_at)
 });
 
+const adminPersist = async (action: string, payload: Record<string, unknown>) => {
+  const response = await fetch('/api/admin/persistence', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, payload })
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || 'Erro ao persistir dados administrativos.');
+  }
+  return data;
+};
+
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [events, setEvents] = useState<Event[]>([]);
@@ -121,13 +155,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useLocalStorage<User | null>('woda_current_user', null);
 
   const refreshRegistrations = useCallback(async () => {
-    const { data, error } = await supabase.from('registrations').select('*');
-    if (error) {
-      console.error("Erro ao atualizar inscrições do Supabase:", error);
-      throw error;
+    const response = await fetch('/api/app/bootstrap');
+    const payload: BootstrapPayload = await response.json();
+    if (!response.ok) {
+      throw new Error('Erro ao atualizar inscrições.');
     }
 
-    const mappedRegs = (data || []).map(mapRegistrationFromDb);
+    const mappedRegs = (payload.registrations || []).map(mapRegistrationFromDb);
     setRegistrations(mappedRegs);
     return mappedRegs;
   }, []);
@@ -137,16 +171,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const fetchAllData = async () => {
       try {
         setIsLoading(true);
-        // 1. Carregar usuários
-        const { data: dbUsers } = await supabase.from('users').select('*');
+        const response = await fetch('/api/app/bootstrap');
+        const payload: BootstrapPayload = await response.json();
+        if (!response.ok) {
+          throw new Error('Erro ao carregar dados iniciais.');
+        }
+        // 1. Carregar usuários e sincronizar sessão
+        const dbUsers = payload.users;
         if (dbUsers && dbUsers.length > 0) {
-          setUsers(dbUsers);
+          setUsers(dbUsers as User[]);
         } else {
           setUsers(INITIAL_USERS);
         }
 
+        if (payload.currentUser !== undefined) {
+          setCurrentUser(payload.currentUser);
+        } else {
+          if (currentUser && dbUsers && !dbUsers.some(u => u.id === currentUser.id)) {
+            setCurrentUser(null);
+          }
+        }
+
         // 2. Carregar atletas
-        const { data: dbAthletes } = await supabase.from('athletes').select('*');
+        const dbAthletes = payload.athletes;
         if (dbAthletes && dbAthletes.length > 0) {
           const mappedAthletes: Athlete[] = dbAthletes.map(a => {
             let parsedTeamMembers: { name: string; instagram: string }[] = [];
@@ -182,7 +229,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
 
         // 3. Carregar scores
-        const { data: dbScores } = await supabase.from('scores').select('*');
+        const dbScores = payload.scores;
         if (dbScores && dbScores.length > 0) {
           const mappedScores: Score[] = dbScores.map(s => {
             let parsedSplits: Record<string, string> = {};
@@ -209,7 +256,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
 
         // 4. Carregar inscrições
-        const { data: dbRegistrations } = await supabase.from('registrations').select('*');
+        const dbRegistrations = payload.registrations;
         if (dbRegistrations && dbRegistrations.length > 0) {
           const mappedRegs: Registration[] = dbRegistrations.map(mapRegistrationFromDb);
           setRegistrations(mappedRegs);
@@ -218,7 +265,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
 
         // 4.1 Carregar cupons
-        const { data: dbCoupons } = await supabase.from('coupons').select('*');
+        const dbCoupons = payload.coupons;
         if (dbCoupons && dbCoupons.length > 0) {
           const mappedCoupons: Coupon[] = dbCoupons.map(c => ({
             id: c.id,
@@ -236,15 +283,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
 
         // 5. Carregar eventos (excluindo mp_access_token por segurança), divisões, workouts e credenciais Mercado Pago dos gestores
-        const { data: dbEvents } = await supabase
-          .from('events')
-          .select('id, name, logo_url, banner_url, status, location, date, description, organizer_id, sponsors, format, ticket_price, ticket_slots, is_ticketing_active, time, city, state, rules, instagram, website, event_type, event_schedule, mp_public_key, marketplace_fee');
-        const { data: dbDivisions } = await supabase.from('divisions').select('*');
-        const { data: dbWorkouts } = await supabase.from('workouts').select('*');
-        const { data: dbMpAccounts } = await supabase
-          .from('mercadopago_accounts')
-          .select('user_id, public_key')
-          .eq('status', 'connected');
+        const dbEvents = payload.events;
+        const dbDivisions = payload.divisions;
+        const dbWorkouts = payload.workouts;
+        const dbMpAccounts = payload.mercadopagoAccounts;
 
         if (dbEvents && dbEvents.length > 0 && dbDivisions && dbWorkouts) {
           const combinedEvents = dbEvents.map((evt): Event => {
@@ -327,6 +369,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
 
     fetchAllData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Rotina de reparo automático (Self-Healing) de dados legados do Fitness Racing
@@ -396,11 +439,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       if (dbWorkoutsToInsert.length > 0) {
         console.log(`[Self-Healing] Reparando ${dbWorkoutsToInsert.length} workouts virtuais de Fitness Racing ausentes no Supabase...`);
-        const { error } = await supabase.from('workouts').insert(dbWorkoutsToInsert);
-        if (error) {
-          console.error("[Self-Healing] Erro ao criar workouts virtuais ausentes:", error);
-        } else {
+        try {
+          await adminPersist('repairWorkouts', { workouts: dbWorkoutsToInsert });
           setEvents(updatedEvents);
+        } catch (error) {
+          console.error("[Self-Healing] Erro ao criar workouts virtuais ausentes:", error);
         }
       }
     };
@@ -439,6 +482,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // Lógica de Logout
   const logout = () => {
     setCurrentUser(null);
+    fetch('/api/auth/logout', { method: 'POST' }).catch(err => {
+      console.warn('Erro ao encerrar sessão no servidor:', err);
+    });
   };
 
   // Lógica para Proprietário cadastrar Gestor
@@ -598,7 +644,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       mpAccessToken: eventData.mpAccessToken || ''
     };
 
-    const { error: eventError } = await supabase.from('events').insert({
+    const eventRow = {
       id: newEvent.id,
       name: newEvent.name,
       logo_url: newEvent.logoUrl,
@@ -623,15 +669,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       event_schedule: newEvent.scheduleItems,
       mp_public_key: newEvent.mpPublicKey || null,
       mp_access_token: newEvent.mpAccessToken || null
-    });
+    };
 
-    if (eventError) {
-      console.error("Erro ao criar evento no Supabase:", eventError);
-      throw eventError;
-    }
-
-    if (eventData.eventType === 'fitness_racing' && defaultFitnessRacing.divisions.length > 0) {
-      const { error: divError } = await supabase.from('divisions').insert(defaultFitnessRacing.divisions.map((division) => ({
+    const divisionRows = eventData.eventType === 'fitness_racing'
+      ? defaultFitnessRacing.divisions.map((division) => ({
         id: division.id,
         event_id: newEvent.id,
         name: division.name,
@@ -643,15 +684,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         use_age_groups: division.useAgeGroups || false,
         age_groups: division.ageGroups || [],
         course_layout: division.courseLayout || []
-      })));
+      }))
+      : [];
 
-      if (divError) {
-        console.error("Erro ao criar categorias padrão Fitness Racing:", divError);
-        await supabase.from('events').delete().eq('id', newEvent.id).eq('organizer_id', currentUser.id);
-        throw divError;
-      }
-
-      const { error: wodError } = await supabase.from('workouts').insert(defaultFitnessRacing.workouts.map((workout) => ({
+    const workoutRows = eventData.eventType === 'fitness_racing'
+      ? defaultFitnessRacing.workouts.map((workout) => ({
         id: workout.id,
         event_id: newEvent.id,
         name: workout.name,
@@ -661,14 +698,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         order_index: workout.orderIndex,
         division_id: workout.divisionId || null,
         tie_breaker: workout.tieBreaker || ''
-      })));
+      }))
+      : [];
 
-      if (wodError) {
-        console.error("Erro ao criar workouts padrão Fitness Racing:", wodError);
-        await supabase.from('events').delete().eq('id', newEvent.id).eq('organizer_id', currentUser.id);
-        throw wodError;
-      }
-    }
+    await adminPersist('createEvent', {
+      event: eventRow,
+      divisions: divisionRows,
+      workouts: workoutRows
+    });
 
     setEvents(prev => [...prev, newEvent]);
     return newEvent;
@@ -706,7 +743,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       };
     }
 
-    const { error } = await supabase.from('divisions').insert({
+    const divisionRow = {
       id: newDivision.id,
       event_id: eventId,
       name: newDivision.name,
@@ -718,15 +755,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       use_age_groups: newDivision.useAgeGroups || false,
       age_groups: newDivision.ageGroups || [],
       course_layout: newDivision.courseLayout || []
-    });
+    };
 
-    if (error) {
-      console.error("Erro ao criar divisão no Supabase:", error);
-      throw error;
-    }
-
-    if (autoWorkout) {
-      const { error: wError } = await supabase.from('workouts').insert({
+    const autoWorkoutRow = autoWorkout ? {
         id: autoWorkout.id,
         event_id: eventId,
         name: autoWorkout.name,
@@ -736,14 +767,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         order_index: autoWorkout.orderIndex,
         division_id: divId,
         tie_breaker: ''
-      });
+      } : null;
 
-      if (wError) {
-        console.error("Erro ao criar workout virtual no Supabase:", wError);
-        await supabase.from('divisions').delete().eq('id', newDivision.id).eq('event_id', eventId);
-        throw wError;
-      }
-    }
+    await adminPersist('createDivision', {
+      division: divisionRow,
+      autoWorkout: autoWorkoutRow
+    });
 
     setEvents(prev => prev.map(e => {
       if (e.id === eventId) {
@@ -785,13 +814,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (updatedData.courseLayout !== undefined) dbPayload.course_layout = updatedData.courseLayout;
     if (updatedData.isCoursePublished !== undefined) dbPayload.is_course_published = updatedData.isCoursePublished;
 
-    const { error } = await supabase
-      .from('divisions')
-      .update(dbPayload)
-      .eq('id', divisionId)
-      .eq('event_id', eventId);
-
-    if (error) {
+    try {
+      await adminPersist('updateDivision', { eventId, divisionId, data: dbPayload });
+    } catch (error) {
       setEvents(previousEvents);
       console.error("Erro ao atualizar categoria no Supabase:", error);
       throw error;
@@ -825,13 +850,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setRegistrations(prev => prev.filter(r => r.divisionId !== divisionId));
     setScores(prev => prev.filter(s => !athleteIds.includes(s.athleteId) && !linkedWorkoutIds.includes(s.workoutId)));
 
-    const { error } = await supabase
-      .from('divisions')
-      .delete()
-      .eq('id', divisionId)
-      .eq('event_id', eventId);
-
-    if (error) {
+    try {
+      await adminPersist('deleteDivision', { eventId, divisionId });
+    } catch (error) {
       setEvents(previousEvents);
       setAthletes(previousAthletes);
       setScores(previousScores);
@@ -865,13 +886,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setCoupons(prev => prev.filter(c => c.eventId !== eventId));
     setScores(prev => prev.filter(s => !athleteIds.includes(s.athleteId) && !workoutIds.includes(s.workoutId)));
 
-    const { error } = await supabase
-      .from('events')
-      .delete()
-      .eq('id', eventId)
-      .eq('organizer_id', currentUser.id);
-
-    if (error) {
+    try {
+      await adminPersist('deleteEvent', { eventId });
+    } catch (error) {
       setEvents(previousEvents);
       setAthletes(previousAthletes);
       setScores(previousScores);
@@ -901,13 +918,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }));
     setScores(prev => prev.filter(s => s.workoutId !== workoutId));
 
-    const { error } = await supabase
-      .from('workouts')
-      .delete()
-      .eq('id', workoutId)
-      .eq('event_id', eventId);
-
-    if (error) {
+    try {
+      await adminPersist('deleteWorkout', { eventId, workoutId });
+    } catch (error) {
       setEvents(previousEvents);
       setScores(previousScores);
       console.error("Erro ao excluir prova no Supabase:", error);
@@ -928,7 +941,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       id: workoutId
     };
 
-    const { error } = await supabase.from('workouts').insert({
+    await adminPersist('createWorkout', {
+      workout: {
       id: newWorkout.id,
       event_id: eventId,
       name: newWorkout.name,
@@ -939,12 +953,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       order_index: newWorkout.orderIndex,
       division_id: newWorkout.divisionId || null,
       tie_breaker: newWorkout.tieBreaker || ''
+      }
     });
-
-    if (error) {
-      console.error("Erro ao criar prova no Supabase:", error);
-      throw error;
-    }
 
     setEvents(prev => prev.map(e => {
       if (e.id === eventId) {
@@ -1004,57 +1014,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       };
     }
 
-    // Salvar no Supabase em background
-    const savePromise = async () => {
-      if (newAthlete) {
-        await supabase.from('athletes').upsert({
-          id: newAthlete.id,
-          name: newAthlete.name,
-          box: newAthlete.box,
-          country: newAthlete.country,
-          division_id: newAthlete.divisionId,
-          birth_date: newAthlete.birthDate || null,
-          gender: newAthlete.gender || null,
-          city: newAthlete.city || null,
-          state: newAthlete.state || null,
-          instagram: newAthlete.instagram || null,
-          photo_url: newAthlete.photoUrl || null,
-          shirt_size: newAthlete.shirtSize || null,
-          email: newAthlete.email || null,
-          phone: newAthlete.phone || null,
-          is_team: newAthlete.isTeam || false,
-          team_members: newAthlete.teamMembers ? JSON.stringify(newAthlete.teamMembers) : '[]'
-        }, { onConflict: 'id' });
-      }
-
-      await supabase.from('registrations').upsert({
-        id: newRegistration.id,
-        event_id: newRegistration.eventId,
-        division_id: newRegistration.divisionId,
-        user_id: newRegistration.userId || null,
-        athlete_id: newRegistration.athleteId || newAthlete?.id || null,
-        athlete_name: newRegistration.athleteName,
-        athlete_email: newRegistration.athleteEmail,
-        athlete_phone: newRegistration.athletePhone,
-        box: newRegistration.box,
-        gender: newRegistration.gender,
-        ticket_type: newRegistration.ticketType,
-        ticket_price: newRegistration.ticketPrice,
-        quantity: newRegistration.quantity,
-        total_paid: newRegistration.totalPaid,
-        created_at: newRegistration.createdAt,
-        coupon_code: newRegistration.couponCode || null,
-        payment_status: newRegistration.paymentStatus || 'payment_approved',
-        payment_method: newRegistration.paymentMethod || null,
-        payment_id: newRegistration.paymentId || null,
-        payment_status_detail: newRegistration.paymentStatusDetail || null,
-        payment_error_message: newRegistration.paymentErrorMessage || null,
-        updated_at: newRegistration.updatedAt || new Date().toISOString()
-      }, { onConflict: 'id' });
-    };
-
-    savePromise().catch(err => console.error("Erro ao registrar ticket no Supabase:", err));
-
     if (newAthlete) {
       setAthletes(prev => [...prev, newAthlete as Athlete]);
     }
@@ -1081,20 +1040,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       createdAt: new Date().toISOString()
     };
 
-    const { error } = await supabase.from('coupons').insert({
-      id: newCoupon.id,
-      event_id: newCoupon.eventId,
-      code: newCoupon.code,
-      discount_type: newCoupon.discountType,
-      discount_value: newCoupon.discountValue,
-      usage_limit: newCoupon.usageLimit,
-      usage_count: newCoupon.usageCount
+    await adminPersist('createCoupon', {
+      coupon: {
+        id: newCoupon.id,
+        event_id: newCoupon.eventId,
+        code: newCoupon.code,
+        discount_type: newCoupon.discountType,
+        discount_value: newCoupon.discountValue,
+        usage_limit: newCoupon.usageLimit,
+        usage_count: newCoupon.usageCount
+      }
     });
-
-    if (error) {
-      console.error("Erro ao adicionar cupom no Supabase:", error);
-      throw error;
-    }
 
     setCoupons(prev => [...prev, newCoupon]);
   };
@@ -1107,22 +1063,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         : c
     ));
 
-    const { data: dbCoupons } = await supabase
-      .from('coupons')
-      .select('*')
-      .eq('event_id', eventId)
-      .ilike('code', code);
-
-    if (dbCoupons && dbCoupons[0]) {
-      const { error } = await supabase
-        .from('coupons')
-        .update({ usage_count: (dbCoupons[0].usage_count || 0) + 1 })
-        .eq('id', dbCoupons[0].id);
-
-      if (error) {
-        console.error("Erro ao atualizar uso do cupom no Supabase:", error);
-      }
-    }
+    adminPersist('incrementCouponUsage', { eventId, code })
+      .catch(error => console.error("Erro ao atualizar uso do cupom no Supabase:", error));
   };
 
   // Alterar senha do usuário
@@ -1273,13 +1215,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
 
     if (dbPayload.length > 0) {
-      const { error } = await supabase
-        .from('scores')
-        .upsert(dbPayload, { onConflict: 'athlete_id,workout_id' });
-
-      if (error) {
-        console.error("Erro ao salvar scores em lote no Supabase:", error);
-      }
+      const eventIds = [...new Set(affectedPairs
+        .map(({ divisionId }) => events.find(event => event.divisions.some(division => division.id === divisionId))?.id)
+        .filter(Boolean))];
+      await adminPersist('upsertScores', { eventIds, scores: dbPayload })
+        .catch(error => console.error("Erro ao salvar scores em lote no Supabase:", error));
     }
   };
 
@@ -1488,18 +1428,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setEvents(prev => prev.map(e => e.id === eventId ? { ...e, ...config } : e));
 
     // 2. Persistir no Supabase em background
-    const { error } = await supabase
-      .from('events')
-      .update({
+    try {
+      await adminPersist('updateEvent', {
+        eventId,
+        data: {
         format: config.format,
         ticket_price: config.ticketPrice,
         ticket_slots: config.ticketSlots,
         is_ticketing_active: config.isTicketingActive
-      })
-      .eq('id', eventId)
-      .eq('organizer_id', currentUser.id);
-
-    if (error) {
+        }
+      });
+    } catch (error) {
       setEvents(previousEvents);
       console.error("Erro ao atualizar bilheteria no Supabase:", error);
       throw error;
@@ -1541,13 +1480,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (updatedData.mpPublicKey !== undefined) dbPayload.mp_public_key = updatedData.mpPublicKey;
     if (updatedData.mpAccessToken !== undefined) dbPayload.mp_access_token = updatedData.mpAccessToken;
 
-    const { error } = await supabase
-      .from('events')
-      .update(dbPayload)
-      .eq('id', eventId)
-      .eq('organizer_id', currentUser.id);
-
-    if (error) {
+    try {
+      await adminPersist('updateEvent', { eventId, data: dbPayload });
+    } catch (error) {
       setEvents(previousEvents);
       console.error("Erro ao atualizar evento no Supabase:", error);
       throw error;
@@ -1573,13 +1508,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return evt;
     }));
 
-    const { error } = await supabase
-      .from('divisions')
-      .update({ course_layout: layout })
-      .eq('id', divisionId)
-      .eq('event_id', event.id);
-
-    if (error) {
+    try {
+      await adminPersist('updateDivision', {
+        eventId: event.id,
+        divisionId,
+        data: { course_layout: layout }
+      });
+    } catch (error) {
       setEvents(previousEvents);
       console.error("Erro ao salvar percurso no Supabase:", error);
       throw error;
@@ -1611,13 +1546,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (updatedData.divisionId !== undefined) dbData.division_id = updatedData.divisionId;
     if (updatedData.tieBreaker !== undefined) dbData.tie_breaker = updatedData.tieBreaker;
 
-    const { error } = await supabase
-      .from('workouts')
-      .update(dbData)
-      .eq('id', workoutId)
-      .eq('event_id', eventId);
-
-    if (error) {
+    try {
+      await adminPersist('updateWorkout', { eventId, workoutId, data: dbData });
+    } catch (error) {
       setEvents(previousEvents);
       console.error("Erro ao atualizar prova no Supabase:", error);
       throw error;

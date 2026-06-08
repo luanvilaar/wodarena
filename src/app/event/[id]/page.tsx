@@ -7,7 +7,8 @@ import { RegisterModal } from '@/components/RegisterModal';
 import { RegistrationVoucher } from '@/components/RegistrationVoucher';
 import { 
   Calendar, MapPin, Trophy, Share2, Ticket, Clock, 
-  Dumbbell, AlignLeft, ShieldCheck, ChevronRight, UserCheck, Medal
+  Dumbbell, AlignLeft, ShieldCheck, ChevronRight, UserCheck, Medal,
+  Sparkles, Footprints
 } from 'lucide-react';
 import Link from 'next/link';
 import { Registration, Athlete } from '@/types';
@@ -26,6 +27,7 @@ export default function EventPage({ params }: PageProps) {
   const [shareFeedback, setShareFeedback] = useState(false);
   const [paymentNotice, setPaymentNotice] = useState<{ text: string; tone: 'success' | 'error' } | null>(null);
   const [confirmedVoucher, setConfirmedVoucher] = useState<{ registration: Registration; athlete: Athlete; cpf?: string } | null>(null);
+  const [selectedDivisionForCourseId, setSelectedDivisionForCourseId] = useState<string>('');
 
   // Procurar evento correspondente
   const event = events.find(e => e.id === eventId);
@@ -144,6 +146,17 @@ export default function EventPage({ params }: PageProps) {
       }
     }
   }, [event, registerTicket, refreshRegistrations, incrementCouponUsage]);
+
+  // Inicializar a categoria selecionada para o percurso
+  useEffect(() => {
+    if (event && event.eventType === 'fitness_racing' && event.divisions) {
+      const firstPub = event.divisions.find(d => d.isCoursePublished);
+      if (firstPub) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setSelectedDivisionForCourseId(firstPub.id);
+      }
+    }
+  }, [event]);
 
   const scheduleItems = React.useMemo(() => {
     const seenHeatKeys = new Set<string>();
@@ -598,30 +611,188 @@ export default function EventPage({ params }: PageProps) {
             {activeTab === 'workouts' && (
               <div className="space-y-4">
                 <h3 className="text-lg font-black text-white uppercase tracking-wider border-b border-card-border pb-3 mb-2">
-                  Provas Anunciadas
+                  {event.eventType === 'fitness_racing' ? 'Percurso Oficial' : 'Provas Anunciadas'}
                 </h3>
-                <div className="space-y-4">
-                  {event.workouts.map((wod) => (
-                    <div key={wod.id} className="space-y-3 rounded-xl border border-card-border bg-card p-6 transition-colors hover:border-primary/60">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-card-border/50 pb-2">
-                        <h4 className="text-base font-extrabold text-white uppercase">{wod.name}</h4>
-                        <div className="flex items-center gap-2">
-                          <span className="px-2.5 py-0.5 bg-dark-gray border border-card-border text-[9px] font-black uppercase text-primary tracking-widest rounded-md">
-                            Tipo: {wod.type === 'fortime' ? 'For Time' : wod.type === 'amrap' ? 'AMRAP' : wod.type === 'maxweight' ? 'Carga Máxima' : 'Reps'}
-                          </span>
-                          {wod.timeCap && (
-                            <span className="rounded-md border border-primary/20 bg-primary/10 px-2.5 py-0.5 text-[9px] font-black uppercase tracking-widest text-primary">
-                              Cap: {wod.timeCap}
-                            </span>
-                          )}
+                
+                {event.eventType === 'fitness_racing' ? (
+                  (() => {
+                    const publishedDivs = event.divisions.filter(d => d.isCoursePublished);
+                    
+                    if (publishedDivs.length === 0) {
+                      return (
+                        <div className="text-center py-16 space-y-4 rounded-xl border border-dashed border-card-border bg-card">
+                          <Trophy className="h-12 w-12 text-muted mx-auto animate-pulse" />
+                          <div className="space-y-1">
+                            <p className="text-sm font-bold text-white uppercase tracking-wider">Percurso em Preparação</p>
+                            <p className="text-xs text-muted max-w-md mx-auto leading-relaxed">
+                              O organizador está definindo os detalhes oficiais das etapas e estações deste percurso. Fique atento, as informações serão publicadas em breve!
+                            </p>
+                          </div>
                         </div>
+                      );
+                    }
+
+                    const activeDivId = selectedDivisionForCourseId || publishedDivs[0].id;
+                    const activeDiv = publishedDivs.find(d => d.id === activeDivId) || publishedDivs[0];
+                    const layout = activeDiv?.courseLayout || [];
+
+                    return (
+                      <div className="space-y-6">
+                        {/* Seletor de Categoria/Divisão */}
+                        <div className="flex flex-col space-y-2">
+                          <span className="text-xs font-bold uppercase tracking-wider text-muted">
+                            Selecione a Categoria para ver o Percurso:
+                          </span>
+                          <div className="flex flex-wrap gap-2">
+                            {publishedDivs.map((div) => (
+                              <button
+                                key={div.id}
+                                onClick={() => setSelectedDivisionForCourseId(div.id)}
+                                className={`flex min-h-10 items-center gap-1.5 rounded-lg border px-4 py-2 text-xs font-bold uppercase transition-colors ${
+                                  activeDiv.id === div.id
+                                    ? 'bg-primary/15 border-primary text-primary font-black scale-105'
+                                    : 'bg-card border-card-border text-muted hover:text-white hover:border-muted'
+                                }`}
+                              >
+                                <Trophy className="h-3.5 w-3.5" />
+                                <span>{div.name}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Informações da Prova Virtual */}
+                        {(() => {
+                          const totalWorkout = event.workouts.find(w => w.divisionId === activeDiv.id && w.code === 'TOTAL');
+                          if (!totalWorkout) return null;
+                          return (
+                            <div className="rounded-xl border border-card-border bg-card p-5 space-y-2">
+                              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-card-border/50 pb-2">
+                                <h4 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-1.5">
+                                  <Sparkles className="h-4 w-4 text-primary" />
+                                  {totalWorkout.name}
+                                </h4>
+                                <span className="rounded-md border border-primary/20 bg-primary/10 px-2.5 py-0.5 text-[9px] font-black uppercase tracking-widest text-primary">
+                                  Formato: {activeDiv.type === 'duo' ? 'Duplas' : activeDiv.type === 'trio' ? 'Trios' : activeDiv.type === 'team' ? 'Equipes' : 'Individual'}
+                                </span>
+                              </div>
+                              <p className="text-xs text-muted leading-relaxed whitespace-pre-line font-medium">
+                                {totalWorkout.description}
+                              </p>
+                            </div>
+                          );
+                        })()}
+
+                        {/* Linha do Tempo do Percurso */}
+                        {layout.length === 0 ? (
+                          <div className="text-center py-12 rounded-xl border border-dashed border-card-border bg-card">
+                            <p className="text-xs text-muted">Nenhuma etapa configurada para esta categoria.</p>
+                          </div>
+                        ) : (
+                          <div className="relative space-y-4 pl-4 pr-1 bg-card border border-card-border rounded-xl p-6">
+                            <div className="border-b border-card-border pb-3 mb-4">
+                              <h4 className="text-sm font-black text-white uppercase tracking-wider">Estações & Corridas</h4>
+                              <p className="text-xs text-muted font-medium">Confira abaixo a ordem oficial de execução de cada etapa do percurso.</p>
+                            </div>
+
+                            {/* Linha Vertical Conectora */}
+                            <div className="absolute left-[39px] top-20 bottom-10 w-[2px] bg-primary/20" aria-hidden="true" />
+
+                            <div className="space-y-3 relative">
+                              {layout
+                                .slice()
+                                .sort((a, b) => a.orderIndex - b.orderIndex)
+                                .map((stg, index) => {
+                                  const isRun = stg.type === 'run';
+                                  return (
+                                    <div
+                                      key={stg.id}
+                                      className="relative grid grid-cols-[36px_1fr] gap-3 items-center rounded-lg border border-card-border bg-dark-gray/30 p-3 hover:border-primary/40 transition-colors duration-200"
+                                    >
+                                      {/* Círculo do Número */}
+                                      <div className="flex items-center justify-center relative z-10">
+                                        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-xs font-black font-mono ${
+                                          isRun
+                                            ? 'border-emerald-500 bg-background text-emerald-400'
+                                            : 'border-primary bg-background text-primary'
+                                        }`}>
+                                          {index + 1}
+                                        </div>
+                                      </div>
+
+                                      {/* Informações da Etapa */}
+                                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 min-w-0">
+                                        <div className="space-y-1 min-w-0">
+                                          <div className="flex flex-wrap items-center gap-2">
+                                            <h5 className="text-xs font-black text-white uppercase tracking-wider truncate">{stg.name}</h5>
+                                            <span className={`inline-flex rounded px-1.5 py-0.5 text-[8px] font-black uppercase tracking-widest border ${
+                                              isRun
+                                                ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-400'
+                                                : 'bg-primary/10 border-primary/25 text-primary'
+                                            }`}>
+                                              {isRun ? 'Corrida' : 'Estação'}
+                                            </span>
+                                          </div>
+                                          
+                                          {/* Especificações da Estação */}
+                                          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted-soft font-medium">
+                                            {stg.distance && (
+                                              <span className="flex items-center gap-1">
+                                                <Footprints className="h-3 w-3 text-muted shrink-0" />
+                                                <span className="font-bold uppercase tracking-wider text-[9px]">Distância:</span>
+                                                <span className="font-semibold text-white font-mono">{stg.distance}</span>
+                                              </span>
+                                            )}
+                                            {stg.reps && (
+                                              <span className="flex items-center gap-1">
+                                                <span className="font-bold uppercase tracking-wider text-[9px]">Repetições:</span>
+                                                <span className="font-semibold text-white font-mono">{stg.reps}</span>
+                                              </span>
+                                            )}
+                                            {!isRun && (stg.maleWeight || stg.femaleWeight) && (
+                                              <span className="flex items-center gap-1.5">
+                                                <span className="font-bold uppercase tracking-wider text-[9px]">Pesos (M/F):</span>
+                                                <span className="rounded bg-dark-gray border border-card-border/60 px-1 py-0.5 text-[9px] font-bold text-white font-mono">{stg.maleWeight || '-'}</span>
+                                                <span className="text-muted-soft">/</span>
+                                                <span className="rounded bg-dark-gray border border-card-border/60 px-1 py-0.5 text-[9px] font-bold text-white font-mono">{stg.femaleWeight || '-'}</span>
+                                              </span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                            </div>
+                          </div>
+                        )}
                       </div>
-                      <p className="text-xs text-muted leading-relaxed whitespace-pre-line font-medium">
-                        {wod.description}
-                      </p>
-                    </div>
-                  ))}
-                </div>
+                    );
+                  })()
+                ) : (
+                  <div className="space-y-4">
+                    {event.workouts.map((wod) => (
+                      <div key={wod.id} className="space-y-3 rounded-xl border border-card-border bg-card p-6 transition-colors hover:border-primary/60">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-card-border/50 pb-2">
+                          <h4 className="text-base font-extrabold text-white uppercase">{wod.name}</h4>
+                          <div className="flex items-center gap-2">
+                            <span className="px-2.5 py-0.5 bg-dark-gray border border-card-border text-[9px] font-black uppercase text-primary tracking-widest rounded-md">
+                              Tipo: {wod.type === 'fortime' ? 'For Time' : wod.type === 'amrap' ? 'AMRAP' : wod.type === 'maxweight' ? 'Carga Máxima' : 'Reps'}
+                            </span>
+                            {wod.timeCap && (
+                              <span className="rounded-md border border-primary/20 bg-primary/10 px-2.5 py-0.5 text-[9px] font-black uppercase tracking-widest text-primary">
+                                Cap: {wod.timeCap}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <p className="text-xs text-muted leading-relaxed whitespace-pre-line font-medium">
+                          {wod.description}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 

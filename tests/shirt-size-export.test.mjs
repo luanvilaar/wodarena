@@ -9,6 +9,7 @@ const context = read('../src/context/AppContext.tsx');
 const registerModal = read('../src/components/RegisterModal.tsx');
 const admin = read('../src/app/admin/page.tsx');
 const startRoute = read('../src/app/api/registrations/start/route.ts');
+const bootstrapRoute = read('../src/app/api/app/bootstrap/route.ts');
 const webhookRoute = read('../src/app/api/webhooks/mercadopago/route.ts');
 const emailRoute = read('../src/app/api/checkout/email/route.ts');
 const migration = read('../supabase/migrations/20260607234500_athlete_shirt_size.sql');
@@ -24,11 +25,12 @@ test('registration form collects shirt size instead of athlete photo', () => {
 test('shirt size is persisted in athlete storage and checkout recovery flows', () => {
   assert.match(migration, /ALTER TABLE athletes ADD COLUMN IF NOT EXISTS shirt_size TEXT/);
   assert.match(context, /shirtSize: a\.shirt_size/);
-  assert.match(context, /shirt_size: newAthlete\.shirtSize/);
+  assert.match(context, /fetch\('\/api\/app\/bootstrap'\)/);
+  assert.match(bootstrapRoute, /supabaseAdmin\.from\('athletes'\)/);
   assert.match(context, /shirtSize: m\.shirtSize/);
-  assert.match(startRoute, /shirt_size: athleteProfile\.shirtSize/);
-  assert.match(startRoute, /shirt_size: athleteProfile\.shirtSize \|\| null/);
-  assert.match(webhookRoute, /shirt_size: athleteProfile\.shirtSize/);
+  assert.match(startRoute, /shirt_size: safeAthleteProfile\.shirtSize/);
+  assert.match(startRoute, /shirt_size: safeAthleteProfile\.shirtSize \|\| null/);
+  assert.match(webhookRoute, /shirtSize: dbAthlete\?\.shirt_size/);
   assert.match(emailRoute, /shirtSize: dbAthlete\?\.shirt_size/);
 });
 

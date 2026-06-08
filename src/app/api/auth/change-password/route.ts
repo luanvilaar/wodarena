@@ -1,22 +1,17 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://momigbtnsswoldqnadmc.supabase.co';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+import {
+  canActOnUser,
+  createSupabaseAdmin,
+  hashPassword,
+  requireSession,
+  verifyPassword
+} from '@/lib/serverSecurity';
 
 export async function POST(request: Request) {
   try {
-    if (!supabaseServiceKey) {
-      console.error('[API Auth ChangePassword] SUPABASE_SERVICE_ROLE_KEY não configurada no servidor.');
-      return NextResponse.json({ error: 'Configuração do servidor ausente.' }, { status: 500 });
-    }
-
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    });
+    const auth = requireSession(request);
+    if (auth.response) return auth.response;
+    const actor = auth.user;
 
     const body = await request.json();
     const { userId, currentPassword, newPassword } = body;
@@ -25,6 +20,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Parâmetros userId, currentPassword e newPassword são obrigatórios.' }, { status: 400 });
     }
 
+    if (!canActOnUser(actor, userId)) {
+      return NextResponse.json({ error: 'Acesso negado para alterar esta senha.' }, { status: 403 });
+    }
+
+    const supabaseAdmin = createSupabaseAdmin();
     console.log(`[API Auth ChangePassword] Processando alteração de senha para o usuário: ${userId}...`);
 
     // 1. Obter a senha atual da tabela privada
@@ -40,7 +40,8 @@ export async function POST(request: Request) {
     }
 
     // 2. Validar senha atual
-    if (secret.password !== currentPassword) {
+    const passwordCheck = verifyPassword(String(currentPassword), secret.password);
+    if (!passwordCheck.valid) {
       console.warn(`[API Auth ChangePassword] Tentativa de alteração frustrada. Senha atual incorreta para o usuário ${userId}`);
       return NextResponse.json({ error: 'A senha atual está incorreta.' }, { status: 401 });
     }
@@ -48,7 +49,7 @@ export async function POST(request: Request) {
     // 3. Atualizar a nova senha na tabela privada
     const { error: updateError } = await supabaseAdmin
       .from('users_secrets')
-      .update({ password: newPassword })
+      .update({ password: hashPassword(String(newPassword)) })
       .eq('user_id', userId);
 
     if (updateError) {

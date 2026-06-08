@@ -1,14 +1,12 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import {
   MercadoPagoConfigError,
   resolveMercadoPagoCheckoutConfig
 } from '@/lib/mercadopagoServer';
+import { loadRegistrationCheckoutSnapshot } from '@/lib/serverCheckout';
+import { checkRateLimit, createSupabaseAdmin, getClientIp } from '@/lib/serverSecurity';
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || 'https://momigbtnsswoldqnadmc.supabase.co',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-);
+const supabaseAdmin = createSupabaseAdmin();
 
 const toRegistrationPaymentStatus = (status?: string) => {
   if (status === 'approved') return 'payment_approved';
@@ -63,21 +61,30 @@ const updateRegistrationPayment = async (
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { registrationData, athleteProfile, token, payment_method_id, installments, cpf, deviceId } = body;
+    const { registrationData, token, payment_method_id, installments, cpf, deviceId } = body;
 
-    if (!registrationData || !athleteProfile || !token || !payment_method_id || !cpf) {
+    if (!registrationData?.id || !token || !payment_method_id || !cpf) {
       return NextResponse.json({ error: 'Parâmetros inválidos.' }, { status: 400 });
     }
+
+    const rateLimited = checkRateLimit({
+      key: `checkout:${getClientIp(request)}:${registrationData.id}:card`,
+      limit: 8,
+      windowMs: 15 * 60 * 1000
+    });
+    if (rateLimited) return rateLimited;
 
     const cleanCpf = cpf.replace(/\D/g, '');
     if (cleanCpf.length !== 11) {
       return NextResponse.json({ error: 'CPF inválido. Deve conter 11 dígitos.' }, { status: 400 });
     }
 
-    const checkoutConfig = await resolveMercadoPagoCheckoutConfig(registrationData.eventId);
-    console.log(`[MercadoPago Card API] Usando credenciais ${checkoutConfig.source} do organizador ${checkoutConfig.organizerId} para o evento ${registrationData.eventId}`);
+    const checkoutSnapshot = await loadRegistrationCheckoutSnapshot(supabaseAdmin, registrationData.id);
+    const { registrationData: safeRegistrationData, athleteProfile, transactionAmount } = checkoutSnapshot;
+    const checkoutConfig = await resolveMercadoPagoCheckoutConfig(checkoutSnapshot.eventId);
+    console.log(`[MercadoPago Card API] Usando credenciais ${checkoutConfig.source} do organizador ${checkoutConfig.organizerId} para o evento ${checkoutSnapshot.eventId}`);
 
-    const fullName = athleteProfile.name || registrationData.athleteName || 'Atleta WODArena';
+    const fullName = String(athleteProfile.name || safeRegistrationData.athleteName || 'Atleta WODArena');
     const names = fullName.trim().split(/\s+/);
     const firstName = names[0] || 'Atleta';
     const lastName = names.slice(1).join(' ') || 'WODArena';
@@ -85,20 +92,15 @@ export async function POST(request: Request) {
     const origin = request.headers.get('origin') || new URL(request.url).origin;
     const isLocalhost = origin.includes('localhost') || origin.includes('127.0.0.1');
 
-    let transactionAmount = Number(registrationData.totalPaid);
-    if (transactionAmount > 0 && transactionAmount < 1.00) {
-      transactionAmount = 1.00;
-    }
-
     const paymentPayload = {
       token: token,
       installments: Number(installments || 1),
       transaction_amount: transactionAmount,
       payment_method_id: payment_method_id,
-      description: `Inscrição: ${registrationData.ticketType} - WODArena`,
+      description: `Inscrição: ${safeRegistrationData.ticketType} - WODArena`,
       statement_descriptor: 'WODARENA',
       payer: {
-        email: athleteProfile.email || registrationData.athleteEmail || 'atleta@wodarena.com',
+        email: athleteProfile.email || safeRegistrationData.athleteEmail || 'atleta@wodarena.com',
         first_name: firstName,
         last_name: lastName,
         identification: {
@@ -107,13 +109,10 @@ export async function POST(request: Request) {
         }
       },
       metadata: {
-        payer_cpf: cleanCpf,
-        registration_json: JSON.stringify({
-          registrationData,
-          athleteProfile
-        })
+        registration_id: checkoutSnapshot.registrationId,
+        event_id: checkoutSnapshot.eventId
       },
-      ...(!isLocalhost ? { notification_url: `${origin}/api/webhooks/mercadopago?event_id=${registrationData.eventId}` } : {})
+      ...(!isLocalhost ? { notification_url: `${origin}/api/webhooks/mercadopago?event_id=${checkoutSnapshot.eventId}` } : {})
     };
 
     console.log("[MercadoPago Card API] Enviando requisição de pagamento via Cartão para Mercado Pago...");
@@ -122,7 +121,7 @@ export async function POST(request: Request) {
       headers: {
         'Authorization': `Bearer ${checkoutConfig.accessToken}`,
         'Content-Type': 'application/json',
-        'X-Idempotency-Key': `card-${registrationData.id}-${Date.now()}`,
+        'X-Idempotency-Key': `card-${checkoutSnapshot.registrationId}`,
         ...(deviceId ? { 'X-Meli-Session-Id': deviceId } : {})
       },
       body: JSON.stringify(paymentPayload)
@@ -132,7 +131,7 @@ export async function POST(request: Request) {
       const errorData = await response.json();
       console.error("[MercadoPago Card API] Erro ao criar pagamento com Cartão no Mercado Pago:", errorData);
       const statusDetail = errorData?.cause?.[0]?.description || errorData?.message;
-      await updateRegistrationPayment(registrationData.id, {
+      await updateRegistrationPayment(checkoutSnapshot.registrationId, {
         paymentStatus: 'payment_failed',
         statusDetail,
         errorMessage: 'Erro ao processar cobrança do cartão.',
@@ -146,7 +145,7 @@ export async function POST(request: Request) {
 
     const paymentData = await response.json();
     const paymentStatus = toRegistrationPaymentStatus(paymentData.status);
-    await updateRegistrationPayment(registrationData.id, {
+    await updateRegistrationPayment(checkoutSnapshot.registrationId, {
       paymentStatus,
       paymentId: paymentData.id,
       statusDetail: paymentData.status_detail,

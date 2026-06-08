@@ -1,19 +1,11 @@
 import { NextResponse } from 'next/server';
 import { createHash } from 'node:crypto';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://momigbtnsswoldqnadmc.supabase.co';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+import { createSupabaseAdmin, hashPassword } from '@/lib/serverSecurity';
 
 const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
 
 export async function POST(request: Request) {
   try {
-    if (!supabaseServiceKey) {
-      console.error('[API Auth ResetPassword] SUPABASE_SERVICE_ROLE_KEY não configurada.');
-      return NextResponse.json({ error: 'Configuração do servidor ausente.' }, { status: 500 });
-    }
-
     const { token, newPassword } = await request.json();
     const rawToken = String(token || '');
     const password = String(newPassword || '');
@@ -26,9 +18,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'A nova senha deve ter pelo menos 6 caracteres.' }, { status: 400 });
     }
 
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { persistSession: false, autoRefreshToken: false }
-    });
+    const supabaseAdmin = createSupabaseAdmin();
 
     const tokenHash = hashToken(rawToken);
     const { data: resetToken, error: tokenError } = await supabaseAdmin
@@ -50,7 +40,7 @@ export async function POST(request: Request) {
       .from('users_secrets')
       .upsert({
         user_id: resetToken.user_id,
-        password
+        password: hashPassword(password)
       }, { onConflict: 'user_id' });
 
     if (secretError) {

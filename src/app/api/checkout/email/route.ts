@@ -1,13 +1,9 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { sendRegistrationEmail } from '@/lib/resend';
 import { Registration, Athlete, Event } from '@/types';
+import { checkRateLimit, createSupabaseAdmin, getClientIp } from '@/lib/serverSecurity';
 
-// Inicializa o cliente Supabase Admin para leitura segura
-const supabaseAdmin = createClient(
-  process.env.SUPABASE_URL || 'https://momigbtnsswoldqnadmc.supabase.co',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-);
+const supabaseAdmin = createSupabaseAdmin();
 
 export async function POST(request: Request) {
   try {
@@ -17,6 +13,13 @@ export async function POST(request: Request) {
     if (!registrationId) {
       return NextResponse.json({ error: 'Parâmetro registrationId obrigatório.' }, { status: 400 });
     }
+
+    const rateLimited = checkRateLimit({
+      key: `checkout-email:${getClientIp(request)}:${registrationId}`,
+      limit: 3,
+      windowMs: 60 * 60 * 1000
+    });
+    if (rateLimited) return rateLimited;
 
     console.log(`[Email API Endpoint] Processando solicitação para inscrição ${registrationId}...`);
 
@@ -30,6 +33,10 @@ export async function POST(request: Request) {
     if (regErr || !dbReg) {
       console.warn(`[Email API Endpoint] Inscrição ${registrationId} não encontrada ou erro no banco.`);
       return NextResponse.json({ error: 'Inscrição não encontrada.' }, { status: 404 });
+    }
+
+    if (dbReg.payment_status && dbReg.payment_status !== 'payment_approved') {
+      return NextResponse.json({ error: 'Comprovante disponível apenas após confirmação do pagamento.' }, { status: 403 });
     }
 
     // Mapear para o formato do tipo Registration

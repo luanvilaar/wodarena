@@ -1,24 +1,12 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || 'https://momigbtnsswoldqnadmc.supabase.co';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+import { calculateSecureRegistrationSnapshot } from '@/lib/serverCheckout';
+import { createSupabaseAdmin, hashPassword } from '@/lib/serverSecurity';
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
 
 export async function POST(request: Request) {
   try {
-    if (!supabaseServiceKey) {
-      console.error('[Registration Start] SUPABASE_SERVICE_ROLE_KEY não configurada no servidor.');
-      return NextResponse.json({ error: 'Configuração do servidor ausente.' }, { status: 500 });
-    }
-
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false
-      }
-    });
+    const supabaseAdmin = createSupabaseAdmin();
 
     const body = await request.json();
     const {
@@ -34,7 +22,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Dados de inscrição obrigatórios.' }, { status: 400 });
     }
 
-    const email = normalizeEmail(registrationData.athleteEmail || athleteProfile.email || '');
+    const secureSnapshot = await calculateSecureRegistrationSnapshot(supabaseAdmin, registrationData, athleteProfile);
+    const safeRegistrationData = secureSnapshot.registrationData;
+    const safeAthleteProfile = secureSnapshot.athleteProfile;
+
+    const email = normalizeEmail(String(safeRegistrationData.athleteEmail || safeAthleteProfile.email || ''));
     if (!email || !email.includes('@') || email.includes('nao-informado@wodarena.com')) {
       return NextResponse.json({ error: 'E-mail válido é obrigatório para criar o painel do atleta.' }, { status: 400 });
     }
@@ -47,7 +39,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'A confirmação de senha não confere.' }, { status: 400 });
     }
 
-    const regId = registrationData.id || `reg-${Date.now()}`;
+    const regId = String(safeRegistrationData.id);
     let userId = '';
 
     const { data: existingUser, error: existingUserError } = await supabaseAdmin
@@ -72,10 +64,10 @@ export async function POST(request: Request) {
         .from('users')
         .insert({
           id: userId,
-          name: registrationData.athleteName,
+          name: safeRegistrationData.athleteName,
           email,
           role: 'athlete',
-          organization: registrationData.box || 'Atleta WODArena'
+          organization: safeRegistrationData.box || 'Atleta WODArena'
         });
 
       if (userError) {
@@ -99,7 +91,7 @@ export async function POST(request: Request) {
     const { data: existingRegEvent, error: regCheckError } = await supabaseAdmin
       .from('registrations')
       .select('id, payment_status')
-      .eq('event_id', registrationData.eventId)
+      .eq('event_id', safeRegistrationData.eventId)
       .eq('athlete_email', email)
       .not('payment_status', 'eq', 'payment_cancelled')
       .maybeSingle();
@@ -123,7 +115,7 @@ export async function POST(request: Request) {
       .from('users_secrets')
       .upsert({
         user_id: userId,
-        password: String(password)
+        password: hashPassword(String(password))
       }, { onConflict: 'user_id' });
 
     if (secretError) {
@@ -131,12 +123,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Erro ao gravar senha do painel do atleta.' }, { status: 500 });
     }
 
-    let athleteId = athleteProfile.id || `ath-${Date.now()}`;
+    let athleteId = String(safeAthleteProfile.id || `ath-${Date.now()}`);
     const { data: existingAthlete } = await supabaseAdmin
       .from('athletes')
       .select('id')
       .eq('email', email)
-      .eq('division_id', registrationData.divisionId)
+      .eq('division_id', safeRegistrationData.divisionId)
       .maybeSingle();
 
     if (existingAthlete) {
@@ -144,8 +136,8 @@ export async function POST(request: Request) {
       const { error: athleteUpdateError } = await supabaseAdmin
         .from('athletes')
         .update({
-          shirt_size: athleteProfile.shirtSize || null,
-          team_members: athleteProfile.teamMembers ? JSON.stringify(athleteProfile.teamMembers) : '[]'
+          shirt_size: safeAthleteProfile.shirtSize || null,
+          team_members: safeAthleteProfile.teamMembers ? JSON.stringify(safeAthleteProfile.teamMembers) : '[]'
         })
         .eq('id', athleteId);
 
@@ -158,21 +150,21 @@ export async function POST(request: Request) {
         .from('athletes')
         .insert({
           id: athleteId,
-          name: registrationData.athleteName,
-          box: registrationData.box || 'Independente',
+          name: safeRegistrationData.athleteName,
+          box: safeRegistrationData.box || 'Independente',
           country: 'BR',
-          division_id: registrationData.divisionId,
-          birth_date: athleteProfile.birthDate || null,
-          gender: athleteProfile.gender || null,
-          city: athleteProfile.city || null,
-          state: athleteProfile.state || null,
-          instagram: athleteProfile.instagram || null,
-          photo_url: athleteProfile.photoUrl || null,
-          shirt_size: athleteProfile.shirtSize || null,
+          division_id: safeRegistrationData.divisionId,
+          birth_date: safeAthleteProfile.birthDate || null,
+          gender: safeAthleteProfile.gender || null,
+          city: safeAthleteProfile.city || null,
+          state: safeAthleteProfile.state || null,
+          instagram: safeAthleteProfile.instagram || null,
+          photo_url: safeAthleteProfile.photoUrl || null,
+          shirt_size: safeAthleteProfile.shirtSize || null,
           email,
-          phone: registrationData.athletePhone || athleteProfile.phone || null,
-          is_team: athleteProfile.isTeam || false,
-          team_members: athleteProfile.teamMembers ? JSON.stringify(athleteProfile.teamMembers) : '[]'
+          phone: safeRegistrationData.athletePhone || safeAthleteProfile.phone || null,
+          is_team: safeAthleteProfile.isTeam || false,
+          team_members: safeAthleteProfile.teamMembers ? JSON.stringify(safeAthleteProfile.teamMembers) : '[]'
         });
 
       if (athleteError) {
@@ -185,21 +177,21 @@ export async function POST(request: Request) {
     const now = new Date().toISOString();
     const registrationPayload = {
       id: regId,
-      event_id: registrationData.eventId,
-      division_id: registrationData.divisionId,
+      event_id: safeRegistrationData.eventId,
+      division_id: safeRegistrationData.divisionId,
       user_id: userId,
       athlete_id: athleteId,
-      athlete_name: registrationData.athleteName,
+      athlete_name: safeRegistrationData.athleteName,
       athlete_email: email,
-      athlete_phone: registrationData.athletePhone || athleteProfile.phone || 'Não informado',
-      box: registrationData.box || 'Independente',
-      gender: registrationData.gender,
-      ticket_type: registrationData.ticketType,
-      ticket_price: Number(registrationData.ticketPrice),
-      quantity: Number(registrationData.quantity || 1),
-      total_paid: Number(registrationData.totalPaid),
-      created_at: registrationData.createdAt || now,
-      coupon_code: registrationData.couponCode || null,
+      athlete_phone: safeRegistrationData.athletePhone || safeAthleteProfile.phone || 'Não informado',
+      box: safeRegistrationData.box || 'Independente',
+      gender: safeRegistrationData.gender,
+      ticket_type: safeRegistrationData.ticketType,
+      ticket_price: Number(safeRegistrationData.ticketPrice),
+      quantity: Number(safeRegistrationData.quantity || 1),
+      total_paid: Number(safeRegistrationData.totalPaid),
+      created_at: safeRegistrationData.createdAt || now,
+      coupon_code: safeRegistrationData.couponCode || null,
       payment_status: paymentStatus,
       payment_method: paymentMethod || null,
       updated_at: now
@@ -220,13 +212,13 @@ export async function POST(request: Request) {
       success: true,
       user: {
         id: userId,
-        name: registrationData.athleteName,
+        name: safeRegistrationData.athleteName,
         email,
         role: 'athlete',
-        organization: registrationData.box || 'Atleta WODArena'
+        organization: safeRegistrationData.box || 'Atleta WODArena'
       },
       registrationData: {
-        ...registrationData,
+        ...safeRegistrationData,
         id: regId,
         userId,
         athleteId,
@@ -237,7 +229,7 @@ export async function POST(request: Request) {
         updatedAt: dbRegistration.updated_at
       },
       athleteProfile: {
-        ...athleteProfile,
+        ...safeAthleteProfile,
         id: athleteId,
         email
       }
