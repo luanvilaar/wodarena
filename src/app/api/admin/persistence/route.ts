@@ -177,6 +177,25 @@ export async function POST(request: Request) {
         return NextResponse.json({ success: true });
       }
 
+      case 'updateCoupon': {
+        await ensureEventOwner(supabaseAdmin, actor, payload.eventId);
+        const { data: existingCoupon, error: findError } = await supabaseAdmin
+          .from('coupons')
+          .select('id, event_id')
+          .eq('id', payload.couponId)
+          .eq('event_id', payload.eventId)
+          .maybeSingle();
+        if (findError || !existingCoupon) {
+          return NextResponse.json({ error: 'Cupom nao encontrado para este evento.' }, { status: 404 });
+        }
+        const { error } = await supabaseAdmin
+          .from('coupons')
+          .update(payload.data)
+          .eq('id', payload.couponId);
+        if (error) throw error;
+        return NextResponse.json({ success: true });
+      }
+
       case 'upsertScores': {
         const eventIds = Array.isArray(payload.eventIds) ? payload.eventIds : [];
         for (const eventId of eventIds) {

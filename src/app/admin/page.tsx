@@ -90,7 +90,7 @@ export default function AdminPage() {
     events, athletes, scores, registrations, coupons, currentUser,
     login, logout, addEvent, addDivision, updateDivision,
     addWorkout, deleteEvent, deleteDivision, deleteWorkout, submitScore, submitScoresBulk, updateEvent, getLeaderboard, registerTicket, saveCourseLayout, updateWorkout,
-    refreshRegistrations, addCoupon, incrementCouponUsage, changePassword
+    refreshRegistrations, addCoupon, updateCoupon, toggleCouponActive, incrementCouponUsage, changePassword
   } = useApp();
 
   // 1. Estados de Login (vinculado ao currentUser do contexto)
@@ -653,6 +653,7 @@ export default function AdminPage() {
   const [newCouponDiscountType, setNewCouponDiscountType] = useState<'percentage' | 'fixed'>('percentage');
   const [newCouponDiscountValue, setNewCouponDiscountValue] = useState('');
   const [newCouponUsageLimit, setNewCouponUsageLimit] = useState('100');
+  const [editingCouponId, setEditingCouponId] = useState('');
 
   // Estados de Cupom na Bilheteria
   const [bilCouponCodeInput, setBilCouponCodeInput] = useState('');
@@ -1083,7 +1084,7 @@ export default function AdminPage() {
     }
 
     const coupon = coupons.find(c => c.eventId === selectedEventToManage.id && c.code.toUpperCase() === code);
-    if (!coupon) {
+    if (!coupon || !coupon.isActive) {
       setAdminNotice({ text: 'Cupom inválido ou inexistente para este evento.', tone: 'error' });
       setBilDiscountApplied(0);
       setBilAppliedCouponCode('');
@@ -1137,7 +1138,7 @@ export default function AdminPage() {
     });
   };
 
-  // Cadastrar novo cupom do evento
+  // Cadastrar ou editar cupom do evento
   const handleCreateCoupon = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedEventToManage) return;
@@ -1166,7 +1167,40 @@ export default function AdminPage() {
 
     const formattedCode = newCouponCode.trim().replace(/\s+/g, '-').toUpperCase();
 
-    // Validar se cupom com o mesmo código já existe para este evento
+    // Modo de edição
+    if (editingCouponId) {
+      // Verificar se o novo código já existe em outro cupom do evento
+      const duplicateExists = coupons.some(c =>
+        c.eventId === selectedEventToManage.id &&
+        c.code.toUpperCase() === formattedCode &&
+        c.id !== editingCouponId
+      );
+      if (duplicateExists) {
+        setAdminNotice({ text: 'Um cupom com este código já está cadastrado para este evento.', tone: 'error' });
+        return;
+      }
+
+      try {
+        await updateCoupon(editingCouponId, {
+          code: formattedCode,
+          discountType: newCouponDiscountType,
+          discountValue: val,
+          usageLimit: limit
+        });
+        setAdminNotice({ text: `Cupom "${formattedCode}" atualizado com sucesso!`, tone: 'success' });
+        setEditingCouponId('');
+        setNewCouponCode('');
+        setNewCouponDiscountValue('');
+        setNewCouponUsageLimit('100');
+        setNewCouponDiscountType('percentage');
+      } catch (err) {
+        console.error(err);
+        setAdminNotice({ text: 'Não foi possível atualizar o cupom. Tente novamente.', tone: 'error' });
+      }
+      return;
+    }
+
+    // Modo de criação
     const exists = coupons.some(c => c.eventId === selectedEventToManage.id && c.code.toUpperCase() === formattedCode);
     if (exists) {
       setAdminNotice({ text: 'Um cupom com este código já está cadastrado para este evento.', tone: 'error' });
@@ -1191,6 +1225,40 @@ export default function AdminPage() {
     } catch (err) {
       console.error(err);
       setAdminNotice({ text: 'Não foi possível cadastrar o cupom. Tente novamente.', tone: 'error' });
+    }
+  };
+
+  // Preencher formulário para edição de cupom
+  const handleEditCoupon = (couponId: string) => {
+    const coupon = coupons.find(c => c.id === couponId);
+    if (!coupon) return;
+    setEditingCouponId(couponId);
+    setNewCouponCode(coupon.code);
+    setNewCouponDiscountType(coupon.discountType);
+    setNewCouponDiscountValue(String(coupon.discountValue));
+    setNewCouponUsageLimit(String(coupon.usageLimit));
+  };
+
+  // Cancelar edição de cupom
+  const handleCancelEditCoupon = () => {
+    setEditingCouponId('');
+    setNewCouponCode('');
+    setNewCouponDiscountType('percentage');
+    setNewCouponDiscountValue('');
+    setNewCouponUsageLimit('100');
+  };
+
+  // Ativar/Desativar cupom
+  const handleToggleCouponActive = async (couponId: string, isActive: boolean) => {
+    try {
+      await toggleCouponActive(couponId, isActive);
+      setAdminNotice({
+        text: isActive ? 'Cupom ativado com sucesso!' : 'Cupom desativado com sucesso!',
+        tone: 'success'
+      });
+    } catch (err) {
+      console.error(err);
+      setAdminNotice({ text: 'Não foi possível alterar o status do cupom. Tente novamente.', tone: 'error' });
     }
   };
 
@@ -6175,67 +6243,89 @@ export default function AdminPage() {
                 <p className="text-xs text-muted">Crie e gerencie cupons de desconto para os atletas utilizarem nas inscrições do evento.</p>
               </div>
 
-              {/* Formulário de Novo Cupom */}
-              <form onSubmit={handleCreateCoupon} className="grid grid-cols-1 sm:grid-cols-4 gap-4 bg-dark-gray/10 p-4 rounded-xl border border-card-border/60 items-end">
-                <div>
-                  <label htmlFor="new-coupon-code" className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-muted font-sans">Código do Cupom *</label>
-                  <input
-                    id="new-coupon-code"
-                    type="text"
-                    required
-                    placeholder="Ex: ATLETA10"
-                    value={newCouponCode}
-                    onChange={(e) => setNewCouponCode(e.target.value)}
-                    className="w-full rounded-md border border-card-border bg-dark-gray px-3 py-2 text-xs text-white placeholder:text-muted focus:border-primary/50 focus:outline-none uppercase"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="new-coupon-type" className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-muted font-sans">Tipo de Desconto *</label>
-                  <select
-                    id="new-coupon-type"
-                    value={newCouponDiscountType}
-                    onChange={(e) => setNewCouponDiscountType(e.target.value as 'percentage' | 'fixed')}
-                    className="w-full rounded-md border border-card-border bg-dark-gray px-3 py-2 text-xs text-white focus:border-primary/50 focus:outline-none"
-                  >
-                    <option value="percentage">Porcentagem (%)</option>
-                    <option value="fixed">Valor Fixo (R$)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label htmlFor="new-coupon-value" className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-muted font-sans">Valor do Desconto *</label>
-                  <input
-                    id="new-coupon-value"
-                    type="number"
-                    required
-                    min="1"
-                    placeholder={newCouponDiscountType === 'percentage' ? "Ex: 15" : "Ex: 50"}
-                    value={newCouponDiscountValue}
-                    onChange={(e) => setNewCouponDiscountValue(e.target.value)}
-                    className="w-full rounded-md border border-card-border bg-dark-gray px-3 py-2 text-xs text-white placeholder:text-muted focus:border-primary/50 focus:outline-none font-number"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="new-coupon-limit" className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-muted font-sans">Limite de Uso *</label>
-                  <div className="flex gap-2">
+              {/* Formulário de Novo/Editar Cupom */}
+              <form onSubmit={handleCreateCoupon} className="space-y-4 bg-dark-gray/10 p-4 rounded-xl border border-card-border/60">
+                {editingCouponId && (
+                  <div className="flex items-center justify-between pb-2 border-b border-card-border/40">
+                    <p className="text-xs font-bold text-info uppercase tracking-wider flex items-center gap-1.5">
+                      <Pencil className="h-3 w-3" />
+                      Editando cupom
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleCancelEditCoupon}
+                      className="text-[10px] font-bold uppercase tracking-wider text-muted hover:text-white transition-colors flex items-center gap-1"
+                    >
+                      <X className="h-3 w-3" />
+                      Cancelar
+                    </button>
+                  </div>
+                )}
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end">
+                  <div>
+                    <label htmlFor="new-coupon-code" className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-muted font-sans">Código do Cupom *</label>
                     <input
-                      id="new-coupon-limit"
+                      id="new-coupon-code"
+                      type="text"
+                      required
+                      placeholder="Ex: ATLETA10"
+                      value={newCouponCode}
+                      onChange={(e) => setNewCouponCode(e.target.value)}
+                      className="w-full rounded-md border border-card-border bg-dark-gray px-3 py-2 text-xs text-white placeholder:text-muted focus:border-primary/50 focus:outline-none uppercase"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="new-coupon-type" className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-muted font-sans">Tipo de Desconto *</label>
+                    <select
+                      id="new-coupon-type"
+                      value={newCouponDiscountType}
+                      onChange={(e) => setNewCouponDiscountType(e.target.value as 'percentage' | 'fixed')}
+                      className="w-full rounded-md border border-card-border bg-dark-gray px-3 py-2 text-xs text-white focus:border-primary/50 focus:outline-none"
+                    >
+                      <option value="percentage">Porcentagem (%)</option>
+                      <option value="fixed">Valor Fixo (R$)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label htmlFor="new-coupon-value" className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-muted font-sans">Valor do Desconto *</label>
+                    <input
+                      id="new-coupon-value"
                       type="number"
                       required
                       min="1"
-                      placeholder="Ex: 100"
-                      value={newCouponUsageLimit}
-                      onChange={(e) => setNewCouponUsageLimit(e.target.value)}
+                      placeholder={newCouponDiscountType === 'percentage' ? "Ex: 15" : "Ex: 50"}
+                      value={newCouponDiscountValue}
+                      onChange={(e) => setNewCouponDiscountValue(e.target.value)}
                       className="w-full rounded-md border border-card-border bg-dark-gray px-3 py-2 text-xs text-white placeholder:text-muted focus:border-primary/50 focus:outline-none font-number"
                     />
-                    <button
-                      type="submit"
-                      className="inline-flex min-h-9 items-center justify-center rounded bg-primary hover:bg-primary-hover px-4 py-2 text-xs font-bold uppercase tracking-wider text-ink transition-colors font-sans whitespace-nowrap"
-                    >
-                      Criar Cupom
-                    </button>
+                  </div>
+
+                  <div>
+                    <label htmlFor="new-coupon-limit" className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-muted font-sans">Limite de Uso *</label>
+                    <div className="flex gap-2">
+                      <input
+                        id="new-coupon-limit"
+                        type="number"
+                        required
+                        min="1"
+                        placeholder="Ex: 100"
+                        value={newCouponUsageLimit}
+                        onChange={(e) => setNewCouponUsageLimit(e.target.value)}
+                        className="w-full rounded-md border border-card-border bg-dark-gray px-3 py-2 text-xs text-white placeholder:text-muted focus:border-primary/50 focus:outline-none font-number"
+                      />
+                      <button
+                        type="submit"
+                        className={`inline-flex min-h-9 items-center justify-center rounded px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors font-sans whitespace-nowrap ${
+                          editingCouponId
+                            ? 'bg-info hover:bg-info/80 text-white'
+                            : 'bg-primary hover:bg-primary-hover text-ink'
+                        }`}
+                      >
+                        {editingCouponId ? 'Salvar' : 'Criar Cupom'}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </form>
@@ -6256,14 +6346,20 @@ export default function AdminPage() {
                           <th className="py-3 px-2">Tipo</th>
                           <th className="py-3 px-2">Valor do Desconto</th>
                           <th className="py-3 px-2 text-center">Uso Atual / Limite</th>
+                          <th className="py-3 px-2 text-center">Status</th>
                           <th className="py-3 px-2">Data de Criação</th>
+                          <th className="py-3 px-2 text-center">Ações</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-card-border/30 text-xs font-normal">
                         {eventCoupons.map((coupon) => (
-                          <tr key={coupon.id} className="hover:bg-dark-gray/30 transition-colors">
+                          <tr key={coupon.id} className={`transition-colors ${coupon.isActive ? 'hover:bg-dark-gray/30' : 'opacity-50 hover:bg-dark-gray/20'}`}>
                             <td className="py-3 px-2 font-mono font-bold text-white uppercase tracking-wider">
-                              <span className="bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded text-[10px]">
+                              <span className={`px-2 py-0.5 rounded text-[10px] border ${
+                                coupon.isActive
+                                  ? 'bg-primary/10 text-primary border-primary/20'
+                                  : 'bg-muted/10 text-muted border-card-border/30 line-through'
+                              }`}>
                                 {coupon.code}
                               </span>
                             </td>
@@ -6281,8 +6377,42 @@ export default function AdminPage() {
                                 {coupon.usageCount}
                               </span> / {coupon.usageLimit}
                             </td>
+                            <td className="py-3 px-2 text-center">
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                coupon.isActive
+                                  ? 'bg-[#00875A]/10 text-[#00875A] border border-[#00875A]/20'
+                                  : 'bg-trading-down/10 text-trading-down border border-trading-down/20'
+                              }`}>
+                                <span className={`h-1.5 w-1.5 rounded-full ${coupon.isActive ? 'bg-[#00875A]' : 'bg-trading-down'}`} />
+                                {coupon.isActive ? 'Ativo' : 'Inativo'}
+                              </span>
+                            </td>
                             <td className="py-3 px-2 text-muted">
                               {new Date(coupon.createdAt).toLocaleDateString('pt-BR')}
+                            </td>
+                            <td className="py-3 px-2 text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleEditCoupon(coupon.id)}
+                                  className="p-1.5 rounded text-muted hover:text-info hover:bg-info/10 transition-colors"
+                                  title="Editar cupom"
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleCouponActive(coupon.id, !coupon.isActive)}
+                                  className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                                    coupon.isActive
+                                      ? 'text-trading-down hover:bg-trading-down/10'
+                                      : 'text-[#00875A] hover:bg-[#00875A]/10'
+                                  }`}
+                                  title={coupon.isActive ? 'Desativar cupom' : 'Ativar cupom'}
+                                >
+                                  {coupon.isActive ? 'Desativar' : 'Ativar'}
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ))}

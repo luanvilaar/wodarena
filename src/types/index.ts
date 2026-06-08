@@ -179,4 +179,5 @@ export interface Coupon {
   usageLimit: number;
   usageCount: number;
   createdAt: string;
+  isActive: boolean;
 }

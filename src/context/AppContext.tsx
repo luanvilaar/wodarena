@@ -50,7 +50,9 @@ interface AppContextType {
   saveCourseLayout: (divisionId: string, layout: CourseStage[]) => Promise<void>;
   updateWorkout: (eventId: string, workoutId: string, updatedData: Partial<Workout>) => Promise<void>;
   coupons: Coupon[];
-  addCoupon: (coupon: Omit<Coupon, 'id' | 'usageCount' | 'createdAt'>) => Promise<void>;
+  addCoupon: (coupon: Omit<Coupon, 'id' | 'usageCount' | 'createdAt' | 'isActive'>) => Promise<void>;
+  updateCoupon: (couponId: string, data: Partial<Pick<Coupon, 'code' | 'discountType' | 'discountValue' | 'usageLimit'>>) => Promise<void>;
+  toggleCouponActive: (couponId: string, isActive: boolean) => Promise<void>;
   incrementCouponUsage: (eventId: string, code: string) => Promise<void>;
   changePassword: (userId: string, currentPassword: string, newPassword: string) => Promise<boolean>;
 }
@@ -275,7 +277,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             discountValue: Number(c.discount_value),
             usageLimit: c.usage_limit !== null ? Number(c.usage_limit) : 100,
             usageCount: c.usage_count !== null ? Number(c.usage_count) : 0,
-            createdAt: c.created_at
+            createdAt: c.created_at,
+            isActive: c.is_active !== false
           }));
           setCoupons(mappedCoupons);
         } else {
@@ -1027,7 +1030,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Cadastrar Cupom de Desconto
-  const addCoupon = async (couponData: Omit<Coupon, 'id' | 'usageCount' | 'createdAt'>) => {
+  const addCoupon = async (couponData: Omit<Coupon, 'id' | 'usageCount' | 'createdAt' | 'isActive'>) => {
     const event = events.find(e => e.id === couponData.eventId);
     if (!event || event.organizerId !== currentUser?.id) {
       throw new Error('Evento não encontrado para este gestor.');
@@ -1037,7 +1040,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       ...couponData,
       id: `coupon-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
       usageCount: 0,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      isActive: true
     };
 
     await adminPersist('createCoupon', {
@@ -1048,11 +1052,62 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         discount_type: newCoupon.discountType,
         discount_value: newCoupon.discountValue,
         usage_limit: newCoupon.usageLimit,
-        usage_count: newCoupon.usageCount
+        usage_count: newCoupon.usageCount,
+        is_active: true
       }
     });
 
     setCoupons(prev => [...prev, newCoupon]);
+  };
+
+  // Editar Cupom de Desconto
+  const updateCoupon = async (couponId: string, data: Partial<Pick<Coupon, 'code' | 'discountType' | 'discountValue' | 'usageLimit'>>) => {
+    const coupon = coupons.find(c => c.id === couponId);
+    if (!coupon) throw new Error('Cupom não encontrado.');
+
+    const event = events.find(e => e.id === coupon.eventId);
+    if (!event || event.organizerId !== currentUser?.id) {
+      throw new Error('Evento não encontrado para este gestor.');
+    }
+
+    const previousCoupons = coupons;
+    setCoupons(prev => prev.map(c => c.id === couponId ? { ...c, ...data } : c));
+
+    const dbPayload: Record<string, unknown> = {};
+    if (data.code !== undefined) dbPayload.code = data.code;
+    if (data.discountType !== undefined) dbPayload.discount_type = data.discountType;
+    if (data.discountValue !== undefined) dbPayload.discount_value = data.discountValue;
+    if (data.usageLimit !== undefined) dbPayload.usage_limit = data.usageLimit;
+
+    try {
+      await adminPersist('updateCoupon', { couponId, eventId: coupon.eventId, data: dbPayload });
+    } catch (error) {
+      setCoupons(previousCoupons);
+      console.error("Erro ao atualizar cupom no Supabase:", error);
+      throw error;
+    }
+  };
+
+  // Ativar/Desativar Cupom de Desconto
+  const toggleCouponActive = async (couponId: string, isActive: boolean) => {
+    const coupon = coupons.find(c => c.id === couponId);
+    if (!coupon) throw new Error('Cupom não encontrado.');
+
+    const event = events.find(e => e.id === coupon.eventId);
+    if (!event || event.organizerId !== currentUser?.id) {
+      throw new Error('Evento não encontrado para este gestor.');
+    }
+
+    const previousCoupons = coupons;
+    setCoupons(prev => prev.map(c => c.id === couponId ? { ...c, isActive } : c));
+
+    try {
+      await adminPersist('updateCoupon', { couponId, eventId: coupon.eventId, data: { is_active: isActive } });
+    } catch (error) {
+      setCoupons(previousCoupons);
+      console.error("Erro ao alterar status do cupom no Supabase:", error);
+      throw error;
+    }
   };
 
   // Incrementar o uso de um cupom
@@ -1586,6 +1641,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         saveCourseLayout,
         updateWorkout,
         addCoupon,
+        updateCoupon,
+        toggleCouponActive,
         incrementCouponUsage,
         changePassword
       }}

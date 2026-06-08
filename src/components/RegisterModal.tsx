@@ -251,7 +251,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
     }
 
     const coupon = coupons.find(c => c.eventId === event.id && c.code.toUpperCase() === code);
-    if (!coupon) {
+    if (!coupon || !coupon.isActive) {
       setCouponNotice({ text: 'Cupom inválido ou inexistente para este evento.', tone: 'error' });
       setAppliedCoupon(null);
       setDiscountApplied(0);

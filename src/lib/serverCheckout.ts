@@ -70,13 +70,17 @@ export const calculateSecureRegistrationSnapshot = async (
   if (couponCode) {
     const { data: coupon, error: couponError } = await supabaseAdmin
       .from('coupons')
-      .select('code, discount_type, discount_value, usage_limit, usage_count')
+      .select('code, discount_type, discount_value, usage_limit, usage_count, is_active')
       .eq('event_id', eventId)
       .eq('code', couponCode)
       .maybeSingle();
 
     if (couponError || !coupon) {
       throw new Error('Cupom invalido para este evento.');
+    }
+
+    if (coupon.is_active === false) {
+      throw new Error('Este cupom esta desativado.');
     }
 
     if (Number(coupon.usage_limit || 0) > 0 && Number(coupon.usage_count || 0) >= Number(coupon.usage_limit || 0)) {
