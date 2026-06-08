@@ -19,6 +19,7 @@ const statusRoute = read('../src/app/api/checkout/status/route.ts');
 const webhookRoute = read('../src/app/api/webhooks/mercadopago/route.ts');
 const oauthCallback = read('../src/app/api/mercadopago/oauth/callback/route.ts');
 const adminPage = read('../src/app/admin/page.tsx');
+const ownerPage = read('../src/app/owner/page.tsx');
 const mockData = read('../src/data/mockData.ts');
 const supabaseClient = read('../src/lib/supabase.ts');
 const rlsMigration = read('../supabase/migrations/20260608120000_reenable_rls_security_baseline.sql');
@@ -88,4 +89,9 @@ test('bootstrap API does not expose full athlete PII to anonymous clients', () =
   assert.match(bootstrapRoute, /\.eq\('id', session\.id\)/);
   assert.match(bootstrapRoute, /athletes: \(athletesResult\.data \|\| \[\]\)\.map\(sanitizePublicAthlete\)/);
   assert.doesNotMatch(bootstrapRoute.match(/const sanitizePublicAthlete[\s\S]*?\}\);/)?.[0] || '', /email|phone|shirt_size/);
+});
+
+test('owner login card does not show demo credentials guidance', () => {
+  assert.doesNotMatch(ownerPage, /Dica rápida de demonstração/);
+  assert.doesNotMatch(ownerPage, /Use <strong className="text-primary font-bold">l\.vilaar@gmail\.com<\/strong>/);
 });

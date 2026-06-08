@@ -845,8 +845,8 @@ export default function AdminPage() {
   // Lógica de Login
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const success = await login(email, password);
-    if (success) {
+    const authenticatedUser = await login(email, password);
+    if (authenticatedUser) {
       if (rememberLogin && typeof window !== 'undefined') {
         window.localStorage.setItem('wodarena_login_email', email);
       }

@@ -139,19 +139,14 @@ export default function OwnerPage() {
   // Ação de Login
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const success = await login(email, password);
-    if (success) {
-      // Verificar se realmente é o proprietário
-      // O state do currentUser é assíncrono no localStorage, então checamos a lista original
-      const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
-      if (user && user.role === 'owner') {
-        setLoginError('');
-      } else {
-        logout();
-        setLoginError('Acesso negado. Esta conta não possui privilégios de proprietário do site.');
-      }
+    const user = await login(email, password);
+    if (user?.role === 'owner') {
+      setLoginError('');
+    } else if (user) {
+      logout();
+      setLoginError('Acesso negado. Esta conta não possui privilégios de proprietário do site.');
     } else {
-      setLoginError('E-mail ou senha incorretos. Use l.vilaar@gmail.com e owner.');
+      setLoginError('E-mail ou senha incorretos.');
     }
   };
 
@@ -245,12 +240,6 @@ export default function OwnerPage() {
             </button>
           </form>
 
-          <div className="pt-4 border-t border-card-border/50 text-center">
-            <p className="text-[10px] text-muted leading-relaxed">
-              Dica rápida de demonstração:<br />
-              Use <strong className="text-primary font-bold">l.vilaar@gmail.com</strong> e senha <strong className="text-primary font-bold">owner</strong> para entrar.
-            </p>
-          </div>
         </div>
       </div>
     );

@@ -30,7 +30,7 @@ interface AppContextType {
   registrations: Registration[];
   users: User[];
   currentUser: User | null;
-  login: (email: string, password: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<User | null>;
   logout: () => void;
   createManagerAccount: (name: string, email: string, password: string, organization: string) => Promise<boolean>;
   addEvent: (event: Omit<Event, 'id' | 'organizerId' | 'sponsors' | 'format' | 'ticketPrice' | 'ticketSlots' | 'isTicketingActive'> & { format?: 'individual' | 'duo' | 'trio'; ticketPrice?: number; ticketSlots?: number; isTicketingActive?: boolean; eventType?: 'functional_fitness' | 'fitness_racing'; }) => Promise<Event>;
@@ -452,7 +452,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [events]);
 
   // Lógica de Login
-  const login = async (emailInput: string, passwordInput: string): Promise<boolean> => {
+  const login = async (emailInput: string, passwordInput: string): Promise<User | null> => {
     try {
       const response = await fetch('/api/auth/login', {
         method: 'POST',
@@ -468,14 +468,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const data = await response.json();
       if (!response.ok) {
         console.error('Erro de login:', data.error);
-        return false;
+        return null;
       }
 
       setCurrentUser(data.user);
-      return true;
+      return data.user as User;
     } catch (err) {
       console.error('Erro crítico no login:', err);
-      return false;
+      return null;
     }
   };
 
