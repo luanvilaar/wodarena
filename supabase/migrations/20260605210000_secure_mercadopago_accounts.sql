@@ -7,14 +7,24 @@ CREATE TABLE IF NOT EXISTS mercadopago_secrets (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 2. Migrar tokens existentes para a tabela privada de segredos
-INSERT INTO mercadopago_secrets (user_id, access_token, refresh_token)
-SELECT user_id, access_token, refresh_token FROM mercadopago_accounts
-ON CONFLICT (user_id) DO NOTHING;
+-- 2. Migrar tokens existentes e remover colunas da tabela pública condicionalmente
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 
+        FROM information_schema.columns 
+        WHERE table_name = 'mercadopago_accounts' AND column_name = 'access_token'
+    ) THEN
+        -- Migrar tokens existentes para a tabela privada de segredos
+        INSERT INTO mercadopago_secrets (user_id, access_token, refresh_token)
+        SELECT user_id, access_token, refresh_token FROM mercadopago_accounts
+        ON CONFLICT (user_id) DO NOTHING;
 
--- 3. Remover colunas sensíveis da tabela pública de contas do Mercado Pago
-ALTER TABLE mercadopago_accounts DROP COLUMN IF EXISTS access_token;
-ALTER TABLE mercadopago_accounts DROP COLUMN IF EXISTS refresh_token;
+        -- Remover colunas sensíveis da tabela pública
+        ALTER TABLE mercadopago_accounts DROP COLUMN IF EXISTS access_token;
+        ALTER TABLE mercadopago_accounts DROP COLUMN IF EXISTS refresh_token;
+    END IF;
+END $$;
 
 -- 4. Habilitar RLS em ambas as tabelas
 ALTER TABLE mercadopago_secrets ENABLE ROW LEVEL SECURITY;
