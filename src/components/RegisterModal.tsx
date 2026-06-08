@@ -48,6 +48,14 @@ type CheckoutConfigResponse = {
   error?: string;
 };
 
+type CouponValidationResponse = {
+  code?: string;
+  discount?: number;
+  totalPaid?: number;
+  ticketPrice?: number;
+  error?: string;
+};
+
 const createEmptyParticipant = (): ParticipantForm => ({
   name: '',
   email: '',
@@ -96,7 +104,7 @@ const getCheckoutErrorMessage = async (response: Response, fallback: string) => 
 };
 
 export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterModalProps) {
-  const { coupons, registerTicket, incrementCouponUsage } = useApp();
+  const { registerTicket, incrementCouponUsage } = useApp();
   const [selectedDivisionId, setSelectedDivisionId] = useState(event.divisions[0]?.id || '');
   const [box, setBox] = useState('');
   const [teamName, setTeamName] = useState('');
@@ -107,6 +115,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
   const [discountApplied, setDiscountApplied] = useState(0);
   const [couponNotice, setCouponNotice] = useState<{ text: string; tone: 'success' | 'error' } | null>(null);
+  const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'pix' | 'credit_card'>('pix');
   const [cpf, setCpf] = useState('');
   const [pixData, setPixData] = useState<{ qr_code: string; qr_code_base64: string; paymentId: string } | null>(null);
@@ -240,41 +249,49 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
   const primaryParticipant = visibleParticipants[0] || createEmptyParticipant();
   const isFitnessRacing = event.eventType === 'fitness_racing';
 
-  const handleApplyCoupon = () => {
+  const clearAppliedCoupon = () => {
+    setAppliedCoupon(null);
+    setDiscountApplied(0);
+  };
+
+  const handleApplyCoupon = async () => {
     if (!selectedDivision) return;
     const code = couponCode.trim().toUpperCase();
     if (!code) {
-      setAppliedCoupon(null);
-      setDiscountApplied(0);
+      clearAppliedCoupon();
       setCouponNotice(null);
       return;
     }
 
-    const coupon = coupons.find(c => c.eventId === event.id && c.code.toUpperCase() === code);
-    if (!coupon || !coupon.isActive) {
-      setCouponNotice({ text: 'Cupom inválido ou inexistente para este evento.', tone: 'error' });
-      setAppliedCoupon(null);
-      setDiscountApplied(0);
-      return;
-    }
+    setIsApplyingCoupon(true);
+    try {
+      const response = await fetch('/api/checkout/coupon', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventId: event.id,
+          divisionId: selectedDivision.id,
+          couponCode: code
+        })
+      });
+      const data: CouponValidationResponse = await response.json().catch(() => ({}));
 
-    if (coupon.usageLimit > 0 && coupon.usageCount >= coupon.usageLimit) {
-      setCouponNotice({ text: 'Este cupom já atingiu o limite de utilização.', tone: 'error' });
-      setAppliedCoupon(null);
-      setDiscountApplied(0);
-      return;
-    }
+      if (!response.ok || !data.code || data.discount === undefined) {
+        throw new Error(data.error || 'Cupom inválido ou inexistente para este evento.');
+      }
 
-    let discount = 0;
-    if (coupon.discountType === 'percentage') {
-      discount = (ticketPrice * coupon.discountValue) / 100;
-    } else {
-      discount = coupon.discountValue;
+      setDiscountApplied(Number(data.discount));
+      setAppliedCoupon(data.code);
+      setCouponNotice({ text: `Cupom "${data.code}" aplicado com sucesso!`, tone: 'success' });
+    } catch (err) {
+      clearAppliedCoupon();
+      setCouponNotice({
+        text: err instanceof Error ? err.message : 'Cupom inválido ou inexistente para este evento.',
+        tone: 'error'
+      });
+    } finally {
+      setIsApplyingCoupon(false);
     }
-
-    setDiscountApplied(discount);
-    setAppliedCoupon(coupon.code);
-    setCouponNotice({ text: `Cupom "${coupon.code}" aplicado com sucesso!`, tone: 'success' });
   };
 
   const updateParticipant = (index: number, field: keyof ParticipantForm, value: string) => {
@@ -787,7 +804,11 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                   id="registration-division"
                   name="division"
                   value={selectedDivisionId}
-                  onChange={(e) => setSelectedDivisionId(e.target.value)}
+                  onChange={(e) => {
+                    setSelectedDivisionId(e.target.value);
+                    clearAppliedCoupon();
+                    setCouponNotice(null);
+                  }}
                   className="w-full rounded-md border border-hairline-light bg-white px-4 py-3 text-sm font-medium text-ink focus:border-primary focus:outline-none"
                 >
                   {event.divisions.map((div) => (
@@ -801,21 +822,27 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
               {/* Cupom de Desconto */}
               <div>
                 <label htmlFor="checkout-coupon" className="mb-2 block text-xs font-bold text-ink">Cupom de desconto</label>
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-2 sm:flex-row">
                   <input
                     id="checkout-coupon"
                     type="text"
                     placeholder="Digite seu cupom..."
                     value={couponCode}
-                    onChange={(e) => setCouponCode(e.target.value)}
+                    onChange={(e) => {
+                      setCouponCode(e.target.value);
+                      if (appliedCoupon && e.target.value.trim().toUpperCase() !== appliedCoupon) {
+                        clearAppliedCoupon();
+                      }
+                    }}
                     className="flex-1 rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none uppercase"
                   />
                   <button
                     type="button"
                     onClick={handleApplyCoupon}
-                    className="rounded-md bg-ink px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white transition-colors hover:bg-ink/90"
+                    disabled={isApplyingCoupon}
+                    className="min-h-11 rounded-md bg-ink px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white transition-colors hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-70 sm:min-h-0"
                   >
-                    Aplicar
+                    {isApplyingCoupon ? 'Aplicando...' : 'Aplicar'}
                   </button>
                 </div>
                 {couponNotice && (

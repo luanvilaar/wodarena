@@ -11,6 +11,13 @@ export type SecureCheckoutSnapshot = {
   registrationId: string;
 };
 
+export type CouponValidationResult = {
+  code: string;
+  discount: number;
+  totalPaid: number;
+  ticketPrice: number;
+};
+
 const asString = (value: unknown, fallback = '') => typeof value === 'string' && value.trim()
   ? value.trim()
   : fallback;
@@ -21,6 +28,83 @@ const asNumber = (value: unknown, fallback = 0) => {
 };
 
 const normalizeCoupon = (value: unknown) => asString(value).toUpperCase();
+
+const calculateDiscount = (ticketPrice: number, discountType: string, discountValue: unknown) => (
+  discountType === 'percentage'
+    ? (ticketPrice * Number(discountValue || 0)) / 100
+    : Number(discountValue || 0)
+);
+
+export const validateCheckoutCoupon = async (
+  supabaseAdmin: SupabaseClient,
+  eventId: string,
+  divisionId: string,
+  couponCodeValue: unknown
+): Promise<CouponValidationResult> => {
+  const couponCode = normalizeCoupon(couponCodeValue);
+  if (!eventId || !divisionId || !couponCode) {
+    throw new Error('Evento, categoria e cupom sao obrigatorios.');
+  }
+
+  const { data: event, error: eventError } = await supabaseAdmin
+    .from('events')
+    .select('id, ticket_price, is_ticketing_active')
+    .eq('id', eventId)
+    .maybeSingle();
+
+  if (eventError || !event) {
+    throw new Error('Evento nao encontrado para checkout.');
+  }
+
+  if (event.is_ticketing_active === false) {
+    throw new Error('As inscricoes online deste evento estao encerradas.');
+  }
+
+  const { data: division, error: divisionError } = await supabaseAdmin
+    .from('divisions')
+    .select('id, price, is_active')
+    .eq('id', divisionId)
+    .eq('event_id', eventId)
+    .maybeSingle();
+
+  if (divisionError || !division) {
+    throw new Error('Categoria nao encontrada para checkout.');
+  }
+
+  if (division.is_active === false) {
+    throw new Error('Esta categoria nao esta aceitando inscricoes.');
+  }
+
+  const { data: coupon, error: couponError } = await supabaseAdmin
+    .from('coupons')
+    .select('code, discount_type, discount_value, usage_limit, usage_count, is_active')
+    .eq('event_id', eventId)
+    .eq('code', couponCode)
+    .maybeSingle();
+
+  if (couponError || !coupon) {
+    throw new Error('Cupom invalido para este evento.');
+  }
+
+  if (coupon.is_active === false) {
+    throw new Error('Este cupom esta desativado.');
+  }
+
+  if (Number(coupon.usage_limit || 0) > 0 && Number(coupon.usage_count || 0) >= Number(coupon.usage_limit || 0)) {
+    throw new Error('Este cupom ja atingiu o limite de utilizacao.');
+  }
+
+  const ticketPrice = asNumber(division.price, asNumber(event.ticket_price, 0));
+  const discount = calculateDiscount(ticketPrice, coupon.discount_type, coupon.discount_value);
+  const totalPaid = Math.max(0, ticketPrice - discount);
+
+  return {
+    code: String(coupon.code || couponCode).toUpperCase(),
+    discount,
+    totalPaid: totalPaid > 0 && totalPaid < 1 ? 1 : totalPaid,
+    ticketPrice
+  };
+};
 
 export const calculateSecureRegistrationSnapshot = async (
   supabaseAdmin: SupabaseClient,
@@ -68,28 +152,8 @@ export const calculateSecureRegistrationSnapshot = async (
   let discount = 0;
 
   if (couponCode) {
-    const { data: coupon, error: couponError } = await supabaseAdmin
-      .from('coupons')
-      .select('code, discount_type, discount_value, usage_limit, usage_count, is_active')
-      .eq('event_id', eventId)
-      .eq('code', couponCode)
-      .maybeSingle();
-
-    if (couponError || !coupon) {
-      throw new Error('Cupom invalido para este evento.');
-    }
-
-    if (coupon.is_active === false) {
-      throw new Error('Este cupom esta desativado.');
-    }
-
-    if (Number(coupon.usage_limit || 0) > 0 && Number(coupon.usage_count || 0) >= Number(coupon.usage_limit || 0)) {
-      throw new Error('Este cupom ja atingiu o limite de utilizacao.');
-    }
-
-    discount = coupon.discount_type === 'percentage'
-      ? (ticketPrice * Number(coupon.discount_value || 0)) / 100
-      : Number(coupon.discount_value || 0);
+    const couponResult = await validateCheckoutCoupon(supabaseAdmin, eventId, divisionId, couponCode);
+    discount = couponResult.discount;
   }
 
   const subtotal = Math.max(0, ticketPrice * quantity);

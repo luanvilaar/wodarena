@@ -6380,10 +6380,10 @@ export default function AdminPage() {
                             <td className="py-3 px-2 text-center">
                               <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
                                 coupon.isActive
-                                  ? 'bg-[#00875A]/10 text-[#00875A] border border-[#00875A]/20'
+                                  ? 'bg-trading-up/10 text-trading-up border border-trading-up/20'
                                   : 'bg-trading-down/10 text-trading-down border border-trading-down/20'
                               }`}>
-                                <span className={`h-1.5 w-1.5 rounded-full ${coupon.isActive ? 'bg-[#00875A]' : 'bg-trading-down'}`} />
+                                <span className={`h-1.5 w-1.5 rounded-full ${coupon.isActive ? 'bg-trading-up' : 'bg-trading-down'}`} />
                                 {coupon.isActive ? 'Ativo' : 'Inativo'}
                               </span>
                             </td>
@@ -6406,7 +6406,7 @@ export default function AdminPage() {
                                   className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider transition-colors ${
                                     coupon.isActive
                                       ? 'text-trading-down hover:bg-trading-down/10'
-                                      : 'text-[#00875A] hover:bg-[#00875A]/10'
+                                      : 'text-trading-up hover:bg-trading-up/10'
                                   }`}
                                   title={coupon.isActive ? 'Desativar cupom' : 'Ativar cupom'}
                                 >

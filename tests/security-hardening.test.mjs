@@ -15,6 +15,7 @@ const adminMercadoPagoRoute = read('../src/app/api/admin/mercadopago/route.ts');
 const cardRoute = read('../src/app/api/checkout/card/route.ts');
 const pixRoute = read('../src/app/api/checkout/pix/route.ts');
 const preferenceRoute = read('../src/app/api/checkout/preference/route.ts');
+const couponRoute = read('../src/app/api/checkout/coupon/route.ts');
 const statusRoute = read('../src/app/api/checkout/status/route.ts');
 const webhookRoute = read('../src/app/api/webhooks/mercadopago/route.ts');
 const oauthCallback = read('../src/app/api/mercadopago/oauth/callback/route.ts');
@@ -71,6 +72,8 @@ test('checkout uses persisted registration snapshots and opaque Mercado Pago met
   assert.match(webhookRoute, /isValidMercadoPagoSignature/);
   assert.match(webhookRoute, /metadata\?\.registration_id/);
   assert.doesNotMatch(webhookRoute, /from\('registrations'\)\.upsert/);
+  assert.match(couponRoute, /validateCheckoutCoupon/);
+  assert.doesNotMatch(couponRoute, /select\('\*'\)/);
 });
 
 test('Supabase hardcoded fallbacks are removed and RLS baseline is present', () => {
