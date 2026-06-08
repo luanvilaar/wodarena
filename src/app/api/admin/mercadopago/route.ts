@@ -89,7 +89,7 @@ export async function POST(request: Request) {
 
     if (publicError) {
       console.error('[API Admin MercadoPago] Erro ao gravar informações públicas no Supabase:', publicError);
-      return NextResponse.json({ error: `Erro ao gravar informações públicas no banco de dados: ${publicError.message}` }, { status: 500 });
+      return NextResponse.json({ error: 'Erro ao gravar informações públicas no banco de dados.' }, { status: 500 });
     }
 
     // 2. Gravar segredos na tabela privada
@@ -104,7 +104,7 @@ export async function POST(request: Request) {
 
     if (secretError) {
       console.error('[API Admin MercadoPago] Erro ao gravar segredos no Supabase:', secretError);
-      return NextResponse.json({ error: `Erro ao gravar credenciais privadas no banco de dados: ${secretError.message}` }, { status: 500 });
+      return NextResponse.json({ error: 'Erro ao gravar credenciais privadas no banco de dados.' }, { status: 500 });
     }
 
     console.log(`[API Admin MercadoPago] Credenciais salvas com sucesso para o usuário ${userId}`);
