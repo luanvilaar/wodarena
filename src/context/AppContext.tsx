@@ -221,8 +221,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           setCoupons([]);
         }
 
-        // 5. Carregar eventos, divisões, workouts e credenciais Mercado Pago dos gestores
-        const { data: dbEvents } = await supabase.from('events').select('*');
+        // 5. Carregar eventos (excluindo mp_access_token por segurança), divisões, workouts e credenciais Mercado Pago dos gestores
+        const { data: dbEvents } = await supabase
+          .from('events')
+          .select('id, name, logo_url, banner_url, status, location, date, description, organizer_id, sponsors, format, ticket_price, ticket_slots, is_ticketing_active, time, city, state, rules, instagram, website, event_type, event_schedule, mp_public_key, marketplace_fee');
         const { data: dbDivisions } = await supabase.from('divisions').select('*');
         const { data: dbWorkouts } = await supabase.from('workouts').select('*');
         const { data: dbMpAccounts } = await supabase
@@ -292,7 +294,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 ? (typeof evt.event_schedule === 'string' ? JSON.parse(evt.event_schedule) : evt.event_schedule)
                 : [],
               mpPublicKey: evt.mp_public_key || organizerMp?.public_key || '',
-              mpAccessToken: evt.mp_access_token || ''
+              mpAccessToken: ''
             };
           });
           setEvents(combinedEvents);
@@ -550,6 +552,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     website?: string;
     eventType?: 'functional_fitness' | 'fitness_racing';
   }) => {
+    if (!currentUser?.id) {
+      alert('Sessão inválida ou expirada. Por favor, faça login novamente para criar o evento.');
+      return;
+    }
+
     const newId = eventData.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
     const defaultFitnessRacing = eventData.eventType === 'fitness_racing'
       ? buildFitnessRacingDefaults(newId, eventData.ticketPrice ?? 150.00, eventData.ticketSlots ?? 100)
@@ -558,7 +565,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const newEvent: Event = {
       ...eventData,
       id: newId,
-      organizerId: currentUser?.id || 'org-1',
+      organizerId: currentUser.id,
       sponsors: ['Bull Fit', 'WOD Gear', 'Strong Nutrition'],
       format: eventData.format || 'individual',
       ticketPrice: eventData.ticketPrice ?? 150.00,

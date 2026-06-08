@@ -26,6 +26,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Parâmetros userId, publicKey e accessToken são obrigatórios.' }, { status: 400 });
     }
 
+    // Validação de segurança: verificar se o usuário existe e é um gestor/proprietário
+    const { data: checkUser, error: checkUserError } = await supabaseAdmin
+      .from('users')
+      .select('role')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (checkUserError || !checkUser) {
+      console.error('[API Admin MercadoPago] Usuário não encontrado ou erro de banco:', checkUserError);
+      return NextResponse.json({ error: 'Usuário inválido ou não encontrado.' }, { status: 403 });
+    }
+
+    if (checkUser.role !== 'manager' && checkUser.role !== 'owner') {
+      return NextResponse.json({ error: 'Acesso negado. Apenas gestores podem configurar chaves de pagamento.' }, { status: 403 });
+    }
+
     let tokenToSave = accessToken;
     if (accessToken === '••••••••••••••••') {
       const { data: existing } = await supabaseAdmin
@@ -119,6 +135,22 @@ export async function DELETE(request: Request) {
 
     if (!userId) {
       return NextResponse.json({ error: 'Parâmetro userId é obrigatório.' }, { status: 400 });
+    }
+
+    // Validação de segurança: verificar se o usuário existe e é um gestor/proprietário
+    const { data: checkUser, error: checkUserError } = await supabaseAdmin
+      .from('users')
+      .select('role')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (checkUserError || !checkUser) {
+      console.error('[API Admin MercadoPago DELETE] Usuário não encontrado ou erro de banco:', checkUserError);
+      return NextResponse.json({ error: 'Usuário inválido ou não encontrado.' }, { status: 403 });
+    }
+
+    if (checkUser.role !== 'manager' && checkUser.role !== 'owner') {
+      return NextResponse.json({ error: 'Acesso negado. Apenas gestores podem configurar chaves de pagamento.' }, { status: 403 });
     }
 
     console.log(`[API Admin MercadoPago DELETE] Desconectando conta Mercado Pago do gestor: ${userId}...`);
