@@ -126,39 +126,62 @@ export function Leaderboard({ event }: LeaderboardProps) {
     <div className="space-y-4">
       {/* Filtros Superiores */}
       <div className="flex flex-col gap-4 rounded-lg border border-card-border bg-card p-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          {/* Categorias cadastradas em botões */}
-          <div className="flex gap-1 rounded-md border border-card-border bg-background p-1 overflow-x-auto scrollbar-none w-full lg:w-auto">
-            {event.divisions.map((division) => (
-              <button
-                key={division.id}
-                type="button"
-                onClick={() => {
-                  setSelectedCategoryId(division.id);
-                  setAgeGroupFilter(''); // Reseta faixa etária
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          {/* CATEGORIAS: Dropdown em mobile, Botões em desktop */}
+          {isMobile ? (
+            <div className="w-full flex flex-col gap-1.5">
+              <label htmlFor={`divisions-${event.id}`} className="text-xs font-bold text-muted uppercase tracking-wider">
+                Categoria
+              </label>
+              <select
+                id={`divisions-${event.id}`}
+                value={selectedCategoryId}
+                onChange={(e) => {
+                  setSelectedCategoryId(e.target.value);
+                  setAgeGroupFilter('');
                 }}
-                className={`min-h-9 flex-1 lg:flex-initial text-center rounded-sm px-4 py-1.5 text-xs font-bold uppercase tracking-wider transition-colors whitespace-nowrap ${
-                  activeCategoryId === division.id
-                    ? 'bg-primary text-ink'
-                    : 'text-muted hover:bg-card hover:text-white'
-                }`}
+                className="h-10 w-full rounded-md border border-card-border bg-background px-3 text-sm font-bold text-white uppercase tracking-wider focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
               >
-                {division.name}
-              </button>
-            ))}
-          </div>
+                {event.divisions.map((division) => (
+                  <option key={division.id} value={division.id}>
+                    {division.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div className="flex gap-1 rounded-md border border-card-border bg-background p-1 overflow-x-auto scrollbar-none w-full lg:w-auto">
+              {event.divisions.map((division) => (
+                <button
+                  key={division.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedCategoryId(division.id);
+                    setAgeGroupFilter('');
+                  }}
+                  className={`min-h-9 flex-1 lg:flex-initial text-center rounded-sm px-4 py-1.5 text-xs font-bold uppercase tracking-wider transition-colors whitespace-nowrap ${
+                    activeCategoryId === division.id
+                      ? 'bg-primary text-ink'
+                      : 'text-muted hover:bg-card hover:text-white'
+                  }`}
+                >
+                  {division.name}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Filtro de Faixa Etária específico para Fitness Racing */}
           {event.eventType === 'fitness_racing' && activeCategory?.useAgeGroups && (
-            <div className="flex items-center gap-2 w-full sm:w-auto lg:flex-grow lg:justify-end">
-              <label htmlFor={`leaderboard-age-${event.id}`} className="hidden text-xs font-bold uppercase tracking-wider text-muted sm:inline">
+            <div className="flex flex-col gap-1.5 w-full sm:w-auto sm:flex-row sm:items-end sm:gap-2 lg:flex-grow lg:justify-end">
+              <label htmlFor={`leaderboard-age-${event.id}`} className="text-xs font-bold uppercase tracking-wider text-muted">
                 Idade
               </label>
               <select
                 id={`leaderboard-age-${event.id}`}
                 value={ageGroupFilter}
                 onChange={(e) => setAgeGroupFilter(e.target.value)}
-                className="h-10 w-full sm:w-auto rounded-md border border-card-border bg-background px-3 text-xs font-bold uppercase tracking-wider text-white focus:border-primary focus:outline-none"
+                className="h-10 w-full sm:w-auto rounded-md border border-card-border bg-background px-3 text-sm font-bold uppercase tracking-wider text-white focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
               >
                 <option value="">Todas</option>
                 {(activeCategory?.ageGroups || ['16-24', '25-29', '30-34', '35-39', '40-44', '45-49', '50-54', '55-59', '60+']).map(ag => (
