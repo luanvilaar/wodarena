@@ -6,6 +6,9 @@ import { useLocalStorage } from '../hooks/useLocalStorage';
 import { INITIAL_EVENTS, INITIAL_ATHLETES, INITIAL_SCORES, INITIAL_USERS } from '../data/mockData';
 import { buildFitnessRacingCourse, buildFitnessRacingDefaults, normalizeInstagram } from '@/lib/fitnessRacing';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type LeaderboardEntry = Record<string, any>;
+
 type RegistrationDraft = Omit<Registration, 'id' | 'createdAt'> & Partial<Pick<Registration, 'id' | 'createdAt'>>;
 
 export type RegistrationEditInput = {
@@ -99,6 +102,8 @@ type BootstrapPayload = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   coupons: any[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  leaderboardEntries?: any[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   events: any[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   divisions: any[];
@@ -168,6 +173,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [scores, setScores] = useState<Score[]>([]);
   const [registrations, setRegistrations] = useState<Registration[]>([]);
   const [coupons, setCoupons] = useState<Coupon[]>([]);
+  const [leaderboardEntries, setLeaderboardEntries] = useState<LeaderboardEntry[]>([]);
   const [users, setUsers] = useState<User[]>(INITIAL_USERS);
   const [currentUser, setCurrentUser] = useLocalStorage<User | null>('woda_current_user', null);
 
@@ -298,6 +304,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           setCoupons(mappedCoupons);
         } else {
           setCoupons([]);
+        }
+
+        // 4.2 Carregar leaderboard_entries (Fase 2 - Dados públicos desnormalizados)
+        const dbLeaderboardEntries = payload.leaderboardEntries;
+        if (dbLeaderboardEntries && Array.isArray(dbLeaderboardEntries) && dbLeaderboardEntries.length > 0) {
+          setLeaderboardEntries(dbLeaderboardEntries);
+        } else {
+          setLeaderboardEntries([]);
         }
 
         // 5. Carregar eventos (excluindo mp_access_token por segurança), divisões, workouts e credenciais Mercado Pago dos gestores
@@ -1329,14 +1343,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const event = events.find(e => e.id === eventId);
     if (!event) return [];
 
-    // 1. Filtrar atletas da divisão que possuem pagamento aprovado
-    const approvedAthleteIds = new Set(
-      registrations
-        .filter(r => r.eventId === eventId && r.paymentStatus === 'payment_approved')
-        .map(r => r.athleteId)
-        .filter(Boolean)
+    // 1. Filtrar atletas usando leaderboard_entries (Fase 2 - dados já sincronizados por trigger)
+    // leaderboard_entries contém apenas atletas com payment_status = 'payment_approved'
+    const leaderboardAthleteIds = new Set(
+      leaderboardEntries
+        .filter(le => le.event_id === eventId && le.division_id === divisionId)
+        .map(le => le.athlete_id)
     );
-    const divisionAthletes = athletes.filter(a => a.divisionId === divisionId && approvedAthleteIds.has(a.id));
+    const divisionAthletes = athletes.filter(
+      a => a.divisionId === divisionId && leaderboardAthleteIds.has(a.id)
+    );
 
     // Se for Fitness Racing, o leaderboard é baseado estritamente no tempo do workout TOTAL (Percurso Completo)
     if (event.eventType === 'fitness_racing') {
