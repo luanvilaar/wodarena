@@ -1344,14 +1344,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!event) return [];
 
     // 1. Filtrar atletas usando leaderboard_entries (Fase 2 - dados já sincronizados por trigger)
-    // leaderboard_entries contém apenas atletas com payment_status = 'payment_approved'
+    // leaderboard_entries contém apenas atletas com payment_status = 'payment_approved'.
+    //
+    // IMPORTANTE: leaderboard_entries é populada por um trigger que dispara apenas em
+    // AFTER UPDATE de registrations (e por um backfill único na migration). Inscrições
+    // criadas já aprovadas (ex.: cadastro manual via bilheteria) ou adicionadas após a
+    // migration podem não ter entrada correspondente. Para que scores lançados nunca
+    // desapareçam do leaderboard público por causa de uma lacuna de sincronização,
+    // aplicamos um fallback: se NÃO houver nenhuma entrada para este evento/divisão,
+    // usamos todos os atletas da divisão (comportamento pré-Fase 2).
     const leaderboardAthleteIds = new Set(
       leaderboardEntries
         .filter(le => le.event_id === eventId && le.division_id === divisionId)
         .map(le => le.athlete_id)
     );
+    const hasLeaderboardEntries = leaderboardAthleteIds.size > 0;
     const divisionAthletes = athletes.filter(
-      a => a.divisionId === divisionId && leaderboardAthleteIds.has(a.id)
+      a => a.divisionId === divisionId && (!hasLeaderboardEntries || leaderboardAthleteIds.has(a.id))
     );
 
     // Se for Fitness Racing, o leaderboard é baseado estritamente no tempo do workout TOTAL (Percurso Completo)
