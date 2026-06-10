@@ -3,6 +3,8 @@ import { createSupabaseAdmin, getRequestSession } from '@/lib/serverSecurity';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AthleteRow = Record<string, any>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type RegistrationRow = Record<string, any>;
 
 const sanitizePublicAthlete = (athlete: AthleteRow) => ({
   id: athlete.id,
@@ -18,6 +20,17 @@ const sanitizePublicAthlete = (athlete: AthleteRow) => ({
   photo_url: athlete.photo_url,
   is_team: athlete.is_team,
   team_members: athlete.team_members
+});
+
+// Sanitizar dados de registration para uso público
+// Remove informações sensíveis: email, phone, payment_id, coupon_code, etc
+const sanitizePublicRegistration = (reg: RegistrationRow) => ({
+  id: String(reg.id),
+  athlete_id: reg.athlete_id ? String(reg.athlete_id) : null,
+  event_id: String(reg.event_id),
+  division_id: String(reg.division_id),
+  payment_status: String(reg.payment_status)
+  // ❌ NÃO incluir: athlete_email, athlete_phone, payment_id, payment_method, coupon_code, total_paid, etc
 });
 
 export async function GET(request: Request) {
@@ -43,7 +56,7 @@ export async function GET(request: Request) {
           : Promise.resolve({ data: [] }),
       supabaseAdmin.from('athletes').select('*'),
       supabaseAdmin.from('scores').select('*'),
-      session ? supabaseAdmin.from('registrations').select('*') : Promise.resolve({ data: [] }),
+      supabaseAdmin.from('registrations').select('*'),
       session ? supabaseAdmin.from('coupons').select('*') : Promise.resolve({ data: [] }),
       supabaseAdmin
         .from('events')
@@ -96,7 +109,9 @@ export async function GET(request: Request) {
       users: usersResult.data || [],
       athletes: (athletesResult.data || []).map(sanitizePublicAthlete),
       scores: scoresResult.data || [],
-      registrations: registrationsResult.data || [],
+      registrations: !session
+        ? (registrationsResult.data || []).map(sanitizePublicRegistration)
+        : registrationsResult.data || [],
       coupons: couponsResult.data || [],
       events: eventsResult.data || [],
       divisions: divisionsResult.data || [],
