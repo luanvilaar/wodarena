@@ -47,7 +47,8 @@ export async function GET(request: Request) {
       eventsResult,
       divisionsResult,
       workoutsResult,
-      mpAccountsResult
+      mpAccountsResult,
+      leaderboardEntriesResult
     ] = await Promise.all([
       session?.role === 'owner'
         ? supabaseAdmin.from('users').select('id, name, email, role, organization')
@@ -66,7 +67,8 @@ export async function GET(request: Request) {
       supabaseAdmin
         .from('mercadopago_accounts')
         .select('user_id, public_key')
-        .eq('status', 'connected')
+        .eq('status', 'connected'),
+      supabaseAdmin.from('leaderboard_entries').select('*')
     ]);
 
     if (session?.role === 'manager') {
@@ -83,7 +85,8 @@ export async function GET(request: Request) {
         events: eventsResult.data || [],
         divisions: divisionsResult.data || [],
         workouts: workoutsResult.data || [],
-        mercadopagoAccounts: mpAccountsResult.data || []
+        mercadopagoAccounts: mpAccountsResult.data || [],
+        leaderboardEntries: leaderboardEntriesResult.data || []
       });
     }
 
@@ -100,7 +103,8 @@ export async function GET(request: Request) {
         events: eventsResult.data || [],
         divisions: divisionsResult.data || [],
         workouts: workoutsResult.data || [],
-        mercadopagoAccounts: mpAccountsResult.data || []
+        mercadopagoAccounts: mpAccountsResult.data || [],
+        leaderboardEntries: leaderboardEntriesResult.data || []
       });
     }
 
@@ -116,7 +120,8 @@ export async function GET(request: Request) {
       events: eventsResult.data || [],
       divisions: divisionsResult.data || [],
       workouts: workoutsResult.data || [],
-      mercadopagoAccounts: mpAccountsResult.data || []
+      mercadopagoAccounts: mpAccountsResult.data || [],
+      leaderboardEntries: leaderboardEntriesResult.data || []
     });
   } catch (err) {
     console.error('[Bootstrap API] Erro ao carregar dados iniciais:', err);
