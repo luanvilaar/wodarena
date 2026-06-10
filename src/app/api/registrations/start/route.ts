@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { calculateSecureRegistrationSnapshot } from '@/lib/serverCheckout';
+import { applyCouponUsageForApprovedRegistration, calculateSecureRegistrationSnapshot } from '@/lib/serverCheckout';
 import { createSupabaseAdmin, hashPassword } from '@/lib/serverSecurity';
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
@@ -206,6 +206,12 @@ export async function POST(request: Request) {
     if (regError || !dbRegistration) {
       console.error('[Registration Start] Erro ao criar inscrição:', regError);
       return NextResponse.json({ error: 'Erro ao registrar inscrição.' }, { status: 500 });
+    }
+
+    // Inscrição gratuita (cupom 100%) já nasce aprovada e não passa pelo Mercado
+    // Pago — contabiliza o uso do cupom aqui para não perder a contagem.
+    if (paymentStatus === 'payment_approved') {
+      await applyCouponUsageForApprovedRegistration(supabaseAdmin, regId);
     }
 
     return NextResponse.json({

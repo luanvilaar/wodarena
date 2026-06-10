@@ -104,7 +104,7 @@ const getCheckoutErrorMessage = async (response: Response, fallback: string) => 
 };
 
 export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterModalProps) {
-  const { registerTicket, incrementCouponUsage } = useApp();
+  const { registerTicket } = useApp();
   const [selectedDivisionId, setSelectedDivisionId] = useState(event.divisions[0]?.id || '');
   const [box, setBox] = useState('');
   const [teamName, setTeamName] = useState('');
@@ -182,9 +182,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
             createdReg = registerTicket(registrationPayload, athletePayload);
             parsedAthlete = athletePayload;
             parsedCpf = parsedCpf || data.cpf || cpf;
-            if (registrationPayload.couponCode) {
-              incrementCouponUsage(event.id, registrationPayload.couponCode);
-            }
+            // O uso do cupom é contabilizado no servidor ao aprovar o pagamento.
           }
 
           if (createdReg && parsedAthlete) {
@@ -212,7 +210,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
       active = false;
       clearInterval(intervalId);
     };
-  }, [pixData, event.id, registerTicket, incrementCouponUsage, onSuccess, onClose, cpf]);
+  }, [pixData, event.id, registerTicket, onSuccess, onClose, cpf]);
 
   const isValidCPF = (val: string) => {
     const clean = val.replace(/\D/g, '');
@@ -440,9 +438,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
       if (totalPaid === 0) {
         console.log("[Checkout WODArena] Inscrição gratuita (totalPaid === 0). Aprovando imediatamente...");
         const createdReg = registerTicket(activeRegistrationData, activeAthleteProfile);
-        if (registrationData.couponCode) {
-          incrementCouponUsage(event.id, registrationData.couponCode);
-        }
+        // O uso do cupom é contabilizado no servidor em /api/registrations/start.
 
         const finalReg = createdReg || {
           ...registrationData,
@@ -550,7 +546,6 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
     securityCode,
     onClose,
     registerTicket,
-    incrementCouponUsage,
     onSuccess,
     event.mpPublicKey,
     acceptedTerms,

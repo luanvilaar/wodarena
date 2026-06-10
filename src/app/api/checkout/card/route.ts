@@ -3,7 +3,7 @@ import {
   MercadoPagoConfigError,
   resolveMercadoPagoCheckoutConfig
 } from '@/lib/mercadopagoServer';
-import { loadRegistrationCheckoutSnapshot } from '@/lib/serverCheckout';
+import { applyCouponUsageForApprovedRegistration, loadRegistrationCheckoutSnapshot } from '@/lib/serverCheckout';
 import { checkRateLimit, createSupabaseAdmin, getClientIp } from '@/lib/serverSecurity';
 
 const supabaseAdmin = createSupabaseAdmin();
@@ -152,6 +152,10 @@ export async function POST(request: Request) {
       errorMessage: paymentStatus === 'payment_failed' ? 'Pagamento não processado pelo cartão.' : undefined,
       totalPaid: transactionAmount
     });
+
+    if (paymentStatus === 'payment_approved') {
+      await applyCouponUsageForApprovedRegistration(supabaseAdmin, checkoutSnapshot.registrationId);
+    }
 
     return NextResponse.json({
       paymentId: paymentData.id,

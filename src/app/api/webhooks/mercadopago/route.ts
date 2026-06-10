@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { sendRegistrationEmail } from '@/lib/resend';
 import { Athlete, Event, Registration, RegistrationPaymentStatus } from '@/types';
+import { applyCouponUsageForApprovedRegistration } from '@/lib/serverCheckout';
 import { createSupabaseAdmin } from '@/lib/serverSecurity';
 import {
   MercadoPagoConfigError,
@@ -244,21 +245,7 @@ export async function POST(request: Request) {
     }
 
     if (nextPaymentStatus === 'payment_approved' && !wasApproved) {
-      if (updatedRegistration.coupon_code) {
-        const { data: couponData } = await supabaseAdmin
-          .from('coupons')
-          .select('id, usage_count')
-          .eq('event_id', updatedRegistration.event_id)
-          .eq('code', String(updatedRegistration.coupon_code).toUpperCase())
-          .maybeSingle();
-
-        if (couponData) {
-          await supabaseAdmin
-            .from('coupons')
-            .update({ usage_count: (couponData.usage_count || 0) + 1 })
-            .eq('id', couponData.id);
-        }
-      }
+      await applyCouponUsageForApprovedRegistration(supabaseAdmin, metadataRegistrationId);
 
       sendApprovedRegistrationEmail(updatedRegistration, paymentData)
         .catch(err => console.error('[MercadoPago Webhook] Erro ao disparar e-mail:', err));

@@ -21,7 +21,7 @@ export default function EventPage({ params }: PageProps) {
   const resolvedParams = use(params);
   const eventId = resolvedParams.id;
   
-  const { events, athletes, registerTicket, refreshRegistrations, incrementCouponUsage } = useApp();
+  const { events, athletes, registerTicket, refreshRegistrations } = useApp();
   const [activeTab, setActiveTab] = useState<'details' | 'divisions' | 'schedule' | 'workouts'>('details');
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
   const [shareFeedback, setShareFeedback] = useState(false);
@@ -80,10 +80,7 @@ export default function EventPage({ params }: PageProps) {
             };
 
             const createdReg = registerTicket(approvedRegistrationData, athleteProfile);
-            
-            if (registrationData.couponCode && event) {
-              incrementCouponUsage(event.id, registrationData.couponCode);
-            }
+            // O uso do cupom é contabilizado no servidor ao confirmar o pagamento.
 
             setTimeout(() => {
               setConfirmedVoucher({
@@ -145,7 +142,7 @@ export default function EventPage({ params }: PageProps) {
         window.history.replaceState(null, '', newUrl);
       }
     }
-  }, [event, registerTicket, refreshRegistrations, incrementCouponUsage]);
+  }, [event, registerTicket, refreshRegistrations]);
 
   // Inicializar a categoria selecionada para o percurso
   useEffect(() => {

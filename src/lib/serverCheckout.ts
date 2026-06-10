@@ -106,6 +106,37 @@ export const validateCheckoutCoupon = async (
   };
 };
 
+/**
+ * Contabiliza o uso de um cupom para uma inscrição aprovada, de forma atômica e
+ * idempotente, via função RPC `apply_coupon_usage` (ver migration
+ * 20260609100000_coupon_usage_tracking.sql).
+ *
+ * Deve ser chamada em TODOS os pontos onde uma inscrição transita para
+ * `payment_approved` (cartão, pix, conciliação/polling, webhook e inscrição
+ * gratuita). A idempotência no banco garante que cada inscrição conte no máximo
+ * uma vez, mesmo que múltiplos fluxos disparem em paralelo.
+ *
+ * Nunca lança: uma falha aqui não pode interromper a confirmação do pagamento.
+ */
+export const applyCouponUsageForApprovedRegistration = async (
+  supabaseAdmin: SupabaseClient,
+  registrationId: string | undefined | null
+): Promise<void> => {
+  const id = asString(registrationId);
+  if (!id) return;
+
+  try {
+    const { error } = await supabaseAdmin.rpc('apply_coupon_usage', {
+      p_registration_id: id
+    });
+    if (error) {
+      console.warn('[Coupon Usage] Falha ao contabilizar uso do cupom:', error.message);
+    }
+  } catch (err) {
+    console.warn('[Coupon Usage] Erro inesperado ao contabilizar uso do cupom:', err);
+  }
+};
+
 export const calculateSecureRegistrationSnapshot = async (
   supabaseAdmin: SupabaseClient,
   registrationData: RegistrationInput,

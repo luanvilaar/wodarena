@@ -7,6 +7,20 @@ import { INITIAL_EVENTS, INITIAL_ATHLETES, INITIAL_SCORES, INITIAL_USERS } from 
 import { buildFitnessRacingCourse, buildFitnessRacingDefaults, normalizeInstagram } from '@/lib/fitnessRacing';
 
 type RegistrationDraft = Omit<Registration, 'id' | 'createdAt'> & Partial<Pick<Registration, 'id' | 'createdAt'>>;
+
+export type RegistrationEditInput = {
+  athleteName: string;
+  box: string;
+  divisionId: string;
+  ticketType: string;
+  gender?: 'male' | 'female';
+  athleteEmail: string;
+  athletePhone: string;
+  instagram: string;
+  shirtSize: string;
+  isTeam: boolean;
+  teamMembers: { name: string; instagram: string; shirtSize: string }[];
+};
 type AthleteProfileDraft = {
   id?: string;
   birthDate?: string;
@@ -41,6 +55,7 @@ interface AppContextType {
   deleteDivision: (eventId: string, divisionId: string) => Promise<void>;
   deleteWorkout: (eventId: string, workoutId: string) => Promise<void>;
   registerTicket: (registration: RegistrationDraft, athleteProfile?: AthleteProfileDraft) => Registration;
+  updateRegistrationDetails: (registrationId: string, eventId: string, data: RegistrationEditInput) => Promise<void>;
   refreshRegistrations: () => Promise<Registration[]>;
   submitScore: (score: Score) => void;
   submitScoresBulk: (newScores: Score[]) => Promise<void>;
@@ -1029,6 +1044,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return newRegistration;
   };
 
+  // Editar uma inscrição existente (correção de cadastro pelo gestor).
+  // Persiste no banco (registrations + athletes) e sincroniza o estado local
+  // com os dados normalizados retornados pelo servidor.
+  const updateRegistrationDetails = async (
+    registrationId: string,
+    eventId: string,
+    data: RegistrationEditInput
+  ) => {
+    const result = await adminPersist('updateRegistration', { registrationId, eventId, data });
+    const updatedReg = result.registration as Registration | undefined;
+    const updatedAthlete = result.athlete as Athlete | null | undefined;
+
+    if (updatedReg) {
+      setRegistrations(prev => prev.map(r => (r.id === registrationId ? { ...r, ...updatedReg } : r)));
+    }
+
+    if (updatedAthlete) {
+      setAthletes(prev => {
+        const exists = prev.some(a => a.id === updatedAthlete.id);
+        return exists
+          ? prev.map(a => (a.id === updatedAthlete.id ? updatedAthlete : a))
+          : [...prev, updatedAthlete];
+      });
+    }
+  };
+
   // Cadastrar Cupom de Desconto
   const addCoupon = async (couponData: Omit<Coupon, 'id' | 'usageCount' | 'createdAt' | 'isActive'>) => {
     const event = events.find(e => e.id === couponData.eventId);
@@ -1632,6 +1673,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         deleteDivision,
         deleteWorkout,
         registerTicket,
+        updateRegistrationDetails,
         refreshRegistrations,
         submitScore,
         submitScoresBulk,

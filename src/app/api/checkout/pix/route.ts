@@ -3,7 +3,7 @@ import {
   MercadoPagoConfigError,
   resolveMercadoPagoCheckoutConfig
 } from '@/lib/mercadopagoServer';
-import { loadRegistrationCheckoutSnapshot } from '@/lib/serverCheckout';
+import { applyCouponUsageForApprovedRegistration, loadRegistrationCheckoutSnapshot } from '@/lib/serverCheckout';
 import { checkRateLimit, createSupabaseAdmin, getClientIp } from '@/lib/serverSecurity';
 
 const supabaseAdmin = createSupabaseAdmin();
@@ -102,6 +102,10 @@ export async function POST(request: Request) {
         updated_at: new Date().toISOString()
       })
       .eq('id', checkoutSnapshot.registrationId);
+
+    if (paymentData.status === 'approved') {
+      await applyCouponUsageForApprovedRegistration(supabaseAdmin, checkoutSnapshot.registrationId);
+    }
 
     return NextResponse.json({
       paymentId: paymentData.id,

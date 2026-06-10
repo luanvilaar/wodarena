@@ -196,6 +196,228 @@ export async function POST(request: Request) {
         return NextResponse.json({ success: true });
       }
 
+      case 'updateRegistration': {
+        const { registrationId, eventId, data } = payload as {
+          registrationId: string;
+          eventId: string;
+          data: Record<string, unknown>;
+        };
+
+        await ensureEventOwner(supabaseAdmin, actor, eventId);
+
+        const { data: registration, error: regError } = await supabaseAdmin
+          .from('registrations')
+          .select('*')
+          .eq('id', registrationId)
+          .eq('event_id', eventId)
+          .maybeSingle();
+
+        if (regError || !registration) {
+          return NextResponse.json({ error: 'Inscrição não encontrada para este evento.' }, { status: 404 });
+        }
+
+        const asTrimmed = (value: unknown, fallback = '') =>
+          typeof value === 'string' && value.trim() ? value.trim() : fallback;
+        const cleanInstagram = (value: unknown) => asTrimmed(value).replace(/^@+/, '');
+        const normalizeMembers = (value: unknown) => (Array.isArray(value) ? value : [])
+          .map((member) => {
+            const m = (member ?? {}) as Record<string, unknown>;
+            return {
+              name: asTrimmed(m.name),
+              instagram: cleanInstagram(m.instagram),
+              shirtSize: asTrimmed(m.shirtSize)
+            };
+          })
+          .filter((member) => member.name);
+
+        // Categoria de destino (relocação). Mantém a atual se não for informada.
+        const targetDivisionId = asTrimmed(data.divisionId, registration.division_id);
+        let targetDivision: { id: string; name: string; event_id: string } | null = null;
+        if (targetDivisionId) {
+          const { data: division, error: divisionError } = await supabaseAdmin
+            .from('divisions')
+            .select('id, name, event_id')
+            .eq('id', targetDivisionId)
+            .eq('event_id', eventId)
+            .maybeSingle();
+          if (divisionError || !division) {
+            return NextResponse.json({ error: 'Categoria de destino não encontrada para este evento.' }, { status: 400 });
+          }
+          targetDivision = division;
+        }
+
+        const nextAthleteName = asTrimmed(data.athleteName, registration.athlete_name);
+        const nextBox = asTrimmed(data.box, registration.box || 'Independente');
+        const nextEmail = asTrimmed(data.athleteEmail, registration.athlete_email);
+        const nextPhone = asTrimmed(data.athletePhone, registration.athlete_phone);
+        const nextGender = data.gender === 'female' || data.gender === 'male'
+          ? data.gender
+          : registration.gender;
+        const nextInstagram = cleanInstagram(data.instagram);
+        const nextShirtSize = asTrimmed(data.shirtSize);
+        const nextIsTeam = typeof data.isTeam === 'boolean' ? data.isTeam : undefined;
+        const nextMembers = data.teamMembers !== undefined ? normalizeMembers(data.teamMembers) : undefined;
+
+        // Atualiza a inscrição. O valor pago (total_paid) é preservado: relocação
+        // de categoria é correção de cadastro, não recobrança.
+        const registrationUpdate: Record<string, unknown> = {
+          athlete_name: nextAthleteName,
+          box: nextBox,
+          athlete_email: nextEmail,
+          athlete_phone: nextPhone,
+          gender: nextGender,
+          division_id: targetDivisionId,
+          ticket_type: targetDivision ? targetDivision.name : registration.ticket_type,
+          updated_at: new Date().toISOString()
+        };
+
+        const { data: updatedRegistration, error: updateRegError } = await supabaseAdmin
+          .from('registrations')
+          .update(registrationUpdate)
+          .eq('id', registrationId)
+          .eq('event_id', eventId)
+          .select('*')
+          .single();
+
+        if (updateRegError || !updatedRegistration) {
+          console.error('[Admin Persistence API] Erro ao atualizar inscrição:', updateRegError);
+          return NextResponse.json({ error: 'Erro ao atualizar a inscrição.' }, { status: 500 });
+        }
+
+        // Resolve o atleta vinculado (por id quando disponível; senão pelo nome +
+        // categoria anteriores) e o mantém em sincronia com a inscrição.
+        let athleteRow: Record<string, unknown> | null = null;
+        if (registration.athlete_id) {
+          const { data } = await supabaseAdmin
+            .from('athletes')
+            .select('*')
+            .eq('id', registration.athlete_id)
+            .maybeSingle();
+          athleteRow = data;
+        }
+        if (!athleteRow) {
+          const { data } = await supabaseAdmin
+            .from('athletes')
+            .select('*')
+            .eq('division_id', registration.division_id)
+            .ilike('name', registration.athlete_name)
+            .maybeSingle();
+          athleteRow = data;
+        }
+
+        const athleteUpdate: Record<string, unknown> = {
+          name: nextAthleteName,
+          box: nextBox,
+          division_id: targetDivisionId,
+          instagram: nextInstagram || null,
+          shirt_size: nextShirtSize || null,
+          email: nextEmail || null,
+          phone: nextPhone || null,
+          gender: nextGender || null
+        };
+        if (nextIsTeam !== undefined) athleteUpdate.is_team = nextIsTeam;
+        if (nextMembers !== undefined) athleteUpdate.team_members = JSON.stringify(nextMembers);
+
+        let updatedAthlete: Record<string, unknown> | null = null;
+        if (athleteRow) {
+          const { data, error: athleteUpdateError } = await supabaseAdmin
+            .from('athletes')
+            .update(athleteUpdate)
+            .eq('id', athleteRow.id as string)
+            .select('*')
+            .single();
+          if (athleteUpdateError) {
+            console.error('[Admin Persistence API] Erro ao atualizar atleta vinculado:', athleteUpdateError);
+            return NextResponse.json({ error: 'Erro ao atualizar os dados do atleta.' }, { status: 500 });
+          }
+          updatedAthlete = data;
+        } else {
+          const newAthleteId = registration.athlete_id || `ath-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+          const { data, error: athleteInsertError } = await supabaseAdmin
+            .from('athletes')
+            .insert({
+              id: newAthleteId,
+              country: 'BR',
+              ...athleteUpdate,
+              is_team: nextIsTeam ?? false,
+              team_members: nextMembers !== undefined ? JSON.stringify(nextMembers) : '[]'
+            })
+            .select('*')
+            .single();
+          if (athleteInsertError) {
+            console.error('[Admin Persistence API] Erro ao criar atleta vinculado:', athleteInsertError);
+            return NextResponse.json({ error: 'Erro ao registrar os dados do atleta.' }, { status: 500 });
+          }
+          updatedAthlete = data;
+          if (!registration.athlete_id) {
+            await supabaseAdmin
+              .from('registrations')
+              .update({ athlete_id: newAthleteId })
+              .eq('id', registrationId);
+            updatedRegistration.athlete_id = newAthleteId;
+          }
+        }
+
+        const parseMembers = (value: unknown) => {
+          if (Array.isArray(value)) return value;
+          if (typeof value === 'string') {
+            try {
+              const parsed = JSON.parse(value);
+              return Array.isArray(parsed) ? parsed : [];
+            } catch {
+              return [];
+            }
+          }
+          return [];
+        };
+
+        return NextResponse.json({
+          success: true,
+          registration: {
+            id: updatedRegistration.id,
+            eventId: updatedRegistration.event_id,
+            divisionId: updatedRegistration.division_id,
+            userId: updatedRegistration.user_id || undefined,
+            athleteId: updatedRegistration.athlete_id || undefined,
+            athleteName: updatedRegistration.athlete_name,
+            athleteEmail: updatedRegistration.athlete_email,
+            athletePhone: updatedRegistration.athlete_phone,
+            box: updatedRegistration.box,
+            gender: updatedRegistration.gender,
+            ticketType: updatedRegistration.ticket_type,
+            ticketPrice: Number(updatedRegistration.ticket_price),
+            quantity: Number(updatedRegistration.quantity),
+            totalPaid: Number(updatedRegistration.total_paid),
+            createdAt: updatedRegistration.created_at,
+            couponCode: updatedRegistration.coupon_code || undefined,
+            paymentStatus: updatedRegistration.payment_status || undefined,
+            paymentMethod: updatedRegistration.payment_method || undefined,
+            paymentId: updatedRegistration.payment_id || undefined,
+            paymentStatusDetail: updatedRegistration.payment_status_detail || undefined,
+            paymentErrorMessage: updatedRegistration.payment_error_message || undefined,
+            updatedAt: updatedRegistration.updated_at || undefined
+          },
+          athlete: updatedAthlete ? {
+            id: updatedAthlete.id,
+            name: updatedAthlete.name,
+            box: updatedAthlete.box,
+            country: updatedAthlete.country || 'BR',
+            divisionId: updatedAthlete.division_id,
+            birthDate: updatedAthlete.birth_date || undefined,
+            gender: updatedAthlete.gender || undefined,
+            city: updatedAthlete.city || undefined,
+            state: updatedAthlete.state || undefined,
+            instagram: updatedAthlete.instagram || undefined,
+            photoUrl: updatedAthlete.photo_url || undefined,
+            shirtSize: updatedAthlete.shirt_size || undefined,
+            email: updatedAthlete.email || undefined,
+            phone: updatedAthlete.phone || undefined,
+            isTeam: Boolean(updatedAthlete.is_team),
+            teamMembers: parseMembers(updatedAthlete.team_members)
+          } : null
+        });
+      }
+
       case 'upsertScores': {
         const eventIds = Array.isArray(payload.eventIds) ? payload.eventIds : [];
         for (const eventId of eventIds) {

@@ -13,7 +13,7 @@ import {
   LayoutDashboard, Calendar, Trophy,
   ClipboardCheck, LogIn, LogOut, DollarSign, Users, Ticket, Settings,
   Upload, X, Trash2, Plus, ShieldAlert, Pencil, Copy, GripVertical, ArrowDown, ArrowUp, Library, ReceiptText, Mail, CreditCard,
-  Lock, QrCode, FileSpreadsheet
+  Lock, QrCode, FileSpreadsheet, ChevronDown
 } from 'lucide-react';
 
 const InstagramIcon = ({ className = 'h-3.5 w-3.5' }: { className?: string }) => (
@@ -31,6 +31,16 @@ const InstagramIcon = ({ className = 'h-3.5 w-3.5' }: { className?: string }) =>
     <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
     <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
   </svg>
+);
+
+// Item de detalhe usado nos cards expansíveis de inscrição.
+const RegDetail = ({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) => (
+  <div className="min-w-0">
+    <p className="text-[9px] font-bold uppercase tracking-wider text-muted font-sans">{label}</p>
+    <p className={`text-[11px] mt-0.5 break-words ${accent ? 'text-primary font-bold uppercase' : 'text-white'}`}>
+      {value || '-'}
+    </p>
+  </div>
 );
 import { WorkoutType, CategoryType, EventStatus, Event, Athlete, Division, CourseStage, EventScheduleItemKind, EventScheduleMode, Score, EventScheduleItem, Registration } from '@/types';
 import { FITNESS_RACING_AGE_GROUPS, FITNESS_RACING_STATION_LIBRARY, buildFitnessRacingCourse, getAgeGroupFromDate } from '@/lib/fitnessRacing';
@@ -90,7 +100,7 @@ export default function AdminPage() {
     events, athletes, scores, registrations, coupons, currentUser,
     login, logout, addEvent, addDivision, updateDivision,
     addWorkout, deleteEvent, deleteDivision, deleteWorkout, submitScore, submitScoresBulk, updateEvent, getLeaderboard, registerTicket, saveCourseLayout, updateWorkout,
-    refreshRegistrations, addCoupon, updateCoupon, toggleCouponActive, incrementCouponUsage, changePassword
+    refreshRegistrations, updateRegistrationDetails, addCoupon, updateCoupon, toggleCouponActive, incrementCouponUsage, changePassword
   } = useApp();
 
   // 1. Estados de Login (vinculado ao currentUser do contexto)
@@ -627,6 +637,20 @@ export default function AdminPage() {
   const [regFilterStatus, setRegFilterStatus] = useState('');
   const [regFilterName, setRegFilterName] = useState('');
   const [regFilterBox, setRegFilterBox] = useState('');
+
+  // Estados para cards expansíveis e edição de inscrições
+  const [expandedRegistrationId, setExpandedRegistrationId] = useState<string | null>(null);
+  const [editingRegistration, setEditingRegistration] = useState<Registration | null>(null);
+  const [isSavingRegistration, setIsSavingRegistration] = useState(false);
+  const [editRegName, setEditRegName] = useState('');
+  const [editRegDivisionId, setEditRegDivisionId] = useState('');
+  const [editRegBox, setEditRegBox] = useState('');
+  const [editRegEmail, setEditRegEmail] = useState('');
+  const [editRegPhone, setEditRegPhone] = useState('');
+  const [editRegInstagram, setEditRegInstagram] = useState('');
+  const [editRegShirtSize, setEditRegShirtSize] = useState('');
+  const [editRegIsTeam, setEditRegIsTeam] = useState(false);
+  const [editRegMembers, setEditRegMembers] = useState<{ name: string; instagram: string; shirtSize: string }[]>([]);
 
   // Estados para a Bilheteria (Venda de Inscrições / Inscrição Manual)
   const [isBilheteriaOpen, setIsBilheteriaOpen] = useState(false);
@@ -1833,6 +1857,120 @@ export default function AdminPage() {
       athlete: getRegistrationAthlete(registration),
       event: selectedEventToManage
     });
+  };
+
+  // Remove o sufixo "(Integrante 1 / Integrante 2)" do nome composto das equipes,
+  // recuperando apenas o nome-base da equipe para edição.
+  const stripTeamSuffix = (name: string) => name.replace(/\s*\([^()]*\)\s*$/, '').trim();
+
+  const handleToggleRegistrationExpand = (registrationId: string) => {
+    setExpandedRegistrationId(prev => (prev === registrationId ? null : registrationId));
+  };
+
+  const handleOpenEditRegistration = (registration: Registration) => {
+    const athlete = getRegistrationAthlete(registration);
+    const division = selectedEventToManage?.divisions.find(d => d.id === registration.divisionId);
+    const isTeam = Boolean(athlete.isTeam) || (division ? division.type !== 'individual' : false);
+
+    setEditingRegistration(registration);
+    setEditRegName(isTeam ? stripTeamSuffix(registration.athleteName) : registration.athleteName);
+    setEditRegDivisionId(registration.divisionId);
+    setEditRegBox(registration.box === 'Independente' ? '' : registration.box || '');
+    setEditRegEmail(
+      registration.athleteEmail && !registration.athleteEmail.includes('nao-informado')
+        ? registration.athleteEmail
+        : ''
+    );
+    setEditRegPhone(
+      registration.athletePhone && registration.athletePhone !== 'Não informado'
+        ? registration.athletePhone
+        : ''
+    );
+    setEditRegInstagram(athlete.instagram || '');
+    setEditRegShirtSize(athlete.shirtSize ? String(athlete.shirtSize) : '');
+    setEditRegIsTeam(isTeam);
+
+    const members = (athlete.teamMembers || []).map(m => ({
+      name: m.name || '',
+      instagram: m.instagram || '',
+      shirtSize: m.shirtSize ? String(m.shirtSize) : ''
+    }));
+    while (members.length < 4) members.push({ name: '', instagram: '', shirtSize: '' });
+    setEditRegMembers(members.slice(0, 4));
+  };
+
+  const handleCloseEditRegistration = () => {
+    if (isSavingRegistration) return;
+    setEditingRegistration(null);
+  };
+
+  const handleSaveRegistrationEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingRegistration || !selectedEventToManage) return;
+
+    const division = selectedEventToManage.divisions.find(d => d.id === editRegDivisionId);
+    if (!division) {
+      setAdminNotice({ text: 'Selecione uma categoria válida.', tone: 'error' });
+      return;
+    }
+
+    const isTeam = division.type !== 'individual';
+    const numIntegrantes = division.type === 'duo' ? 2 : division.type === 'trio' ? 3 : division.type === 'team' ? 4 : 0;
+    const trimmedName = editRegName.trim();
+
+    if (!trimmedName) {
+      setAdminNotice({ text: isTeam ? 'Informe o nome da equipe.' : 'Informe o nome do atleta.', tone: 'error' });
+      return;
+    }
+
+    let members: { name: string; instagram: string; shirtSize: string }[] = [];
+    if (isTeam) {
+      members = editRegMembers.slice(0, numIntegrantes).map(m => ({
+        name: m.name.trim(),
+        instagram: m.instagram.trim().replace(/^@+/, ''),
+        shirtSize: m.shirtSize
+      }));
+      if (members.some(m => !m.name)) {
+        setAdminNotice({ text: 'Preencha o nome de todos os integrantes da equipe.', tone: 'error' });
+        return;
+      }
+    }
+
+    const finalAthleteName = isTeam
+      ? `${trimmedName} (${members.map(m => m.name).join(' / ')})`
+      : trimmedName;
+
+    const nextGender: 'male' | 'female' | undefined =
+      division.category === 'female' ? 'female'
+        : division.category === 'male' ? 'male'
+          : editingRegistration.gender;
+
+    setIsSavingRegistration(true);
+    setAdminNotice(null);
+    try {
+      await updateRegistrationDetails(editingRegistration.id, selectedEventToManage.id, {
+        athleteName: finalAthleteName,
+        box: editRegBox.trim() || 'Independente',
+        divisionId: division.id,
+        ticketType: division.name,
+        gender: nextGender,
+        athleteEmail: editRegEmail.trim(),
+        athletePhone: editRegPhone.trim(),
+        instagram: editRegInstagram.trim().replace(/^@+/, ''),
+        shirtSize: editRegShirtSize,
+        isTeam,
+        teamMembers: members
+      });
+      setAdminNotice({ text: `Inscrição de "${finalAthleteName}" atualizada com sucesso!`, tone: 'success' });
+      setEditingRegistration(null);
+    } catch (err) {
+      setAdminNotice({
+        text: err instanceof Error ? err.message : 'Não foi possível atualizar a inscrição.',
+        tone: 'error'
+      });
+    } finally {
+      setIsSavingRegistration(false);
+    }
   };
 
   const handleResendRegistrationVoucher = async (registration: Registration) => {
@@ -6122,114 +6260,146 @@ export default function AdminPage() {
             {filteredRegs.length === 0 ? (
               <p className="text-xs text-muted text-center py-8">Nenhuma inscrição corresponde aos filtros.</p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b border-card-border/50 text-[10px] font-bold text-muted uppercase tracking-wider font-sans">
-                      <th className="py-3 px-2">Atleta / Equipe</th>
-                      <th className="py-3 px-2">Categoria</th>
-                      <th className="py-3 px-2">Camisa</th>
-                      <th className="py-3 px-2">Box / Academia</th>
-                      <th className="py-3 px-2">Data Inscrição</th>
-                      <th className="py-3 px-2 text-right">Valor Pago</th>
-                      <th className="py-3 px-2 text-right">Status</th>
-                      <th className="py-3 px-2 text-right">Comprovante</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-card-border/30 text-xs font-normal">
-                    {filteredRegs.map((reg) => {
-                      const div = divisions.find(d => d.id === reg.divisionId);
-                      const statusMeta = getPaymentStatusMeta(reg.paymentStatus);
-                      const athleteInfo = athletes.find(
-                        a => a.name.toLowerCase() === reg.athleteName.toLowerCase() && a.divisionId === reg.divisionId
-                      );
-                      const shirtSizeLabel = athleteInfo?.isTeam && athleteInfo.teamMembers?.length
-                        ? athleteInfo.teamMembers.map(m => `${m.name}: ${m.shirtSize || '-'}`).join(' / ')
-                        : athleteInfo?.shirtSize || '-';
+              <div className="space-y-2.5">
+                {filteredRegs.map((reg) => {
+                  const div = divisions.find(d => d.id === reg.divisionId);
+                  const statusMeta = getPaymentStatusMeta(reg.paymentStatus);
+                  const athleteInfo = athletes.find(
+                    a => a.name.toLowerCase() === reg.athleteName.toLowerCase() && a.divisionId === reg.divisionId
+                  );
+                  const isExpanded = expandedRegistrationId === reg.id;
+                  const teamMembers = athleteInfo?.isTeam ? (athleteInfo.teamMembers || []) : [];
+                  const shirtSizeLabel = athleteInfo?.isTeam && teamMembers.length
+                    ? teamMembers.map(m => m.shirtSize || '-').join(' / ')
+                    : (athleteInfo?.shirtSize ? String(athleteInfo.shirtSize) : '-');
+                  const displayName = athleteInfo?.isTeam ? stripTeamSuffix(reg.athleteName) : reg.athleteName;
+                  const instagramLabel = athleteInfo?.instagram
+                    ? (athleteInfo.instagram.startsWith('@') ? athleteInfo.instagram : `@${athleteInfo.instagram}`)
+                    : '-';
+                  const canSync = reg.paymentStatus === 'payment_pending'
+                    || reg.paymentStatus === 'payment_in_review'
+                    || reg.paymentStatus === 'payment_failed';
 
-                      return (
-                        <tr key={reg.id} className="hover:bg-dark-gray/30 transition-colors align-top">
-                          <td className="py-3 px-2">
-                            <div className="space-y-1">
-                              <p className="font-bold text-white uppercase">{reg.athleteName}</p>
-                              <p className="text-[10px] text-muted">{reg.athleteEmail} &middot; {reg.athletePhone}</p>
-
-                              {athleteInfo && athleteInfo.isTeam && athleteInfo.teamMembers && athleteInfo.teamMembers.length > 0 && (
-                                <div className="mt-1 bg-dark-gray/30 border border-card-border/50 rounded-lg p-2 space-y-1 max-w-sm">
-                                  <p className="text-[9px] font-bold uppercase text-primary font-sans">Integrantes:</p>
-                                  <ul className="text-[10px] text-muted-soft list-disc list-inside">
-                                    {athleteInfo.teamMembers.map((m, idx) => (
-                                      <li key={idx}>
-                                        {m.name} {m.instagram ? `(${m.instagram})` : ''}
-                                      </li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              )}
-                            </div>
-                          </td>
-                          <td className="py-3 px-2 uppercase font-semibold text-muted text-[10px]">
+                  return (
+                    <div
+                      key={reg.id}
+                      className={`rounded-lg border transition-colors ${
+                        isExpanded
+                          ? 'border-primary/30 bg-dark-gray/30'
+                          : 'border-card-border bg-dark-gray/10 hover:border-primary/20'
+                      }`}
+                    >
+                      {/* Cabeçalho minimalista clicável */}
+                      <button
+                        type="button"
+                        onClick={() => handleToggleRegistrationExpand(reg.id)}
+                        aria-expanded={isExpanded}
+                        className="flex w-full items-center gap-3 p-3 sm:px-4 text-left"
+                      >
+                        <ChevronDown
+                          className={`h-4 w-4 shrink-0 transition-transform ${isExpanded ? 'rotate-180 text-primary' : 'text-muted'}`}
+                          aria-hidden="true"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs sm:text-sm font-bold uppercase text-white">{displayName}</p>
+                          <p className="mt-0.5 text-[10px] uppercase tracking-wider text-muted">
                             {div ? div.name : 'Outro'}
-                          </td>
-                          <td className="py-3 px-2 text-primary uppercase text-[10px] font-bold">
-                            {shirtSizeLabel}
-                          </td>
-                          <td className="py-3 px-2 text-muted uppercase text-[10px] font-medium">
-                            {reg.box}
-                          </td>
-                          <td className="py-3 px-2 text-muted">
-                            {new Date(reg.createdAt).toLocaleDateString('pt-BR')}
-                          </td>
-                          <td className="py-3 px-2 text-right font-number text-primary font-bold">
-                            {currencyFormatter.format(reg.totalPaid)}
-                          </td>
-                          <td className="py-3 px-2 text-right">
-                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase font-sans ${getPaymentStatusClassName(statusMeta.tone)}`}>
-                              {statusMeta.label}
-                            </span>
-                            {(reg.paymentStatus === 'payment_pending' || reg.paymentStatus === 'payment_in_review' || reg.paymentStatus === 'payment_failed') && (
+                            {athleteInfo?.isTeam ? ` · ${teamMembers.length} atletas` : ''}
+                          </p>
+                        </div>
+                        <div className="hidden sm:block shrink-0 text-right">
+                          <p className="font-number text-sm font-bold text-primary">{currencyFormatter.format(reg.totalPaid)}</p>
+                          <p className="mt-0.5 text-[9px] uppercase text-muted">{new Date(reg.createdAt).toLocaleDateString('pt-BR')}</p>
+                        </div>
+                        <span className={`shrink-0 rounded border px-2 py-1 text-[9px] font-bold uppercase font-sans ${getPaymentStatusClassName(statusMeta.tone)}`}>
+                          {statusMeta.label}
+                        </span>
+                      </button>
+
+                      {/* Detalhes expandidos */}
+                      {isExpanded && (
+                        <div className="space-y-4 border-t border-card-border/60 px-3 sm:px-4 py-4">
+                          <div className="flex items-center justify-between sm:hidden">
+                            <span className="text-[10px] uppercase tracking-wider text-muted">Valor pago · {new Date(reg.createdAt).toLocaleDateString('pt-BR')}</span>
+                            <span className="font-number font-bold text-primary">{currencyFormatter.format(reg.totalPaid)}</span>
+                          </div>
+
+                          <div className="grid grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3">
+                            <RegDetail label="E-mail" value={reg.athleteEmail} />
+                            <RegDetail label="Telefone" value={reg.athletePhone} />
+                            <RegDetail label="Box / Academia" value={reg.box} />
+                            <RegDetail label="Camisa" value={shirtSizeLabel} accent />
+                            <RegDetail label="Instagram" value={instagramLabel} />
+                            <RegDetail label="Método" value={reg.paymentMethod || '-'} />
+                          </div>
+
+                          {athleteInfo?.isTeam && teamMembers.length > 0 && (
+                            <div className="space-y-2 rounded-lg border border-card-border/50 bg-dark-gray/40 p-3">
+                              <p className="text-[9px] font-bold uppercase tracking-wider text-primary font-sans">Integrantes</p>
+                              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                {teamMembers.map((m, idx) => (
+                                  <div key={idx} className="flex items-center justify-between gap-2 text-[11px]">
+                                    <span className="truncate text-white">{m.name}</span>
+                                    <span className="flex shrink-0 items-center gap-2 text-muted-soft">
+                                      {m.instagram && <span>{m.instagram.startsWith('@') ? m.instagram : `@${m.instagram}`}</span>}
+                                      {m.shirtSize && <span className="font-bold uppercase text-primary">{m.shirtSize}</span>}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {reg.paymentStatus === 'payment_failed' && (
+                            <p className="text-[10px] text-trading-down">{reg.paymentErrorMessage || 'Pagamento não processado.'}</p>
+                          )}
+
+                          <div className="flex flex-wrap items-center gap-2 border-t border-card-border/40 pt-3">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditRegistration(reg)}
+                              className="inline-flex min-h-8 items-center justify-center gap-1.5 rounded bg-primary px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-ink transition-colors hover:bg-primary-hover"
+                              aria-label={`Editar inscrição de ${displayName}`}
+                            >
+                              <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                              Editar inscrição
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenRegistrationVoucher(reg)}
+                              className="inline-flex min-h-8 items-center justify-center gap-1.5 rounded border border-primary/30 bg-primary/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-primary transition-colors hover:bg-primary/20"
+                              aria-label={`Visualizar comprovante de ${displayName}`}
+                            >
+                              <ReceiptText className="h-3.5 w-3.5" aria-hidden="true" />
+                              Ver comprovante
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleResendRegistrationVoucher(reg)}
+                              disabled={resendingRegistrationId === reg.id}
+                              className="inline-flex min-h-8 items-center justify-center gap-1.5 rounded border border-card-border bg-dark-gray px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white transition-colors hover:border-primary/40 hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+                              aria-label={`Enviar segunda via do comprovante para ${reg.athleteEmail}`}
+                            >
+                              <Mail className="h-3.5 w-3.5" aria-hidden="true" />
+                              {resendingRegistrationId === reg.id ? 'Enviando...' : 'Enviar 2a via'}
+                            </button>
+                            {canSync && (
                               <button
                                 type="button"
                                 onClick={() => handleSyncPaymentStatus(reg)}
                                 disabled={syncingRegistrationId === reg.id}
-                                className="mt-1 flex min-h-6 items-center justify-center gap-1 ml-auto rounded border border-card-border bg-dark-gray px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-muted-soft transition-colors hover:border-primary/40 hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
-                                aria-label={`Sincronizar status do pagamento de ${reg.athleteName}`}
+                                className="inline-flex min-h-8 items-center justify-center gap-1.5 rounded border border-card-border bg-dark-gray px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-soft transition-colors hover:border-primary/40 hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+                                aria-label={`Sincronizar status do pagamento de ${displayName}`}
                               >
-                                {syncingRegistrationId === reg.id ? '...' : 'Sincronizar'}
+                                {syncingRegistrationId === reg.id ? 'Sincronizando...' : 'Sincronizar pagamento'}
                               </button>
                             )}
-                            {reg.paymentStatus === 'payment_failed' && (
-                              <p className="mt-1 text-[9px] text-trading-down">{reg.paymentErrorMessage || 'Pagamento não processado.'}</p>
-                            )}
-                          </td>
-                          <td className="py-3 px-2">
-                            <div className="flex flex-col items-end gap-2">
-                              <button
-                                type="button"
-                                onClick={() => handleOpenRegistrationVoucher(reg)}
-                                className="inline-flex min-h-8 items-center justify-center gap-1.5 rounded border border-primary/30 bg-primary/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-primary transition-colors hover:bg-primary/20"
-                                aria-label={`Visualizar comprovante de ${reg.athleteName}`}
-                              >
-                                <ReceiptText className="h-3.5 w-3.5" aria-hidden="true" />
-                                Ver comprovante
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleResendRegistrationVoucher(reg)}
-                                disabled={resendingRegistrationId === reg.id}
-                                className="inline-flex min-h-8 items-center justify-center gap-1.5 rounded border border-card-border bg-dark-gray px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white transition-colors hover:border-primary/40 hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
-                                aria-label={`Enviar segunda via do comprovante para ${reg.athleteEmail}`}
-                              >
-                                <Mail className="h-3.5 w-3.5" aria-hidden="true" />
-                                {resendingRegistrationId === reg.id ? 'Enviando...' : 'Enviar 2a via'}
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
 
@@ -8171,6 +8341,235 @@ export default function AdminPage() {
                 {isDeletingEvent ? 'Excluindo...' : 'Excluir definitivamente'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {editingRegistration && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/80 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="edit-reg-title"
+        >
+          <div className="my-8 w-full max-w-2xl rounded-xl border border-card-border bg-card text-white">
+            {(() => {
+              const selectedDiv = selectedEventToManage?.divisions.find(d => d.id === editRegDivisionId);
+              const isTeam = selectedDiv ? selectedDiv.type !== 'individual' : editRegIsTeam;
+              const numIntegrantes = selectedDiv?.type === 'duo' ? 2 : selectedDiv?.type === 'trio' ? 3 : selectedDiv?.type === 'team' ? 4 : 0;
+              const updateMember = (idx: number, field: 'name' | 'instagram' | 'shirtSize', value: string) => {
+                setEditRegMembers(prev => {
+                  const next = [...prev];
+                  next[idx] = { ...next[idx], [field]: value };
+                  return next;
+                });
+              };
+
+              return (
+                <form onSubmit={handleSaveRegistrationEdit}>
+                  {/* Cabeçalho */}
+                  <div className="flex items-center justify-between gap-4 border-b border-card-border p-5">
+                    <div className="flex items-center gap-3">
+                      <div className="rounded-lg bg-primary p-2 text-ink">
+                        <Ticket className="h-5 w-5" aria-hidden="true" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-primary font-sans">Gestão de inscrição</p>
+                        <h3 id="edit-reg-title" className="text-lg font-bold text-white">Editar inscrição</h3>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleCloseEditRegistration}
+                      disabled={isSavingRegistration}
+                      className="text-muted transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                      aria-label="Fechar edição de inscrição"
+                    >
+                      <X className="h-5 w-5" aria-hidden="true" />
+                    </button>
+                  </div>
+
+                  {/* Corpo */}
+                  <div className="max-h-[70vh] space-y-5 overflow-y-auto p-5">
+                    {/* Categoria (relocação) */}
+                    <div>
+                      <label htmlFor="edit-reg-cat" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans">Categoria *</label>
+                      <select
+                        id="edit-reg-cat"
+                        required
+                        value={editRegDivisionId}
+                        onChange={(e) => setEditRegDivisionId(e.target.value)}
+                        className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"
+                      >
+                        <option value="">Selecione a categoria...</option>
+                        {(selectedEventToManage?.divisions || []).map((d) => (
+                          <option key={d.id} value={d.id}>
+                            {d.name} — {d.type === 'duo' ? 'Dupla' : d.type === 'trio' ? 'Trio' : d.type === 'team' ? 'Equipe' : 'Individual'}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="mt-1 text-[10px] text-muted">Relocar a inscrição para outra categoria em caso de erro. O valor pago é preservado.</p>
+                    </div>
+
+                    {/* Nome + Box */}
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      <div>
+                        <label htmlFor="edit-reg-name" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans">
+                          {isTeam ? 'Nome da equipe *' : 'Nome do atleta *'}
+                        </label>
+                        <input
+                          id="edit-reg-name"
+                          type="text"
+                          required
+                          value={editRegName}
+                          onChange={(e) => setEditRegName(e.target.value)}
+                          placeholder={isTeam ? 'Ex: Equipe Brutus' : 'Ex: João Silva'}
+                          className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="edit-reg-box" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans">Box / Academia</label>
+                        <input
+                          id="edit-reg-box"
+                          type="text"
+                          value={editRegBox}
+                          onChange={(e) => setEditRegBox(e.target.value)}
+                          placeholder="Ex: CrossFit WODArena"
+                          className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Contato */}
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      <div>
+                        <label htmlFor="edit-reg-email" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans">E-mail de contato</label>
+                        <input
+                          id="edit-reg-email"
+                          type="email"
+                          value={editRegEmail}
+                          onChange={(e) => setEditRegEmail(e.target.value)}
+                          placeholder="Ex: atleta@email.com"
+                          className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="edit-reg-phone" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans">Telefone / WhatsApp</label>
+                        <input
+                          id="edit-reg-phone"
+                          type="tel"
+                          value={editRegPhone}
+                          onChange={(e) => setEditRegPhone(e.target.value)}
+                          placeholder="Ex: (21) 99999-9999"
+                          className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Individual: instagram + camisa */}
+                    {!isTeam && (
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div>
+                          <label htmlFor="edit-reg-instagram" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans">Instagram</label>
+                          <input
+                            id="edit-reg-instagram"
+                            type="text"
+                            value={editRegInstagram}
+                            onChange={(e) => setEditRegInstagram(e.target.value)}
+                            placeholder="Ex: @atleta"
+                            className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label htmlFor="edit-reg-shirt" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans">Tamanho da camisa</label>
+                          <select
+                            id="edit-reg-shirt"
+                            value={editRegShirtSize}
+                            onChange={(e) => setEditRegShirtSize(e.target.value)}
+                            className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"
+                          >
+                            <option value="">Selecione...</option>
+                            {SHIRT_SIZE_OPTIONS.map(size => (
+                              <option key={size} value={size}>{size}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Equipe: integrantes */}
+                    {isTeam && numIntegrantes > 0 && (
+                      <div className="space-y-3 border-t border-card-border/60 pt-4">
+                        <p className="text-xs font-bold uppercase tracking-wider text-primary font-sans">Integrantes da equipe</p>
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                          {Array.from({ length: numIntegrantes }).map((_, idx) => (
+                            <div key={idx} className="space-y-3 rounded-xl border border-card-border/60 bg-dark-gray/25 p-3">
+                              <p className="text-[10px] font-bold uppercase tracking-wider text-white">Atleta {idx + 1}</p>
+                              <div>
+                                <label htmlFor={`edit-member-name-${idx}`} className="mb-1 block text-[10px] font-bold uppercase text-muted font-sans">Nome completo *</label>
+                                <input
+                                  id={`edit-member-name-${idx}`}
+                                  type="text"
+                                  required
+                                  value={editRegMembers[idx]?.name || ''}
+                                  onChange={(e) => updateMember(idx, 'name', e.target.value)}
+                                  placeholder="Nome do integrante"
+                                  className="w-full rounded-md border border-card-border bg-dark-gray px-3 py-1.5 text-xs text-white focus:border-primary/50 focus:outline-none"
+                                />
+                              </div>
+                              <div>
+                                <label htmlFor={`edit-member-insta-${idx}`} className="mb-1 block text-[10px] font-bold uppercase text-muted font-sans">Instagram</label>
+                                <input
+                                  id={`edit-member-insta-${idx}`}
+                                  type="text"
+                                  value={editRegMembers[idx]?.instagram || ''}
+                                  onChange={(e) => updateMember(idx, 'instagram', e.target.value)}
+                                  placeholder="@usuario"
+                                  className="w-full rounded-md border border-card-border bg-dark-gray px-3 py-1.5 text-xs text-white focus:border-primary/50 focus:outline-none"
+                                />
+                              </div>
+                              <div>
+                                <label htmlFor={`edit-member-shirt-${idx}`} className="mb-1 block text-[10px] font-bold uppercase text-muted font-sans">Camisa</label>
+                                <select
+                                  id={`edit-member-shirt-${idx}`}
+                                  value={editRegMembers[idx]?.shirtSize || ''}
+                                  onChange={(e) => updateMember(idx, 'shirtSize', e.target.value)}
+                                  className="w-full rounded-md border border-card-border bg-dark-gray px-3 py-1.5 text-xs text-white focus:border-primary/50 focus:outline-none"
+                                >
+                                  <option value="">Selecione...</option>
+                                  {SHIRT_SIZE_OPTIONS.map(size => (
+                                    <option key={size} value={size}>{size}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Rodapé */}
+                  <div className="flex flex-col-reverse gap-3 border-t border-card-border p-5 sm:flex-row sm:justify-end">
+                    <button
+                      type="button"
+                      onClick={handleCloseEditRegistration}
+                      disabled={isSavingRegistration}
+                      className="inline-flex min-h-10 items-center justify-center rounded-md border border-card-border bg-dark-gray px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-muted transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50 font-sans"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSavingRegistration || !editRegDivisionId}
+                      className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md bg-primary px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-ink transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50 font-sans"
+                    >
+                      {isSavingRegistration ? 'Salvando...' : 'Salvar alterações'}
+                    </button>
+                  </div>
+                </form>
+              );
+            })()}
           </div>
         </div>
       )}
