@@ -572,7 +572,7 @@ export default function AdminPage() {
 
   // Estados para nova Categoria (Aba: Categorias)
   const [catName, setCatName] = useState('');
-  const [catType, setCatType] = useState<'individual' | 'duo' | 'trio' | 'team'>('individual');
+  const [catType, setCatType] = useState<'individual' | 'duo' | 'trio' | 'team' | 'team4' | 'team6'>('individual');
   const [catCategory, setCatCategory] = useState<CategoryType>('male');
   const [catSlotsLimit, setCatSlotsLimit] = useState<number>(100);
   const [catPrice, setCatPrice] = useState<number>(150);
@@ -1024,7 +1024,7 @@ export default function AdminPage() {
     }
 
     const isTeamCategory = div.type !== 'individual';
-    const numIntegrantes = div.type === 'duo' ? 2 : div.type === 'trio' ? 3 : div.type === 'team' ? 4 : 0;
+    const numIntegrantes = div.type === 'duo' ? 2 : div.type === 'trio' ? 3 : (div.type === 'team' || div.type === 'team4') ? 4 : div.type === 'team6' ? 6 : 0;
 
     if (isTeamCategory) {
       for (let i = 0; i < numIntegrantes; i++) {
@@ -1915,7 +1915,7 @@ export default function AdminPage() {
     }
 
     const isTeam = division.type !== 'individual';
-    const numIntegrantes = division.type === 'duo' ? 2 : division.type === 'trio' ? 3 : division.type === 'team' ? 4 : 0;
+    const numIntegrantes = division.type === 'duo' ? 2 : division.type === 'trio' ? 3 : (division.type === 'team' || division.type === 'team4') ? 4 : division.type === 'team6' ? 6 : 0;
     const trimmedName = editRegName.trim();
 
     if (!trimmedName) {
@@ -3021,13 +3021,21 @@ export default function AdminPage() {
                 <select
                   id="cat-type-input"
                   value={catType}
-                  onChange={(e) => setCatType(e.target.value as 'individual' | 'duo' | 'trio' | 'team')}
+                  onChange={(e) => setCatType(e.target.value as any)}
                   className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"
                 >
                   <option value="individual">Individual</option>
                   <option value="duo">Dupla</option>
                   <option value="trio">Trio</option>
-                  <option value="team">Equipe</option>
+                  {(!selectedEventToManage || selectedEventToManage.eventType === 'functional_fitness') ? (
+                    <>
+                      <option value="team4">Equipe de 4</option>
+                      <option value="team6">Equipe de 6</option>
+                      <option value="team">Equipe (Legado)</option>
+                    </>
+                  ) : (
+                    <option value="team">Equipe</option>
+                  )}
                 </select>
               </div>
               <div>
@@ -3231,7 +3239,9 @@ export default function AdminPage() {
                             {selectedEventToManage?.eventType === 'fitness_racing' && div.useAgeGroups ? ' · Faixas etárias' : ''}
                           </div>
                         </td>
-                        <td className="py-3 px-2 text-muted uppercase text-[10px] font-semibold">{div.type === 'duo' ? 'Dupla' : div.type === 'trio' ? 'Trio' : div.type === 'team' ? 'Revezamento' : 'Individual'}</td>
+                         <td className="py-3 px-2 text-muted uppercase text-[10px] font-semibold">
+                           {div.type === 'duo' ? 'Dupla' : div.type === 'trio' ? 'Trio' : div.type === 'team' ? (selectedEventToManage?.eventType === 'fitness_racing' ? 'Revezamento' : 'Equipe') : div.type === 'team4' ? 'Equipe 4' : div.type === 'team6' ? 'Equipe 6' : 'Individual'}
+                         </td>
                         <td className="py-3 px-2">
                           <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase ${
                             div.isActive
@@ -3712,6 +3722,8 @@ export default function AdminPage() {
                       if (type === 'duo') return 'Duplas 👥';
                       if (type === 'trio') return 'Trios 👥👤';
                       if (type === 'team') return 'Equipes 👥👥';
+                      if (type === 'team4') return 'Equipes de 4 👥👥';
+                      if (type === 'team6') return 'Equipes de 6 👥👥👥';
                       return 'Individual 👤';
                     };
                     return (
@@ -5868,7 +5880,7 @@ export default function AdminPage() {
                   <option value="">Selecione a Categoria...</option>
                   {divisions.map((d) => (
                     <option key={d.id} value={d.id}>
-                      {d.name} (R$ {d.price.toFixed(2)}) - {d.type === 'duo' ? 'Dupla' : d.type === 'trio' ? 'Trio' : d.type === 'team' ? 'Equipe' : 'Individual'}
+                      {d.name} (R$ {d.price.toFixed(2)}) - {d.type === 'duo' ? 'Dupla' : d.type === 'trio' ? 'Trio' : d.type === 'team' ? 'Equipe' : d.type === 'team4' ? 'Equipe 4' : d.type === 'team6' ? 'Equipe 6' : 'Individual'}
                     </option>
                   ))}
                 </select>
@@ -6035,7 +6047,7 @@ export default function AdminPage() {
                       <p className="text-xs font-bold uppercase tracking-wider text-primary font-sans">Integrantes da Equipe</p>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {Array.from({ length: selectedCat.type === 'duo' ? 2 : selectedCat.type === 'trio' ? 3 : 4 }).map((_, idx) => (
+                        {Array.from({ length: selectedCat.type === 'duo' ? 2 : selectedCat.type === 'trio' ? 3 : (selectedCat.type === 'team' || selectedCat.type === 'team4') ? 4 : selectedCat.type === 'team6' ? 6 : 1 }).map((_, idx) => (
                           <div key={idx} className="bg-dark-gray/25 border border-card-border/60 rounded-xl p-3 space-y-3">
                             <p className="text-[10px] font-bold uppercase tracking-wider text-white">Atleta {idx + 1}</p>
                             <div>
@@ -8356,7 +8368,7 @@ export default function AdminPage() {
             {(() => {
               const selectedDiv = selectedEventToManage?.divisions.find(d => d.id === editRegDivisionId);
               const isTeam = selectedDiv ? selectedDiv.type !== 'individual' : editRegIsTeam;
-              const numIntegrantes = selectedDiv?.type === 'duo' ? 2 : selectedDiv?.type === 'trio' ? 3 : selectedDiv?.type === 'team' ? 4 : 0;
+              const numIntegrantes = selectedDiv?.type === 'duo' ? 2 : selectedDiv?.type === 'trio' ? 3 : (selectedDiv?.type === 'team' || selectedDiv?.type === 'team4') ? 4 : selectedDiv?.type === 'team6' ? 6 : 0;
               const updateMember = (idx: number, field: 'name' | 'instagram' | 'shirtSize', value: string) => {
                 setEditRegMembers(prev => {
                   const next = [...prev];
@@ -8404,7 +8416,7 @@ export default function AdminPage() {
                         <option value="">Selecione a categoria...</option>
                         {(selectedEventToManage?.divisions || []).map((d) => (
                           <option key={d.id} value={d.id}>
-                            {d.name} — {d.type === 'duo' ? 'Dupla' : d.type === 'trio' ? 'Trio' : d.type === 'team' ? 'Equipe' : 'Individual'}
+                            {d.name} — {d.type === 'duo' ? 'Dupla' : d.type === 'trio' ? 'Trio' : d.type === 'team' ? 'Equipe' : d.type === 'team4' ? 'Equipe 4' : d.type === 'team6' ? 'Equipe 6' : 'Individual'}
                           </option>
                         ))}
                       </select>

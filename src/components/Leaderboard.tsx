@@ -90,6 +90,10 @@ export function Leaderboard({ event }: LeaderboardProps) {
 
   const activeCategory = event.divisions.find(d => d.id === activeCategoryId);
 
+  const divisionWorkouts = useMemo(() => {
+    return event.workouts.filter(w => w.divisionId === activeCategoryId);
+  }, [event.workouts, activeCategoryId]);
+
   const leaderboardData = useMemo(
     () => activeCategoryId ? getLeaderboard(event.id, activeCategoryId) : [],
     [activeCategoryId, event.id, getLeaderboard]
@@ -462,7 +466,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
                   </th>
 
                   {/* Workouts Headers */}
-                  {event.workouts.map((workout) => (
+                  {divisionWorkouts.map((workout) => (
                     <th key={workout.id} className="min-w-[190px] p-0 border-l border-card-border/40">
                       <div className="flex flex-col h-full justify-between">
                         <div className="px-3 py-3 text-center text-[10px] font-black uppercase tracking-wider text-primary border-b border-card-border/40 min-h-[46px] flex flex-col justify-center gap-0.5">
@@ -579,7 +583,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
                         </td>
 
                         {/* Workouts Cells */}
-                        {event.workouts.map((workout) => {
+                        {divisionWorkouts.map((workout) => {
                           const score = row.scores[workout.id];
                           return (
                             <td key={workout.id} className="p-0 border-l border-card-border/20 text-center">

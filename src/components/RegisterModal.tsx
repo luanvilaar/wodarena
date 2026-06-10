@@ -225,6 +225,8 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
     if (selectedDivision.type === 'duo') return 2;
     if (selectedDivision.type === 'trio') return 3;
     if (selectedDivision.type === 'team') return 4;
+    if (selectedDivision.type === 'team4') return 4;
+    if (selectedDivision.type === 'team6') return 6;
     return 1;
   }, [selectedDivision]);
 

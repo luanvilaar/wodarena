@@ -670,7 +670,7 @@ export default function EventPage({ params }: PageProps) {
                                   {totalWorkout.name}
                                 </h4>
                                 <span className="rounded-md border border-primary/20 bg-primary/10 px-2.5 py-0.5 text-[9px] font-black uppercase tracking-widest text-primary">
-                                  Formato: {activeDiv.type === 'duo' ? 'Duplas' : activeDiv.type === 'trio' ? 'Trios' : activeDiv.type === 'team' ? 'Equipes' : 'Individual'}
+                                  Formato: {activeDiv.type === 'duo' ? 'Duplas' : activeDiv.type === 'trio' ? 'Trios' : (activeDiv.type === 'team' || activeDiv.type === 'team4' || activeDiv.type === 'team6') ? 'Equipes' : 'Individual'}
                                 </span>
                               </div>
                               <p className="text-xs text-muted leading-relaxed whitespace-pre-line font-medium">

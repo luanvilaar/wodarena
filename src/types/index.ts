@@ -34,7 +34,7 @@ export interface Division {
   id: string;
   name: string;      // Ex: "RX", "Scale", "Intermediário", "Master 35+"
   category: CategoryType;
-  type: 'individual' | 'duo' | 'trio' | 'team';
+  type: 'individual' | 'duo' | 'trio' | 'team' | 'team4' | 'team6';
   slotsLimit: number;
   price: number;
   isActive: boolean;

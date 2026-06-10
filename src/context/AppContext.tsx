@@ -1405,8 +1405,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       });
     }
 
-    // 2. Mapear workouts do evento (Functional Fitness)
-    const workoutIds = event.workouts.map(w => w.id);
+    // 2. Mapear workouts do evento (Functional Fitness) filtrados pela divisão
+    const divisionWorkouts = event.workouts.filter(w => w.divisionId === divisionId);
+    const workoutIds = divisionWorkouts.map(w => w.id);
 
     // 3. Compilar scores para cada atleta da divisão com penalidade para não lançados
     const list: AthleteOverall[] = divisionAthletes.map(athlete => {
