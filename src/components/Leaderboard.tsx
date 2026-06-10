@@ -172,12 +172,50 @@ export function Leaderboard({ event }: LeaderboardProps) {
 
       {/* Tabela de Classificação */}
       {filteredLeaderboard.length > 0 ? (
-        <div className="overflow-x-auto rounded-xl border border-card-border bg-card">
-          {event.eventType === 'fitness_racing' ? (
-            /* =======================================================
-               DESIGN LEADERBOARD FITNESS RACING (TEMPO E DIFERENÇA)
-               ======================================================= */
-            <table className="min-w-[760px] w-full border-collapse text-left">
+        isMobile ? (
+          // ========== MOBILE: Card Stack ==========
+          <div className="space-y-2 pb-4">
+            {filteredLeaderboard.map((row) => {
+              const hasTime = row.totalPoints < 999999;
+              const diffSecs = hasTime ? row.totalPoints - leaderTime : 0;
+
+              return (
+                <MobileLeaderboardCard
+                  key={row.athlete.id}
+                  rank={row.rank}
+                  athlete={row.athlete}
+                  time={event.eventType === 'fitness_racing' && hasTime ? secondsToTimeStr(row.totalPoints) : undefined}
+                  difference={
+                    event.eventType === 'fitness_racing'
+                      ? hasTime && diffSecs > 0
+                        ? `+${secondsToTimeStr(diffSecs)}`
+                        : hasTime && row.rank === 1
+                          ? 'Líder'
+                          : '-'
+                      : undefined
+                  }
+                  totalPoints={event.eventType !== 'fitness_racing' ? row.totalPoints : undefined}
+                  isExpanded={expandedTeams[row.athlete.id]}
+                  onToggleExpand={() => toggleTeamExpanded(row.athlete.id)}
+                  onViewDetails={() => {
+                    if (row.athlete.isTeam) {
+                      setSelectedTeamForProfile(row.athlete);
+                    } else {
+                      setSelectedAthleteForProfile(row.athlete);
+                    }
+                  }}
+                />
+              );
+            })}
+          </div>
+        ) : (
+          // ========== DESKTOP: Tabela ==========
+          <div className="overflow-x-auto rounded-xl border border-card-border bg-card">
+            {event.eventType === 'fitness_racing' ? (
+              /* =======================================================
+                 DESIGN LEADERBOARD FITNESS RACING (TEMPO E DIFERENÇA)
+                 ======================================================= */
+              <table className="min-w-[760px] w-full border-collapse text-left">
               <thead>
                 <tr className="border-b border-card-border bg-background">
                   <th className="w-[340px] p-0">
@@ -547,6 +585,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
             </table>
           )}
         </div>
+        )
       ) : (
         <div className="space-y-3 rounded-xl border border-card-border bg-card py-16 text-center">
           <ShieldAlert className="mx-auto h-10 w-10 text-muted" aria-hidden="true" />
