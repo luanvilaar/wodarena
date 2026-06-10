@@ -1,9 +1,9 @@
 'use client';
-
+ 
 import React from 'react';
-import { ChevronDown, ChevronUp, X } from 'lucide-react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { Athlete } from '@/types';
-
+ 
 const InstagramIcon = ({ className = 'h-3.5 w-3.5' }: { className?: string }) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
@@ -20,7 +20,7 @@ const InstagramIcon = ({ className = 'h-3.5 w-3.5' }: { className?: string }) =>
     <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
   </svg>
 );
-
+ 
 interface MobileLeaderboardCardProps {
   rank: number;
   athlete: Athlete;
@@ -31,7 +31,7 @@ interface MobileLeaderboardCardProps {
   onToggleExpand?: () => void;
   onViewDetails?: () => void;
 }
-
+ 
 export function MobileLeaderboardCard({
   rank,
   athlete,
@@ -48,7 +48,7 @@ export function MobileLeaderboardCard({
     if (rank === 3) return 'bg-amber-700/20 text-amber-700 border border-amber-700/30';
     return 'text-muted';
   };
-
+ 
   const getTeamMembersArray = (teamMembers: unknown): { name: string; instagram?: string }[] => {
     if (!teamMembers) return [];
     if (Array.isArray(teamMembers)) return teamMembers as { name: string; instagram?: string }[];
@@ -62,12 +62,13 @@ export function MobileLeaderboardCard({
     }
     return [];
   };
-
+ 
   const teamMembers = getTeamMembersArray(athlete.teamMembers);
-
+  const displayName = athlete.isTeam ? athlete.name.split('(')[0].trim() : athlete.name;
+ 
   return (
     <div
-      className="rounded-lg border border-card-border bg-card p-4 space-y-3 transition-colors hover:bg-elevated/30 cursor-pointer"
+      className="rounded-lg border border-card-border/50 bg-card p-3 flex justify-between items-center transition-colors hover:bg-elevated/30 cursor-pointer"
       onClick={onViewDetails}
       role="button"
       tabIndex={0}
@@ -77,115 +78,110 @@ export function MobileLeaderboardCard({
         }
       }}
     >
-      {/* Rank + Name + Country */}
-      <div className="flex items-start gap-3">
-        <span className={`inline-flex items-center justify-center h-8 w-8 rounded-full font-bold text-sm flex-shrink-0 ${getRankColor()}`}>
+      {/* Lado Esquerdo: Rank, Nome, Box, Membros */}
+      <div className="flex items-center gap-3 min-w-0 flex-1">
+        {/* Rank */}
+        <span className={`inline-flex items-center justify-center h-7 w-7 rounded-full font-mono font-bold text-xs flex-shrink-0 ${getRankColor()}`}>
           {rank > 0 ? rank : '-'}
         </span>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap mb-1">
-            <h3 className="font-bold text-sm text-white truncate uppercase">
-              {athlete.name}
-            </h3>
+ 
+        {/* Competidor Info */}
+        <div className="flex flex-col min-w-0 flex-1">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-xs font-bold text-white uppercase tracking-wide flex items-center gap-1">
+              {displayName}
+              {athlete.isTeam && teamMembers.length > 0 && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleExpand?.();
+                  }}
+                  className="p-0.5 hover:text-primary transition-colors flex items-center justify-center"
+                  aria-label={isExpanded ? "Ocultar membros" : "Ver membros"}
+                >
+                  {isExpanded ? (
+                    <ChevronUp className="h-3.5 w-3.5 text-primary" />
+                  ) : (
+                    <ChevronDown className="h-3.5 w-3.5 text-muted-soft" />
+                  )}
+                </button>
+              )}
+            </span>
+ 
+            {/* Instagram de Atleta Individual */}
+            {!athlete.isTeam && athlete.instagram && (
+              <a
+                href={`https://instagram.com/${athlete.instagram.trim().replace(/^@/, '')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-0.5 text-[10px] text-primary hover:text-primary-hover font-semibold transition-colors"
+                title={`Ver Instagram de ${athlete.name}`}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <InstagramIcon className="h-3.5 w-3.5" />
+              </a>
+            )}
+ 
+            {/* País */}
             {athlete.country && (
-              <span className="text-[9px] font-bold text-muted-soft bg-dark-gray/50 rounded px-1.5 py-0.5 flex-shrink-0">
+              <span className="rounded bg-dark-gray border border-card-border/40 px-1.5 py-0.5 text-[8px] font-bold text-muted-soft uppercase font-sans">
                 {athlete.country}
               </span>
             )}
           </div>
-          <p className="text-xs text-muted truncate">
+ 
+          {/* Box / Academia */}
+          <span className="text-[10px] text-muted font-medium mt-0.5 truncate">
             {athlete.box}
-          </p>
+          </span>
+ 
+          {/* Membros de Equipe (Inline compacto e animado) */}
+          {athlete.isTeam && isExpanded && teamMembers.length > 0 && (
+            <span className="text-[9px] text-muted-soft mt-1.5 flex flex-wrap gap-x-2 gap-y-0.5 animate-fadeIn">
+              {teamMembers.map((m, mIdx) => (
+                <span key={mIdx} className="inline-flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
+                  <span>{m.name}</span>
+                  {m.instagram && (
+                    <a
+                      href={`https://instagram.com/${m.instagram.trim().replace(/^@/, '')}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:text-primary-hover font-semibold inline-flex items-center"
+                      title={`Ver Instagram de ${m.name}`}
+                    >
+                      <InstagramIcon className="h-2.5 w-2.5 ml-0.5" />
+                    </a>
+                  )}
+                  {mIdx < teamMembers.length - 1 && <span className="text-muted-soft ml-1">&</span>}
+                </span>
+              ))}
+            </span>
+          )}
         </div>
       </div>
-
-      {/* Stats Grid: Time | Difference | Points */}
-      <div className="grid grid-cols-3 gap-2 text-xs">
+ 
+      {/* Lado Direito: Resultados (Tempo / Diferença / Pontos) */}
+      <div className="flex flex-col items-end flex-shrink-0 text-right pl-3">
+        {/* Fitness Racing (Tempo + Diferença) */}
         {time && (
-          <div className="rounded-md bg-dark-gray/30 p-2 border border-card-border/50">
-            <span className="block text-[9px] font-bold text-muted mb-1 uppercase tracking-wider">Tempo</span>
-            <span className="font-mono font-bold text-primary block break-words">{time}</span>
-          </div>
+          <span className="font-mono text-xs font-bold text-white leading-none">
+            {time}
+          </span>
         )}
         {difference && (
-          <div className="rounded-md bg-dark-gray/30 p-2 border border-card-border/50">
-            <span className="block text-[9px] font-bold text-muted mb-1 uppercase tracking-wider">Dif.</span>
-            <span className="font-mono font-bold text-primary block break-words">{difference}</span>
-          </div>
+          <span className="font-mono text-[10px] font-bold text-primary mt-1.5 leading-none">
+            {difference}
+          </span>
         )}
+ 
+        {/* CrossFit (Pontos Totais) */}
         {totalPoints !== undefined && (
-          <div className="rounded-md bg-dark-gray/30 p-2 border border-card-border/50">
-            <span className="block text-[9px] font-bold text-muted mb-1 uppercase tracking-wider">Pts</span>
-            <span className="font-mono font-bold text-white block">{totalPoints}</span>
-          </div>
+          <span className="font-mono text-xs font-bold text-primary leading-none">
+            {totalPoints} <span className="text-[8px] font-bold uppercase tracking-wider text-muted font-sans ml-0.5">Pts</span>
+          </span>
         )}
       </div>
-
-      {/* Instagram Link */}
-      {!athlete.isTeam && athlete.instagram && (
-        <a
-          href={`https://instagram.com/${athlete.instagram.trim().replace(/^@/, '')}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:text-primary-hover transition-colors"
-          onClick={(e) => e.stopPropagation()}
-          title={`Ver Instagram de ${athlete.name}`}
-        >
-          <InstagramIcon className="h-3.5 w-3.5" />
-          <span>@{athlete.instagram.trim().replace(/^@/, '')}</span>
-        </a>
-      )}
-
-      {/* Team expansion button */}
-      {athlete.isTeam && teamMembers.length > 0 && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleExpand?.();
-          }}
-          aria-expanded={isExpanded}
-          className="w-full h-10 text-xs font-bold text-primary bg-primary/10 border border-primary/30 rounded hover:bg-primary/20 transition-colors flex items-center justify-center gap-1.5"
-        >
-          {isExpanded ? (
-            <>
-              <ChevronUp className="h-4 w-4" />
-              <span>Ocultar Membros</span>
-            </>
-          ) : (
-            <>
-              <ChevronDown className="h-4 w-4" />
-              <span>Ver Membros ({teamMembers.length})</span>
-            </>
-          )}
-        </button>
-      )}
-
-      {/* Expanded team members */}
-      {isExpanded && teamMembers.length > 0 && (
-        <div className="border-t border-card-border/30 pt-3 space-y-2 animate-fadeIn">
-          {teamMembers.map((member, idx) => (
-            <div
-              key={idx}
-              className="text-xs p-2.5 rounded bg-dark-gray/20 border border-card-border/30"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-semibold text-white">{member.name}</span>
-                {member.instagram && (
-                  <a
-                    href={`https://instagram.com/${member.instagram.replace(/^@/, '')}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-primary hover:text-primary-hover inline-flex items-center flex-shrink-0"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <InstagramIcon className="h-3 w-3" />
-                  </a>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
