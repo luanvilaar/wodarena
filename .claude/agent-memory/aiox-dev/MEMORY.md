@@ -1,0 +1,2 @@
+- [Leaderboard Workout Scoping](project_leaderboard-workout-scoping.md) — functional_fitness WODs are global (division_id NULL); filters must keep the `!w.divisionId ||` clause or scoring collapses
+- [Leaderboard Architecture](project_leaderboard-architecture.md) — leaderboard_entries gates visibility; getLeaderboard branches by eventType; manual admin reg doesn't persist to DB

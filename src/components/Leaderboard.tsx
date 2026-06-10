@@ -91,7 +91,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
   const activeCategory = event.divisions.find(d => d.id === activeCategoryId);
 
   const divisionWorkouts = useMemo(() => {
-    return event.workouts.filter(w => w.divisionId === activeCategoryId);
+    return event.workouts.filter(w => !w.divisionId || w.divisionId === activeCategoryId);
   }, [event.workouts, activeCategoryId]);
 
   const leaderboardData = useMemo(
