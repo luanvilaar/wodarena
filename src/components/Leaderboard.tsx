@@ -3,6 +3,8 @@
 import React, { useMemo, useState } from 'react';
 import { Search, ShieldAlert, ChevronDown, ChevronUp, X, TrendingUp, User, Flame, Zap } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { MobileLeaderboardCard } from './MobileLeaderboardCard';
 
 const InstagramIcon = ({ className = 'h-3.5 w-3.5' }: { className?: string }) => (
   <svg
@@ -67,6 +69,7 @@ const timeToSeconds = (timeStr: string): number => {
 
 export function Leaderboard({ event }: LeaderboardProps) {
   const { getLeaderboard } = useApp();
+  const isMobile = useMediaQuery('(max-width: 640px)');
   const [selectedCategoryId, setSelectedCategoryId] = useState(event.divisions[0]?.id || '');
   const [searchQuery, setSearchQuery] = useState('');
   const [ageGroupFilter, setAgeGroupFilter] = useState('');
@@ -182,14 +185,25 @@ export function Leaderboard({ event }: LeaderboardProps) {
                       <div className="px-4 py-3 flex flex-col gap-1.5 border-b border-card-border/40">
                         <span className="text-[10px] font-bold text-muted uppercase tracking-wider">Competidor</span>
                         <div className="relative">
-                          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-soft" />
+                          <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-soft pointer-events-none" />
                           <input
                             type="text"
-                            placeholder="Buscar atleta ou box..."
+                            placeholder="Nome ou box..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full pl-8 pr-3 py-1.5 bg-background border border-card-border/60 rounded text-xs text-white placeholder:text-muted focus:outline-none focus:border-primary/50"
+                            className="w-full pl-9 pr-9 py-2 h-10 bg-background border border-card-border/60 rounded text-sm text-white placeholder:text-muted focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
+                            aria-label="Buscar atleta ou box"
                           />
+                          {searchQuery && (
+                            <button
+                              type="button"
+                              onClick={() => setSearchQuery('')}
+                              className="absolute right-2.5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted hover:text-white transition-colors flex items-center justify-center p-0"
+                              aria-label="Limpar busca"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          )}
                         </div>
                       </div>
                       <div className="grid grid-cols-[56px_1fr] text-[9px] font-bold text-muted uppercase text-left py-1.5 bg-background/50">
@@ -346,14 +360,25 @@ export function Leaderboard({ event }: LeaderboardProps) {
                       <div className="px-4 py-3 flex flex-col gap-1.5 border-b border-card-border/40">
                         <span className="text-[10px] font-bold text-muted uppercase tracking-wider">Participant</span>
                         <div className="relative">
-                          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-soft" />
+                          <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-soft pointer-events-none" />
                           <input
                             type="text"
-                            placeholder="Buscar atleta ou box..."
+                            placeholder="Nome ou box..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full pl-8 pr-3 py-1.5 bg-background border border-card-border/60 rounded text-xs text-white placeholder:text-muted focus:outline-none focus:border-primary/50"
+                            className="w-full pl-9 pr-9 py-2 h-10 bg-background border border-card-border/60 rounded text-sm text-white placeholder:text-muted focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
+                            aria-label="Buscar atleta ou box"
                           />
+                          {searchQuery && (
+                            <button
+                              type="button"
+                              onClick={() => setSearchQuery('')}
+                              className="absolute right-2.5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted hover:text-white transition-colors flex items-center justify-center p-0"
+                              aria-label="Limpar busca"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          )}
                         </div>
                       </div>
                       <div className="grid grid-cols-[56px_1fr] text-[9px] font-bold text-muted uppercase text-left py-1.5 bg-background/50">
