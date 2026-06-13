@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { Search, ShieldAlert, ChevronDown, ChevronUp, X, TrendingUp, User, Flame, Zap } from 'lucide-react';
+import { Search, ShieldAlert, ChevronDown, ChevronUp, X, TrendingUp, User, Flame, Zap, BarChart3, Clock } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { MobileLeaderboardCard } from './MobileLeaderboardCard';
@@ -22,7 +22,7 @@ const InstagramIcon = ({ className = 'h-3.5 w-3.5' }: { className?: string }) =>
     <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
   </svg>
 );
-import { Event, Athlete } from '@/types';
+import { Event, Athlete, Workout, Score } from '@/types';
 import { getAgeGroupFromDate } from '@/lib/fitnessRacing';
 
 interface LeaderboardProps {
@@ -65,6 +65,89 @@ const timeToSeconds = (timeStr: string): number => {
     return parts[0] * 60 + parts[1];
   }
   return 0;
+};
+
+// Cores de pódio reutilizadas para o badge numérico de colocação (Functional Fitness)
+const getRankBadgeClasses = (rank?: number): string => {
+  if (rank === 1) return 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30';
+  if (rank === 2) return 'bg-slate-300/20 text-slate-300 border-slate-300/30';
+  if (rank === 3) return 'bg-amber-700/20 text-amber-700 border-amber-700/30';
+  return 'bg-dark-gray/60 text-muted-soft border-card-border/50';
+};
+
+// Badge numérico estilizado de colocação, com aria-label (não depende só de cor — WCAG AA)
+const RankBadge = ({ rank }: { rank?: number }) => {
+  const hasRank = typeof rank === 'number' && rank > 0;
+  return (
+    <span
+      className={`inline-flex items-center justify-center min-w-[2.25rem] h-7 px-2 rounded-md border font-mono text-xs font-black ${getRankBadgeClasses(rank)}`}
+      aria-label={hasRank ? `${rank}º lugar` : 'Sem colocação'}
+    >
+      {hasRank ? `${rank}º` : '–'}
+    </span>
+  );
+};
+
+// Card de resumo: colocação geral + pontos totais reais (Functional Fitness)
+const OverallPlacementCard = ({ rank, totalPoints }: { rank?: number; totalPoints?: number }) => (
+  <div className="col-span-2 rounded-xl border border-primary/20 bg-primary/5 p-4 flex items-center justify-between gap-3">
+    <span className="text-[10px] font-bold text-muted uppercase tracking-wider">Colocação Geral</span>
+    <div className="flex items-center gap-3">
+      <RankBadge rank={rank} />
+      <span className="font-mono text-2xl font-black text-primary leading-none whitespace-nowrap">
+        {totalPoints ?? 0}
+        <span className="text-[10px] font-bold uppercase tracking-wider text-muted font-sans ml-1">pts</span>
+      </span>
+    </div>
+  </div>
+);
+
+// Molécula: pontuação e colocação obtidas por prova (Functional Fitness)
+const ScorePerWorkoutList = ({ workouts, scores }: { workouts: Workout[]; scores: Record<string, Score> }) => {
+  const ordered = [...workouts].sort((a, b) => a.orderIndex - b.orderIndex);
+
+  if (ordered.length === 0) {
+    return (
+      <div className="rounded-xl border border-dashed border-card-border p-6 text-center">
+        <p className="text-xs text-muted">Nenhuma prova cadastrada nesta categoria.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2 animate-fadeIn">
+      {ordered.map((workout) => {
+        const score = scores[workout.id];
+        const pending = !score || score.result === '-' || score.result === '';
+
+        return (
+          <div key={workout.id} className="rounded-xl border border-card-border/60 bg-dark-gray/30 p-3">
+            <p className="text-[11px] font-bold text-white uppercase tracking-wide truncate" title={workout.name}>
+              {workout.name}
+            </p>
+            {pending ? (
+              <p className="text-[11px] text-muted-soft mt-2 flex items-center gap-1.5">
+                <Clock className="h-3 w-3" /> Aguardando lançamento
+              </p>
+            ) : (
+              <div className="flex items-center justify-between mt-2 gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <RankBadge rank={score.rank} />
+                  <span className="font-mono text-[11px] text-muted-soft truncate" title={score.result}>
+                    {score.result}
+                  </span>
+                </div>
+                <span className="font-mono text-sm font-black text-primary whitespace-nowrap">
+                  {score.points ?? 0}
+                  <span className="text-[8px] font-bold uppercase tracking-wider text-muted font-sans ml-0.5">pts</span>
+                </span>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
 };
 
 export function Leaderboard({ event }: LeaderboardProps) {
@@ -721,6 +804,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
                         <span className="font-bold text-white uppercase text-xs block">{selectedAthleteForProfile.country || 'BR'}</span>
                       </div>
 
+                      {event.eventType === 'fitness_racing' ? (
                       <div className="col-span-2 rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-1">
                         <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">Tempo Oficial Total</span>
                         <div className="flex items-baseline gap-2">
@@ -734,9 +818,24 @@ export function Leaderboard({ event }: LeaderboardProps) {
                           <span className="text-[10px] font-semibold text-muted font-sans">no percurso completo</span>
                         </div>
                       </div>
+                      ) : (() => {
+                        const row = leaderboardData.find(r => r.athlete.id === selectedAthleteForProfile.id);
+                        return <OverallPlacementCard rank={row?.rank} totalPoints={row?.totalPoints} />;
+                      })()}
                     </div>
 
-                    {/* Análise de Performance */}
+                    {/* Functional Fitness: Pontuação por Prova | Fitness Racing: Análise de splits */}
+                    {event.eventType !== 'fitness_racing' ? (
+                      <div className="border-t border-card-border/50 pt-5 space-y-4">
+                        <h3 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-1.5">
+                          <BarChart3 className="h-4 w-4" /> Pontuação por Prova
+                        </h3>
+                        {(() => {
+                          const row = leaderboardData.find(r => r.athlete.id === selectedAthleteForProfile.id);
+                          return <ScorePerWorkoutList workouts={divisionWorkouts} scores={row?.scores || {}} />;
+                        })()}
+                      </div>
+                    ) : (
                     <div className="border-t border-card-border/50 pt-5 space-y-4">
                       <h3 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-1.5">
                         <TrendingUp className="h-4 w-4" /> Análise de Performance
@@ -867,6 +966,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
                         );
                       })()}
                     </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -924,6 +1024,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
                         </span>
                       </div>
 
+                      {event.eventType === 'fitness_racing' && (
                       <div className="col-span-2 rounded-xl border border-card-border/50 bg-dark-gray/20 p-3.5 space-y-1">
                         <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">Instagram Equipe</span>
                         {selectedTeamForProfile.instagram ? (
@@ -941,7 +1042,9 @@ export function Leaderboard({ event }: LeaderboardProps) {
                           <span className="text-muted">Não informado</span>
                         )}
                       </div>
+                      )}
 
+                      {event.eventType === 'fitness_racing' ? (
                       <div className="col-span-2 rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-1">
                         <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">Tempo Oficial Total</span>
                         <div className="flex items-baseline gap-2">
@@ -955,6 +1058,10 @@ export function Leaderboard({ event }: LeaderboardProps) {
                           <span className="text-[10px] font-semibold text-muted font-sans">no percurso completo</span>
                         </div>
                       </div>
+                      ) : (() => {
+                        const row = leaderboardData.find(r => r.athlete.id === selectedTeamForProfile.id);
+                        return <OverallPlacementCard rank={row?.rank} totalPoints={row?.totalPoints} />;
+                      })()}
                     </div>
 
                     {/* Integrantes da Equipe */}
@@ -987,7 +1094,18 @@ export function Leaderboard({ event }: LeaderboardProps) {
                       )}
                     </div>
 
-                    {/* Análise de Performance */}
+                    {/* Functional Fitness: Pontuação por Prova | Fitness Racing: Análise de splits */}
+                    {event.eventType !== 'fitness_racing' ? (
+                      <div className="border-t border-card-border/50 pt-5 space-y-4">
+                        <h3 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-1.5">
+                          <BarChart3 className="h-4 w-4" /> Pontuação por Prova
+                        </h3>
+                        {(() => {
+                          const row = leaderboardData.find(r => r.athlete.id === selectedTeamForProfile.id);
+                          return <ScorePerWorkoutList workouts={divisionWorkouts} scores={row?.scores || {}} />;
+                        })()}
+                      </div>
+                    ) : (
                     <div className="border-t border-card-border/50 pt-5 space-y-4">
                       <h3 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-1.5">
                         <TrendingUp className="h-4 w-4" /> Análise de Performance
@@ -1118,6 +1236,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
                         );
                       })()}
                     </div>
+                    )}
                   </div>
                 </div>
               </div>
