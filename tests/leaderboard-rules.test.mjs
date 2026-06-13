@@ -16,7 +16,11 @@ test('presents tie-breaking cascade logic for overall leaderboard', () => {
   assert.match(appContext, /Confronto Direto/);
 });
 
-test('implements standard low-point tie points penalty for missing scores', () => {
-  // Penalidade de total_competidores + 1 para pendentes
-  assert.match(appContext, /penaltyPoints = divisionAthletes\.length \+ 1/);
+test('does not auto-penalize unscored workouts while the event is in progress', () => {
+  // Functional Fitness: provas ainda sem resultado NÃO geram penalidade automática
+  // nem score falso — o evento segue em andamento. Ausência real é tratada pelo
+  // organizador via lançamento manual da pontuação máxima (entra como score normal).
+  assert.doesNotMatch(appContext, /penaltyPoints = divisionAthletes\.length \+ 1/);
+  // O total soma apenas provas com resultado válido lançado
+  assert.match(appContext, /score && score\.result !== '-' && score\.result !== ''/);
 });

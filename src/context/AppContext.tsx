@@ -1418,28 +1418,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const divisionWorkouts = event.workouts.filter(w => !w.divisionId || w.divisionId === divisionId);
     const workoutIds = divisionWorkouts.map(w => w.id);
 
-    // 3. Compilar scores para cada atleta da divisão com penalidade para não lançados
+    // 3. Compilar scores para cada atleta da divisão somando apenas as provas já lançadas.
+    //    Provas ainda sem resultado NÃO geram penalidade automática nem score falso: o evento
+    //    segue em andamento. Em caso de ausência real, o organizador lança manualmente a
+    //    pontuação máxima, que já entra como score normal e atua como penalidade.
     const list: AthleteOverall[] = divisionAthletes.map(athlete => {
       const athleteScores: Record<string, Score> = {};
       let totalPoints = 0;
 
       workoutIds.forEach(wId => {
         const score = scores.find(s => s.athleteId === athlete.id && s.workoutId === wId);
-        if (score) {
+        if (score && score.result !== '-' && score.result !== '') {
           athleteScores[wId] = score;
           totalPoints += score.points || 0;
         } else {
-          // Score não lançado ou pendente: penalidade = número total de atletas da divisão + 1
-          const penaltyPoints = divisionAthletes.length + 1;
+          // Prova ainda não lançada/pendente: placeholder visual ('-'), sem somar ao total
           athleteScores[wId] = {
             athleteId: athlete.id,
             workoutId: wId,
             result: '-',
             value: 0,
             rank: 0,
-            points: penaltyPoints
+            points: 0
           };
-          totalPoints += penaltyPoints;
         }
       });
 
