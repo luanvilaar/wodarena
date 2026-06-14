@@ -16,14 +16,6 @@ export const INITIAL_USERS: User[] = [
     password: 'manager1',
     role: 'manager',
     organization: 'CrossFit Imperium'
-  },
-  {
-    id: 'org-2',
-    name: 'Juliana Arena',
-    email: 'org2@wodarena.com',
-    password: 'manager2',
-    role: 'manager',
-    organization: 'WODArena CrossFit Box'
   }
 ];
 
