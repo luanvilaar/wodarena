@@ -176,6 +176,13 @@ export async function sendRegistrationEmail(
     ? athlete.teamMembers.map(m => m.name).join(', ')
     : '';
 
+  // Recursos visuais do evento (banner no topo, logo em selo sobreposto)
+  const safeEventName = escapeHtml(event.name || 'Evento WODArena');
+  const safeBannerUrl = event.bannerUrl ? escapeHtml(event.bannerUrl) : '';
+  const safeLogoUrl = event.logoUrl ? escapeHtml(event.logoUrl) : '';
+  const hasBanner = Boolean(safeBannerUrl);
+  const hasLogo = Boolean(safeLogoUrl);
+
   // Template HTML do E-mail (Estilo Binance Flat / Visual Profissional)
   const htmlContent = `
     <!DOCTYPE html>
@@ -206,19 +213,6 @@ export async function sendRegistrationEmail(
           border-radius: 12px;
           overflow: hidden;
           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-        }
-        .header {
-          background-color: #181a20;
-          padding: 24px;
-          text-align: center;
-          border-bottom: 3px solid #FCD535;
-        }
-        .header-logo {
-          color: #FCD535;
-          font-size: 20px;
-          font-weight: 900;
-          letter-spacing: 0.1em;
-          text-transform: uppercase;
         }
         .body {
           padding: 32px 24px;
@@ -328,10 +322,32 @@ export async function sendRegistrationEmail(
       <div class="wrapper">
         <div class="container">
           
-          <!-- Header Banner -->
-          <div class="header">
-            <div class="header-logo">WODArena</div>
-          </div>
+          <!-- Header: faixa de marca WODArena + banner do evento + logo -->
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse: collapse;">
+            <tr>
+              <td style="background-color: #181a20; padding: 14px 24px; text-align: center; border-bottom: 3px solid #FCD535;">
+                <span style="color: #FCD535; font-size: 15px; font-weight: 900; letter-spacing: 0.14em; text-transform: uppercase; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;">WODArena</span>
+              </td>
+            </tr>
+            ${hasBanner ? `
+            <tr>
+              <td style="background-color: #0b0e11; padding: 0; font-size: 0; line-height: 0;">
+                <img src="${safeBannerUrl}" alt="${safeEventName}" width="580" style="display: block; width: 100%; max-width: 580px; height: auto; border: 0; outline: none; text-decoration: none;">
+              </td>
+            </tr>` : ''}
+            ${hasLogo ? `
+            <tr>
+              <td style="background-color: #ffffff; text-align: center; padding: 0;">
+                <table role="presentation" align="center" cellpadding="0" cellspacing="0" border="0" style="margin: ${hasBanner ? '-40px' : '24px'} auto 0 auto;">
+                  <tr>
+                    <td style="background-color: #ffffff; border: 1px solid #eaecef; border-radius: 12px; padding: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">
+                      <img src="${safeLogoUrl}" alt="${safeEventName} logo" width="72" height="72" style="display: block; width: 72px; height: 72px; border-radius: 8px; border: 0;">
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>` : ''}
+          </table>
           
           <!-- Body Content -->
           <div class="body">
