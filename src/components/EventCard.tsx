@@ -58,7 +58,6 @@ export function EventCard({ event, priority = false }: EventCardProps) {
           ) : (
             <div className="h-full w-full bg-gradient-to-br from-dark-gray to-card opacity-75" />
           )}
-          <div className="absolute inset-0 bg-gradient-to-t from-card via-transparent to-black/40"></div>
           
           {/* Status Badge */}
           <div className="absolute top-4 left-4">

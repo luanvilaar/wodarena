@@ -3,8 +3,9 @@
 import React, { use } from 'react';
 import { useApp } from '@/context/AppContext';
 import { Leaderboard } from '@/components/Leaderboard';
-import { Trophy, ChevronLeft, Medal } from 'lucide-react';
+import { Trophy, ChevronLeft } from 'lucide-react';
 import Link from 'next/link';
+import Image from 'next/image';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -37,9 +38,16 @@ export default function EventLeaderboardPage({ params }: PageProps) {
       <header className="border-b border-card-border bg-[#121214] px-4 py-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
-              <Medal className="h-5 w-5 text-ink" aria-hidden="true" />
-            </div>
+            <Link href="/" className="flex items-center justify-center transition-transform duration-300 hover:scale-105 cursor-pointer" aria-label="WODArena - Voltar para a Home">
+              <Image
+                src="/icon.svg"
+                alt="WODArena"
+                width={40}
+                height={40}
+                className="object-contain"
+                priority
+              />
+            </Link>
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-[9px] font-black uppercase tracking-wider text-primary">Placar de Líderes</span>
