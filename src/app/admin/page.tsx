@@ -3021,7 +3021,7 @@ export default function AdminPage() {
                 <select
                   id="cat-type-input"
                   value={catType}
-                  onChange={(e) => setCatType(e.target.value as any)}
+                  onChange={(e) => setCatType(e.target.value as 'individual' | 'duo' | 'trio' | 'team' | 'team4' | 'team6')}
                   className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"
                 >
                   <option value="individual">Individual</option>
