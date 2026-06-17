@@ -5047,10 +5047,10 @@ export default function AdminPage() {
           <button
             type="button"
             onClick={() => setScheduleSubTab('general')}
-            className={`rounded-md px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors ${
+            className={`rounded-md px-4 py-2 text-xs font-semibold uppercase tracking-wider transition-all duration-200 ${
               scheduleSubTab === 'general'
                 ? 'bg-primary text-ink'
-                : 'bg-dark-gray text-muted border border-card-border hover:text-white'
+                : 'bg-card text-muted border border-card-border hover:bg-elevated hover:text-foreground'
             }`}
           >
             Cronograma Geral
@@ -5061,17 +5061,17 @@ export default function AdminPage() {
               if (hasWorkouts) setScheduleSubTab('heats');
             }}
             disabled={!hasWorkouts}
-            className={`rounded-md px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors relative ${
+            className={`rounded-md px-4 py-2 text-xs font-semibold uppercase tracking-wider transition-all duration-200 relative ${
               !hasWorkouts
-                ? 'bg-muted/10 text-muted/40 cursor-not-allowed border border-card-border/30'
+                ? 'bg-card/45 text-muted-soft/40 border border-card-border/30 cursor-not-allowed'
                 : scheduleSubTab === 'heats'
                 ? 'bg-primary text-ink'
-                : 'bg-dark-gray text-muted border border-card-border hover:text-white'
+                : 'bg-card text-muted border border-card-border hover:bg-elevated hover:text-foreground'
             }`}
           >
             Baterias de Provas
             {!hasWorkouts && (
-              <span className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full text-[8px] px-1.5 py-0.5 font-bold scale-75">Bloqueado</span>
+              <span className="absolute -top-2 -right-2 bg-red-500/20 text-red-400 border border-red-500/30 rounded-full text-[8px] px-1.5 py-0.5 font-bold scale-75">Bloqueado</span>
             )}
           </button>
         </div>
@@ -5179,7 +5179,7 @@ export default function AdminPage() {
 
               <button
                 type="submit"
-                className="w-full flex min-h-11 items-center justify-center gap-2 rounded-md bg-primary hover:bg-primary-hover text-ink px-6 py-2.5 text-xs font-bold uppercase tracking-wider transition-colors"
+                className="w-full flex min-h-11 items-center justify-center gap-2 rounded-md bg-primary hover:bg-primary-hover text-ink px-6 py-2.5 text-xs font-semibold uppercase tracking-wider transition-all duration-200"
               >
                 <Plus className="h-4 w-4" aria-hidden="true" />
                 Adicionar ao Cronograma
@@ -5188,37 +5188,37 @@ export default function AdminPage() {
 
             <div className="lg:col-span-2 bg-card border border-card-border rounded-xl p-6 space-y-4 text-white">
               <div className="border-b border-card-border pb-3">
-                <h3 className="text-base font-bold text-white uppercase tracking-wider">Cronograma Cadastrado</h3>
-                <p className="text-xs text-muted font-medium">Briefings, entrega de kits e programação oficial publicados para atletas.</p>
+                <h3 className="text-base font-semibold text-foreground uppercase tracking-wider">Cronograma Cadastrado</h3>
+                <p className="text-xs text-muted-soft font-medium">Briefings, entrega de kits e programação oficial publicados para atletas.</p>
               </div>
 
               {scheduleItems.length === 0 ? (
-                <p className="text-xs text-muted text-center py-8">Nenhum item de cronograma cadastrado neste evento.</p>
+                <p className="text-xs text-muted-soft text-center py-8">Nenhum item de cronograma cadastrado neste evento.</p>
               ) : (
                 <div className="space-y-3">
                   {scheduleItems.map((item) => (
-                    <div key={item.id} className="rounded-xl border border-card-border/60 bg-dark-gray/20 p-4">
+                    <div key={item.id} className="rounded-xl border border-card-border bg-dark-gray p-4">
                       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                         <div className="space-y-2">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="rounded border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary">
+                            <span className="rounded border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary">
                               {getScheduleKindLabel(item.kind)}
                             </span>
-                            <span className="rounded border border-card-border bg-dark-gray px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted">
+                            <span className="rounded border border-card-border bg-card px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted">
                               {getScheduleModeLabel(item.mode)}
                             </span>
-                            <span className="font-number text-xs font-bold text-white">{item.date} às {item.time}</span>
+                            <span className="font-number text-xs font-bold text-foreground">{item.date} às {item.time}</span>
                           </div>
-                          <h4 className="text-sm font-bold uppercase text-white">{item.title}</h4>
-                          <p className="text-xs leading-relaxed text-muted-soft">{item.description}</p>
+                          <h4 className="text-sm font-semibold uppercase text-foreground">{item.title}</h4>
+                          <p className="text-xs leading-relaxed text-muted">{item.description}</p>
                           {item.location && (
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-muted">Local/link: {item.location}</p>
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-soft">Local/link: {item.location}</p>
                           )}
                         </div>
                         <button
                           type="button"
                           onClick={() => handleDeleteScheduleItem(item.id)}
-                          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-card-border text-red-500 transition-colors hover:border-red-500 hover:text-red-400"
+                          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-card-border bg-dark-gray text-muted-soft transition-all duration-200 hover:border-red-500/50 hover:text-red-400"
                           aria-label={`Excluir item do cronograma ${item.title}`}
                         >
                           <Trash2 className="h-4 w-4" aria-hidden="true" />
@@ -5237,12 +5237,12 @@ export default function AdminPage() {
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-card-border/60 pb-4">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <span className="text-2xl font-black italic uppercase tracking-wider text-white">
-                    <span className="text-primary font-bold mr-1">CRONOGRAMA</span>
+                  <span className="text-xl font-extrabold uppercase tracking-wider text-foreground">
+                    <span className="text-primary mr-1.5">CRONOGRAMA</span>
                     DE BATERIAS
                   </span>
                 </div>
-                <p className="text-xs text-muted-soft font-medium font-sans">
+                <p className="text-xs text-muted-soft font-medium">
                   Gestão de horários e alocação de equipes para o WOD.
                 </p>
               </div>
@@ -5253,10 +5253,10 @@ export default function AdminPage() {
                   type="button"
                   disabled={isWorkoutLocked || !heatWorkoutId}
                   onClick={handleClearWorkoutHeats}
-                  className={`inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors border ${
+                  className={`inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-xs font-semibold uppercase tracking-wider transition-all duration-200 border ${
                     isWorkoutLocked || !heatWorkoutId
-                      ? 'bg-muted/10 text-muted/40 border-card-border/30 cursor-not-allowed'
-                      : 'bg-dark-gray border-card-border hover:border-red-500 hover:text-red-400 text-muted cursor-pointer'
+                      ? 'bg-card/45 text-muted-soft/40 border border-card-border/30 cursor-not-allowed'
+                      : 'bg-dark-gray border border-card-border hover:border-red-500/50 hover:text-red-400 text-foreground cursor-pointer'
                   }`}
                 >
                   <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -5269,10 +5269,10 @@ export default function AdminPage() {
                   type="button"
                   disabled={isWorkoutLocked || !heatWorkoutId}
                   onClick={handleSaveWorkoutHeats}
-                  className={`inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors ${
+                  className={`inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-xs font-semibold uppercase tracking-wider transition-all duration-200 border ${
                     isWorkoutLocked || !heatWorkoutId
-                      ? 'bg-muted/10 text-muted/40 border border-card-border/30 cursor-not-allowed'
-                      : 'bg-white text-black hover:bg-white/95 font-black cursor-pointer'
+                      ? 'bg-card/45 text-muted-soft/40 border border-card-border/30 cursor-not-allowed'
+                      : 'bg-card border border-card-border text-foreground hover:bg-elevated hover:border-primary/50 cursor-pointer'
                   }`}
                 >
                   <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
@@ -5286,14 +5286,14 @@ export default function AdminPage() {
                     <button
                       type="button"
                       disabled={true}
-                      className="inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-xs font-bold uppercase tracking-wider bg-red-500/10 border border-red-500/20 text-red-400 cursor-not-allowed"
+                      className="inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-xs font-semibold uppercase tracking-wider bg-card/45 border border-card-border/30 text-muted-soft/40 cursor-not-allowed"
                     >
                       <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                       </svg>
                       Publicar
                     </button>
-                    <div className="absolute right-0 top-full mt-1.5 hidden group-hover:block bg-black border border-card-border p-2 rounded text-[9px] text-amber-400 font-bold w-48 z-50">
+                    <div className="absolute right-0 top-full mt-1.5 hidden group-hover:block bg-[#1e2329] border border-card-border p-2 rounded text-[10px] text-primary font-semibold w-48 z-50 shadow-lg">
                       O cronograma salvo possui competidores pendentes de alocação.
                     </div>
                   </div>
@@ -5302,10 +5302,10 @@ export default function AdminPage() {
                     type="button"
                     disabled={isPublished}
                     onClick={handlePublishHeats}
-                    className={`inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors ${
+                    className={`inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-xs font-semibold uppercase tracking-wider transition-all duration-200 ${
                       isPublished
-                        ? 'bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 cursor-not-allowed'
-                        : 'bg-primary hover:bg-primary/90 text-ink cursor-pointer'
+                        ? 'bg-trading-up/10 border border-trading-up/20 text-trading-up cursor-not-allowed'
+                        : 'bg-primary hover:bg-primary-hover text-ink cursor-pointer'
                     }`}
                   >
                     <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -5320,15 +5320,15 @@ export default function AdminPage() {
             {/* Configurações do Cronograma */}
             <div className="rounded-xl border border-card-border p-5 bg-card text-white space-y-4">
               <div className="flex items-center gap-2 border-b border-card-border/50 pb-2">
-                <span className="w-1 h-4 bg-primary rounded"></span>
-                <h3 className="text-sm font-bold text-white uppercase tracking-wider font-sans">
+                <span className="w-1 h-4 bg-primary rounded-full"></span>
+                <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">
                   Configurações do Cronograma
                 </h3>
               </div>
 
               {/* Seletor do WOD */}
-              <div className="max-w-md font-sans">
-                <label htmlFor="heat-wod-select" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans text-muted-soft">Selecione a Prova *</label>
+              <div className="max-w-md">
+                <label htmlFor="heat-wod-select" className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-soft">Selecione a Prova *</label>
                 <select
                   id="heat-wod-select"
                   value={heatWorkoutId}
@@ -5390,7 +5390,7 @@ export default function AdminPage() {
                       setHeatAllocations(initialAllocations);
                     }
                   }}
-                  className="w-full rounded-md border border-card-border bg-card px-4 py-2 text-sm text-foreground focus:ring-2 focus:ring-info focus:border-transparent focus:outline-none"
+                  className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-foreground focus:ring-1 focus:ring-primary/50 focus:border-primary/50 focus:outline-none transition-all duration-200"
                 >
                   <option value="">Selecione...</option>
                   {(() => {
@@ -5440,55 +5440,55 @@ export default function AdminPage() {
 
               {/* Grid 4 colunas de Inputs */}
               {heatWorkoutId && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 pt-2 font-sans">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 pt-2">
                   <div>
-                    <label htmlFor="heat-date" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans text-muted-soft">Data da Prova *</label>
+                    <label htmlFor="heat-date" className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-soft">Data da Prova *</label>
                     <input
                       id="heat-date"
                       type="date"
                       value={heatDate}
                       onChange={(e) => setHeatDate(e.target.value)}
-                      className="w-full rounded-md border border-card-border bg-card px-4 py-2 text-sm text-foreground focus:ring-2 focus:ring-info focus:border-transparent focus:outline-none font-sans"
+                      className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-foreground focus:ring-1 focus:ring-primary/50 focus:border-primary/50 focus:outline-none transition-all duration-200 font-number"
                     />
                   </div>
 
                   <div>
-                    <label htmlFor="heat-start-time" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans text-muted-soft">Início 1ª Bateria *</label>
+                    <label htmlFor="heat-start-time" className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-soft">Início 1ª Bateria *</label>
                     <input
                       id="heat-start-time"
                       type="time"
                       value={heatStartTime}
                       onChange={(e) => setHeatStartTime(e.target.value)}
-                      className="w-full rounded-md border border-card-border bg-card px-4 py-2 text-sm text-foreground focus:ring-2 focus:ring-info focus:border-transparent focus:outline-none font-sans"
+                      className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-foreground focus:ring-1 focus:ring-primary/50 focus:border-primary/50 focus:outline-none transition-all duration-200 font-number"
                     />
                   </div>
 
                   <div>
-                    <label htmlFor="heat-duration" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans text-muted-soft">Duração Prova (min)</label>
+                    <label htmlFor="heat-duration" className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-soft">Duração Prova (min)</label>
                     <input
                       id="heat-duration"
                       type="number"
                       min="1"
                       value={heatWorkoutDuration}
                       onChange={(e) => setHeatWorkoutDuration(Number(e.target.value))}
-                      className="w-full rounded-md border border-card-border bg-card px-4 py-2 text-sm text-foreground focus:ring-2 focus:ring-info focus:border-transparent focus:outline-none font-number"
+                      className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-foreground focus:ring-1 focus:ring-primary/50 focus:border-primary/50 focus:outline-none transition-all duration-200 font-number"
                     />
                   </div>
 
                   <div>
-                    <label htmlFor="heat-interval" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans text-muted-soft">Intervalo (min)</label>
+                    <label htmlFor="heat-interval" className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-soft">Intervalo (min)</label>
                     <input
                       id="heat-interval"
                       type="number"
                       min="0"
                       value={heatIntervalDuration}
                       onChange={(e) => setHeatIntervalDuration(Number(e.target.value))}
-                      className="w-full rounded-md border border-card-border bg-card px-4 py-2 text-sm text-foreground focus:ring-2 focus:ring-info focus:border-transparent focus:outline-none font-number"
+                      className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-foreground focus:ring-1 focus:ring-primary/50 focus:border-primary/50 focus:outline-none transition-all duration-200 font-number"
                     />
                   </div>
 
                   <div>
-                    <label htmlFor="heat-count" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans text-muted-soft">Baterias</label>
+                    <label htmlFor="heat-count" className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-soft">Baterias</label>
                     <input
                       id="heat-count"
                       type="number"
@@ -5518,12 +5518,12 @@ export default function AdminPage() {
                           });
                         }
                       }}
-                      className="w-full rounded-md border border-card-border bg-card px-4 py-2 text-sm text-foreground focus:ring-2 focus:ring-info focus:border-transparent focus:outline-none font-number"
+                      className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-foreground focus:ring-1 focus:ring-primary/50 focus:border-primary/50 focus:outline-none transition-all duration-200 font-number"
                     />
                   </div>
 
                   <div>
-                    <label htmlFor="heat-capacity" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans text-muted-soft">Raias</label>
+                    <label htmlFor="heat-capacity" className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-soft">Raias</label>
                     <input
                       id="heat-capacity"
                       type="number"
@@ -5549,31 +5549,31 @@ export default function AdminPage() {
                           });
                         }
                       }}
-                      className="w-full rounded-md border border-card-border bg-card px-4 py-2 text-sm text-foreground focus:ring-2 focus:ring-info focus:border-transparent focus:outline-none font-number"
+                      className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-foreground focus:ring-1 focus:ring-primary/50 focus:border-primary/50 focus:outline-none transition-all duration-200 font-number"
                     />
                   </div>
 
                   <div>
-                    <label htmlFor="heat-warmup" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans text-muted-soft">Aquecimento (min)</label>
+                    <label htmlFor="heat-warmup" className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-soft">Aquecimento (min)</label>
                     <input
                       id="heat-warmup"
                       type="number"
                       min="0"
                       value={heatWarmupDuration}
                       onChange={(e) => setHeatWarmupDuration(Number(e.target.value))}
-                      className="w-full rounded-md border border-card-border bg-card px-4 py-2 text-sm text-foreground focus:ring-2 focus:ring-info focus:border-transparent focus:outline-none font-number"
+                      className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-foreground focus:ring-1 focus:ring-primary/50 focus:border-primary/50 focus:outline-none transition-all duration-200 font-number"
                     />
                   </div>
 
                   <div>
-                    <label htmlFor="heat-checkin" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans text-muted-soft">Fila (min)</label>
+                    <label htmlFor="heat-checkin" className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-soft">Fila (min)</label>
                     <input
                       id="heat-checkin"
                       type="number"
                       min="0"
                       value={heatCheckinDuration}
                       onChange={(e) => setHeatCheckinDuration(Number(e.target.value))}
-                      className="w-full rounded-md border border-card-border bg-card px-4 py-2 text-sm text-foreground focus:ring-2 focus:ring-info focus:border-transparent focus:outline-none font-number"
+                      className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-foreground focus:ring-1 focus:ring-primary/50 focus:border-primary/50 focus:outline-none transition-all duration-200 font-number"
                     />
                   </div>
                 </div>
@@ -5581,26 +5581,27 @@ export default function AdminPage() {
 
               {/* Botão de Gerar Cronograma e Aviso */}
               {heatWorkoutId && (
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-3 border-t border-card-border/40 font-sans">
-                  <div className="flex items-center gap-2 text-xs text-muted-soft font-sans">
-                    <span className={`h-2.5 w-2.5 rounded-full ${
-                      pendingAthletes.length === 0 && categoryAthletes.length > 0 ? 'bg-trading-up animate-pulse' : 'bg-trading-down'
-                    }`} />
-                    <span className="font-bold text-foreground uppercase tracking-wider font-sans">
-                      {pendingAthletes.length === 0 && categoryAthletes.length > 0
-                        ? 'Cronograma Concluído'
-                        : `Falta alocar ${pendingAthletes.length} atleta(s) de ${categoryAthletes.length}.`}
-                    </span>
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-3 border-t border-card-border/40">
+                  <div className="flex items-center">
+                    {pendingAthletes.length === 0 && categoryAthletes.length > 0 ? (
+                      <span className="bg-trading-up/10 text-trading-up border border-trading-up/20 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">
+                        Cronograma Concluído
+                      </span>
+                    ) : (
+                      <span className="bg-trading-down/10 text-trading-down border border-trading-down/20 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">
+                        Falta alocar {pendingAthletes.length} atleta(s) de {categoryAthletes.length}
+                      </span>
+                    )}
                   </div>
 
                   <button
                     type="button"
                     disabled={isWorkoutLocked}
                     onClick={handleSaveWorkoutHeats}
-                    className={`inline-flex items-center justify-center rounded-md px-6 py-2.5 text-xs font-black uppercase tracking-wider transition-colors ${
+                    className={`inline-flex items-center justify-center rounded-md px-6 py-2.5 text-xs font-bold uppercase tracking-wider transition-all duration-200 ${
                       isWorkoutLocked
-                        ? 'bg-muted/10 text-muted/40 border border-card-border/30 cursor-not-allowed font-sans'
-                        : 'bg-primary hover:bg-primary-hover text-ink font-black cursor-pointer font-sans'
+                        ? 'bg-card/45 text-muted-soft/40 border border-card-border/30 cursor-not-allowed'
+                        : 'bg-primary hover:bg-primary-hover text-ink cursor-pointer'
                     }`}
                   >
                     Gerar Cronograma
@@ -5626,35 +5627,35 @@ export default function AdminPage() {
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start font-sans">
+                <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
                   
                   {/* Coluna 1/3: EQUIPES PENDENTES */}
                   <div
                     onDragOver={handleDragOver}
                     onDrop={handleDropOnPendingList}
-                    className="xl:col-span-1 rounded-xl border border-card-border/50 bg-dark-gray/10 p-4 space-y-4 font-sans"
+                    className="xl:col-span-1 rounded-xl border border-card-border bg-card p-4 space-y-4"
                   >
-                    <div className="flex items-center justify-between pb-2 border-b border-card-border/30">
+                    <div className="flex items-center justify-between pb-2 border-b border-card-border">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-black uppercase text-foreground tracking-wider font-sans">
+                        <span className="text-xs font-bold uppercase text-foreground tracking-wider">
                           EQUIPES
                         </span>
-                        <span className="text-xs font-black bg-primary/20 text-primary border border-primary/20 px-2 py-0.5 rounded-full font-number">
+                        <span className="text-[11px] font-semibold bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-full font-number">
                           {pendingAthletes.length}
                         </span>
                       </div>
                     </div>
 
                     {/* Barra de Busca de Equipes */}
-                    <div className="relative font-sans">
+                    <div className="relative">
                       <input
                         type="text"
                         placeholder="Buscar equipe..."
                         value={heatAthleteSearchQuery}
                         onChange={(e) => setHeatAthleteSearchQuery(e.target.value)}
-                        className="w-full rounded-md border border-card-border bg-card px-3.5 py-2 pl-9 text-xs text-foreground placeholder:text-muted focus:ring-2 focus:ring-info focus:border-transparent focus:outline-none"
+                        className="w-full rounded-lg border border-card-border bg-dark-gray px-3.5 py-2 pl-9 text-xs text-foreground placeholder:text-muted-soft focus:ring-1 focus:ring-primary/50 focus:border-primary/50 focus:outline-none transition-all duration-200"
                       />
-                      <svg className="absolute left-3.5 top-3.5 h-3.5 w-3.5 text-muted" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                      <svg className="absolute left-3.5 top-3 h-3.5 w-3.5 text-muted-soft" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                       </svg>
                     </div>
@@ -5664,10 +5665,10 @@ export default function AdminPage() {
                       type="button"
                       disabled={isWorkoutLocked || pendingAthletes.length === 0}
                       onClick={handleAutoFillHeats}
-                      className={`w-full flex items-center justify-center gap-2 rounded-md py-2.5 text-xs font-black uppercase tracking-wider transition-colors ${
+                      className={`w-full flex items-center justify-center gap-2 rounded-md py-2.5 text-xs font-bold uppercase tracking-wider transition-all duration-200 ${
                         isWorkoutLocked || pendingAthletes.length === 0
-                          ? 'bg-muted/10 text-muted/40 cursor-not-allowed border border-card-border/30 font-sans'
-                          : 'bg-card border border-card-border/80 hover:opacity-80 text-foreground font-black cursor-pointer font-sans'
+                          ? 'bg-card/45 text-muted-soft/40 cursor-not-allowed border border-card-border/30'
+                          : 'bg-dark-gray border border-card-border text-foreground hover:bg-elevated hover:border-primary/50 cursor-pointer'
                       }`}
                     >
                       <svg className="h-3.5 w-3.5 text-primary" fill="currentColor" viewBox="0 0 24 24">
@@ -5678,7 +5679,7 @@ export default function AdminPage() {
                     </button>
 
                     {/* Lista das Equipes Pendentes */}
-                    <div className="space-y-2 max-h-[480px] overflow-y-auto pr-1 font-sans">
+                    <div className="space-y-2 max-h-[480px] overflow-y-auto pr-1">
                       {(() => {
                         const filtered = pendingAthletes.filter(ath =>
                           ath.name.toLowerCase().includes(heatAthleteSearchQuery.toLowerCase())
@@ -5686,7 +5687,7 @@ export default function AdminPage() {
 
                         if (filtered.length === 0) {
                           return (
-                            <p className="text-xs text-muted text-center py-8 italic bg-black/20 rounded-lg border border-card-border/30 font-sans font-medium text-muted-soft">
+                            <p className="text-xs text-muted-soft text-center py-8 italic bg-[#181a20]/40 rounded-lg border border-card-border/30 font-medium">
                               Nenhuma equipe pendente
                             </p>
                           );
@@ -5697,22 +5698,22 @@ export default function AdminPage() {
                             key={ath.id}
                             draggable={!isWorkoutLocked}
                             onDragStart={(e) => handleDragStart(e, ath.id)}
-                            className={`flex items-center gap-3 bg-black/40 border border-card-border/50 rounded-lg p-3 transition-all ${
+                            className={`flex items-center gap-3 bg-dark-gray border border-card-border/60 rounded-lg p-3 transition-all duration-200 ${
                               isWorkoutLocked
-                                ? 'opacity-85'
-                                : 'cursor-grab active:cursor-grabbing hover:border-primary/50 hover:bg-black/50'
+                                ? 'opacity-50'
+                                : 'cursor-grab active:cursor-grabbing hover:border-primary/45 hover:bg-elevated'
                             }`}
                           >
-                            <div className="shrink-0 flex items-center justify-center h-8 w-8 rounded-full bg-black/60 border border-card-border/60">
-                              <svg className="h-4 w-4 text-trading-down" fill="currentColor" viewBox="0 0 24 24">
+                            <div className="shrink-0 flex items-center justify-center h-8 w-8 rounded-full bg-card border border-card-border">
+                              <svg className="h-4 w-4 text-muted-soft" fill="currentColor" viewBox="0 0 24 24">
                                 <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5s-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
                               </svg>
                             </div>
                             <div className="min-w-0 flex-1 space-y-0.5">
-                              <h5 className="text-xs font-black text-foreground truncate uppercase tracking-wide font-sans">
+                              <h5 className="text-xs font-bold text-foreground truncate uppercase tracking-wider">
                                 {ath.name}
                               </h5>
-                              <p className="text-xs text-muted font-medium truncate font-sans">
+                              <p className="text-[11px] text-muted-soft font-medium truncate">
                                 {getDivisionName(ath.divisionId)} &ndash; {ath.isTeam ? 'Equipe' : 'Individual'}
                               </p>
                             </div>
@@ -5723,7 +5724,7 @@ export default function AdminPage() {
                   </div>
 
                   {/* Coluna 2/3: GRID DE BATERIAS */}
-                  <div className="xl:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-5 font-sans">
+                  <div className="xl:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-5">
                     {generatedHeatsList.map((heat) => {
                       const heatId = `heat-${heatWorkoutId}-${heat.number}`;
                       const allocatedIds = heatAllocations[heatId] || [];
@@ -5734,14 +5735,14 @@ export default function AdminPage() {
                       return (
                         <div
                           key={heatId}
-                          className="rounded-xl border border-card-border bg-card/25 p-4 space-y-3.5 flex flex-col font-sans"
+                          className="rounded-xl border border-card-border bg-card p-4 space-y-3.5 flex flex-col"
                         >
                           {/* Cabeçalho da Bateria */}
-                          <div className="flex items-center justify-between border-b border-card-border/50 pb-2">
-                            <h4 className="text-lg font-black italic uppercase tracking-wider text-trading-down font-sans">
+                          <div className="flex items-center justify-between border-b border-card-border pb-2">
+                            <h4 className="text-sm font-bold uppercase tracking-wider text-foreground">
                               Bateria {heat.number}
                             </h4>
-                            <div className="flex items-center gap-1 bg-black/40 border border-card-border px-2 py-0.5 rounded-full text-xs font-bold text-muted font-sans">
+                            <div className="flex items-center gap-1 bg-dark-gray border border-card-border px-2.5 py-0.5 rounded-full text-[11px] font-semibold text-foreground font-number">
                               <svg className="h-3 w-3 text-muted-soft" fill="currentColor" viewBox="0 0 24 24">
                                 <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5s-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5z" />
                               </svg>
@@ -5750,30 +5751,30 @@ export default function AdminPage() {
                           </div>
 
                           {/* Horários da Bateria na Horizontal */}
-                          <div className="grid grid-cols-4 bg-black/50 border border-card-border/60 rounded-lg p-2 text-center text-xs font-bold uppercase gap-2 font-sans font-medium">
+                          <div className="grid grid-cols-4 bg-dark-gray border border-card-border/80 rounded-lg p-2 text-center gap-1">
                             <div className="flex flex-col justify-center min-w-0">
-                              <span className="text-xs text-muted font-extrabold block truncate">Aquecimento</span>
-                              <span className="font-number font-black text-foreground text-sm mt-0.5">{heat.warmup}</span>
+                              <span className="text-[10px] text-muted-soft font-bold uppercase tracking-wider block truncate">Aquecimento</span>
+                              <span className="font-number font-bold text-foreground text-xs mt-0.5">{heat.warmup}</span>
                             </div>
                             <div className="flex flex-col justify-center min-w-0">
-                              <span className="text-xs text-muted font-extrabold block truncate">Fila</span>
-                              <span className="font-number font-black text-foreground text-sm mt-0.5">{heat.fila}</span>
+                              <span className="text-[10px] text-muted-soft font-bold uppercase tracking-wider block truncate">Fila</span>
+                              <span className="font-number font-bold text-foreground text-xs mt-0.5">{heat.fila}</span>
                             </div>
                             <div className="flex flex-col justify-center min-w-0 items-center">
-                              <span className="text-xs text-muted font-extrabold block truncate">Início</span>
+                              <span className="text-[10px] text-muted-soft font-bold uppercase tracking-wider block truncate">Início</span>
                               <div className="flex items-center gap-1 mt-0.5">
                                 <span className="h-1.5 w-1.5 rounded-full bg-trading-up shrink-0" />
-                                <span className="font-number font-black text-primary text-sm">{heat.inicio}</span>
+                                <span className="font-number font-extrabold text-primary text-xs">{heat.inicio}</span>
                               </div>
                             </div>
                             <div className="flex flex-col justify-center min-w-0">
-                              <span className="text-xs text-muted font-extrabold block truncate">Final</span>
-                              <span className="font-number font-black text-foreground text-sm mt-0.5">{heat.final}</span>
+                              <span className="text-[10px] text-muted-soft font-bold uppercase tracking-wider block truncate">Final</span>
+                              <span className="font-number font-bold text-foreground text-xs mt-0.5">{heat.final}</span>
                             </div>
                           </div>
 
                           {/* Grid de Raias (2 colunas) */}
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 font-sans">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                             {Array.from({ length: heatCapacity }).map((_, laneIdx) => {
                               const athleteId = allocatedIds[laneIdx];
                               const athlete = athleteId ? athletes.find(a => a.id === athleteId) : null;
@@ -5783,9 +5784,9 @@ export default function AdminPage() {
                                   key={laneIdx}
                                   onDragOver={handleDragOver}
                                   onDrop={(e) => handleDropOnLane(e, heatId, laneIdx)}
-                                  className="space-y-1 font-sans"
+                                  className="space-y-1"
                                 >
-                                  <span className="text-[9px] font-extrabold uppercase text-muted tracking-wider block font-sans">
+                                  <span className="text-[10px] font-semibold uppercase text-muted-soft tracking-wider block">
                                     Raia {laneIdx + 1}
                                   </span>
 
@@ -5793,13 +5794,13 @@ export default function AdminPage() {
                                     <div
                                       draggable={!isWorkoutLocked}
                                       onDragStart={(e) => handleDragStart(e, athlete.id)}
-                                      className="flex items-center justify-between bg-black/60 border border-card-border/80 rounded-lg p-2.5 text-xs transition-all hover:border-primary/40 cursor-grab active:cursor-grabbing font-sans"
+                                      className="flex items-center justify-between bg-dark-gray border border-card-border rounded-lg p-2 text-xs transition-all duration-200 hover:border-primary/45 cursor-grab active:cursor-grabbing"
                                     >
-                                      <div className="flex items-center gap-2 truncate min-w-0">
-                                        <svg className="h-3.5 w-3.5 text-trading-down shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                                      <div className="flex items-center gap-1.5 truncate min-w-0">
+                                        <svg className="h-3.5 w-3.5 text-muted-soft shrink-0" fill="currentColor" viewBox="0 0 24 24">
                                           <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z" />
                                         </svg>
-                                        <span className="font-black text-foreground truncate uppercase tracking-wider text-xs font-sans">
+                                        <span className="font-semibold text-foreground truncate uppercase tracking-wider text-[11px]">
                                           {athlete.name}
                                         </span>
                                       </div>
@@ -5807,16 +5808,15 @@ export default function AdminPage() {
                                         <button
                                           type="button"
                                           onClick={() => handleRemoveAthleteFromHeatLane(heatId, laneIdx)}
-                                          className="text-trading-down/70 hover:text-trading-down p-0.5 transition-colors shrink-0 ml-1.5 cursor-pointer font-sans"
+                                          className="text-muted-soft hover:text-red-500 p-0.5 transition-colors shrink-0 ml-1.5 cursor-pointer"
                                           title="Desalocar raia"
                                         >
                                           <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                                          Limpar
                                         </button>
                                       )}
                                     </div>
                                   ) : (
-                                    <div className="flex items-center justify-center border border-dashed border-card-border/60 rounded-lg p-2.5 text-muted/50 text-xs uppercase font-bold tracking-wider font-sans bg-black/10 min-h-[38px]">
+                                    <div className="flex items-center justify-center border border-dashed border-card-border/60 bg-dark-gray/10 rounded-lg p-2 text-muted-soft/40 text-[10px] uppercase font-bold tracking-wider min-h-[38px]">
                                       Raia Vazia
                                     </div>
                                   )}
@@ -8197,7 +8197,42 @@ export default function AdminPage() {
                     </div>
 
                     {/* Abas Internas */}
-                    <div className="flex flex-row overflow-x-auto border-b border-card-border pb-px scrollbar-none gap-2">
+                    {/* Versão Mobile (Select Dropdown) */}
+                    <div className="md:hidden pb-3">
+                      <label htmlFor="admin-event-tabs-select" className="sr-only">Selecione a Seção</label>
+                      <select
+                        id="admin-event-tabs-select"
+                        value={activeEventTab}
+                        onChange={(e) => {
+                          const tabId = e.target.value;
+                          setActiveEventTab(tabId as 'info' | 'categories' | 'wods' | 'schedule' | 'registrations' | 'scores' | 'leaderboard' | 'contestations');
+                          if (tabId === 'info') {
+                            initEventEditForm(selectedEventToManage);
+                          }
+                        }}
+                        className="w-full rounded-md border border-card-border bg-card px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-foreground focus:ring-1 focus:ring-primary/50 focus:border-primary/50 focus:outline-none transition-all duration-200"
+                      >
+                        {[
+                          { id: 'info', label: 'Informações Gerais' },
+                          { id: 'categories', label: 'Categorias' },
+                          { id: 'wods', label: selectedEventToManage.eventType === 'fitness_racing' ? 'Configuração do Percurso' : 'Provas (WODs)' },
+                          { id: 'schedule', label: 'Cronograma' },
+                          { id: 'registrations', label: 'Inscrições' },
+                          { id: 'scores', label: selectedEventToManage.eventType === 'fitness_racing' ? 'Lançar Resultados' : 'Lançamento de Scores' },
+                          { id: 'leaderboard', label: 'Leaderboard' },
+                          ...((selectedEventToManage.eventType || 'functional_fitness') === 'functional_fitness'
+                            ? [{ id: 'contestations', label: 'Contestações' }]
+                            : [])
+                        ].map(tab => (
+                          <option key={tab.id} value={tab.id} className="bg-card text-foreground">
+                            {tab.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Versão Desktop (Abas Horizontais) */}
+                    <div className="hidden md:flex flex-row overflow-x-auto border-b border-card-border pb-px scrollbar-none gap-2">
                       {[
                         { id: 'info', label: 'Informações Gerais' },
                         { id: 'categories', label: 'Categorias' },
@@ -8218,10 +8253,10 @@ export default function AdminPage() {
                               initEventEditForm(selectedEventToManage);
                             }
                           }}
-                          className={`border-b-2 px-4 py-2.5 text-xs font-bold uppercase tracking-wider whitespace-nowrap transition-colors font-sans ${
+                          className={`border-b-2 px-4 py-2.5 text-xs font-semibold uppercase tracking-wider whitespace-nowrap transition-all duration-200 font-sans ${
                             activeEventTab === tab.id
-                              ? 'border-primary text-primary'
-                              : 'border-transparent text-muted hover:text-white'
+                              ? 'border-primary text-primary font-bold'
+                              : 'border-transparent text-muted hover:text-foreground'
                           }`}
                         >
                           {tab.label}
