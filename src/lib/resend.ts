@@ -1,4 +1,5 @@
-import { Registration, Athlete, Event } from '@/types';
+import { Registration, Athlete, Event, ContestationStatus } from '@/types';
+import { getContestationStatusLabel } from '@/lib/contestations';
 
 type ResendApiError = {
   status: number;
@@ -475,6 +476,121 @@ export async function sendRegistrationEmail(
     return { success: true, messageId: data.id };
   } catch (err) {
     console.error('[Resend Email Service] Erro crítico ao processar requisição do Resend:', err);
+    return { success: false, error: err };
+  }
+}
+
+export async function sendContestationStatusEmail(params: {
+  toEmail: string;
+  athleteName: string;
+  eventName: string;
+  workoutName: string;
+  heatLabel: string;
+  lane: string;
+  status: ContestationStatus;
+  creditRefunded: boolean;
+  managerNote?: string;
+}) {
+  const apiKey = getResendApiKey();
+  if (!apiKey) {
+    console.error('[Resend Contestation] RESENDAPI_KEY não configurada no ambiente.');
+    return { success: false, error: 'Chave de API do Resend ausente.' };
+  }
+
+  const safeAthleteName = escapeHtml(params.athleteName || 'Atleta');
+  const safeEventName = escapeHtml(params.eventName || 'Evento WODArena');
+  const safeWorkoutName = escapeHtml(params.workoutName || 'Prova');
+  const safeHeatLabel = escapeHtml(params.heatLabel || 'Bateria informada');
+  const safeLane = escapeHtml(params.lane || '-');
+  const safeManagerNote = params.managerNote ? escapeHtml(params.managerNote) : '';
+  const statusLabel = getContestationStatusLabel(params.status);
+
+  const creditMessage = params.status === 'approved'
+    ? (params.creditRefunded
+      ? 'Seu credito utilizado foi devolvido pela organizacao.'
+      : 'Sua contestacao foi deferida, mas o credito utilizado segue consumido conforme regra definida pela organizacao.')
+    : params.status === 'rejected'
+      ? 'Sua contestacao foi indeferida e o credito utilizado foi perdido.'
+      : 'Sua contestacao segue em analise pela organizacao.';
+
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Atualização de contestação - WODArena</title>
+      <style>
+        body { margin: 0; padding: 0; background: #f5f5f5; color: #181a20; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+        .wrapper { width: 100%; padding: 32px 0; background: #f5f5f5; }
+        .container { max-width: 560px; margin: 0 auto; background: #ffffff; border: 1px solid #eaecef; border-radius: 12px; overflow: hidden; }
+        .header { background: #181a20; border-bottom: 3px solid #FCD535; padding: 24px; text-align: center; }
+        .brand { color: #FCD535; font-size: 20px; font-weight: 900; letter-spacing: 0.14em; text-transform: uppercase; }
+        .body { padding: 32px 24px; }
+        .eyebrow { display: inline-block; margin-bottom: 14px; border: 1px solid #d4a900; background: #fff7d6; color: #8a6a00; border-radius: 4px; padding: 6px 10px; font-size: 10px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
+        h1 { margin: 0 0 10px; font-size: 23px; line-height: 1.2; color: #181a20; text-transform: uppercase; }
+        p { margin: 0 0 16px; color: #707a8a; font-size: 14px; line-height: 1.55; }
+        .info { width: 100%; border-collapse: collapse; margin-top: 18px; }
+        .info td { padding: 8px 0; vertical-align: top; font-size: 13px; }
+        .label { color: #707a8a; font-weight: 800; text-transform: uppercase; font-size: 10px; letter-spacing: 0.08em; width: 36%; }
+        .value { color: #181a20; font-weight: 700; }
+        .notice { border: 1px solid #eaecef; background: #fafafa; border-radius: 8px; padding: 14px; color: #707a8a; font-size: 12px; line-height: 1.5; }
+        .footer { border-top: 1px solid #eaecef; background: #fafafa; padding: 22px 24px; text-align: center; color: #707a8a; font-size: 11px; line-height: 1.5; }
+      </style>
+    </head>
+    <body>
+      <div class="wrapper">
+        <div class="container">
+          <div class="header"><div class="brand">WODArena</div></div>
+          <div class="body">
+            <span class="eyebrow">Contestacao de prova</span>
+            <h1>Status atualizado</h1>
+            <p>Olá, <strong>${safeAthleteName}</strong>. Houve uma atualização na sua contestação registrada para o evento <strong>${safeEventName}</strong>.</p>
+            <table class="info">
+              <tr><td class="label">Status</td><td class="value">${statusLabel}</td></tr>
+              <tr><td class="label">Prova</td><td class="value">${safeWorkoutName}</td></tr>
+              <tr><td class="label">Bateria</td><td class="value">${safeHeatLabel}</td></tr>
+              <tr><td class="label">Raia</td><td class="value">${safeLane}</td></tr>
+            </table>
+            <div class="notice">
+              ${escapeHtml(creditMessage)}
+              ${safeManagerNote ? `<br><br><strong>Observacao da organizacao:</strong><br>${safeManagerNote}` : ''}
+            </div>
+          </div>
+          <div class="footer">
+            Esta mensagem foi enviada automaticamente pela WODArena para manter voce atualizado sobre o recurso aberto no painel do atleta.
+          </div>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: getResendFrom(),
+        to: params.toEmail,
+        subject: `Atualizacao da contestacao - ${params.eventName}`,
+        html: htmlContent,
+      }),
+    });
+
+    if (!res.ok) {
+      const errorData = await parseResendError(res);
+      console.error('[Resend Contestation] Erro na API do Resend:', errorData);
+      return { success: false, error: errorData };
+    }
+
+    const data = await res.json();
+    return { success: true, messageId: data.id };
+  } catch (err) {
+    console.error('[Resend Contestation] Erro crítico ao enviar e-mail:', err);
     return { success: false, error: err };
   }
 }

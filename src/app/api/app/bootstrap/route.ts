@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseAdmin, getRequestSession } from '@/lib/serverSecurity';
+import { mapContestationFromDb } from '@/lib/contestations';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AthleteRow = Record<string, any>;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type RegistrationRow = Record<string, any>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ContestationRow = Record<string, any>;
 
 const sanitizePublicAthlete = (athlete: AthleteRow) => ({
   id: athlete.id,
@@ -43,6 +46,7 @@ export async function GET(request: Request) {
       athletesResult,
       scoresResult,
       registrationsResult,
+      contestationsResult,
       couponsResult,
       eventsResult,
       divisionsResult,
@@ -58,6 +62,7 @@ export async function GET(request: Request) {
       supabaseAdmin.from('athletes').select('*'),
       supabaseAdmin.from('scores').select('*'),
       supabaseAdmin.from('registrations').select('*'),
+      session ? supabaseAdmin.from('contestations').select('*') : Promise.resolve({ data: [] }),
       session ? supabaseAdmin.from('coupons').select('*') : Promise.resolve({ data: [] }),
       supabaseAdmin
         .from('events')
@@ -81,6 +86,7 @@ export async function GET(request: Request) {
         athletes: (athletesResult.data || []).filter(athlete => (divisionsResult.data || []).some(division => division.id === athlete.division_id && eventIds.has(division.event_id))),
         scores: scoresResult.data || [],
         registrations: (registrationsResult.data || []).filter(registration => eventIds.has(registration.event_id)),
+        contestations: (contestationsResult.data || []).filter(contestation => eventIds.has(contestation.event_id)),
         coupons: (couponsResult.data || []).filter(coupon => eventIds.has(coupon.event_id)),
         events: eventsResult.data || [],
         divisions: divisionsResult.data || [],
@@ -93,12 +99,19 @@ export async function GET(request: Request) {
     if (session?.role === 'athlete') {
       const ownRegistrations = (registrationsResult.data || []).filter(registration => registration.user_id === session.id);
       const ownAthleteIds = new Set(ownRegistrations.map(registration => registration.athlete_id));
+      const ownContestationIds = new Set(
+        (contestationsResult.data || [])
+          .map(mapContestationFromDb)
+          .filter(contestation => contestation.userId === session.id)
+          .map(contestation => contestation.id)
+      );
       return NextResponse.json({
         currentUser: session,
         users: usersResult.data || [],
         athletes: (athletesResult.data || []).map(athlete => ownAthleteIds.has(athlete.id) ? athlete : sanitizePublicAthlete(athlete)),
         scores: scoresResult.data || [],
         registrations: ownRegistrations,
+        contestations: (contestationsResult.data || []).filter((contestation: ContestationRow) => ownContestationIds.has(String(contestation.id))),
         coupons: [],
         events: eventsResult.data || [],
         divisions: divisionsResult.data || [],
@@ -116,6 +129,7 @@ export async function GET(request: Request) {
       registrations: !session
         ? (registrationsResult.data || []).map(sanitizePublicRegistration)
         : registrationsResult.data || [],
+      contestations: session ? contestationsResult.data || [] : [],
       coupons: couponsResult.data || [],
       events: eventsResult.data || [],
       divisions: divisionsResult.data || [],

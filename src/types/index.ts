@@ -19,6 +19,8 @@ export type RegistrationPaymentStatus =
   | 'payment_in_review'
   | 'payment_cancelled';
 
+export type ContestationStatus = 'under_review' | 'approved' | 'rejected';
+
 export interface CourseStage {
   id: string;
   name: string;
@@ -168,6 +170,26 @@ export interface Registration {
   paymentStatusDetail?: string;
   paymentErrorMessage?: string;
   updatedAt?: string;
+}
+
+export interface Contestation {
+  id: string;
+  eventId: string;
+  registrationId: string;
+  userId: string;
+  athleteId?: string;
+  workoutId: string;
+  heatId?: string;
+  heatNumber?: number;
+  lane: string;
+  description: string;
+  status: ContestationStatus;
+  creditConsumed: boolean;
+  creditRefunded: boolean;
+  managerNote?: string;
+  createdAt: string;
+  updatedAt?: string;
+  resolvedAt?: string;
 }
 
 export interface Coupon {

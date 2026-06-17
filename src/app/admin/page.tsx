@@ -42,7 +42,8 @@ const RegDetail = ({ label, value, accent = false }: { label: string; value: str
     </p>
   </div>
 );
-import { WorkoutType, CategoryType, EventStatus, Event, Athlete, Division, CourseStage, EventScheduleItemKind, EventScheduleMode, Score, EventScheduleItem, Registration } from '@/types';
+import { WorkoutType, CategoryType, EventStatus, Event, Athlete, Division, CourseStage, EventScheduleItemKind, EventScheduleMode, Score, EventScheduleItem, Registration, Contestation } from '@/types';
+import { CONTESTATION_CREDITS_LIMIT, getContestationStatusLabel } from '@/lib/contestations';
 import { FITNESS_RACING_AGE_GROUPS, FITNESS_RACING_STATION_LIBRARY, buildFitnessRacingCourse, getAgeGroupFromDate } from '@/lib/fitnessRacing';
 
 const currencyFormatter = new Intl.NumberFormat('pt-BR', {
@@ -97,10 +98,10 @@ const formatLongDate = (dateStr: string): string => {
 
 export default function AdminPage() {
   const {
-    events, athletes, scores, registrations, coupons, currentUser,
+    events, athletes, scores, registrations, contestations, coupons, currentUser,
     login, logout, addEvent, addDivision, updateDivision,
     addWorkout, deleteEvent, deleteDivision, deleteWorkout, submitScore, submitScoresBulk, updateEvent, getLeaderboard, registerTicket, saveCourseLayout, updateWorkout,
-    refreshRegistrations, updateRegistrationDetails, addCoupon, updateCoupon, toggleCouponActive, incrementCouponUsage, changePassword
+    refreshRegistrations, updateRegistrationDetails, addCoupon, updateCoupon, toggleCouponActive, incrementCouponUsage, changePassword, updateAthleteProfile
   } = useApp();
 
   // 1. Estados de Login (vinculado ao currentUser do contexto)
@@ -412,7 +413,30 @@ export default function AdminPage() {
 
   // Estado do evento sendo gerenciado internamente
   const [selectedEventToManage, setSelectedEventToManage] = useState<Event | null>(null);
-  const [activeEventTab, setActiveEventTab] = useState<'info' | 'categories' | 'wods' | 'schedule' | 'registrations' | 'scores' | 'leaderboard'>('info');
+  const [activeEventTab, setActiveEventTab] = useState<'info' | 'categories' | 'wods' | 'schedule' | 'registrations' | 'scores' | 'leaderboard' | 'contestations'>('info');
+
+  // Área do Atleta: navegação lateral entre seções
+  const [activeAthleteSection, setActiveAthleteSection] = useState<'profile' | 'events' | 'contestations'>('profile');
+
+  // Formulário de perfil do atleta — null significa "ainda não editado", usa-se o valor padrão derivado
+  const [athleteProfileNameInput, setAthleteProfileNameInput] = useState<string | null>(null);
+  const [athleteProfileBirthInput, setAthleteProfileBirthInput] = useState<string | null>(null);
+  const [savingAthleteProfile, setSavingAthleteProfile] = useState(false);
+
+  // Fluxo de contestação (atleta)
+  const [contestRegistrationId, setContestRegistrationId] = useState('');
+  const [contestWorkoutId, setContestWorkoutId] = useState('');
+  const [contestHeatId, setContestHeatId] = useState('');
+  const [contestLane, setContestLane] = useState('');
+  const [contestDescription, setContestDescription] = useState('');
+  const [submittingContestation, setSubmittingContestation] = useState(false);
+
+  // Revisão de contestações (gestor)
+  const [reviewContestationId, setReviewContestationId] = useState<string | null>(null);
+  const [reviewStatus, setReviewStatus] = useState<'under_review' | 'approved' | 'rejected'>('under_review');
+  const [reviewCreditRefunded, setReviewCreditRefunded] = useState(false);
+  const [reviewManagerNote, setReviewManagerNote] = useState('');
+  const [savingReviewDecision, setSavingReviewDecision] = useState(false);
 
   // 3. Estados dos Formulários
   // Cadastro de Evento (Novo Evento)
@@ -2445,6 +2469,104 @@ export default function AdminPage() {
     const failedPayments = athleteRegistrations.filter(reg => reg.paymentStatus === 'payment_failed');
     const pendingPayments = athleteRegistrations.filter(reg => reg.paymentStatus === 'payment_pending' || reg.paymentStatus === 'payment_in_review');
 
+    // Valores padrão do formulário de perfil (derivados em render, sem setState em effect)
+    const linkedAthlete = athletes.find(
+      ath => ath.id === currentUser.id || (ath.email || '').toLowerCase() === currentUser.email.toLowerCase()
+    );
+    const athleteProfileName = athleteProfileNameInput ?? (currentUser.name || '');
+    const athleteProfileBirthDate = athleteProfileBirthInput ?? (linkedAthlete?.birthDate || '');
+
+    // Contestações do atleta autenticado
+    const athleteContestations = contestations
+      .filter(contestation => contestation.userId === currentUser.id)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    // Inscrições elegíveis para contestação (Functional Fitness com pagamento aprovado)
+    const contestableRegistrations = athleteRegistrations.filter(reg => {
+      const event = getRegistrationEvent(reg);
+      return reg.paymentStatus === 'payment_approved' && (event?.eventType || 'functional_fitness') === 'functional_fitness';
+    });
+
+    const selectedContestRegistration = contestableRegistrations.find(reg => reg.id === contestRegistrationId) || null;
+    const selectedContestEvent = selectedContestRegistration ? getRegistrationEvent(selectedContestRegistration) : null;
+    const contestWorkouts = selectedContestEvent?.workouts || [];
+    const contestHeats = (selectedContestEvent?.scheduleItems || []).filter(
+      item => item.kind === 'heat' && item.workoutId === contestWorkoutId
+    );
+
+    const handleSaveAthleteProfile = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!updateAthleteProfile) return;
+      const trimmedName = athleteProfileName.trim();
+      const trimmedBirth = athleteProfileBirthDate.trim();
+
+      if (!trimmedName) {
+        setAdminNotice({ text: 'Informe o nome completo para salvar o perfil.', tone: 'error' });
+        return;
+      }
+      if (trimmedBirth && !/^\d{4}-\d{2}-\d{2}$/.test(trimmedBirth)) {
+        setAdminNotice({ text: 'A data de nascimento deve estar no formato YYYY-MM-DD.', tone: 'error' });
+        return;
+      }
+
+      setSavingAthleteProfile(true);
+      setAdminNotice(null);
+      try {
+        const success = await updateAthleteProfile({ fullName: trimmedName, birthDate: trimmedBirth });
+        setAdminNotice(
+          success
+            ? { text: 'Perfil atualizado com sucesso.', tone: 'success' }
+            : { text: 'Não foi possível atualizar o perfil. Tente novamente.', tone: 'error' }
+        );
+      } finally {
+        setSavingAthleteProfile(false);
+      }
+    };
+
+    const handleSubmitContestation = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!contestRegistrationId || !contestWorkoutId || !contestHeatId || !contestLane.trim() || !contestDescription.trim()) {
+        setAdminNotice({ text: 'Preencha prova, bateria, raia e descrição para contestar.', tone: 'error' });
+        return;
+      }
+
+      setSubmittingContestation(true);
+      setAdminNotice(null);
+      try {
+        const response = await fetch('/api/contestations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            eventId: selectedContestEvent?.id,
+            registrationId: contestRegistrationId,
+            workoutId: contestWorkoutId,
+            heatId: contestHeatId,
+            lane: contestLane.trim(),
+            description: contestDescription.trim()
+          })
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload.success) {
+          setAdminNotice({ text: payload.error || 'Não foi possível registrar a contestação.', tone: 'error' });
+          return;
+        }
+        setAdminNotice({ text: payload.message || 'Contestação registrada com sucesso.', tone: 'success' });
+        setContestWorkoutId('');
+        setContestHeatId('');
+        setContestLane('');
+        setContestDescription('');
+        await refreshRegistrations();
+      } finally {
+        setSubmittingContestation(false);
+      }
+    };
+
+    const athleteSections: { id: 'profile' | 'events' | 'contestations'; label: string; icon: typeof Settings }[] = [
+      { id: 'profile', label: 'Dados do Perfil', icon: Settings },
+      { id: 'events', label: 'Historico de Eventos', icon: Calendar },
+      { id: 'contestations', label: 'Contestacoes de Prova', icon: ShieldAlert }
+    ];
+
     return (
       <div className="min-h-screen bg-background text-white">
         <section className="bg-card border-b border-card-border py-6">
@@ -2509,111 +2631,375 @@ export default function AdminPage() {
               <h3 className="mt-2 text-2xl font-bold font-number text-primary">{pendingPayments.length}</h3>
             </div>
             <div className="rounded-xl border border-card-border bg-card p-5">
-              <p className="text-[10px] uppercase font-bold text-muted tracking-wider font-sans">Falhas no cartão</p>
-              <h3 className="mt-2 text-2xl font-bold font-number text-trading-down">{failedPayments.length}</h3>
+              <p className="text-[10px] uppercase font-bold text-muted tracking-wider font-sans">Contestações</p>
+              <h3 className="mt-2 text-2xl font-bold font-number text-trading-down">{athleteContestations.length}</h3>
             </div>
           </div>
 
-          <section className="rounded-xl border border-card-border bg-card p-5 sm:p-6 space-y-5">
-            <div className="border-b border-card-border pb-4">
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary font-sans">Minhas inscrições</p>
-              <h3 className="mt-1 text-2xl font-bold tracking-tight text-white uppercase">Registros de evento</h3>
-            </div>
-
-            {athleteRegistrations.length === 0 ? (
-              <p className="py-8 text-center text-sm text-muted">Nenhuma inscrição encontrada para este e-mail.</p>
-            ) : (
-              <div className="space-y-4">
-                {athleteRegistrations.map(reg => {
-                  const event = getRegistrationEvent(reg);
-                  const division = event?.divisions.find(div => div.id === reg.divisionId);
-                  const statusMeta = getPaymentStatusMeta(reg.paymentStatus);
+          <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-6">
+            {/* Navegação lateral da Área do Atleta */}
+            <aside className="lg:sticky lg:top-6 self-start">
+              <nav className="flex flex-row lg:flex-col gap-2 overflow-x-auto rounded-xl border border-card-border bg-card p-3">
+                {athleteSections.map(section => {
+                  const Icon = section.icon;
+                  const isActive = activeAthleteSection === section.id;
                   return (
-                    <article key={reg.id} className="rounded-lg border border-card-border bg-dark-gray/30 p-4 space-y-4">
-                      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-                        <div className="space-y-2">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h4 className="text-base font-bold uppercase tracking-wider text-white">{event?.name || 'Evento não encontrado'}</h4>
-                            <span className={`rounded border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${getPaymentStatusClassName(statusMeta.tone)}`}>
-                              {statusMeta.label}
-                            </span>
-                          </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs text-muted">
-                            <p><span className="font-bold text-white">Atleta:</span> {reg.athleteName}</p>
-                            <p><span className="font-bold text-white">Categoria:</span> {division?.name || reg.ticketType}</p>
-                            <p><span className="font-bold text-white">Valor:</span> {currencyFormatter.format(reg.totalPaid)}</p>
-                            <p><span className="font-bold text-white">Inscrição:</span> {reg.id}</p>
-                            <p><span className="font-bold text-white">Data:</span> {new Date(reg.createdAt).toLocaleDateString('pt-BR')}</p>
-                            <p><span className="font-bold text-white">Pagamento:</span> {reg.paymentMethod || 'Não informado'}</p>
-                          </div>
-                          {reg.paymentStatus === 'payment_failed' && (
-                            <p className="rounded-md border border-trading-down/30 bg-trading-down/10 px-3 py-2 text-xs leading-5 text-trading-down">
-                              {reg.paymentErrorMessage || 'Pagamento não processado. Sua participação depende da regularização do pagamento.'}
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex flex-col sm:flex-row lg:flex-col gap-2 lg:min-w-44">
-                          {(reg.paymentStatus === 'payment_failed' || reg.paymentStatus === 'payment_pending') && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const athlete = getRegistrationAthlete(reg);
-                                  const event = getRegistrationEvent(reg);
-                                  if (event) {
-                                    setPayingPixRegistration({ reg, event, athlete });
-                                  }
-                                }}
-                                className="flex min-h-10 items-center justify-center gap-1.5 rounded-md bg-trading-up hover:bg-trading-up/90 px-4 py-2 text-xs font-bold uppercase tracking-wider text-ink transition-colors"
-                              >
-                                <QrCode className="h-3.5 w-3.5" aria-hidden="true" />
-                                <span>Pagar com Pix</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleRedirectToCardPreference(reg)}
-                                disabled={redirectingRegistrationId === reg.id}
-                                className="flex min-h-10 items-center justify-center gap-1.5 rounded-md bg-primary px-4 py-2 text-xs font-bold uppercase tracking-wider text-ink transition-colors hover:bg-primary-hover disabled:opacity-60"
-                              >
-                                {redirectingRegistrationId === reg.id ? (
-                                  <>
-                                    <div className="w-3.5 h-3.5 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
-                                    <span>Redirecionando...</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <CreditCard className="h-3.5 w-3.5" aria-hidden="true" />
-                                    <span>Pagar com Cartão</span>
-                                  </>
-                                )}
-                              </button>
-                            </>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => handleOpenAthleteVoucher(reg)}
-                            className="flex min-h-10 items-center justify-center gap-1.5 rounded-md border border-card-border bg-card px-4 py-2 text-xs font-bold uppercase tracking-wider text-white transition-colors hover:border-primary"
-                          >
-                            <ReceiptText className="h-3.5 w-3.5" aria-hidden="true" />
-                            <span>Visualizar</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleResendRegistrationVoucher(reg)}
-                            disabled={resendingRegistrationId === reg.id}
-                            className="flex min-h-10 items-center justify-center gap-1.5 rounded-md bg-primary px-4 py-2 text-xs font-bold uppercase tracking-wider text-ink transition-colors hover:bg-primary-hover disabled:opacity-60"
-                          >
-                            <Mail className="h-3.5 w-3.5" aria-hidden="true" />
-                            <span>{resendingRegistrationId === reg.id ? 'Enviando...' : 'Solicitar 2ª via'}</span>
-                          </button>
-                        </div>
-                      </div>
-                    </article>
+                    <button
+                      key={section.id}
+                      type="button"
+                      onClick={() => setActiveAthleteSection(section.id)}
+                      className={`flex min-h-11 items-center gap-2 whitespace-nowrap rounded-md px-4 py-2.5 text-xs font-bold uppercase tracking-wider transition-colors font-sans ${
+                        isActive
+                          ? 'bg-primary text-ink'
+                          : 'text-muted hover:bg-dark-gray hover:text-white'
+                      }`}
+                    >
+                      <Icon className="h-4 w-4" aria-hidden="true" />
+                      <span>{section.label}</span>
+                    </button>
                   );
                 })}
-              </div>
-            )}
-          </section>
+              </nav>
+            </aside>
+
+            <div className="space-y-6">
+              {/* Seção: Dados do Perfil */}
+              {activeAthleteSection === 'profile' && (
+                <section id="activeAthleteSection-profile" className="rounded-xl border border-card-border bg-card p-5 sm:p-6 space-y-5">
+                  <div className="border-b border-card-border pb-4">
+                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary font-sans">Dados do Perfil</p>
+                    <h3 className="mt-1 text-2xl font-bold tracking-tight text-white uppercase">Informacoes da conta</h3>
+                    <p className="mt-1 text-xs text-muted font-medium">Mantenha seu nome e data de nascimento atualizados. Essas informacoes sao usadas em inscricoes e leaderboards.</p>
+                  </div>
+
+                  <form onSubmit={handleSaveAthleteProfile} className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label htmlFor="athlete-profile-name" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Nome completo *</label>
+                        <input
+                          id="athlete-profile-name"
+                          type="text"
+                          required
+                          value={athleteProfileName}
+                          onChange={(e) => setAthleteProfileNameInput(e.target.value)}
+                          placeholder="Ex: Maria Souza"
+                          className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white placeholder:text-muted focus:border-primary/50 focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="athlete-profile-birth" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Data de nascimento</label>
+                        <input
+                          id="athlete-profile-birth"
+                          type="date"
+                          value={athleteProfileBirthDate}
+                          onChange={(e) => setAthleteProfileBirthInput(e.target.value)}
+                          className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white placeholder:text-muted focus:border-primary/50 focus:outline-none"
+                        />
+                        <p className="mt-1 text-[10px] text-muted">Formato YYYY-MM-DD.</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">E-mail</label>
+                        <input
+                          type="email"
+                          value={currentUser.email}
+                          disabled
+                          className="w-full rounded-md border border-card-border bg-background px-4 py-2 text-sm text-muted"
+                        />
+                      </div>
+                      <div className="flex items-end">
+                        <button
+                          type="submit"
+                          disabled={savingAthleteProfile}
+                          className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-md bg-primary px-4 py-2 text-xs font-bold uppercase tracking-wider text-ink transition-colors hover:bg-primary-hover disabled:opacity-60"
+                        >
+                          <ClipboardCheck className="h-3.5 w-3.5" aria-hidden="true" />
+                          <span>{savingAthleteProfile ? 'Salvando...' : 'Salvar perfil'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                </section>
+              )}
+
+              {/* Seção: Historico de Eventos */}
+              {activeAthleteSection === 'events' && (
+                <section id="activeAthleteSection-events" className="rounded-xl border border-card-border bg-card p-5 sm:p-6 space-y-5">
+                  <div className="border-b border-card-border pb-4">
+                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary font-sans">Historico de Eventos</p>
+                    <h3 className="mt-1 text-2xl font-bold tracking-tight text-white uppercase">Minhas inscricoes</h3>
+                    <p className="mt-1 text-xs text-muted font-medium">Registros, resultados e acessos rapidos das suas participacoes.</p>
+                  </div>
+
+                  {athleteRegistrations.length === 0 ? (
+                    <p className="py-8 text-center text-sm text-muted">Nenhuma inscrição encontrada para este e-mail.</p>
+                  ) : (
+                    <div className="space-y-4">
+                      {athleteRegistrations.map(reg => {
+                        const event = getRegistrationEvent(reg);
+                        const division = event?.divisions.find(div => div.id === reg.divisionId);
+                        const statusMeta = getPaymentStatusMeta(reg.paymentStatus);
+                        return (
+                          <article key={reg.id} className="rounded-lg border border-card-border bg-dark-gray/30 p-4 space-y-4">
+                            <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                              <div className="space-y-2">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <h4 className="text-base font-bold uppercase tracking-wider text-white">{event?.name || 'Evento não encontrado'}</h4>
+                                  <span className={`rounded border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${getPaymentStatusClassName(statusMeta.tone)}`}>
+                                    {statusMeta.label}
+                                  </span>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs text-muted">
+                                  <p><span className="font-bold text-white">Atleta:</span> {reg.athleteName}</p>
+                                  <p><span className="font-bold text-white">Categoria:</span> {division?.name || reg.ticketType}</p>
+                                  <p><span className="font-bold text-white">Valor:</span> {currencyFormatter.format(reg.totalPaid)}</p>
+                                  <p><span className="font-bold text-white">Inscrição:</span> {reg.id}</p>
+                                  <p><span className="font-bold text-white">Data:</span> {new Date(reg.createdAt).toLocaleDateString('pt-BR')}</p>
+                                  <p><span className="font-bold text-white">Pagamento:</span> {reg.paymentMethod || 'Não informado'}</p>
+                                </div>
+                                {reg.paymentStatus === 'payment_failed' && (
+                                  <p className="rounded-md border border-trading-down/30 bg-trading-down/10 px-3 py-2 text-xs leading-5 text-trading-down">
+                                    {reg.paymentErrorMessage || 'Pagamento não processado. Sua participação depende da regularização do pagamento.'}
+                                  </p>
+                                )}
+                                {event && (
+                                  <div className="flex flex-wrap gap-2 pt-1">
+                                    <Link
+                                      href={`/event/${event.id}`}
+                                      className="flex min-h-9 items-center gap-1.5 rounded-md border border-card-border bg-card px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-white transition-colors hover:border-primary"
+                                    >
+                                      <Calendar className="h-3 w-3" aria-hidden="true" />
+                                      <span>Ver detalhes do evento</span>
+                                    </Link>
+                                    <Link
+                                      href={`/event/${event.id}/leaderboard`}
+                                      className="flex min-h-9 items-center gap-1.5 rounded-md border border-card-border bg-card px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-white transition-colors hover:border-primary"
+                                    >
+                                      <Trophy className="h-3 w-3" aria-hidden="true" />
+                                      <span>Ver leaderboard</span>
+                                    </Link>
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex flex-col sm:flex-row lg:flex-col gap-2 lg:min-w-44">
+                                {(reg.paymentStatus === 'payment_failed' || reg.paymentStatus === 'payment_pending') && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const athlete = getRegistrationAthlete(reg);
+                                        const event = getRegistrationEvent(reg);
+                                        if (event) {
+                                          setPayingPixRegistration({ reg, event, athlete });
+                                        }
+                                      }}
+                                      className="flex min-h-10 items-center justify-center gap-1.5 rounded-md bg-trading-up hover:bg-trading-up/90 px-4 py-2 text-xs font-bold uppercase tracking-wider text-ink transition-colors"
+                                    >
+                                      <QrCode className="h-3.5 w-3.5" aria-hidden="true" />
+                                      <span>Pagar com Pix</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRedirectToCardPreference(reg)}
+                                      disabled={redirectingRegistrationId === reg.id}
+                                      className="flex min-h-10 items-center justify-center gap-1.5 rounded-md bg-primary px-4 py-2 text-xs font-bold uppercase tracking-wider text-ink transition-colors hover:bg-primary-hover disabled:opacity-60"
+                                    >
+                                      {redirectingRegistrationId === reg.id ? (
+                                        <>
+                                          <div className="w-3.5 h-3.5 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
+                                          <span>Redirecionando...</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <CreditCard className="h-3.5 w-3.5" aria-hidden="true" />
+                                          <span>Pagar com Cartão</span>
+                                        </>
+                                      )}
+                                    </button>
+                                  </>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenAthleteVoucher(reg)}
+                                  className="flex min-h-10 items-center justify-center gap-1.5 rounded-md border border-card-border bg-card px-4 py-2 text-xs font-bold uppercase tracking-wider text-white transition-colors hover:border-primary"
+                                >
+                                  <ReceiptText className="h-3.5 w-3.5" aria-hidden="true" />
+                                  <span>Visualizar</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleResendRegistrationVoucher(reg)}
+                                  disabled={resendingRegistrationId === reg.id}
+                                  className="flex min-h-10 items-center justify-center gap-1.5 rounded-md bg-primary px-4 py-2 text-xs font-bold uppercase tracking-wider text-ink transition-colors hover:bg-primary-hover disabled:opacity-60"
+                                >
+                                  <Mail className="h-3.5 w-3.5" aria-hidden="true" />
+                                  <span>{resendingRegistrationId === reg.id ? 'Enviando...' : 'Solicitar 2ª via'}</span>
+                                </button>
+                              </div>
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  )}
+                </section>
+              )}
+
+              {/* Seção: Contestacoes de Prova */}
+              {activeAthleteSection === 'contestations' && (
+                <section id="activeAthleteSection-contestations" className="space-y-6">
+                  <div className="rounded-xl border border-card-border bg-card p-5 sm:p-6 space-y-5">
+                    <div className="border-b border-card-border pb-4">
+                      <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary font-sans">Contestacao de Provas</p>
+                      <h3 className="mt-1 text-2xl font-bold tracking-tight text-white uppercase">Contestar Prova</h3>
+                      <p className="mt-1 text-xs text-muted font-medium">Disponivel apenas para eventos de Functional Fitness com pagamento aprovado. Cada inscricao possui ate {CONTESTATION_CREDITS_LIMIT} creditos de contestacao.</p>
+                    </div>
+
+                    {contestableRegistrations.length === 0 ? (
+                      <p className="py-8 text-center text-sm text-muted">Nenhuma inscricao elegivel para contestacao no momento.</p>
+                    ) : (
+                      <form onSubmit={handleSubmitContestation} className="space-y-5">
+                        <div className="space-y-3">
+                          <p className="text-xs font-bold uppercase tracking-wider text-primary">1. Selecao da Prova</p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                              <label htmlFor="contest-registration" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Inscricao *</label>
+                              <select
+                                id="contest-registration"
+                                value={contestRegistrationId}
+                                onChange={(e) => {
+                                  setContestRegistrationId(e.target.value);
+                                  setContestWorkoutId('');
+                                  setContestHeatId('');
+                                }}
+                                className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"
+                              >
+                                <option value="">Selecione uma inscricao</option>
+                                {contestableRegistrations.map(reg => {
+                                  const event = getRegistrationEvent(reg);
+                                  return (
+                                    <option key={reg.id} value={reg.id}>{event?.name || reg.id}</option>
+                                  );
+                                })}
+                              </select>
+                            </div>
+                            <div>
+                              <label htmlFor="contest-workout" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Prova *</label>
+                              <select
+                                id="contest-workout"
+                                value={contestWorkoutId}
+                                onChange={(e) => {
+                                  setContestWorkoutId(e.target.value);
+                                  setContestHeatId('');
+                                }}
+                                disabled={!contestRegistrationId}
+                                className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none disabled:opacity-60"
+                              >
+                                <option value="">Selecione a prova</option>
+                                {contestWorkouts.map(workout => (
+                                  <option key={workout.id} value={workout.id}>{workout.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label htmlFor="contest-heat" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Bateria *</label>
+                              <select
+                                id="contest-heat"
+                                value={contestHeatId}
+                                onChange={(e) => setContestHeatId(e.target.value)}
+                                disabled={!contestWorkoutId}
+                                className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none disabled:opacity-60"
+                              >
+                                <option value="">Selecione a bateria</option>
+                                {contestHeats.map(heat => (
+                                  <option key={heat.id} value={heat.id}>{heat.title || `Bateria ${heat.heatNumber ?? ''}`}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label htmlFor="contest-lane" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Raia *</label>
+                              <input
+                                id="contest-lane"
+                                type="text"
+                                value={contestLane}
+                                onChange={(e) => setContestLane(e.target.value)}
+                                placeholder="Ex: 4"
+                                className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white placeholder:text-muted focus:border-primary/50 focus:outline-none"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="space-y-3">
+                          <p className="text-xs font-bold uppercase tracking-wider text-primary">2. Formulario de Contestacao</p>
+                          <div>
+                            <label htmlFor="contest-description" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Descricao da contestacao *</label>
+                            <textarea
+                              id="contest-description"
+                              rows={4}
+                              value={contestDescription}
+                              onChange={(e) => setContestDescription(e.target.value)}
+                              placeholder="Descreva o ocorrido com o maximo de detalhes (movimentos, repeticoes, video, etc)."
+                              className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white placeholder:text-muted focus:border-primary/50 focus:outline-none"
+                            />
+                          </div>
+                          <button
+                            type="submit"
+                            disabled={submittingContestation}
+                            className="flex min-h-11 items-center justify-center gap-1.5 rounded-md bg-primary px-5 py-2 text-xs font-bold uppercase tracking-wider text-ink transition-colors hover:bg-primary-hover disabled:opacity-60"
+                          >
+                            <ShieldAlert className="h-3.5 w-3.5" aria-hidden="true" />
+                            <span>{submittingContestation ? 'Enviando...' : 'Contestar Prova'}</span>
+                          </button>
+                        </div>
+                      </form>
+                    )}
+                  </div>
+
+                  <div className="rounded-xl border border-card-border bg-card p-5 sm:p-6 space-y-4">
+                    <div className="border-b border-card-border pb-4">
+                      <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary font-sans">Historico das contestacoes</p>
+                      <h3 className="mt-1 text-xl font-bold tracking-tight text-white uppercase">Contestacoes enviadas</h3>
+                    </div>
+
+                    {athleteContestations.length === 0 ? (
+                      <p className="py-8 text-center text-sm text-muted">Voce ainda nao enviou contestacoes.</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {athleteContestations.map(contestation => {
+                          const event = events.find(ev => ev.id === contestation.eventId);
+                          const workout = event?.workouts.find(w => w.id === contestation.workoutId);
+                          return (
+                            <article key={contestation.id} className="rounded-lg border border-card-border bg-dark-gray/30 p-4 space-y-2">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <h4 className="text-sm font-bold uppercase tracking-wider text-white">{event?.name || 'Evento'} · {workout?.name || 'Prova'}</h4>
+                                <span className={`rounded border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                                  contestation.status === 'approved'
+                                    ? 'border-trading-up/40 bg-trading-up/10 text-trading-up'
+                                    : contestation.status === 'rejected'
+                                      ? 'border-trading-down/40 bg-trading-down/10 text-trading-down'
+                                      : 'border-primary/40 bg-primary/10 text-primary'
+                                }`}>
+                                  {getContestationStatusLabel(contestation.status)}
+                                </span>
+                              </div>
+                              <p className="text-xs text-muted">Raia {contestation.lane}{contestation.heatNumber ? ` · Bateria ${contestation.heatNumber}` : ''}</p>
+                              <p className="text-xs text-white leading-5">{contestation.description}</p>
+                              {contestation.managerNote && (
+                                <p className="rounded-md border border-card-border bg-card px-3 py-2 text-xs leading-5 text-muted"><span className="font-bold text-white">Resposta da organizacao:</span> {contestation.managerNote}</p>
+                              )}
+                            </article>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </section>
+              )}
+            </div>
+          </div>
         </main>
 
         {selectedRegistrationVoucher && (
@@ -6837,6 +7223,178 @@ export default function AdminPage() {
     );
   };
 
+  const renderAbaContestations = () => {
+    const eventContestations = contestations
+      .filter(contestation => contestation.eventId === selectedEventToManage?.id)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    const statusBadgeClass = (status: 'under_review' | 'approved' | 'rejected') => {
+      if (status === 'approved') return 'border-trading-up/40 bg-trading-up/10 text-trading-up';
+      if (status === 'rejected') return 'border-trading-down/40 bg-trading-down/10 text-trading-down';
+      return 'border-primary/40 bg-primary/10 text-primary';
+    };
+
+    const openReview = (contestation: Contestation) => {
+      setReviewContestationId(contestation.id);
+      setReviewStatus(contestation.status);
+      setReviewCreditRefunded(contestation.creditRefunded);
+      setReviewManagerNote(contestation.managerNote || '');
+    };
+
+    const handleSaveContestationDecision = async (contestationId: string) => {
+      setSavingReviewDecision(true);
+      setAdminNotice(null);
+      try {
+        const response = await fetch(`/api/contestations/${contestationId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            status: reviewStatus,
+            creditRefunded: reviewStatus === 'approved' ? reviewCreditRefunded : false,
+            managerNote: reviewManagerNote.trim()
+          })
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload.success) {
+          setAdminNotice({ text: payload.error || 'Não foi possível salvar a decisão.', tone: 'error' });
+          return;
+        }
+        setAdminNotice({ text: 'Decisão registrada e atleta notificado por e-mail.', tone: 'success' });
+        setReviewContestationId(null);
+        if (typeof window !== 'undefined') {
+          window.location.reload();
+        }
+      } finally {
+        setSavingReviewDecision(false);
+      }
+    };
+
+    return (
+      <div className="space-y-5 rounded-xl border border-card-border p-6 bg-card text-white">
+        <div className="border-b border-card-border pb-3">
+          <h3 className="text-base font-bold text-white uppercase tracking-wider">Contestacoes</h3>
+          <p className="text-xs text-muted font-medium">Revise os recursos enviados pelos atletas, defina a decisao e registre uma nota de retorno.</p>
+        </div>
+
+        {eventContestations.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted">Nenhuma contestacao registrada para este evento.</p>
+        ) : (
+          <div className="space-y-4">
+            {eventContestations.map(contestation => {
+              const workout = selectedEventToManage?.workouts.find(w => w.id === contestation.workoutId);
+              const registration = registrations.find(reg => reg.id === contestation.registrationId);
+              const isReviewing = reviewContestationId === contestation.id;
+              return (
+                <article key={contestation.id} className="rounded-lg border border-card-border bg-dark-gray/30 p-4 space-y-3">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h4 className="text-sm font-bold uppercase tracking-wider text-white">{workout?.name || 'Prova'} · {registration?.athleteName || 'Atleta'}</h4>
+                        <span className={`rounded border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${statusBadgeClass(contestation.status)}`}>
+                          {getContestationStatusLabel(contestation.status)}
+                        </span>
+                        {contestation.creditRefunded && (
+                          <span className="rounded border border-trading-up/40 bg-trading-up/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-trading-up">Crédito devolvido</span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted">Raia {contestation.lane}{contestation.heatNumber ? ` · Bateria ${contestation.heatNumber}` : ''} · {new Date(contestation.createdAt).toLocaleDateString('pt-BR')}</p>
+                    </div>
+                    {!isReviewing && (
+                      <button
+                        type="button"
+                        onClick={() => openReview(contestation)}
+                        className="flex min-h-9 items-center gap-1.5 rounded-md border border-card-border bg-card px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-white transition-colors hover:border-primary"
+                      >
+                        <Pencil className="h-3 w-3" aria-hidden="true" />
+                        <span>Revisar</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <p className="rounded-md border border-card-border bg-card px-3 py-2 text-xs leading-5 text-white">{contestation.description}</p>
+
+                  {contestation.managerNote && !isReviewing && (
+                    <p className="rounded-md border border-card-border bg-card px-3 py-2 text-xs leading-5 text-muted"><span className="font-bold text-white">Nota da organizacao:</span> {contestation.managerNote}</p>
+                  )}
+
+                  {isReviewing && (
+                    <div className="space-y-3 rounded-md border border-primary/30 bg-card p-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label htmlFor={`review-status-${contestation.id}`} className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Decisao</label>
+                          <select
+                            id={`review-status-${contestation.id}`}
+                            value={reviewStatus}
+                            onChange={(e) => {
+                              const next = e.target.value as 'under_review' | 'approved' | 'rejected';
+                              setReviewStatus(next);
+                              if (next !== 'approved') setReviewCreditRefunded(false);
+                            }}
+                            className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"
+                          >
+                            <option value="under_review">Em analise</option>
+                            <option value="approved">Deferida</option>
+                            <option value="rejected">Indeferida</option>
+                          </select>
+                        </div>
+                        <div className="flex items-end">
+                          <label className={`flex min-h-11 w-full items-center gap-2 rounded-md border px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors ${
+                            reviewStatus === 'approved'
+                              ? 'border-card-border bg-dark-gray text-white cursor-pointer'
+                              : 'border-card-border bg-background text-muted cursor-not-allowed'
+                          }`}>
+                            <input
+                              type="checkbox"
+                              checked={reviewCreditRefunded}
+                              disabled={reviewStatus !== 'approved'}
+                              onChange={(e) => setReviewCreditRefunded(e.target.checked)}
+                              className="h-4 w-4 accent-primary"
+                            />
+                            <span>Devolver credito</span>
+                          </label>
+                        </div>
+                      </div>
+                      <div>
+                        <label htmlFor={`review-note-${contestation.id}`} className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Manager Note</label>
+                        <textarea
+                          id={`review-note-${contestation.id}`}
+                          rows={3}
+                          value={reviewManagerNote}
+                          onChange={(e) => setReviewManagerNote(e.target.value)}
+                          placeholder="Mensagem enviada ao atleta com a justificativa da decisao."
+                          className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white placeholder:text-muted focus:border-primary/50 focus:outline-none"
+                        />
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleSaveContestationDecision(contestation.id)}
+                          disabled={savingReviewDecision}
+                          className="flex min-h-10 items-center justify-center gap-1.5 rounded-md bg-primary px-4 py-2 text-xs font-bold uppercase tracking-wider text-ink transition-colors hover:bg-primary-hover disabled:opacity-60"
+                        >
+                          <ClipboardCheck className="h-3.5 w-3.5" aria-hidden="true" />
+                          <span>{savingReviewDecision ? 'Salvando...' : 'Salvar decisao'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setReviewContestationId(null)}
+                          className="flex min-h-10 items-center justify-center gap-1.5 rounded-md border border-card-border bg-card px-4 py-2 text-xs font-bold uppercase tracking-wider text-white transition-colors hover:border-muted"
+                        >
+                          <X className="h-3.5 w-3.5" aria-hidden="true" />
+                          <span>Cancelar</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderAbaLeaderboard = () => {
     const divisions = selectedEventToManage?.divisions || [];
     const workouts = selectedEventToManage?.workouts || [];
@@ -7647,12 +8205,15 @@ export default function AdminPage() {
                         { id: 'schedule', label: 'Cronograma' },
                         { id: 'registrations', label: 'Inscrições' },
                         { id: 'scores', label: selectedEventToManage.eventType === 'fitness_racing' ? 'Lançar Resultados' : 'Lançamento de Scores' },
-                        { id: 'leaderboard', label: 'Leaderboard' }
+                        { id: 'leaderboard', label: 'Leaderboard' },
+                        ...((selectedEventToManage.eventType || 'functional_fitness') === 'functional_fitness'
+                          ? [{ id: 'contestations', label: 'Contestações' }]
+                          : [])
                       ].map(tab => (
                         <button
                           key={tab.id}
                           onClick={() => {
-                            setActiveEventTab(tab.id as 'info' | 'categories' | 'wods' | 'schedule' | 'registrations' | 'scores' | 'leaderboard');
+                            setActiveEventTab(tab.id as 'info' | 'categories' | 'wods' | 'schedule' | 'registrations' | 'scores' | 'leaderboard' | 'contestations');
                             if (tab.id === 'info') {
                               initEventEditForm(selectedEventToManage);
                             }
@@ -7685,6 +8246,7 @@ export default function AdminPage() {
                           : renderAbaScores()
                       )}
                       {activeEventTab === 'leaderboard' && renderAbaLeaderboard()}
+                      {activeEventTab === 'contestations' && renderAbaContestations()}
                     </div>
                   </div>
                 </div>

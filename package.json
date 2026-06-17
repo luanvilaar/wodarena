@@ -9,7 +9,9 @@
     "lint": "eslint",
     "typegen": "next typegen",
     "typecheck": "next typegen && tsc --noEmit",
-    "test": "node --test tests/*.test.mjs"
+    "test": "node --test tests/*.test.mjs",
+    "contestations:cli": "node bin/contestations.mjs",
+    "athlete-profile:cli": "node bin/athlete-profile.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.107.0",

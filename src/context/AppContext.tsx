@@ -1,10 +1,11 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { WorkoutType, Event, Athlete, Division, Score, CourseStage, Coupon, Registration, User, Workout, AthleteOverall, EventScheduleItem } from '../types';
+import { WorkoutType, Event, Athlete, Division, Score, CourseStage, Coupon, Registration, User, Workout, AthleteOverall, EventScheduleItem, Contestation } from '../types';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { INITIAL_EVENTS, INITIAL_ATHLETES, INITIAL_SCORES, INITIAL_USERS } from '../data/mockData';
 import { buildFitnessRacingCourse, buildFitnessRacingDefaults, normalizeInstagram } from '@/lib/fitnessRacing';
+import { mapContestationFromDb } from '@/lib/contestations';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type LeaderboardEntry = Record<string, any>;
@@ -24,6 +25,12 @@ export type RegistrationEditInput = {
   isTeam: boolean;
   teamMembers: { name: string; instagram: string; shirtSize: string }[];
 };
+
+export type AthleteProfileUpdateInput = {
+  fullName: string;
+  birthDate: string;
+};
+
 type AthleteProfileDraft = {
   id?: string;
   birthDate?: string;
@@ -45,6 +52,7 @@ interface AppContextType {
   athletes: Athlete[];
   scores: Score[];
   registrations: Registration[];
+  contestations: Contestation[];
   users: User[];
   currentUser: User | null;
   login: (email: string, password: string) => Promise<User | null>;
@@ -73,6 +81,7 @@ interface AppContextType {
   toggleCouponActive: (couponId: string, isActive: boolean) => Promise<void>;
   incrementCouponUsage: (eventId: string, code: string) => Promise<void>;
   changePassword: (userId: string, currentPassword: string, newPassword: string) => Promise<boolean>;
+  updateAthleteProfile: (data: AthleteProfileUpdateInput) => Promise<boolean>;
 }
 
 type WorkoutDbUpdate = Partial<{
@@ -89,6 +98,7 @@ type WorkoutDbUpdate = Partial<{
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 type RegistrationDbRow = Record<string, unknown>;
+type AthleteDbRow = Record<string, unknown>;
 type BootstrapPayload = {
   currentUser?: User | null;
   // Supabase rows are normalized immediately below; keeping this flexible avoids duplicating DB row types.
@@ -97,6 +107,7 @@ type BootstrapPayload = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   athletes: any[];
   registrations: RegistrationDbRow[];
+  contestations: Record<string, unknown>[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   scores: any[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -152,6 +163,36 @@ const mapRegistrationFromDb = (r: RegistrationDbRow): Registration => ({
   updatedAt: optionalString(r.updated_at)
 });
 
+const mapAthleteFromDb = (a: AthleteDbRow): Athlete => {
+  let parsedTeamMembers: { name: string; instagram: string; shirtSize?: string }[] = [];
+  if (a.team_members) {
+    try {
+      parsedTeamMembers = typeof a.team_members === 'string' ? JSON.parse(a.team_members) : a.team_members as { name: string; instagram: string; shirtSize?: string }[];
+    } catch (err) {
+      console.error("Erro ao fazer parse dos teamMembers do atleta:", a.id, err);
+    }
+  }
+
+  return {
+    id: String(a.id),
+    name: String(a.name),
+    box: String(a.box),
+    country: String(a.country),
+    divisionId: String(a.division_id),
+    birthDate: optionalString(a.birth_date),
+    gender: (optionalString(a.gender) as Athlete['gender']),
+    city: optionalString(a.city),
+    state: optionalString(a.state),
+    instagram: optionalString(a.instagram),
+    photoUrl: optionalString(a.photo_url),
+    shirtSize: a.shirt_size ? String(a.shirt_size) : undefined,
+    email: optionalString(a.email),
+    phone: optionalString(a.phone),
+    isTeam: a.is_team !== undefined ? Boolean(a.is_team) : false,
+    teamMembers: Array.isArray(parsedTeamMembers) ? parsedTeamMembers : []
+  };
+};
+
 const adminPersist = async (action: string, payload: Record<string, unknown>) => {
   const response = await fetch('/api/admin/persistence', {
     method: 'POST',
@@ -172,6 +213,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [athletes, setAthletes] = useState<Athlete[]>([]);
   const [scores, setScores] = useState<Score[]>([]);
   const [registrations, setRegistrations] = useState<Registration[]>([]);
+  const [contestations, setContestations] = useState<Contestation[]>([]);
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [leaderboardEntries, setLeaderboardEntries] = useState<LeaderboardEntry[]>([]);
   const [users, setUsers] = useState<User[]>(INITIAL_USERS);
@@ -218,34 +260,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // 2. Carregar atletas
         const dbAthletes = payload.athletes;
         if (dbAthletes && dbAthletes.length > 0) {
-          const mappedAthletes: Athlete[] = dbAthletes.map(a => {
-            let parsedTeamMembers: { name: string; instagram: string }[] = [];
-            if (a.team_members) {
-              try {
-                parsedTeamMembers = typeof a.team_members === 'string' ? JSON.parse(a.team_members) : a.team_members;
-              } catch (err) {
-                console.error("Erro ao fazer parse dos teamMembers do atleta:", a.id, err);
-              }
-            }
-            return {
-              id: a.id,
-              name: a.name,
-              box: a.box,
-              country: a.country,
-              divisionId: a.division_id,
-              birthDate: a.birth_date || undefined,
-              gender: a.gender || undefined,
-              city: a.city || undefined,
-              state: a.state || undefined,
-              instagram: a.instagram || undefined,
-              photoUrl: a.photo_url || undefined,
-              shirtSize: a.shirt_size || undefined,
-              email: a.email || undefined,
-              phone: a.phone || undefined,
-              isTeam: a.is_team !== undefined ? Boolean(a.is_team) : false,
-              teamMembers: Array.isArray(parsedTeamMembers) ? parsedTeamMembers : []
-            };
-          });
+          const mappedAthletes: Athlete[] = dbAthletes.map(mapAthleteFromDb);
           setAthletes(mappedAthletes);
         } else {
           setAthletes(INITIAL_ATHLETES);
@@ -285,6 +300,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           setRegistrations(mappedRegs);
         } else {
           setRegistrations([]);
+        }
+
+        const dbContestations = payload.contestations;
+        if (dbContestations && dbContestations.length > 0) {
+          setContestations(dbContestations.map(mapContestationFromDb));
+        } else {
+          setContestations([]);
         }
 
         // 4.1 Carregar cupons
@@ -394,6 +416,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setUsers(INITIAL_USERS);
         setAthletes(INITIAL_ATHLETES);
         setScores(INITIAL_SCORES);
+        setContestations([]);
         setEvents(INITIAL_EVENTS);
       } finally {
         setIsLoading(false);
@@ -1205,6 +1228,58 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const updateAthleteProfile = async ({ fullName, birthDate }: AthleteProfileUpdateInput): Promise<boolean> => {
+    try {
+      const response = await fetch('/api/athlete/profile', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          fullName,
+          birthDate
+        })
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.success) {
+        console.error('Erro ao atualizar perfil do atleta:', payload.error || 'Erro desconhecido.');
+        return false;
+      }
+
+      if (payload.user) {
+        setCurrentUser(payload.user as User);
+      }
+
+      if (Array.isArray(payload.athletes)) {
+        const updatedAthletes = (payload.athletes as AthleteDbRow[]).map(mapAthleteFromDb);
+        setAthletes(prev => {
+          const next = new Map(prev.map(athlete => [athlete.id, athlete]));
+          updatedAthletes.forEach(athlete => {
+            next.set(athlete.id, athlete);
+          });
+          return Array.from(next.values());
+        });
+      }
+
+      if (Array.isArray(payload.registrations)) {
+        const updatedRegistrations = (payload.registrations as RegistrationDbRow[]).map(mapRegistrationFromDb);
+        setRegistrations(prev => {
+          const next = new Map(prev.map(registration => [registration.id, registration]));
+          updatedRegistrations.forEach(registration => {
+            next.set(registration.id, registration);
+          });
+          return Array.from(next.values());
+        });
+      }
+
+      return true;
+    } catch (err) {
+      console.error('Erro inesperado ao atualizar perfil do atleta:', err);
+      return false;
+    }
+  };
+
   // Lançar múltiplos scores em lote (bulk) e recalcular rankings
   const submitScoresBulk = async (newScores: Score[]) => {
     if (newScores.length === 0) return;
@@ -1686,6 +1761,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         athletes,
         scores,
         registrations,
+        contestations,
         coupons,
         users,
         currentUser,
@@ -1713,7 +1789,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         updateCoupon,
         toggleCouponActive,
         incrementCouponUsage,
-        changePassword
+        changePassword,
+        updateAthleteProfile
       }}
     >
       {children}

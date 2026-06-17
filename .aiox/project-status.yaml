@@ -3,12 +3,14 @@ status:
   modifiedFiles: []
   modifiedFilesTotalCount: 0
   recentCommits:
-    - 'docs: status final - fase 2 completa com roadmap fase 3'
-    - 'docs: fase 2 completa - resumo executivo'
+    - 'chore: remover usuario mock org-2 e doc de migration obsoleto'
+    - >-
+      feat(ux): logo WODArena no header do leaderboard e ajuste de overlay no
+      EventCard
   currentEpic: null
   currentStory: null
-  lastUpdate: '2026-06-10T10:49:25.254Z'
+  lastUpdate: '2026-06-17T13:55:46.558Z'
   isGitRepo: true
-timestamp: 1781088565255
+timestamp: 1781704546563
 ttl: 60
-gitFingerprint: 1780618055577.6655:1781088498953.9746
+gitFingerprint: 1780618055577.6655:1781400803515.2883
