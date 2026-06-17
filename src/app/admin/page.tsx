@@ -4303,6 +4303,9 @@ export default function AdminPage() {
           const checkinStr = minutesToHhmm(filaMin);
           const endStr = minutesToHhmm(endMin);
 
+          const currentAlloc = heatAllocations[`heat-${heatWorkoutId}-${i}`] || [];
+          const finalAlloc = Array.from({ length: heatCapacity }, (_, idx) => currentAlloc[idx] || "");
+
           newHeatItems.push({
             id: `heat-${wId}-${i}`,
             kind: 'heat',
@@ -4316,7 +4319,7 @@ export default function AdminPage() {
             warmupTime: warmupStr,
             checkinTime: checkinStr,
             endTime: endStr,
-            athleteIds: heatAllocations[`heat-${heatWorkoutId}-${i}`] || [],
+            athleteIds: finalAlloc,
             capacity: heatCapacity,
             isPublished: wasPublishedBefore
           });
@@ -4416,28 +4419,30 @@ export default function AdminPage() {
         athletesToAllocate = eventAthletes.map(a => ({ id: a.id }));
       }
 
-      // Distribui atletas pelas baterias de forma sequencial
+      // Distribui atletas pelas baterias de forma sequencial por raias
       const newAllocations: Record<string, string[]> = {};
       for (let i = 1; i <= heatCount; i++) {
-        newAllocations[`heat-${heatWorkoutId}-${i}`] = [];
+        newAllocations[`heat-${heatWorkoutId}-${i}`] = Array(heatCapacity).fill("");
       }
 
       let heatIndex = 0;
+      let laneIndex = 0;
       athletesToAllocate.forEach(entry => {
         if (heatIndex >= heatCount) return; // Sem mais baterias disponíveis
         const targetHeatKey = `heat-${heatWorkoutId}-${heatIndex + 1}`;
-        if (newAllocations[targetHeatKey].length < heatCapacity) {
-          newAllocations[targetHeatKey].push(entry.id);
-        }
-        // Se a bateria atual encheu, passa pra próxima
-        if (newAllocations[targetHeatKey].length >= heatCapacity) {
+        newAllocations[targetHeatKey][laneIndex] = entry.id;
+        laneIndex++;
+        
+        // Se encheu as raias desta bateria, passa para a próxima bateria
+        if (laneIndex >= heatCapacity) {
+          laneIndex = 0;
           heatIndex++;
         }
       });
 
       setHeatAllocations(newAllocations);
 
-      const allocatedCount = Object.values(newAllocations).flat().length;
+      const allocatedCount = Object.values(newAllocations).flat().filter(Boolean).length;
       const unallocatedCount = athletesToAllocate.length - allocatedCount;
       if (unallocatedCount > 0) {
         setAdminNotice({
@@ -4453,11 +4458,6 @@ export default function AdminPage() {
         });
       }
     };
-
-    // Detectar se já tem baterias salvas para o WOD selecionado
-    const hasSavedHeats = (selectedEventToManage?.scheduleItems || []).some(
-      item => item.kind === 'heat' && item.workoutId === heatWorkoutId
-    );
 
     // Gerar baterias na memória para visualização em tempo real na tabela
     const generatedHeatsList: { number: number; warmup: string; fila: string; inicio: string; final: string; }[] = [];
@@ -4516,17 +4516,7 @@ export default function AdminPage() {
       return (selectedEventToManage?.divisions || []).find(d => d.id === divId)?.name || 'Geral';
     };
 
-    const groupAthletesByDivision = (athletesList: Athlete[]) => {
-      const groups: Record<string, Athlete[]> = {};
-      athletesList.forEach(ath => {
-        const divName = getDivisionName(ath.divisionId);
-        if (!groups[divName]) {
-          groups[divName] = [];
-        }
-        groups[divName].push(ath);
-      });
-      return groups;
-    };
+
 
     const divisionId = selectedWorkout?.divisionId;
     const isFitnessRacingTotal = selectedEventToManage?.eventType === 'fitness_racing' && selectedWorkout?.code === 'TOTAL';
@@ -4588,29 +4578,80 @@ export default function AdminPage() {
       }
     };
 
-    const handleAddAthleteToHeat = (heatId: string, athleteId: string) => {
+    const handleAddAthleteToHeatLane = (heatId: string, athleteId: string, laneIndex: number) => {
       setHeatAllocations(prev => {
-        const currentList = prev[heatId] || [];
-        if (currentList.includes(athleteId)) return prev;
-        if (currentList.length >= heatCapacity) {
-          setAdminNotice({ text: 'Esta bateria já atingiu a capacidade máxima de competidores.', tone: 'error' });
-          return prev;
+        const nextAllocations = { ...prev };
+        
+        // Remove de qualquer outra raia ou bateria deste mesmo WOD
+        Object.keys(nextAllocations).forEach(hId => {
+          if (nextAllocations[hId]?.includes(athleteId)) {
+            nextAllocations[hId] = nextAllocations[hId].map(id => id === athleteId ? "" : id);
+          }
+        });
+
+        if (!nextAllocations[heatId]) {
+          nextAllocations[heatId] = Array(heatCapacity).fill("");
         }
-        return {
-          ...prev,
-          [heatId]: [...currentList, athleteId]
-        };
+
+        const currentList = [...nextAllocations[heatId]];
+        while (currentList.length < heatCapacity) {
+          currentList.push("");
+        }
+        currentList[laneIndex] = athleteId;
+        nextAllocations[heatId] = currentList;
+
+        return nextAllocations;
       });
     };
 
-    const handleRemoveAthleteFromHeat = (heatId: string, athleteId: string) => {
+    const handleRemoveAthleteFromHeatLane = (heatId: string, laneIndex: number) => {
       setHeatAllocations(prev => {
-        const currentList = prev[heatId] || [];
-        return {
-          ...prev,
-          [heatId]: currentList.filter(id => id !== athleteId)
-        };
+        const nextAllocations = { ...prev };
+        if (nextAllocations[heatId]) {
+          const currentList = [...nextAllocations[heatId]];
+          if (laneIndex < currentList.length) {
+            currentList[laneIndex] = "";
+          }
+          nextAllocations[heatId] = currentList;
+        }
+        return nextAllocations;
       });
+    };
+
+    const handleRemoveAthleteFromAllLanes = (athleteId: string) => {
+      setHeatAllocations(prev => {
+        const nextAllocations = { ...prev };
+        Object.keys(nextAllocations).forEach(hId => {
+          if (nextAllocations[hId]?.includes(athleteId)) {
+            nextAllocations[hId] = nextAllocations[hId].map(id => id === athleteId ? "" : id);
+          }
+        });
+        return nextAllocations;
+      });
+    };
+
+    const handleDragStart = (e: React.DragEvent, athleteId: string) => {
+      e.dataTransfer.setData('text/plain', athleteId);
+    };
+
+    const handleDragOver = (e: React.DragEvent) => {
+      e.preventDefault();
+    };
+
+    const handleDropOnLane = (e: React.DragEvent, targetHeatId: string, targetLaneIndex: number) => {
+      e.preventDefault();
+      const athleteId = e.dataTransfer.getData('text/plain');
+      if (!athleteId) return;
+
+      handleAddAthleteToHeatLane(targetHeatId, athleteId, targetLaneIndex);
+    };
+
+    const handleDropOnPendingList = (e: React.DragEvent) => {
+      e.preventDefault();
+      const athleteId = e.dataTransfer.getData('text/plain');
+      if (!athleteId) return;
+
+      handleRemoveAthleteFromAllLanes(athleteId);
     };
 
     return (
@@ -4804,202 +4845,264 @@ export default function AdminPage() {
             </div>
           </div>
         ) : (
-          /* Sub-aba: Baterias de Prova (Excel Style) */
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Formulário Lateral de Configuração */}
-            <div className="lg:col-span-1 space-y-6 rounded-xl border border-card-border p-6 bg-card text-white">
-              <div className="border-b border-card-border pb-3">
-                <h3 className="text-base font-bold text-white uppercase tracking-wider">Calculadora de Baterias</h3>
-                <p className="text-xs text-muted font-medium">Parâmetros das baterias de provas e horários.</p>
+          /* Sub-aba: Baterias de Prova (Drag & Drop) */
+          <div className="space-y-6">
+            {/* Cabeçalho do Cronograma de Baterias com Ações */}
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-card-border/60 pb-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl font-black italic uppercase tracking-wider text-white">
+                    <span className="text-primary font-bold mr-1">CRONOGRAMA</span>
+                    DE BATERIAS
+                  </span>
+                </div>
+                <p className="text-xs text-muted-soft font-medium font-sans">
+                  Gestão de horários e alocação de equipes para o WOD.
+                </p>
               </div>
 
-              <div className="space-y-4">
-                <div>
-                  <label htmlFor="heat-wod-select" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Selecione a Prova *</label>
-                  <select
-                    id="heat-wod-select"
-                    value={heatWorkoutId}
-                    onChange={(e) => {
-                      const wId = e.target.value;
-                      setHeatWorkoutId(wId);
-                      if (!wId) {
-                        setHeatAllocations({});
-                        return;
-                      }
+              {/* Botões superiores direito: Resetar, Salvar, Publicar */}
+              <div className="flex flex-wrap items-center gap-2.5">
+                <button
+                  type="button"
+                  disabled={isWorkoutLocked || !heatWorkoutId}
+                  onClick={handleClearWorkoutHeats}
+                  className={`inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors border ${
+                    isWorkoutLocked || !heatWorkoutId
+                      ? 'bg-muted/10 text-muted/40 border-card-border/30 cursor-not-allowed'
+                      : 'bg-dark-gray border-card-border hover:border-red-500 hover:text-red-400 text-muted cursor-pointer'
+                  }`}
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.228 10H18.23" />
+                  </svg>
+                  Resetar
+                </button>
 
-                      const w = workouts.find(work => work.id === wId);
-                      if (w && w.timeCap) {
-                        const match = w.timeCap.match(/^(\d+)/);
-                        if (match) {
-                          setHeatWorkoutDuration(Number(match[1]));
-                        }
-                      }
+                <button
+                  type="button"
+                  disabled={isWorkoutLocked || !heatWorkoutId}
+                  onClick={handleSaveWorkoutHeats}
+                  className={`inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors ${
+                    isWorkoutLocked || !heatWorkoutId
+                      ? 'bg-muted/10 text-muted/40 border border-card-border/30 cursor-not-allowed'
+                      : 'bg-white text-black hover:bg-white/95 font-black cursor-pointer'
+                  }`}
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                  </svg>
+                  Salvar Cronograma
+                </button>
 
-                      const allocations: Record<string, string[]> = {};
-                      let foundCapacity = 5;
-                      let foundCount = 3;
-
-                      const existingHeats = (selectedEventToManage?.scheduleItems || []).filter(
-                        item => item.kind === 'heat' && item.workoutId === wId
-                      );
-
-                      if (existingHeats.length > 0) {
-                        existingHeats.forEach(item => {
-                          allocations[item.id] = item.athleteIds || [];
-                          if (item.capacity) {
-                            foundCapacity = item.capacity;
-                          }
-                        });
-                        foundCount = existingHeats.length;
-
-                        const firstHeat = existingHeats[0];
-                        if (firstHeat.date) setHeatDate(firstHeat.date);
-                        if (firstHeat.time) setHeatStartTime(firstHeat.time);
-                        if (firstHeat.warmupTime && firstHeat.time) {
-                          setHeatWarmupDuration(hhmmToMinutes(firstHeat.time) - hhmmToMinutes(firstHeat.warmupTime));
-                        }
-                        if (firstHeat.checkinTime && firstHeat.time) {
-                          setHeatCheckinDuration(hhmmToMinutes(firstHeat.time) - hhmmToMinutes(firstHeat.checkinTime));
-                        }
-                        if (firstHeat.endTime && firstHeat.time) {
-                          setHeatWorkoutDuration(hhmmToMinutes(firstHeat.endTime) - hhmmToMinutes(firstHeat.time));
-                        }
-                        setHeatCount(foundCount);
-                        setHeatCapacity(foundCapacity);
-                        setHeatAllocations(allocations);
-                      } else {
-                        const initialAllocations: Record<string, string[]> = {};
-                        for (let i = 1; i <= heatCount; i++) {
-                          initialAllocations[`heat-${wId}-${i}`] = [];
-                        }
-                        setHeatCapacity(5);
-                        setHeatAllocations(initialAllocations);
-                      }
-                    }}
-                    className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"
+                {!isSavedScheduleComplete ? (
+                  <div className="relative group">
+                    <button
+                      type="button"
+                      disabled={true}
+                      className="inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-xs font-bold uppercase tracking-wider bg-red-500/10 border border-red-500/20 text-red-400 cursor-not-allowed"
+                    >
+                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      Publicar
+                    </button>
+                    <div className="absolute right-0 top-full mt-1.5 hidden group-hover:block bg-black border border-card-border p-2 rounded text-[9px] text-amber-400 font-bold w-48 z-50">
+                      O cronograma salvo possui competidores pendentes de alocação.
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={isPublished}
+                    onClick={handlePublishHeats}
+                    className={`inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors ${
+                      isPublished
+                        ? 'bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 cursor-not-allowed'
+                        : 'bg-primary hover:bg-primary/90 text-ink cursor-pointer'
+                    }`}
                   >
-                    <option value="">Selecione...</option>
-                    {(() => {
-                      const renderedTotalLayouts: string[] = [];
-                      const options: React.ReactNode[] = [];
+                    <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                    </svg>
+                    {isPublished ? 'Publicado' : 'Publicar'}
+                  </button>
+                )}
+              </div>
+            </div>
 
-                      workouts.forEach((w) => {
-                        const isFRTotal = selectedEventToManage?.eventType === 'fitness_racing' && w.code === 'TOTAL';
+            {/* Configurações do Cronograma */}
+            <div className="rounded-xl border border-card-border p-5 bg-card text-white space-y-4">
+              <div className="flex items-center gap-2 border-b border-card-border/50 pb-2">
+                <span className="w-1 h-4 bg-primary rounded"></span>
+                <h3 className="text-sm font-bold text-white uppercase tracking-wider font-sans">
+                  Configurações do Cronograma
+                </h3>
+              </div>
 
-                        if (isFRTotal) {
-                          const div = (selectedEventToManage?.divisions || []).find(d => d.id === w.divisionId);
-                          const layout = div?.courseLayout || [];
-                          const layoutSignature = layout.map(stg => `${stg.name}:${stg.type}`).join('|');
+              {/* Seletor do WOD */}
+              <div className="max-w-md font-sans">
+                <label htmlFor="heat-wod-select" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans text-muted-soft">Selecione a Prova *</label>
+                <select
+                  id="heat-wod-select"
+                  value={heatWorkoutId}
+                  onChange={(e) => {
+                    const wId = e.target.value;
+                    setHeatWorkoutId(wId);
+                    if (!wId) {
+                      setHeatAllocations({});
+                      return;
+                    }
 
-                          if (renderedTotalLayouts.includes(layoutSignature)) {
-                            return;
-                          }
-                          renderedTotalLayouts.push(layoutSignature);
+                    const w = workouts.find(work => work.id === wId);
+                    if (w && w.timeCap) {
+                      const match = w.timeCap.match(/^(\d+)/);
+                      if (match) {
+                        setHeatWorkoutDuration(Number(match[1]));
+                      }
+                    }
 
-                          const equivalentDivs = (selectedEventToManage?.divisions || []).filter(d => {
-                            if (d.id === w.divisionId) return true;
-                            if (!d.courseLayout || d.courseLayout.length !== layout.length) return false;
-                            return d.courseLayout.every((stg, idx) => stg.name === layout[idx]?.name && stg.type === layout[idx]?.type);
-                          });
+                    const allocations: Record<string, string[]> = {};
+                    let foundCapacity = 5;
+                    let foundCount = 3;
 
-                          const divNames = equivalentDivs.map(d => d.name).join(', ');
+                    const existingHeats = (selectedEventToManage?.scheduleItems || []).filter(
+                      item => item.kind === 'heat' && item.workoutId === wId
+                    );
 
-                          options.push(
-                            <option key={w.id} value={w.id}>
-                              {w.code} - {w.name} [{divNames}]
-                            </option>
-                          );
-                        } else {
-                          const divName = (selectedEventToManage?.divisions || []).find(d => d.id === w.divisionId)?.name;
-                          options.push(
-                            <option key={w.id} value={w.id}>
-                              {w.code} - {w.name}{divName ? ` [${divName}]` : ' [Geral]'}
-                            </option>
-                          );
+                    if (existingHeats.length > 0) {
+                      existingHeats.forEach(item => {
+                        const cap = item.capacity || 6;
+                        const aths = item.athleteIds || [];
+                        allocations[item.id] = Array.from({ length: cap }, (_, idx) => aths[idx] || "");
+                        if (item.capacity) {
+                          foundCapacity = item.capacity;
                         }
                       });
+                      foundCount = existingHeats.length;
 
-                      return options;
-                    })()}
-                  </select>
-                </div>
+                      const firstHeat = existingHeats[0];
+                      if (firstHeat.date) setHeatDate(firstHeat.date);
+                      if (firstHeat.time) setHeatStartTime(firstHeat.time);
+                      if (firstHeat.warmupTime && firstHeat.time) {
+                        setHeatWarmupDuration(hhmmToMinutes(firstHeat.time) - hhmmToMinutes(firstHeat.warmupTime));
+                      }
+                      if (firstHeat.checkinTime && firstHeat.time) {
+                        setHeatCheckinDuration(hhmmToMinutes(firstHeat.time) - hhmmToMinutes(firstHeat.checkinTime));
+                      }
+                      if (firstHeat.endTime && firstHeat.time) {
+                        setHeatWorkoutDuration(hhmmToMinutes(firstHeat.endTime) - hhmmToMinutes(firstHeat.time));
+                      }
+                      setHeatCount(foundCount);
+                      setHeatCapacity(foundCapacity);
+                      setHeatAllocations(allocations);
+                    } else {
+                      const initialAllocations: Record<string, string[]> = {};
+                      for (let i = 1; i <= heatCount; i++) {
+                        initialAllocations[`heat-${wId}-${i}`] = Array(heatCapacity).fill("");
+                      }
+                      setHeatAllocations(initialAllocations);
+                    }
+                  }}
+                  className="w-full rounded-md border border-card-border bg-card px-4 py-2 text-sm text-foreground focus:ring-2 focus:ring-info focus:border-transparent focus:outline-none"
+                >
+                  <option value="">Selecione...</option>
+                  {(() => {
+                    const renderedTotalLayouts: string[] = [];
+                    const options: React.ReactNode[] = [];
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    workouts.forEach((w) => {
+                      const isFRTotal = selectedEventToManage?.eventType === 'fitness_racing' && w.code === 'TOTAL';
+
+                      if (isFRTotal) {
+                        const div = (selectedEventToManage?.divisions || []).find(d => d.id === w.divisionId);
+                        const layout = div?.courseLayout || [];
+                        const layoutSignature = layout.map(stg => `${stg.name}:${stg.type}`).join('|');
+
+                        if (renderedTotalLayouts.includes(layoutSignature)) {
+                          return;
+                        }
+                        renderedTotalLayouts.push(layoutSignature);
+
+                        const equivalentDivs = (selectedEventToManage?.divisions || []).filter(d => {
+                          if (d.id === w.divisionId) return true;
+                          if (!d.courseLayout || d.courseLayout.length !== layout.length) return false;
+                          return d.courseLayout.every((stg, idx) => stg.name === layout[idx]?.name && stg.type === layout[idx]?.type);
+                        });
+
+                        const divNames = equivalentDivs.map(d => d.name).join(', ');
+
+                        options.push(
+                          <option key={w.id} value={w.id}>
+                            {w.code} - {w.name} [{divNames}]
+                          </option>
+                        );
+                      } else {
+                        const divName = (selectedEventToManage?.divisions || []).find(d => d.id === w.divisionId)?.name;
+                        options.push(
+                          <option key={w.id} value={w.id}>
+                            {w.code} - {w.name}{divName ? ` [${divName}]` : ' [Geral]'}
+                          </option>
+                        );
+                      }
+                    });
+
+                    return options;
+                  })()}
+                </select>
+              </div>
+
+              {/* Grid 4 colunas de Inputs */}
+              {heatWorkoutId && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 pt-2 font-sans">
                   <div>
-                    <label htmlFor="heat-date" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Data da Prova *</label>
+                    <label htmlFor="heat-date" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans text-muted-soft">Data da Prova *</label>
                     <input
                       id="heat-date"
                       type="date"
                       value={heatDate}
                       onChange={(e) => setHeatDate(e.target.value)}
-                      className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"
+                      className="w-full rounded-md border border-card-border bg-card px-4 py-2 text-sm text-foreground focus:ring-2 focus:ring-info focus:border-transparent focus:outline-none font-sans"
                     />
                   </div>
+
                   <div>
-                    <label htmlFor="heat-start-time" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Início Bateria 1 *</label>
+                    <label htmlFor="heat-start-time" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans text-muted-soft">Início 1ª Bateria *</label>
                     <input
                       id="heat-start-time"
                       type="time"
                       value={heatStartTime}
                       onChange={(e) => setHeatStartTime(e.target.value)}
-                      className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"
+                      className="w-full rounded-md border border-card-border bg-card px-4 py-2 text-sm text-foreground focus:ring-2 focus:ring-info focus:border-transparent focus:outline-none font-sans"
                     />
                   </div>
-                </div>
 
-                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label htmlFor="heat-warmup" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Aquecimento (min)</label>
-                    <input
-                      id="heat-warmup"
-                      type="number"
-                      min="0"
-                      value={heatWarmupDuration}
-                      onChange={(e) => setHeatWarmupDuration(Number(e.target.value))}
-                      className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none font-number"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="heat-checkin" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Fila (min)</label>
-                    <input
-                      id="heat-checkin"
-                      type="number"
-                      min="0"
-                      value={heatCheckinDuration}
-                      onChange={(e) => setHeatCheckinDuration(Number(e.target.value))}
-                      className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none font-number"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label htmlFor="heat-duration" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Tempo Prova (min)</label>
+                    <label htmlFor="heat-duration" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans text-muted-soft">Duração Prova (min)</label>
                     <input
                       id="heat-duration"
                       type="number"
                       min="1"
                       value={heatWorkoutDuration}
                       onChange={(e) => setHeatWorkoutDuration(Number(e.target.value))}
-                      className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none font-number"
+                      className="w-full rounded-md border border-card-border bg-card px-4 py-2 text-sm text-foreground focus:ring-2 focus:ring-info focus:border-transparent focus:outline-none font-number"
                     />
                   </div>
+
                   <div>
-                    <label htmlFor="heat-interval" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Transição (min)</label>
+                    <label htmlFor="heat-interval" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans text-muted-soft">Intervalo (min)</label>
                     <input
                       id="heat-interval"
                       type="number"
                       min="0"
                       value={heatIntervalDuration}
                       onChange={(e) => setHeatIntervalDuration(Number(e.target.value))}
-                      className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none font-number"
+                      className="w-full rounded-md border border-card-border bg-card px-4 py-2 text-sm text-foreground focus:ring-2 focus:ring-info focus:border-transparent focus:outline-none font-number"
                     />
                   </div>
-                </div>
 
-                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label htmlFor="heat-count" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Quantidade Baterias *</label>
+                    <label htmlFor="heat-count" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans text-muted-soft">Baterias</label>
                     <input
                       id="heat-count"
                       type="number"
@@ -5014,7 +5117,7 @@ export default function AdminPage() {
                             for (let i = 1; i <= newCount; i++) {
                               const heatId = `heat-${heatWorkoutId}-${i}`;
                               if (!nextAllocations[heatId]) {
-                                nextAllocations[heatId] = [];
+                                nextAllocations[heatId] = Array(heatCapacity).fill("");
                               }
                             }
                             Object.keys(nextAllocations).forEach(key => {
@@ -5029,492 +5132,319 @@ export default function AdminPage() {
                           });
                         }
                       }}
-                      className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none font-number"
+                      className="w-full rounded-md border border-card-border bg-card px-4 py-2 text-sm text-foreground focus:ring-2 focus:ring-info focus:border-transparent focus:outline-none font-number"
                     />
                   </div>
+
                   <div>
-                    <label htmlFor="heat-capacity" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Capacidade por Bateria *</label>
+                    <label htmlFor="heat-capacity" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans text-muted-soft">Raias</label>
                     <input
                       id="heat-capacity"
                       type="number"
                       min="1"
                       value={heatCapacity}
-                      onChange={(e) => setHeatCapacity(Number(e.target.value))}
-                      className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none font-number"
+                      onChange={(e) => {
+                        const newCapacity = Number(e.target.value);
+                        setHeatCapacity(newCapacity);
+                        if (heatWorkoutId) {
+                          setHeatAllocations(prev => {
+                            const nextAllocations = { ...prev };
+                            Object.keys(nextAllocations).forEach(key => {
+                              if (key.startsWith(`heat-${heatWorkoutId}-`)) {
+                                const currentList = nextAllocations[key] || [];
+                                if (currentList.length < newCapacity) {
+                                  nextAllocations[key] = [...currentList, ...Array(newCapacity - currentList.length).fill("")];
+                                } else if (currentList.length > newCapacity) {
+                                  nextAllocations[key] = currentList.slice(0, newCapacity);
+                                }
+                              }
+                            });
+                            return nextAllocations;
+                          });
+                        }
+                      }}
+                      className="w-full rounded-md border border-card-border bg-card px-4 py-2 text-sm text-foreground focus:ring-2 focus:ring-info focus:border-transparent focus:outline-none font-number"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="heat-warmup" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans text-muted-soft">Aquecimento (min)</label>
+                    <input
+                      id="heat-warmup"
+                      type="number"
+                      min="0"
+                      value={heatWarmupDuration}
+                      onChange={(e) => setHeatWarmupDuration(Number(e.target.value))}
+                      className="w-full rounded-md border border-card-border bg-card px-4 py-2 text-sm text-foreground focus:ring-2 focus:ring-info focus:border-transparent focus:outline-none font-number"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="heat-checkin" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans text-muted-soft">Fila (min)</label>
+                    <input
+                      id="heat-checkin"
+                      type="number"
+                      min="0"
+                      value={heatCheckinDuration}
+                      onChange={(e) => setHeatCheckinDuration(Number(e.target.value))}
+                      className="w-full rounded-md border border-card-border bg-card px-4 py-2 text-sm text-foreground focus:ring-2 focus:ring-info focus:border-transparent focus:outline-none font-number"
                     />
                   </div>
                 </div>
-              </div>
-            </div>
+              )}
 
-            {/* Pré-visualização Excel Style */}
-            <div className="lg:col-span-2 bg-card border border-card-border rounded-xl p-4 sm:p-6 space-y-4 sm:space-y-6 text-white overflow-x-auto">
-              <div className="border-b border-card-border pb-2 sm:pb-3 flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <h3 className="text-sm sm:text-base font-bold text-white uppercase tracking-wider">Cronograma de Prova</h3>
-                  <p className="text-[10px] sm:text-xs text-muted font-medium">Pré-visualização da planilha gerada em tempo real.</p>
-                </div>
-                {hasSavedHeats && (
-                  <span className="rounded border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary uppercase">
-                    Salvo no banco
-                  </span>
-                )}
-              </div>
-
-              {/* Status do Cronograma da Prova */}
-              <div className={`rounded-xl border p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
-                pendingAthletes.length === 0 && categoryAthletes.length > 0
-                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
-                  : 'border-red-500/30 bg-red-500/10 text-red-200'
-              }`}>
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
+              {/* Botão de Gerar Cronograma e Aviso */}
+              {heatWorkoutId && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-3 border-t border-card-border/40 font-sans">
+                  <div className="flex items-center gap-2 text-xs text-muted-soft font-sans">
                     <span className={`h-2.5 w-2.5 rounded-full ${
-                      pendingAthletes.length === 0 && categoryAthletes.length > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'
+                      pendingAthletes.length === 0 && categoryAthletes.length > 0 ? 'bg-trading-up animate-pulse' : 'bg-trading-down'
                     }`} />
-                    <h4 className="text-xs font-bold uppercase tracking-wider font-sans">
+                    <span className="font-bold text-foreground uppercase tracking-wider font-sans">
                       {pendingAthletes.length === 0 && categoryAthletes.length > 0
                         ? 'Cronograma Concluído'
-                        : 'Cronograma Incompleto'}
-                    </h4>
-                  </div>
-                  <p className="text-xs text-muted-soft">
-                    {pendingAthletes.length === 0 && categoryAthletes.length > 0
-                      ? 'Todos os atletas foram alocados nas baterias.'
-                      : `Falta alocar ${pendingAthletes.length} atleta(s) de um total de ${categoryAthletes.length}.`}
-                  </p>
-                </div>
-                {pendingAthletes.length > 0 && (
-                  <span className="text-xs font-bold font-number bg-red-500/20 text-red-400 border border-red-500/20 px-2.5 py-1 rounded-md self-start sm:self-center">
-                    {pendingAthletes.length} pendentes
-                  </span>
-                )}
-              </div>
-
-              {!heatWorkoutId ? (
-                <p className="text-xs text-muted text-center py-16">Selecione uma prova no formulário para gerar o cronograma.</p>
-              ) : (
-                <div className="space-y-6">
-                  {isWorkoutLocked && previousWorkout && (
-                    <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 flex items-start gap-3 text-amber-200">
-                      <ShieldAlert className="h-5 w-5 shrink-0 text-amber-400 mt-0.5" />
-                      <div className="space-y-1">
-                        <h4 className="text-xs font-bold uppercase tracking-wider">Criação Bloqueada</h4>
-                        <p className="text-xs leading-relaxed text-amber-200/80">
-                          Para cadastrar as baterias da prova atual, você deve primeiro criar e salvar o cronograma de baterias da prova anterior: <strong className="text-amber-100 uppercase">&quot;{previousWorkout.code || previousWorkout.name}&quot;</strong>.
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                  {/* Excel Style Table Container */}
-                  <div className="w-full min-w-[340px] border-collapse border border-white text-center font-sans">
-
-                    {/* Header: Data por Extenso */}
-                    <div className="bg-black text-white py-3 text-sm font-black border-b border-white uppercase tracking-widest">
-                      {formatLongDate(heatDate)}
-                    </div>
-
-                    {/* Sub-Header: Configurações Gerais */}
-                    <div className="grid grid-cols-4 bg-white text-black text-[10px] font-bold py-2 border-b border-white uppercase tracking-wider gap-0">
-                      <div className="border-r border-black flex flex-col justify-center">
-                        <span className="text-[8px] text-gray-500 font-extrabold uppercase">Aquecimento</span>
-                        <span className="font-number font-black text-xs">00:{String(heatWarmupDuration).padStart(2, '0')}</span>
-                      </div>
-                      <div className="border-r border-black flex flex-col justify-center">
-                        <span className="text-[8px] text-gray-500 font-extrabold uppercase">Fila</span>
-                        <span className="font-number font-black text-xs">00:{String(heatCheckinDuration).padStart(2, '0')}</span>
-                      </div>
-                      <div className="border-r border-black flex flex-col justify-center">
-                        <span className="text-[8px] text-gray-500 font-extrabold uppercase">Intervalo</span>
-                        <span className="font-number font-black text-xs">00:{String(heatIntervalDuration).padStart(2, '0')}</span>
-                      </div>
-                      <div className="flex flex-col justify-center">
-                        <span className="text-[8px] text-gray-500 font-extrabold uppercase">Tempo Prova</span>
-                        <span className="font-number font-black text-xs">00:{String(heatWorkoutDuration).padStart(2, '0')}</span>
-                      </div>
-                    </div>
-
-                    {/* Prova Selecionada Highlight Banner */}
-                    <div className="bg-white text-black py-2.5 text-xs font-black border-b border-white uppercase tracking-widest text-center">
-                      {selectedEventToManage?.name} - {selectedWorkout?.name}
-                    </div>
-
-                    {/* Table Column Headers */}
-                    <div className="grid grid-cols-5 bg-white text-black text-[9px] font-black py-1.5 border-b border-white uppercase tracking-widest">
-                      <div></div>
-                      <div className="border-l border-black">Aquecimento</div>
-                      <div className="border-l border-black">Fila</div>
-                      <div className="border-l border-black">Início</div>
-                      <div className="border-l border-black">Final</div>
-                    </div>
-
-                    {/* Grid de Baterias em Cascata */}
-                    <div className="bg-black text-white text-xs font-bold divide-y divide-white">
-                      {generatedHeatsList.map((heat, idx) => {
-                        const isEvenLine = idx % 2 === 1;
-                        const lineBgClass = isEvenLine ? 'bg-white text-black' : 'bg-black text-white';
-                        const colBorderClass = isEvenLine ? 'border-l border-black' : 'border-l border-white';
-
-                        // Célula do INICIO com estilo condicional conforme Excel
-                        const inicioCellClass = isEvenLine
-                          ? `font-number font-black text-primary ${colBorderClass}`
-                          : `bg-primary text-ink font-number font-black ${colBorderClass}`;
-
-                        return (
-                          <div key={heat.number} className={`grid grid-cols-5 py-2.5 ${lineBgClass} items-center`}>
-                            <div className="uppercase font-black text-[10px] tracking-wider">
-                              Bateria {heat.number}
-                            </div>
-                            <div className={`font-number ${colBorderClass}`}>
-                              {heat.warmup}
-                            </div>
-                            <div className={`font-number ${colBorderClass}`}>
-                              {heat.fila}
-                            </div>
-                            <div className={inicioCellClass}>
-                              {heat.inicio}
-                            </div>
-                            <div className={`font-number ${colBorderClass}`}>
-                              {heat.final}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                        : `Falta alocar ${pendingAthletes.length} atleta(s) de ${categoryAthletes.length}.`}
+                    </span>
                   </div>
 
-                  {/* Seção: Distribuição de Competidores */}
-                  <div className="border-t border-card-border/60 pt-4 sm:pt-6 space-y-3 sm:space-y-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                      <div className="min-w-0">
-                        <h4 className="text-xs sm:text-sm font-bold text-white uppercase tracking-wider">Distribuição de Competidores</h4>
-                        <p className="text-[10px] sm:text-xs text-muted font-medium">Aloque competidores nas baterias manualmente ou por leaderboard.</p>
-                      </div>
-                      <button
-                        type="button"
-                        disabled={isWorkoutLocked}
-                        onClick={handleAutoFillHeats}
-                        className={`inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors shrink-0 ${
-                          isWorkoutLocked
-                            ? 'bg-muted/10 text-muted/40 cursor-not-allowed border border-card-border/30'
-                            : 'bg-primary/10 border border-primary/30 hover:bg-primary/20 text-primary'
-                        }`}
-                      >
-                        <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                          <path d="M19 11.5L16.5 6L14 11.5L8.5 14L14 16.5L16.5 22L19 16.5L24 14L19 11.5Z" />
-                          <path d="M7 6.5L5.5 3L4 6.5L0.5 8L4 9.5L5.5 13L7 9.5L10.5 8L7 6.5Z" />
-                          <path d="M8 17.5L7.25 15.75L5.5 15L7.25 14.25L8 12.5L8.75 14.25L10.5 15L8.75 15.75L8 17.5Z" />
-                        </svg>
-                        Auto-preencher por Leaderboard
-                      </button>
-                    </div>
-
-                    {/* Layout Lado a Lado (xl:grid-cols-3) no Desktop */}
-                    <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6">
-
-                      {/* Coluna da Esquerda (Baterias e Pendentes) */}
-                      <div className="xl:col-span-2 space-y-4 sm:space-y-6">
-
-                        {/* Grid de Baterias (Cards de Alocação) */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-                          {generatedHeatsList.map((heat) => {
-                            const heatId = `heat-${heatWorkoutId}-${heat.number}`;
-                            const allocatedIds = heatAllocations[heatId] || [];
-                            const allocatedAthletes = allocatedIds
-                              .map(id => athletes.find(a => a.id === id))
-                              .filter(Boolean) as Athlete[];
-
-                            return (
-                              <div key={heatId} className="rounded-lg border border-card-border bg-dark-gray/30 p-3 space-y-2">
-                                <div className="flex items-center justify-between pb-1.5 border-b border-card-border/50">
-                                  <span className="text-[10px] font-extrabold text-white uppercase tracking-wider">
-                                    Bat. {heat.number}
-                                  </span>
-                                  <span className={`text-[9px] font-bold px-1.5 py-px rounded-full ${
-                                    allocatedAthletes.length >= heatCapacity
-                                      ? 'bg-red-500/20 text-red-400 border border-red-500/30'
-                                      : 'bg-primary/20 text-primary border border-primary/30'
-                                  }`}>
-                                    {allocatedAthletes.length}/{heatCapacity}
-                                  </span>
-                                </div>
-
-                                {/* Lista de Atletas Alocados nesta bateria */}
-                                <div className="space-y-1 min-h-[36px]">
-                                  {allocatedAthletes.length === 0 ? (
-                                    <p className="text-[9px] text-muted-soft text-center py-2.5 italic">Nenhum alocado</p>
-                                  ) : (
-                                    allocatedAthletes.map(ath => (
-                                      <div key={ath.id} className="flex items-center justify-between bg-black/40 border border-card-border/40 rounded px-2 py-1 text-[10px] transition-colors hover:border-card-border">
-                                        <div className="flex items-center gap-1.5 truncate min-w-0">
-                                          {ath.isTeam ? (
-                                            <span className="shrink-0 text-[8px] font-bold text-primary">EQ</span>
-                                          ) : (
-                                            <span className="shrink-0 text-[8px] font-bold text-muted font-number">#</span>
-                                          )}
-                                          <span className="font-bold text-white truncate">{ath.name}</span>
-                                        </div>
-                                        {!isWorkoutLocked && (
-                                          <button
-                                            type="button"
-                                            onClick={() => handleRemoveAthleteFromHeat(heatId, ath.id)}
-                                            className="text-red-500/70 hover:text-red-400 p-0.5 transition-colors ml-1 shrink-0"
-                                            title="Remover"
-                                          >
-                                            <X className="h-3 w-3" />
-                                          </button>
-                                        )}
-                                      </div>
-                                    ))
-                                  )}
-                                </div>
-
-                                {/* Dropdown de alocação rápida */}
-                                {allocatedAthletes.length < heatCapacity && (
-                                  <select
-                                    value=""
-                                    disabled={isWorkoutLocked}
-                                    onChange={(e) => {
-                                      if (e.target.value) {
-                                        handleAddAthleteToHeat(heatId, e.target.value);
-                                      }
-                                    }}
-                                    className="w-full rounded border border-card-border/50 bg-dark-gray/60 px-2 py-1 text-[10px] text-muted hover:text-white focus:border-primary/50 focus:outline-none disabled:cursor-not-allowed disabled:opacity-55"
-                                  >
-                                    <option value="">+ Adicionar...</option>
-                                    {pendingAthletes.map(ath => (
-                                      <option key={ath.id} value={ath.id}>
-                                        {ath.name} {ath.box ? `(${ath.box})` : ''}
-                                      </option>
-                                    ))}
-                                  </select>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-
-                        {/* Competidores Pendentes */}
-                        <div className="rounded-lg border border-card-border/40 bg-dark-gray/10 p-3 space-y-2">
-                          <div className="flex items-center justify-between pb-1.5 border-b border-card-border/30">
-                            <span className="text-[10px] font-extrabold text-muted uppercase tracking-wider">
-                              Sem Bateria ({pendingAthletes.length})
-                            </span>
-                          </div>
-
-                          {pendingAthletes.length === 0 ? (
-                            <p className="text-[10px] text-muted text-center py-3 italic">Todos alocados!</p>
-                          ) : (
-                            <div className="space-y-3 max-h-[160px] overflow-y-auto">
-                              {Object.entries(groupAthletesByDivision(pendingAthletes)).map(([divName, list]) => {
-                                if (list.length === 0) return null;
-                                return (
-                                  <div key={divName} className="space-y-1">
-                                    <span className="text-[8px] font-bold text-primary/80 uppercase tracking-wider block mb-0.5">{divName}</span>
-                                    <div className="flex flex-wrap gap-1.5">
-                                      {list.map(ath => (
-                                        <div
-                                          key={ath.id}
-                                          className="group relative flex items-center gap-1 rounded border border-card-border/50 bg-dark-gray/40 px-2 py-1 text-[10px] text-white hover:border-primary/50 transition-colors"
-                                        >
-                                          <span className="font-bold truncate max-w-[100px]">{ath.name}</span>
-                                          {!isWorkoutLocked && (
-                                            <div className="hidden group-hover:flex absolute left-0 bottom-full mb-1 bg-black border border-card-border rounded-lg p-1.5 z-50 flex-col gap-1 w-32">
-                                              <span className="text-[8px] text-muted font-bold text-center block pb-1 border-b border-card-border/40">Mover para:</span>
-                                              {generatedHeatsList.map(h => {
-                                                const hId = `heat-${heatWorkoutId}-${h.number}`;
-                                                const currentCount = (heatAllocations[hId] || []).length;
-                                                const isFull = currentCount >= heatCapacity;
-                                                return (
-                                                  <button
-                                                    key={hId}
-                                                    type="button"
-                                                    disabled={isFull}
-                                                    onClick={() => handleAddAthleteToHeat(hId, ath.id)}
-                                                    className={`text-[9px] font-bold text-left px-2 py-1 rounded transition-colors ${
-                                                      isFull
-                                                        ? 'text-muted cursor-not-allowed bg-red-950/20'
-                                                        : 'text-white hover:bg-primary hover:text-ink'
-                                                    }`}
-                                                  >
-                                                    Bateria {h.number} ({currentCount}/{heatCapacity})
-                                                  </button>
-                                                );
-                                              })}
-                                            </div>
-                                          )}
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-
-                      </div>
-
-                      {/* Coluna da Direita (Status Geral da Categoria) */}
-                      <div className="rounded-lg border border-card-border bg-dark-gray/20 p-3 space-y-3">
-                        <div className="border-b border-card-border/40 pb-1.5">
-                          <h5 className="text-[10px] font-extrabold text-white uppercase tracking-wider">Inscritos na Categoria</h5>
-                          <p className="text-[9px] text-muted-soft">Competidores e baterias.</p>
-                        </div>
-
-                        {/* Campo de Busca Rápida */}
-                        <div className="relative">
-                          <input
-                            type="text"
-                            placeholder="Buscar competidor..."
-                            value={heatAthleteSearchQuery}
-                            onChange={(e) => setHeatAthleteSearchQuery(e.target.value)}
-                            className="w-full rounded-md border border-card-border bg-dark-gray px-3 py-1.5 pl-8 text-xs text-white placeholder:text-muted focus:border-primary/50 focus:outline-none"
-                          />
-                          <svg className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <circle cx="11" cy="11" r="8"></circle>
-                            <line x1="21" x2="16.65" y1="21" y2="16.65"></line>
-                          </svg>
-                        </div>
-
-                        {/* Lista Geral de Alocação */}
-                        <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1">
-                          {categoryAthletes.length === 0 ? (
-                            <p className="text-xs text-muted text-center py-8 italic">Nenhum competidor cadastrado nesta prova.</p>
-                          ) : (
-                            (() => {
-                              const filtered = categoryAthletes.filter(ath => {
-                                if (!heatAthleteSearchQuery) return true;
-                                return ath.name.toLowerCase().includes(heatAthleteSearchQuery.toLowerCase());
-                              });
-
-                              if (filtered.length === 0) {
-                                return <p className="text-xs text-muted text-center py-8 italic">Nenhum competidor correspondente à busca.</p>;
-                              }
-
-                              return Object.entries(groupAthletesByDivision(filtered)).map(([divName, list]) => {
-                                if (list.length === 0) return null;
-                                return (
-                                  <div key={divName} className="space-y-1.5">
-                                    <div className="bg-dark-gray/40 px-2 py-1 rounded border border-card-border/30 flex items-center justify-between font-sans">
-                                      <span className="text-[9px] font-extrabold text-primary uppercase tracking-wider">{divName}</span>
-                                      <span className="text-[9px] font-bold text-muted font-number">{list.length} atletas</span>
-                                    </div>
-                                    <div className="space-y-1">
-                                      {list.map(ath => {
-                                        let allocatedHeatNumber: number | null = null;
-                                        let allocatedHeatTime: string | null = null;
-
-                                        generatedHeatsList.forEach(h => {
-                                          const hId = `heat-${heatWorkoutId}-${h.number}`;
-                                          if ((heatAllocations[hId] || []).includes(ath.id)) {
-                                            allocatedHeatNumber = h.number;
-                                            allocatedHeatTime = h.inicio;
-                                          }
-                                        });
-
-                                        return (
-                                          <div key={ath.id} className="flex items-center justify-between bg-black/30 border border-card-border/40 rounded px-2 py-1.5 text-[10px] transition-colors hover:bg-black/50 font-sans w-full min-w-0">
-                                            <div className="flex flex-col flex-1 min-w-0 pr-2">
-                                              <span className="font-bold text-white truncate block">{ath.name}</span>
-                                              {ath.box && <span className="text-[9px] text-muted truncate block">{ath.box}</span>}
-                                            </div>
-                                            <div className="shrink-0">
-                                              {allocatedHeatNumber !== null ? (
-                                                <span className="inline-flex rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold">
-                                                  Bateria {allocatedHeatNumber} ({allocatedHeatTime})
-                                                </span>
-                                              ) : (
-                                                <span className="inline-flex rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 px-2 py-0.5 text-[9px] font-bold">
-                                                  Pendente
-                                                </span>
-                                              )}
-                                            </div>
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  </div>
-                                );
-                              });
-                            })()
-                          )}
-                        </div>
-
-                      </div>
-
-                    </div>
-                  </div>
-
-                  {/* Seção de Ações de Publicação e Chamada */}
-                  {hasSavedHeats && (
-                    <div className="border-t border-card-border/60 pt-4 space-y-3 font-sans">
-                      <div className="flex items-center justify-between">
-                        <h5 className="text-[10px] font-extrabold text-white uppercase tracking-wider">Ações de Controle de Prova</h5>
-                        <div className="flex gap-2">
-                          {isPublished && (
-                            <span className="rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[9px] font-bold text-emerald-400 uppercase">
-                              Publicado ✅
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      {!isSavedScheduleComplete ? (
-                        <p className="text-[10px] text-amber-400 font-bold bg-amber-500/10 border border-amber-500/20 px-3 py-2 rounded-lg">
-                          ⚠️ O cronograma salvo possui competidores pendentes de alocação. Aloque todos os competidores e salve para habilitar as ações de publicação.
-                        </p>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={handlePublishHeats}
-                          disabled={isPublished}
-                          className={`w-full flex min-h-10 items-center justify-center gap-1.5 rounded-md px-3 sm:px-4 py-2 text-[10px] sm:text-xs font-bold uppercase tracking-wider leading-tight transition-colors ${
-                            isPublished
-                              ? 'bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 cursor-not-allowed'
-                              : 'bg-primary hover:bg-primary-hover text-ink'
-                          }`}
-                        >
-                          {isPublished ? 'Baterias Publicadas' : 'Publicar Baterias'}
-                        </button>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Ações */}
-                  <div className="flex flex-col sm:flex-row gap-3 pt-3 sm:pt-4 border-t border-card-border/60">
-                    <button
-                      type="button"
-                      disabled={isWorkoutLocked}
-                      onClick={handleSaveWorkoutHeats}
-                      className={`flex-1 flex min-h-10 items-center justify-center gap-2 rounded-md px-4 sm:px-6 py-2 text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-colors ${
-                        isWorkoutLocked
-                          ? 'bg-muted/10 text-muted/40 cursor-not-allowed border border-card-border/30'
-                          : 'bg-primary hover:bg-primary-hover text-ink'
-                      }`}
-                    >
-                      <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-                      Salvar Baterias
-                    </button>
-                    {hasSavedHeats && (
-                      <button
-                        type="button"
-                        disabled={isWorkoutLocked}
-                        onClick={handleClearWorkoutHeats}
-                        className={`flex min-h-10 items-center justify-center gap-2 rounded-md border px-4 sm:px-6 py-2 text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-colors ${
-                          isWorkoutLocked
-                            ? 'bg-muted/10 text-muted/40 cursor-not-allowed border-card-border/30'
-                            : 'border-card-border bg-dark-gray hover:border-red-500 hover:text-red-400 text-muted'
-                        }`}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                        Limpar
-                      </button>
-                    )}
-                  </div>
+                  <button
+                    type="button"
+                    disabled={isWorkoutLocked}
+                    onClick={handleSaveWorkoutHeats}
+                    className={`inline-flex items-center justify-center rounded-md px-6 py-2.5 text-xs font-black uppercase tracking-wider transition-colors ${
+                      isWorkoutLocked
+                        ? 'bg-muted/10 text-muted/40 border border-card-border/30 cursor-not-allowed font-sans'
+                        : 'bg-trading-down hover:opacity-90 text-white font-black cursor-pointer font-sans'
+                    }`}
+                  >
+                    Gerar Cronograma
+                  </button>
                 </div>
               )}
             </div>
+
+            {/* Distribuição de Competidores */}
+            {heatWorkoutId && (
+              <div className="border-t border-card-border/60 pt-4 space-y-4">
+                {isWorkoutLocked && previousWorkout && (
+                  <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 flex items-start gap-3 text-amber-200">
+                    <svg className="h-5 w-5 shrink-0 text-amber-400 mt-0.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <div className="space-y-1">
+                      <h4 className="text-xs font-bold uppercase tracking-wider font-sans">Criação Bloqueada</h4>
+                      <p className="text-xs leading-relaxed text-amber-200/80 font-sans">
+                        Para cadastrar as baterias da prova atual, você deve primeiro criar e salvar o cronograma de baterias da prova anterior: <strong className="text-amber-100 uppercase">&quot;{previousWorkout.code || previousWorkout.name}&quot;</strong>.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start font-sans">
+                  
+                  {/* Coluna 1/3: EQUIPES PENDENTES */}
+                  <div
+                    onDragOver={handleDragOver}
+                    onDrop={handleDropOnPendingList}
+                    className="xl:col-span-1 rounded-xl border border-card-border/50 bg-dark-gray/10 p-4 space-y-4 font-sans"
+                  >
+                    <div className="flex items-center justify-between pb-2 border-b border-card-border/30">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-black uppercase text-foreground tracking-wider font-sans">
+                          EQUIPES
+                        </span>
+                        <span className="text-xs font-black bg-primary/20 text-primary border border-primary/20 px-2 py-0.5 rounded-full font-number">
+                          {pendingAthletes.length}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Barra de Busca de Equipes */}
+                    <div className="relative font-sans">
+                      <input
+                        type="text"
+                        placeholder="Buscar equipe..."
+                        value={heatAthleteSearchQuery}
+                        onChange={(e) => setHeatAthleteSearchQuery(e.target.value)}
+                        className="w-full rounded-md border border-card-border bg-card px-3.5 py-2 pl-9 text-xs text-foreground placeholder:text-muted focus:ring-2 focus:ring-info focus:border-transparent focus:outline-none"
+                      />
+                      <svg className="absolute left-3.5 top-3.5 h-3.5 w-3.5 text-muted" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                    </div>
+
+                    {/* Botão AUTO-DISTRIBUIR */}
+                    <button
+                      type="button"
+                      disabled={isWorkoutLocked || pendingAthletes.length === 0}
+                      onClick={handleAutoFillHeats}
+                      className={`w-full flex items-center justify-center gap-2 rounded-md py-2.5 text-xs font-black uppercase tracking-wider transition-colors ${
+                        isWorkoutLocked || pendingAthletes.length === 0
+                          ? 'bg-muted/10 text-muted/40 cursor-not-allowed border border-card-border/30 font-sans'
+                          : 'bg-card border border-card-border/80 hover:opacity-80 text-foreground font-black cursor-pointer font-sans'
+                      }`}
+                    >
+                      <svg className="h-3.5 w-3.5 text-primary" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M19 11.5L16.5 6L14 11.5L8.5 14L14 16.5L16.5 22L19 16.5L24 14L19 11.5Z" />
+                        <path d="M7 6.5L5.5 3L4 6.5L0.5 8L4 9.5L5.5 13L7 9.5L10.5 8L7 6.5Z" />
+                      </svg>
+                      Auto-distribuir
+                    </button>
+
+                    {/* Lista das Equipes Pendentes */}
+                    <div className="space-y-2 max-h-[480px] overflow-y-auto pr-1 font-sans">
+                      {(() => {
+                        const filtered = pendingAthletes.filter(ath =>
+                          ath.name.toLowerCase().includes(heatAthleteSearchQuery.toLowerCase())
+                        );
+
+                        if (filtered.length === 0) {
+                          return (
+                            <p className="text-xs text-muted text-center py-8 italic bg-black/20 rounded-lg border border-card-border/30 font-sans font-medium text-muted-soft">
+                              Nenhuma equipe pendente
+                            </p>
+                          );
+                        }
+
+                        return filtered.map(ath => (
+                          <div
+                            key={ath.id}
+                            draggable={!isWorkoutLocked}
+                            onDragStart={(e) => handleDragStart(e, ath.id)}
+                            className={`flex items-center gap-3 bg-black/40 border border-card-border/50 rounded-lg p-3 transition-all ${
+                              isWorkoutLocked
+                                ? 'opacity-85'
+                                : 'cursor-grab active:cursor-grabbing hover:border-primary/50 hover:bg-black/50'
+                            }`}
+                          >
+                            <div className="shrink-0 flex items-center justify-center h-8 w-8 rounded-full bg-black/60 border border-card-border/60">
+                              <svg className="h-4 w-4 text-trading-down" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5s-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
+                              </svg>
+                            </div>
+                            <div className="min-w-0 flex-1 space-y-0.5">
+                              <h5 className="text-xs font-black text-foreground truncate uppercase tracking-wide font-sans">
+                                {ath.name}
+                              </h5>
+                              <p className="text-xs text-muted font-medium truncate font-sans">
+                                {getDivisionName(ath.divisionId)} &ndash; {ath.isTeam ? 'Equipe' : 'Individual'}
+                              </p>
+                            </div>
+                          </div>
+                        ));
+                      })()}
+                    </div>
+                  </div>
+
+                  {/* Coluna 2/3: GRID DE BATERIAS */}
+                  <div className="xl:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-5 font-sans">
+                    {generatedHeatsList.map((heat) => {
+                      const heatId = `heat-${heatWorkoutId}-${heat.number}`;
+                      const allocatedIds = heatAllocations[heatId] || [];
+                      
+                      // Filtra os IDs válidos alocados nesta bateria
+                      const occupiedCount = allocatedIds.filter(Boolean).length;
+
+                      return (
+                        <div
+                          key={heatId}
+                          className="rounded-xl border border-card-border bg-card/25 p-4 space-y-3.5 flex flex-col font-sans"
+                        >
+                          {/* Cabeçalho da Bateria */}
+                          <div className="flex items-center justify-between border-b border-card-border/50 pb-2">
+                            <h4 className="text-lg font-black italic uppercase tracking-wider text-trading-down font-sans">
+                              Bateria {heat.number}
+                            </h4>
+                            <div className="flex items-center gap-1 bg-black/40 border border-card-border px-2 py-0.5 rounded-full text-xs font-bold text-muted font-sans">
+                              <svg className="h-3 w-3 text-muted-soft" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5s-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5z" />
+                              </svg>
+                              <span className="font-number">{occupiedCount}/{heatCapacity}</span>
+                            </div>
+                          </div>
+
+                          {/* Horários da Bateria na Horizontal */}
+                          <div className="grid grid-cols-4 bg-black/50 border border-card-border/60 rounded-lg p-2 text-center text-xs font-bold uppercase gap-2 font-sans font-medium">
+                            <div className="flex flex-col justify-center min-w-0">
+                              <span className="text-xs text-muted font-extrabold block truncate">Aquecimento</span>
+                              <span className="font-number font-black text-foreground text-sm mt-0.5">{heat.warmup}</span>
+                            </div>
+                            <div className="flex flex-col justify-center min-w-0">
+                              <span className="text-xs text-muted font-extrabold block truncate">Fila</span>
+                              <span className="font-number font-black text-foreground text-sm mt-0.5">{heat.fila}</span>
+                            </div>
+                            <div className="flex flex-col justify-center min-w-0 items-center">
+                              <span className="text-xs text-muted font-extrabold block truncate">Início</span>
+                              <div className="flex items-center gap-1 mt-0.5">
+                                <span className="h-1.5 w-1.5 rounded-full bg-trading-up shrink-0" />
+                                <span className="font-number font-black text-primary text-sm">{heat.inicio}</span>
+                              </div>
+                            </div>
+                            <div className="flex flex-col justify-center min-w-0">
+                              <span className="text-xs text-muted font-extrabold block truncate">Final</span>
+                              <span className="font-number font-black text-foreground text-sm mt-0.5">{heat.final}</span>
+                            </div>
+                          </div>
+
+                          {/* Grid de Raias (2 colunas) */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 font-sans">
+                            {Array.from({ length: heatCapacity }).map((_, laneIdx) => {
+                              const athleteId = allocatedIds[laneIdx];
+                              const athlete = athleteId ? athletes.find(a => a.id === athleteId) : null;
+
+                              return (
+                                <div
+                                  key={laneIdx}
+                                  onDragOver={handleDragOver}
+                                  onDrop={(e) => handleDropOnLane(e, heatId, laneIdx)}
+                                  className="space-y-1 font-sans"
+                                >
+                                  <span className="text-[9px] font-extrabold uppercase text-muted tracking-wider block font-sans">
+                                    Raia {laneIdx + 1}
+                                  </span>
+
+                                  {athlete ? (
+                                    <div
+                                      draggable={!isWorkoutLocked}
+                                      onDragStart={(e) => handleDragStart(e, athlete.id)}
+                                      className="flex items-center justify-between bg-black/60 border border-card-border/80 rounded-lg p-2.5 text-xs transition-all hover:border-primary/40 cursor-grab active:cursor-grabbing font-sans"
+                                    >
+                                      <div className="flex items-center gap-2 truncate min-w-0">
+                                        <svg className="h-3.5 w-3.5 text-trading-down shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                                          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z" />
+                                        </svg>
+                                        <span className="font-black text-foreground truncate uppercase tracking-wider text-xs font-sans">
+                                          {athlete.name}
+                                        </span>
+                                      </div>
+                                      {!isWorkoutLocked && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleRemoveAthleteFromHeatLane(heatId, laneIdx)}
+                                          className="text-trading-down/70 hover:text-trading-down p-0.5 transition-colors shrink-0 ml-1.5 cursor-pointer font-sans"
+                                          title="Desalocar raia"
+                                        >
+                                          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                                          Limpar
+                                        </button>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center justify-center border border-dashed border-card-border/60 rounded-lg p-2.5 text-muted/50 text-xs uppercase font-bold tracking-wider font-sans bg-black/10 min-h-[38px]">
+                                      Raia Vazia
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
