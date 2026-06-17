@@ -1,9 +1,23 @@
 import type { Metadata, Viewport } from "next";
+import { Inter, IBM_Plex_Sans } from "next/font/google";
 import "./globals.css";
 import { AppProvider } from "@/context/AppContext";
 import { AppLoadingWrapper } from "@/components/AppLoadingWrapper";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-body",
+  display: "swap",
+});
+
+const ibmPlexSans = IBM_Plex_Sans({
+  weight: ["400", "500"],
+  subsets: ["latin"],
+  variable: "--font-number",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "WODArena | Líder em Competições de Functional Fitness",
@@ -43,7 +57,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt-BR" data-scroll-behavior="smooth" className="h-full bg-background text-foreground">
+    <html lang="pt-BR" data-scroll-behavior="smooth" className={`h-full bg-background text-foreground ${inter.variable} ${ibmPlexSans.variable}`}>
       <body className="flex flex-col min-h-screen antialiased bg-background">
         <a href="#main-content" className="skip-link">Pular para o conteúdo</a>
         <AppProvider>

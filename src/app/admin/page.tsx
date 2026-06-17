@@ -5214,7 +5214,7 @@ export default function AdminPage() {
                     className={`inline-flex items-center justify-center rounded-md px-6 py-2.5 text-xs font-black uppercase tracking-wider transition-colors ${
                       isWorkoutLocked
                         ? 'bg-muted/10 text-muted/40 border border-card-border/30 cursor-not-allowed font-sans'
-                        : 'bg-trading-down hover:opacity-90 text-white font-black cursor-pointer font-sans'
+                        : 'bg-primary hover:bg-primary-hover text-ink font-black cursor-pointer font-sans'
                     }`}
                   >
                     Gerar Cronograma
