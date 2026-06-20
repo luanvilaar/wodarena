@@ -20,6 +20,8 @@ export type RegistrationPaymentStatus =
   | 'payment_cancelled';
 
 export type ContestationStatus = 'under_review' | 'approved' | 'rejected';
+export type CommercialLeadStatus = 'new' | 'contacted' | 'qualified' | 'discarded';
+export type CommercialLeadEmailNotificationStatus = 'pending' | 'sent' | 'failed' | 'skipped';
 
 export interface CourseStage {
   id: string;
@@ -202,4 +204,26 @@ export interface Coupon {
   usageCount: number;
   createdAt: string;
   isActive: boolean;
+}
+
+export interface CommercialLead {
+  id: string;
+  managerName: string;
+  phone: string;
+  phoneNormalized: string;
+  eventName: string;
+  city: string;
+  state: string;
+  leadStatus: CommercialLeadStatus;
+  acceptedTerms: boolean;
+  acceptedAt: string;
+  termsVersion: string;
+  source: string;
+  ownerEmailNotificationStatus: CommercialLeadEmailNotificationStatus;
+  ownerEmailNotifiedAt?: string;
+  ownerEmailRecipient?: string;
+  ownerEmailMessageId?: string;
+  ownerEmailError?: string;
+  submittedAt: string;
+  updatedAt?: string;
 }

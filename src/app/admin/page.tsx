@@ -5293,7 +5293,7 @@ export default function AdminPage() {
                       </svg>
                       Publicar
                     </button>
-                    <div className="absolute right-0 top-full mt-1.5 hidden group-hover:block bg-[#1e2329] border border-card-border p-2 rounded text-[10px] text-primary font-semibold w-48 z-50 shadow-lg">
+                    <div className="absolute right-0 top-full mt-1.5 hidden group-hover:block bg-card border border-card-border p-2 rounded text-[10px] text-primary font-semibold w-48 z-50">
                       O cronograma salvo possui competidores pendentes de alocação.
                     </div>
                   </div>
@@ -5687,7 +5687,7 @@ export default function AdminPage() {
 
                         if (filtered.length === 0) {
                           return (
-                            <p className="text-xs text-muted-soft text-center py-8 italic bg-[#181a20]/40 rounded-lg border border-card-border/30 font-medium">
+                            <p className="text-xs text-muted-soft text-center py-8 italic bg-background/40 rounded-lg border border-card-border/30 font-medium">
                               Nenhuma equipe pendente
                             </p>
                           );

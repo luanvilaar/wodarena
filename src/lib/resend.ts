@@ -594,3 +594,108 @@ export async function sendContestationStatusEmail(params: {
     return { success: false, error: err };
   }
 }
+
+export async function sendCommercialLeadOwnerEmail(params: {
+  toEmail: string;
+  managerName: string;
+  phone: string;
+  eventName: string;
+  city: string;
+  state: string;
+  acceptedAt: string;
+  submittedAt: string;
+}) {
+  const apiKey = getResendApiKey();
+  if (!apiKey) {
+    console.error('[Resend Commercial Lead] RESENDAPI_KEY nao configurada no ambiente.');
+    return { success: false, error: 'Chave de API do Resend ausente.' };
+  }
+
+  const safeManagerName = escapeHtml(params.managerName || 'Gestor interessado');
+  const safePhone = escapeHtml(params.phone || '-');
+  const safeEventName = escapeHtml(params.eventName || '-');
+  const safeCity = escapeHtml(params.city || '-');
+  const safeState = escapeHtml(params.state || '-');
+  const safeAcceptedAt = escapeHtml(params.acceptedAt || '-');
+  const safeSubmittedAt = escapeHtml(params.submittedAt || '-');
+
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Novo gestor interessado no WODArena</title>
+      <style>
+        body { margin: 0; padding: 0; background: #f5f5f5; color: #181a20; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+        .wrapper { width: 100%; padding: 32px 0; background: #f5f5f5; }
+        .container { max-width: 560px; margin: 0 auto; background: #ffffff; border: 1px solid #eaecef; border-radius: 12px; overflow: hidden; }
+        .header { background: #181a20; border-bottom: 3px solid #FCD535; padding: 24px; text-align: center; }
+        .brand { color: #FCD535; font-size: 20px; font-weight: 900; letter-spacing: 0.14em; text-transform: uppercase; }
+        .body { padding: 32px 24px; }
+        .eyebrow { display: inline-block; margin-bottom: 14px; border: 1px solid #d4a900; background: #fff7d6; color: #8a6a00; border-radius: 4px; padding: 6px 10px; font-size: 10px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
+        h1 { margin: 0 0 10px; font-size: 23px; line-height: 1.2; color: #181a20; text-transform: uppercase; }
+        p { margin: 0 0 16px; color: #707a8a; font-size: 14px; line-height: 1.55; }
+        .info { width: 100%; border-collapse: collapse; margin-top: 18px; }
+        .info td { padding: 8px 0; vertical-align: top; font-size: 13px; }
+        .label { color: #707a8a; font-weight: 800; text-transform: uppercase; font-size: 10px; letter-spacing: 0.08em; width: 40%; }
+        .value { color: #181a20; font-weight: 700; }
+        .footer { border-top: 1px solid #eaecef; background: #fafafa; padding: 22px 24px; text-align: center; color: #707a8a; font-size: 11px; line-height: 1.5; }
+      </style>
+    </head>
+    <body>
+      <div class="wrapper">
+        <div class="container">
+          <div class="header"><div class="brand">WODArena</div></div>
+          <div class="body">
+            <span class="eyebrow">Lead comercial</span>
+            <h1>Novo gestor interessado</h1>
+            <p>Um novo potencial cliente preencheu o formulario comercial da homepage da WODArena.</p>
+            <table class="info">
+              <tr><td class="label">Nome do Gestor</td><td class="value">${safeManagerName}</td></tr>
+              <tr><td class="label">Telefone</td><td class="value">${safePhone}</td></tr>
+              <tr><td class="label">Nome do Evento</td><td class="value">${safeEventName}</td></tr>
+              <tr><td class="label">Cidade</td><td class="value">${safeCity}</td></tr>
+              <tr><td class="label">Estado</td><td class="value">${safeState}</td></tr>
+              <tr><td class="label">Aceite de Termos</td><td class="value">Sim</td></tr>
+              <tr><td class="label">Data/Hora do Aceite</td><td class="value">${safeAcceptedAt}</td></tr>
+              <tr><td class="label">Data/Hora do Cadastro</td><td class="value">${safeSubmittedAt}</td></tr>
+            </table>
+          </div>
+          <div class="footer">
+            Este e-mail foi enviado automaticamente pela captacao comercial da homepage da WODArena.
+          </div>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: getResendFrom(),
+        to: params.toEmail,
+        subject: 'Novo gestor interessado no WODArena',
+        html: htmlContent,
+      }),
+    });
+
+    if (!res.ok) {
+      const errorData = await parseResendError(res);
+      console.error('[Resend Commercial Lead] Erro na API do Resend:', errorData);
+      return { success: false, error: errorData };
+    }
+
+    const data = await res.json();
+    return { success: true, messageId: data.id };
+  } catch (err) {
+    console.error('[Resend Commercial Lead] Erro critico ao enviar e-mail:', err);
+    return { success: false, error: err };
+  }
+}

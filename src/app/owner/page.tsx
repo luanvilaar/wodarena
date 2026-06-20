@@ -1,14 +1,29 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import { useApp } from '@/context/AppContext';
 import { Leaderboard } from '@/components/Leaderboard';
 import { BrandLogo } from '@/components/BrandLogo';
+import { CommercialLead } from '@/types';
+import { getCommercialLeadEmailStatusLabel, getCommercialLeadStatusLabel } from '@/lib/commercialLeads';
 import {
   Shield, LayoutDashboard, Users, Trophy, DollarSign,
   UserPlus, Calendar, Medal, LogOut, KeyRound, Building, ShieldCheck
 } from 'lucide-react';
+
+const formatDateTime = (value?: string) => {
+  if (!value) return '-';
+
+  try {
+    return new Intl.DateTimeFormat('pt-BR', {
+      dateStyle: 'short',
+      timeStyle: 'short'
+    }).format(new Date(value));
+  } catch {
+    return value;
+  }
+};
 
 export default function OwnerPage() {
   const {
@@ -21,7 +36,7 @@ export default function OwnerPage() {
   const [loginError, setLoginError] = useState('');
 
   // Abas do Painel
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'managers' | 'events' | 'leaderboards'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'managers' | 'events' | 'leaderboards' | 'leads'>('dashboard');
 
   // Formulário de Cadastro de Gestor
   const [newManagerName, setNewManagerName] = useState('');
@@ -29,9 +44,12 @@ export default function OwnerPage() {
   const [newManagerPassword, setNewManagerPassword] = useState('');
   const [newManagerOrg, setNewManagerOrg] = useState('');
   const [createMsg, setCreateMsg] = useState({ text: '', isError: false });
+  const [commercialLeads, setCommercialLeads] = useState<CommercialLead[]>([]);
+  const [leadsLoading, setLeadsLoading] = useState(false);
+  const [leadsError, setLeadsError] = useState('');
 
   // 1. Validar se o usuário atual é o proprietário (role: 'owner')
-  const isOwner = currentUser && currentUser.role === 'owner';
+  const isOwner = currentUser?.role === 'owner';
 
   // 2. Estatísticas Consolidadas (Taxa Dinâmica por Evento - Apenas Inscrições Pagas)
   const stats = useMemo(() => {
@@ -135,6 +153,50 @@ export default function OwnerPage() {
   const selectedEventForLead = useMemo(() => {
     return events.find(e => e.id === selectedEventIdLead);
   }, [events, selectedEventIdLead]);
+
+  const leadStats = useMemo(() => ({
+    total: commercialLeads.length,
+    newCount: commercialLeads.filter(lead => lead.leadStatus === 'new').length,
+    sentCount: commercialLeads.filter(lead => lead.ownerEmailNotificationStatus === 'sent').length,
+    failedCount: commercialLeads.filter(lead => lead.ownerEmailNotificationStatus === 'failed').length
+  }), [commercialLeads]);
+
+  useEffect(() => {
+    if (!isOwner) return;
+
+    let isMounted = true;
+
+    const fetchCommercialLeads = async () => {
+      try {
+        setLeadsLoading(true);
+        setLeadsError('');
+        const response = await fetch('/api/commercial-leads');
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Erro ao carregar leads comerciais.');
+        }
+
+        if (isMounted) {
+          setCommercialLeads(data.leads || []);
+        }
+      } catch (err) {
+        if (isMounted) {
+          setLeadsError(err instanceof Error ? err.message : 'Erro ao carregar leads comerciais.');
+        }
+      } finally {
+        if (isMounted) {
+          setLeadsLoading(false);
+        }
+      }
+    };
+
+    void fetchCommercialLeads();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOwner]);
 
   // Ação de Login
   const handleLogin = async (e: React.FormEvent) => {
@@ -279,6 +341,7 @@ export default function OwnerPage() {
             {[
               { id: 'dashboard', label: 'Visão Geral', icon: LayoutDashboard },
               { id: 'managers', label: 'Gestores & Vendas', icon: Users },
+              { id: 'leads', label: 'Leads Comerciais', icon: UserPlus },
               { id: 'events', label: 'Eventos Globais', icon: Calendar },
               { id: 'leaderboards', label: 'Leaderboards', icon: Medal }
             ].map(tab => {
@@ -555,6 +618,125 @@ export default function OwnerPage() {
                   </div>
                 </div>
 
+              </div>
+            )}
+
+            {/* ABA: Leads Comerciais */}
+            {activeTab === 'leads' && (
+              <div className="space-y-6">
+                <div className="bg-card border border-card-border rounded-xl p-6 space-y-6">
+                  <div className="border-b border-card-border pb-3">
+                    <h3 className="text-lg font-bold text-white uppercase tracking-wider">
+                      Leads Comerciais da Homepage
+                    </h3>
+                    <p className="mt-1 text-xs text-muted">
+                      Interessados capturados na campanha comercial da home, com registro do status de notificacao por e-mail.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                    <div className="rounded-xl border border-card-border bg-dark-gray/40 p-4">
+                      <p className="text-[10px] uppercase tracking-widest text-muted font-bold">Total de Leads</p>
+                      <p className="mt-2 font-number text-2xl font-bold text-white">{leadStats.total}</p>
+                    </div>
+                    <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+                      <p className="text-[10px] uppercase tracking-widest text-primary font-bold">Novos</p>
+                      <p className="mt-2 font-number text-2xl font-bold text-primary">{leadStats.newCount}</p>
+                    </div>
+                    <div className="rounded-xl border border-card-border bg-dark-gray/40 p-4">
+                      <p className="text-[10px] uppercase tracking-widest text-muted font-bold">E-mail Enviado</p>
+                      <p className="mt-2 font-number text-2xl font-bold text-white">{leadStats.sentCount}</p>
+                    </div>
+                    <div className="rounded-xl border border-red-500/20 bg-red-950/10 p-4">
+                      <p className="text-[10px] uppercase tracking-widest text-red-300 font-bold">Falhas de E-mail</p>
+                      <p className="mt-2 font-number text-2xl font-bold text-red-300">{leadStats.failedCount}</p>
+                    </div>
+                  </div>
+
+                  {leadsError && (
+                    <div role="alert" className="rounded-lg border border-red-500/30 bg-red-950/20 px-4 py-3 text-xs text-red-300">
+                      {leadsError}
+                    </div>
+                  )}
+
+                  {leadsLoading ? (
+                    <div className="rounded-xl border border-card-border bg-dark-gray/20 px-4 py-10 text-center text-sm text-muted">
+                      Carregando leads comerciais...
+                    </div>
+                  ) : commercialLeads.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-card-border bg-dark-gray/20 px-4 py-10 text-center">
+                      <p className="text-sm font-bold uppercase tracking-wider text-white">Nenhum lead capturado ainda</p>
+                      <p className="mt-2 text-xs text-muted">Os interessados enviados pela homepage aparecerao aqui automaticamente.</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[980px] border-collapse text-left">
+                        <thead>
+                          <tr className="border-b border-card-border text-[9px] uppercase tracking-widest text-muted">
+                            <th className="px-3 py-3">Gestor</th>
+                            <th className="px-3 py-3">Evento</th>
+                            <th className="px-3 py-3">Cidade / UF</th>
+                            <th className="px-3 py-3">Origem</th>
+                            <th className="px-3 py-3">Status</th>
+                            <th className="px-3 py-3">Notificacao</th>
+                            <th className="px-3 py-3">Cadastro</th>
+                            <th className="px-3 py-3">Aceite</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {commercialLeads.map((lead) => (
+                            <tr key={lead.id} className="border-b border-card-border/50 text-xs hover:bg-dark-gray/10">
+                              <td className="px-3 py-3 align-top">
+                                <p className="font-bold text-white">{lead.managerName}</p>
+                                <p className="mt-1 text-[10px] text-muted">{lead.phone}</p>
+                              </td>
+                              <td className="px-3 py-3 align-top">
+                                <p className="font-bold text-white">{lead.eventName}</p>
+                              </td>
+                              <td className="px-3 py-3 align-top text-muted">
+                                {lead.city} / {lead.state}
+                              </td>
+                              <td className="px-3 py-3 align-top text-muted">
+                                {lead.source}
+                              </td>
+                              <td className="px-3 py-3 align-top">
+                                <span className="inline-flex rounded-full border border-primary/20 bg-primary/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-primary">
+                                  {getCommercialLeadStatusLabel(lead.leadStatus)}
+                                </span>
+                              </td>
+                              <td className="px-3 py-3 align-top">
+                                <span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wider ${
+                                  lead.ownerEmailNotificationStatus === 'sent'
+                                    ? 'border border-primary/20 bg-primary/10 text-primary'
+                                    : lead.ownerEmailNotificationStatus === 'failed'
+                                      ? 'border border-red-500/30 bg-red-950/20 text-red-300'
+                                      : 'border border-card-border bg-dark-gray text-muted'
+                                }`}>
+                                  {getCommercialLeadEmailStatusLabel(lead.ownerEmailNotificationStatus)}
+                                </span>
+                                <p className="mt-1 text-[10px] text-muted">
+                                  {formatDateTime(lead.ownerEmailNotifiedAt)}
+                                </p>
+                                {lead.ownerEmailRecipient && (
+                                  <p className="text-[10px] text-muted">{lead.ownerEmailRecipient}</p>
+                                )}
+                                {lead.ownerEmailError && lead.ownerEmailNotificationStatus === 'failed' && (
+                                  <p className="mt-1 text-[10px] text-red-300">{lead.ownerEmailError}</p>
+                                )}
+                              </td>
+                              <td className="px-3 py-3 align-top text-muted">
+                                {formatDateTime(lead.submittedAt)}
+                              </td>
+                              <td className="px-3 py-3 align-top text-muted">
+                                {formatDateTime(lead.acceptedAt)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
