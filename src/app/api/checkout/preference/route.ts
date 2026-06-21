@@ -3,6 +3,7 @@ import {
   MercadoPagoConfigError,
   resolveMercadoPagoCheckoutConfig
 } from '@/lib/mercadopagoServer';
+import { ManagerAccessError, assertManagerSalesAccessForEvent, managerAccessErrorResponse } from '@/lib/serverManagerAccess';
 import { loadRegistrationCheckoutSnapshot } from '@/lib/serverCheckout';
 import { createSupabaseAdmin } from '@/lib/serverSecurity';
 
@@ -19,6 +20,7 @@ export async function POST(request: Request) {
 
     const checkoutSnapshot = await loadRegistrationCheckoutSnapshot(supabaseAdmin, registrationData.id);
     const { registrationData: safeRegistrationData, athleteProfile, transactionAmount } = checkoutSnapshot;
+    await assertManagerSalesAccessForEvent(supabaseAdmin, checkoutSnapshot.eventId);
     const checkoutConfig = await resolveMercadoPagoCheckoutConfig(checkoutSnapshot.eventId);
     console.log(`[MercadoPago Preference API] Usando credenciais ${checkoutConfig.source} do organizador ${checkoutConfig.organizerId} para o evento ${checkoutSnapshot.eventId}`);
 
@@ -97,6 +99,9 @@ export async function POST(request: Request) {
     });
 
   } catch (err) {
+    if (err instanceof ManagerAccessError) {
+      return managerAccessErrorResponse(err);
+    }
     if (err instanceof MercadoPagoConfigError) {
       console.error("[MercadoPago Preference API] Erro de configuração:", err.message);
       return NextResponse.json({ error: err.message }, { status: err.status });

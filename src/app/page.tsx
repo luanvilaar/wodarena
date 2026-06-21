@@ -44,6 +44,7 @@ const EMPTY_LEAD_FORM: LeadFormState = {
 
 export default function Home() {
   const { events, athletes, registrations } = useApp();
+  const totalDivisions = events.reduce((sum, event) => sum + (event.divisions?.length || 0), 0);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | EventStatus>('all');
   const [leadFormOpen, setLeadFormOpen] = useState(false);
@@ -58,8 +59,6 @@ export default function Home() {
     const matchesStatus = statusFilter === 'all' || event.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
-
-  const totalDivisions = events.reduce((sum, event) => sum + (event.divisions?.length || 0), 0);
 
   const handleLeadFieldChange = (field: keyof LeadFormState, value: string | boolean) => {
     setLeadForm((current) => ({

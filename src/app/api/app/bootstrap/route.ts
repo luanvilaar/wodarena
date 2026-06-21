@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { getManagerAccessStatus, normalizeServiceValidUntil } from '@/lib/managerAccess';
 import { createSupabaseAdmin, getRequestSession } from '@/lib/serverSecurity';
 import { mapContestationFromDb } from '@/lib/contestations';
 
@@ -8,6 +9,19 @@ type AthleteRow = Record<string, any>;
 type RegistrationRow = Record<string, any>;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ContestationRow = Record<string, any>;
+
+const mapUserForClient = (user: Record<string, unknown>) => {
+  const serviceValidUntil = normalizeServiceValidUntil(user.service_valid_until || user.serviceValidUntil);
+  return {
+    id: String(user.id),
+    name: String(user.name || ''),
+    email: String(user.email || ''),
+    role: user.role,
+    organization: user.organization || undefined,
+    serviceValidUntil,
+    managerAccessStatus: user.role === 'manager' ? getManagerAccessStatus(serviceValidUntil) : undefined
+  };
+};
 
 const sanitizePublicAthlete = (athlete: AthleteRow) => ({
   id: athlete.id,
@@ -55,9 +69,9 @@ export async function GET(request: Request) {
       leaderboardEntriesResult
     ] = await Promise.all([
       session?.role === 'owner'
-        ? supabaseAdmin.from('users').select('id, name, email, role, organization')
+        ? supabaseAdmin.from('users').select('id, name, email, role, organization, service_valid_until')
         : session
-          ? supabaseAdmin.from('users').select('id, name, email, role, organization').eq('id', session.id)
+          ? supabaseAdmin.from('users').select('id, name, email, role, organization, service_valid_until').eq('id', session.id)
           : Promise.resolve({ data: [] }),
       supabaseAdmin.from('athletes').select('*'),
       supabaseAdmin.from('scores').select('*'),
@@ -66,7 +80,7 @@ export async function GET(request: Request) {
       session ? supabaseAdmin.from('coupons').select('*') : Promise.resolve({ data: [] }),
       supabaseAdmin
         .from('events')
-        .select('id, name, logo_url, banner_url, status, location, date, description, organizer_id, sponsors, format, ticket_price, ticket_slots, is_ticketing_active, time, city, state, rules, instagram, website, event_type, event_schedule, mp_public_key, marketplace_fee'),
+        .select('id, name, logo_url, banner_url, status, location, date, description, organizer_id, sponsors, format, ticket_price, ticket_slots, is_ticketing_active, time, city, state, rules, instagram, website, event_type, event_schedule, mp_public_key, marketplace_fee, registration_deadline'),
       supabaseAdmin.from('divisions').select('*'),
       supabaseAdmin.from('workouts').select('*'),
       supabaseAdmin
@@ -76,13 +90,18 @@ export async function GET(request: Request) {
       supabaseAdmin.from('leaderboard_entries').select('*')
     ]);
 
+    const mappedUsers = (usersResult.data || []).map(mapUserForClient);
+    const mappedCurrentUser = session
+      ? mappedUsers.find(user => user.id === session.id) || session
+      : null;
+
     if (session?.role === 'manager') {
       const eventIds = new Set((eventsResult.data || [])
         .filter(event => event.organizer_id === session.id)
         .map(event => event.id));
       return NextResponse.json({
-        currentUser: session,
-        users: usersResult.data || [],
+        currentUser: mappedCurrentUser,
+        users: mappedUsers,
         athletes: (athletesResult.data || []).filter(athlete => (divisionsResult.data || []).some(division => division.id === athlete.division_id && eventIds.has(division.event_id))),
         scores: scoresResult.data || [],
         registrations: (registrationsResult.data || []).filter(registration => eventIds.has(registration.event_id)),
@@ -106,8 +125,8 @@ export async function GET(request: Request) {
           .map(contestation => contestation.id)
       );
       return NextResponse.json({
-        currentUser: session,
-        users: usersResult.data || [],
+        currentUser: mappedCurrentUser,
+        users: mappedUsers,
         athletes: (athletesResult.data || []).map(athlete => ownAthleteIds.has(athlete.id) ? athlete : sanitizePublicAthlete(athlete)),
         scores: scoresResult.data || [],
         registrations: ownRegistrations,
@@ -122,8 +141,8 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json({
-      currentUser: session || null,
-      users: usersResult.data || [],
+      currentUser: mappedCurrentUser,
+      users: mappedUsers,
       athletes: (athletesResult.data || []).map(sanitizePublicAthlete),
       scores: scoresResult.data || [],
       registrations: !session

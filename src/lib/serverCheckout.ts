@@ -1,4 +1,5 @@
 import { SupabaseClient } from '@supabase/supabase-js';
+import { assertManagerSalesAccessForEvent } from '@/lib/serverManagerAccess';
 
 type RegistrationInput = Record<string, unknown>;
 type AthleteInput = Record<string, unknown>;
@@ -59,6 +60,8 @@ export const validateCheckoutCoupon = async (
   if (event.is_ticketing_active === false) {
     throw new Error('As inscricoes online deste evento estao encerradas.');
   }
+
+  await assertManagerSalesAccessForEvent(supabaseAdmin, eventId);
 
   const { data: division, error: divisionError } = await supabaseAdmin
     .from('divisions')
@@ -161,6 +164,8 @@ export const calculateSecureRegistrationSnapshot = async (
   if (event.is_ticketing_active === false) {
     throw new Error('As inscricoes online deste evento estao encerradas.');
   }
+
+  await assertManagerSalesAccessForEvent(supabaseAdmin, eventId);
 
   const { data: division, error: divisionError } = await supabaseAdmin
     .from('divisions')

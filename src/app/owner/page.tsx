@@ -5,11 +5,12 @@ import Image from 'next/image';
 import { useApp } from '@/context/AppContext';
 import { Leaderboard } from '@/components/Leaderboard';
 import { BrandLogo } from '@/components/BrandLogo';
+import { getManagerAccessStatus, getManagerAccessStatusLabel } from '@/lib/managerAccess';
 import { CommercialLead } from '@/types';
 import { getCommercialLeadEmailStatusLabel, getCommercialLeadStatusLabel } from '@/lib/commercialLeads';
 import {
   Shield, LayoutDashboard, Users, Trophy, DollarSign,
-  UserPlus, Calendar, Medal, LogOut, KeyRound, Building, ShieldCheck
+  UserPlus, Calendar, Medal, LogOut, KeyRound, Building, ShieldCheck, ShieldAlert, Clock3
 } from 'lucide-react';
 
 const formatDateTime = (value?: string) => {
@@ -27,7 +28,7 @@ const formatDateTime = (value?: string) => {
 
 export default function OwnerPage() {
   const {
-    events, registrations, users, currentUser, login, logout, createManagerAccount
+    events, registrations, users, currentUser, login, logout, createManagerAccount, updateManagerServiceValidity
   } = useApp();
 
   // Estados locais
@@ -43,7 +44,11 @@ export default function OwnerPage() {
   const [newManagerEmail, setNewManagerEmail] = useState('');
   const [newManagerPassword, setNewManagerPassword] = useState('');
   const [newManagerOrg, setNewManagerOrg] = useState('');
+  const [newManagerServiceValidUntil, setNewManagerServiceValidUntil] = useState('');
   const [createMsg, setCreateMsg] = useState({ text: '', isError: false });
+  const [managerNotice, setManagerNotice] = useState({ text: '', isError: false });
+  const [managerValidityDrafts, setManagerValidityDrafts] = useState<Record<string, string>>({});
+  const [savingManagerId, setSavingManagerId] = useState<string | null>(null);
   const [commercialLeads, setCommercialLeads] = useState<CommercialLead[]>([]);
   const [leadsLoading, setLeadsLoading] = useState(false);
   const [leadsError, setLeadsError] = useState('');
@@ -104,9 +109,12 @@ export default function OwnerPage() {
 
       // Repasse Líquido Estimado para o Gestor (Faturamento Bruto - Comissão)
       const netRevenue = Math.max(0, grossRevenue - platformFee);
+      const accessStatus = m.managerAccessStatus || getManagerAccessStatus(m.serviceValidUntil);
 
       return {
         manager: m,
+        accessStatus,
+        serviceValidUntil: m.serviceValidUntil || '',
         eventsCount: managerEvents.length,
         grossRevenue,
         netRevenue,
@@ -116,6 +124,13 @@ export default function OwnerPage() {
       };
     });
   }, [users, events, registrations]);
+
+  const managerAccessOverview = useMemo(() => ({
+    active: managersList.filter(item => item.accessStatus === 'active').length,
+    expiringSoon: managersList.filter(item => item.accessStatus === 'expiring_soon').length,
+    expired: managersList.filter(item => item.accessStatus === 'expired').length,
+    unconfigured: managersList.filter(item => item.accessStatus === 'unconfigured').length
+  }), [managersList]);
 
   // 4. Detalhamento financeiro por evento para cobrança manual
   const eventsFinanceList = useMemo(() => {
@@ -224,7 +239,8 @@ export default function OwnerPage() {
       newManagerName,
       newManagerEmail,
       newManagerPassword,
-      newManagerOrg
+      newManagerOrg,
+      newManagerServiceValidUntil || undefined
     );
 
     if (success) {
@@ -233,12 +249,36 @@ export default function OwnerPage() {
       setNewManagerEmail('');
       setNewManagerPassword('');
       setNewManagerOrg('');
+      setNewManagerServiceValidUntil('');
 
       // Limpar mensagem após 4 segundos
       setTimeout(() => setCreateMsg({ text: '', isError: false }), 4000);
     } else {
       setCreateMsg({ text: 'Erro ao cadastrar gestor. O e-mail já existe ou houve um problema.', isError: true });
     }
+  };
+
+  const handleSaveManagerValidity = async (managerId: string) => {
+    const draftValue = managerValidityDrafts[managerId] ?? managersList.find(item => item.manager.id === managerId)?.serviceValidUntil ?? '';
+    setSavingManagerId(managerId);
+    const updatedUser = await updateManagerServiceValidity(managerId, draftValue || null);
+    setSavingManagerId(null);
+
+    if (!updatedUser) {
+      setManagerNotice({ text: 'Nao foi possivel atualizar o prazo de uso do gestor.', isError: true });
+      return;
+    }
+
+    setManagerValidityDrafts(prev => ({ ...prev, [managerId]: updatedUser.serviceValidUntil || '' }));
+    setManagerNotice({ text: `Prazo de uso atualizado para ${updatedUser.name}.`, isError: false });
+    setTimeout(() => setManagerNotice({ text: '', isError: false }), 4000);
+  };
+
+  const getManagerStatusClasses = (status: string) => {
+    if (status === 'active') return 'border-primary/20 bg-primary/10 text-primary';
+    if (status === 'expiring_soon') return 'border-amber-400/25 bg-amber-400/10 text-amber-300';
+    if (status === 'expired') return 'border-red-500/30 bg-red-950/20 text-red-300';
+    return 'border-card-border bg-dark-gray text-muted';
   };
 
   if (!isOwner) {
@@ -485,13 +525,40 @@ export default function OwnerPage() {
             {/* ABA: Gestores e Vendas */}
             {activeTab === 'managers' && (
               <div className="space-y-6">
+                <div className="bg-card border border-card-border rounded-xl p-6 space-y-6">
+                  <div className="border-b border-card-border pb-3">
+                    <h3 className="text-lg font-bold text-white uppercase tracking-wider">Gestores e Vendas</h3>
+                    <p className="mt-1 text-xs text-muted">Cadastre gestores, acompanhe o prazo de uso da plataforma e renove o acesso quando necessario.</p>
+                  </div>
 
-                {/* 1. Cadastrar Novo Gestor */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                    <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+                      <p className="text-[10px] uppercase tracking-widest text-primary font-bold">Ativos</p>
+                      <p className="mt-2 font-number text-2xl font-bold text-primary">{managerAccessOverview.active}</p>
+                    </div>
+                    <div className="rounded-xl border border-amber-400/20 bg-amber-400/10 p-4">
+                      <p className="text-[10px] uppercase tracking-widest text-amber-300 font-bold">Vencendo</p>
+                      <p className="mt-2 font-number text-2xl font-bold text-amber-300">{managerAccessOverview.expiringSoon}</p>
+                    </div>
+                    <div className="rounded-xl border border-red-500/20 bg-red-950/10 p-4">
+                      <p className="text-[10px] uppercase tracking-widest text-red-300 font-bold">Expirados</p>
+                      <p className="mt-2 font-number text-2xl font-bold text-red-300">{managerAccessOverview.expired}</p>
+                    </div>
+                    <div className="rounded-xl border border-card-border bg-dark-gray/40 p-4">
+                      <p className="text-[10px] uppercase tracking-widest text-muted font-bold">Sem Prazo</p>
+                      <p className="mt-2 font-number text-2xl font-bold text-white">{managerAccessOverview.unconfigured}</p>
+                    </div>
+                  </div>
+                </div>
+
                 <form onSubmit={handleCreateManager} className="bg-card border border-card-border rounded-xl p-6 space-y-4">
                   <div className="border-b border-card-border pb-3 flex justify-between items-center">
-                    <h3 className="text-base font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-                      <UserPlus className="h-5 w-5 text-primary" /> Cadastrar Novo Gestor de Eventos
-                    </h3>
+                    <div>
+                      <h3 className="text-base font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                        <UserPlus className="h-5 w-5 text-primary" /> Credenciais e Prazo de Uso
+                      </h3>
+                      <p className="mt-1 text-[11px] text-muted">O prazo e opcional no cadastro, mas pode ser definido agora ou renovado depois.</p>
+                    </div>
                     {createMsg.text && (
                       <span role={createMsg.isError ? 'alert' : 'status'} aria-live="polite" className={`text-xs font-bold uppercase ${createMsg.isError ? 'text-red-400' : 'text-primary animate-pulse'}`}>
                         {createMsg.text}
@@ -533,7 +600,7 @@ export default function OwnerPage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
                       <label htmlFor="manager-email" className="block text-xs font-bold text-muted uppercase tracking-wider mb-1">E-mail de Login *</label>
                       <input
@@ -565,6 +632,17 @@ export default function OwnerPage() {
                         />
                       </div>
                     </div>
+                    <div>
+                      <label htmlFor="manager-service-valid-until" className="block text-xs font-bold text-muted uppercase tracking-wider mb-1">Validade de Uso</label>
+                      <input
+                        id="manager-service-valid-until"
+                        name="manager-service-valid-until"
+                        type="date"
+                        value={newManagerServiceValidUntil}
+                        onChange={(e) => setNewManagerServiceValidUntil(e.target.value)}
+                        className="w-full px-4 py-2.5 bg-dark-gray border border-card-border rounded-lg text-white focus:outline-none focus:border-primary/50 text-xs"
+                      />
+                    </div>
                   </div>
 
                   <button
@@ -575,33 +653,60 @@ export default function OwnerPage() {
                   </button>
                 </form>
 
-                {/* 2. Tabela de Gestores e Repasses */}
                 <div className="bg-card border border-card-border rounded-xl p-6 space-y-4">
-                  <h3 className="text-base font-bold text-white uppercase tracking-wider border-b border-card-border pb-3">
-                    Relatório Financeiro por Organizador
-                  </h3>
+                  <div className="border-b border-card-border pb-3 flex items-start justify-between gap-4">
+                    <div>
+                      <h3 className="text-base font-bold text-white uppercase tracking-wider">Carteira de Gestores</h3>
+                      <p className="mt-1 text-[11px] text-muted">Edite o prazo de uso do gestor para renovar ou bloquear a operacao da plataforma.</p>
+                    </div>
+                    {managerNotice.text && (
+                      <span role={managerNotice.isError ? 'alert' : 'status'} aria-live="polite" className={`text-xs font-bold uppercase ${managerNotice.isError ? 'text-red-400' : 'text-primary'}`}>
+                        {managerNotice.text}
+                      </span>
+                    )}
+                  </div>
 
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse min-w-[600px]">
+                    <table className="w-full text-left border-collapse min-w-[1060px]">
                       <thead>
                         <tr className="border-b border-card-border text-[9px] uppercase tracking-widest text-muted">
-                          <th className="py-3 px-3">Gestor / E-mail</th>
-                          <th className="py-3 px-3">Organização</th>
+                          <th className="py-3 px-3">Gestor</th>
+                          <th className="py-3 px-3">Status de Uso</th>
+                          <th className="py-3 px-3">Validade</th>
                           <th className="py-3 px-3 text-center">Eventos</th>
-                          <th className="py-3 px-3 text-center">Inscritos (Pagos / Não Pagos)</th>
+                          <th className="py-3 px-3 text-center">Inscritos</th>
                           <th className="py-3 px-3 text-right">Volume Pago</th>
-                          <th className="py-3 px-3 text-right text-primary">Taxa Devida (Manual)</th>
-                          <th className="py-3 px-3 text-right text-primary">Saldo Estimado Gestor</th>
+                          <th className="py-3 px-3 text-right text-primary">Taxa Devida</th>
+                          <th className="py-3 px-3 text-right text-primary">Saldo Gestor</th>
+                          <th className="py-3 px-3">Renovar / Ajustar</th>
                         </tr>
                       </thead>
                       <tbody>
                         {managersList.map(item => (
-                          <tr key={item.manager.id} className="border-b border-card-border/50 text-xs hover:bg-dark-gray/10">
+                          <tr key={item.manager.id} className="border-b border-card-border/50 text-xs hover:bg-dark-gray/10 align-top">
                             <td className="py-3 px-3">
                               <p className="font-bold text-white">{item.manager.name}</p>
                               <p className="text-[10px] text-muted">{item.manager.email}</p>
+                              <p className="mt-1 text-[10px] text-muted">{item.manager.organization || 'Organização não informada'}</p>
                             </td>
-                            <td className="py-3 px-3 text-muted font-medium">{item.manager.organization || 'Não informada'}</td>
+                            <td className="py-3 px-3">
+                              <span className={`inline-flex rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-wider ${getManagerStatusClasses(item.accessStatus)}`}>
+                                {getManagerAccessStatusLabel(item.accessStatus)}
+                              </span>
+                              {item.accessStatus === 'expired' && (
+                                <p className="mt-2 flex items-center gap-1 text-[10px] text-red-300">
+                                  <ShieldAlert className="h-3.5 w-3.5" /> Painel e vendas bloqueados
+                                </p>
+                              )}
+                              {item.accessStatus === 'expiring_soon' && (
+                                <p className="mt-2 flex items-center gap-1 text-[10px] text-amber-300">
+                                  <Clock3 className="h-3.5 w-3.5" /> Renovar em breve
+                                </p>
+                              )}
+                            </td>
+                            <td className="py-3 px-3 text-muted font-medium">
+                              {item.serviceValidUntil || 'Nao definido'}
+                            </td>
                             <td className="py-3 px-3 text-center font-bold font-number text-white">{item.eventsCount}</td>
                             <td className="py-3 px-3 text-center font-bold font-number text-white">
                               <span className="text-primary">{item.paidCount}</span>
@@ -611,13 +716,30 @@ export default function OwnerPage() {
                             <td className="py-3 px-3 text-right font-bold font-number text-white">R$ {item.grossRevenue.toFixed(2)}</td>
                             <td className="py-3 px-3 text-right font-bold font-number text-primary">R$ {item.platformFee.toFixed(2)}</td>
                             <td className="py-3 px-3 text-right font-bold font-number text-primary">R$ {item.netRevenue.toFixed(2)}</td>
+                            <td className="py-3 px-3">
+                              <div className="flex min-w-[220px] items-center gap-2">
+                                <input
+                                  type="date"
+                                  value={managerValidityDrafts[item.manager.id] ?? item.serviceValidUntil ?? ''}
+                                  onChange={(e) => setManagerValidityDrafts(prev => ({ ...prev, [item.manager.id]: e.target.value }))}
+                                  className="w-full rounded-lg border border-card-border bg-dark-gray px-3 py-2 text-[11px] text-white focus:outline-none focus:border-primary/50"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleSaveManagerValidity(item.manager.id)}
+                                  disabled={savingManagerId === item.manager.id}
+                                  className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-primary transition-colors hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  {savingManagerId === item.manager.id ? 'Salvando' : 'Salvar'}
+                                </button>
+                              </div>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
                 </div>
-
               </div>
             )}
 

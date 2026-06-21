@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { ManagerAccessError, assertManagerOperationalAccess, managerAccessErrorResponse } from '@/lib/serverManagerAccess';
 import {
   canActOnUser,
   createSupabaseAdmin,
@@ -24,6 +25,7 @@ export async function GET(request: Request) {
     if (auth.response) return auth.response;
     const actor = auth.user;
     const supabaseAdmin = createSupabaseAdmin();
+    await assertManagerOperationalAccess(supabaseAdmin, actor);
 
     const { searchParams } = new URL(request.url);
     const requestedUserId = searchParams.get('userId');
@@ -51,6 +53,9 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ account: data || null });
   } catch (err) {
+    if (err instanceof ManagerAccessError) {
+      return managerAccessErrorResponse(err);
+    }
     console.error('[API Admin MercadoPago GET] Erro crítico inesperado:', err);
     return NextResponse.json({ error: 'Erro crítico interno no servidor.' }, { status: 500 });
   }
@@ -62,6 +67,7 @@ export async function POST(request: Request) {
     if (auth.response) return auth.response;
     const actor = auth.user;
     const supabaseAdmin = createSupabaseAdmin();
+    await assertManagerOperationalAccess(supabaseAdmin, actor);
 
     const body = await request.json();
     const { publicKey, accessToken } = body;
@@ -154,6 +160,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, account: publicData });
 
   } catch (err) {
+    if (err instanceof ManagerAccessError) {
+      return managerAccessErrorResponse(err);
+    }
     console.error('[API Admin MercadoPago] Erro crítico inesperado:', err);
     return NextResponse.json({ error: 'Erro crítico interno no servidor.' }, { status: 500 });
   }
@@ -165,6 +174,7 @@ export async function DELETE(request: Request) {
     if (auth.response) return auth.response;
     const actor = auth.user;
     const supabaseAdmin = createSupabaseAdmin();
+    await assertManagerOperationalAccess(supabaseAdmin, actor);
 
     const body = await request.json();
     const { userId: requestedUserId } = body;
@@ -215,6 +225,9 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ success: true });
 
   } catch (err) {
+    if (err instanceof ManagerAccessError) {
+      return managerAccessErrorResponse(err);
+    }
     console.error('[API Admin MercadoPago DELETE] Erro crítico inesperado:', err);
     return NextResponse.json({ error: 'Erro crítico interno no servidor.' }, { status: 500 });
   }

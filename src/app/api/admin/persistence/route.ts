@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { ManagerAccessError, assertManagerOperationalAccess, managerAccessErrorResponse } from '@/lib/serverManagerAccess';
 import { createSupabaseAdmin, requireSession, SessionUser } from '@/lib/serverSecurity';
 
 type DbClient = ReturnType<typeof createSupabaseAdmin>;
@@ -49,6 +50,7 @@ export async function POST(request: Request) {
     if (auth.response) return auth.response;
     const actor = auth.user;
     const supabaseAdmin = createSupabaseAdmin();
+    await assertManagerOperationalAccess(supabaseAdmin, actor);
     const { action, payload } = await request.json();
 
     switch (action) {
@@ -444,6 +446,9 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Acao de persistencia invalida.' }, { status: 400 });
     }
   } catch (err) {
+    if (err instanceof ManagerAccessError) {
+      return managerAccessErrorResponse(err);
+    }
     console.error('[Admin Persistence API] Erro ao persistir dados:', err);
     return NextResponse.json({
       error: err instanceof Error ? err.message : 'Erro ao persistir dados.'

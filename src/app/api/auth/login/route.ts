@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { getManagerAccessStatus, normalizeServiceValidUntil } from '@/lib/managerAccess';
 import {
   checkRateLimit,
   createSessionToken,
@@ -32,7 +33,7 @@ export async function POST(request: Request) {
     // 1. Buscar o perfil do usuário pelo e-mail
     const { data: user, error: userError } = await supabaseAdmin
       .from('users')
-      .select('id, name, email, role, organization')
+      .select('id, name, email, role, organization, service_valid_until')
       .eq('email', normalizedEmail)
       .maybeSingle();
 
@@ -66,8 +67,23 @@ export async function POST(request: Request) {
         .eq('user_id', user.id);
     }
 
-    const token = createSessionToken(user);
-    const response = NextResponse.json({ success: true, user });
+    const sessionUser = {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      organization: user.organization || undefined
+    };
+    const serviceValidUntil = normalizeServiceValidUntil(user.service_valid_until);
+    const token = createSessionToken(sessionUser);
+    const response = NextResponse.json({
+      success: true,
+      user: {
+        ...sessionUser,
+        serviceValidUntil,
+        managerAccessStatus: user.role === 'manager' ? getManagerAccessStatus(serviceValidUntil) : undefined
+      }
+    });
     response.headers.set('Set-Cookie', getSessionCookieHeader(token));
     console.log(`[API Auth Login] Login efetuado com sucesso para usuario ${user.id} (Role: ${user.role})`);
     return response;

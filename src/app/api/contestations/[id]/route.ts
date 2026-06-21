@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { mapContestationFromDb } from '@/lib/contestations';
 import { sendContestationStatusEmail } from '@/lib/resend';
+import { ManagerAccessError, assertManagerOperationalAccess, managerAccessErrorResponse } from '@/lib/serverManagerAccess';
 import { createSupabaseAdmin, requireSession } from '@/lib/serverSecurity';
 import { ContestationStatus } from '@/types';
 
@@ -38,6 +39,7 @@ export async function PATCH(
 
     const actor = auth.user;
     const supabaseAdmin = createSupabaseAdmin();
+    await assertManagerOperationalAccess(supabaseAdmin, actor);
     const { id } = await context.params;
     const body = await request.json() as {
       status?: string;
@@ -131,6 +133,9 @@ export async function PATCH(
 
     return NextResponse.json({ success: true, contestation, emailDelivered });
   } catch (err) {
+    if (err instanceof ManagerAccessError) {
+      return managerAccessErrorResponse(err);
+    }
     console.error('[Contestation Status API] Erro ao atualizar contestacao:', err);
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Erro ao atualizar contestacao.' }, { status: 500 });
   }

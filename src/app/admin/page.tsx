@@ -5,6 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import Script from 'next/script';
 import { useApp } from '@/context/AppContext';
+import { getManagerAccessStatus, getManagerAccessStatusLabel } from '@/lib/managerAccess';
 
 import { BrandLogo } from '@/components/BrandLogo';
 import { RegistrationVoucher } from '@/components/RegistrationVoucher';
@@ -106,7 +107,12 @@ export default function AdminPage() {
 
   // 1. Estados de Login (vinculado ao currentUser do contexto)
   const isAthleteLoggedIn = currentUser?.role === 'athlete';
+  const isManagerLoggedIn = currentUser?.role === 'manager';
   const isLoggedIn = Boolean(currentUser && (currentUser.role === 'manager' || currentUser.role === 'athlete'));
+  const managerAccessStatus = isManagerLoggedIn
+    ? (currentUser.managerAccessStatus || getManagerAccessStatus(currentUser.serviceValidUntil))
+    : null;
+  const isManagerAccessExpired = managerAccessStatus === 'expired';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
@@ -129,6 +135,7 @@ export default function AdminPage() {
     if (errorParam === 'oauth_failed') msg = 'A autorização do Mercado Pago falhou ou foi recusada.';
     if (errorParam === 'oauth_mp_error') msg = 'Erro de comunicação com o Mercado Pago durante a troca de tokens.';
     if (errorParam === 'db_error') msg = 'Erro ao persistir as credenciais de pagamento no banco de dados.';
+    if (errorParam === 'access_expired') msg = 'O periodo de uso da plataforma expirou. Renove as credenciais com a WODArena para continuar operando.';
     if (errorParam === 'critical_error') msg = 'Ocorreu um erro inesperado no callback do Mercado Pago.';
 
     return { text: msg, tone: 'error' };
@@ -3028,6 +3035,65 @@ export default function AdminPage() {
           src="https://sdk.mercadopago.com/js/v2"
           strategy="lazyOnload"
         />
+      </div>
+    );
+  }
+
+  if (isManagerLoggedIn && currentUser && isManagerAccessExpired) {
+    return (
+      <div className="min-h-screen bg-background text-white">
+        <section className="bg-card border-b border-card-border py-6">
+          <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <BrandLogo className="h-12 w-12 rounded-sm border border-card-border" priority />
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-red-300 font-sans">Acesso Bloqueado</p>
+                <h2 className="text-xl font-bold text-white uppercase tracking-wider">{currentUser.name}</h2>
+                <p className="text-xs text-muted font-medium">{currentUser.email}</p>
+              </div>
+            </div>
+            <button
+              onClick={logout}
+              className="flex min-h-11 items-center gap-1.5 rounded-md border border-card-border bg-dark-gray px-4 py-2 text-xs font-bold text-muted transition-colors hover:border-muted hover:text-white"
+            >
+              <span>Desconectar</span>
+              <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          </div>
+        </section>
+
+        <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+          <div className="rounded-2xl border border-red-500/30 bg-card p-8">
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+              <div className="max-w-2xl space-y-4">
+                <span className="inline-flex w-fit rounded-full border border-red-500/30 bg-red-950/30 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-red-300">
+                  {getManagerAccessStatusLabel(managerAccessStatus)}
+                </span>
+                <div>
+                  <h3 className="text-2xl font-bold uppercase tracking-tight text-white">Seu periodo de uso da plataforma expirou</h3>
+                  <p className="mt-3 text-sm leading-6 text-muted">
+                    As funções operacionais do painel e as vendas online dos seus eventos estão temporariamente bloqueadas.
+                    Para voltar a utilizar o WODArena, solicite a renovação das suas credenciais com a equipe proprietária da plataforma.
+                  </p>
+                </div>
+              </div>
+
+              <div className="min-w-[240px] rounded-xl border border-card-border bg-dark-gray/30 p-5 space-y-3">
+                <div className="flex items-center gap-2 text-red-300">
+                  <ShieldAlert className="h-5 w-5" aria-hidden="true" />
+                  <p className="text-xs font-bold uppercase tracking-wider">Status operacional</p>
+                </div>
+                <div className="space-y-2 text-sm">
+                  <p className="text-muted">Validade contratada</p>
+                  <p className="font-mono text-white">{currentUser.serviceValidUntil || 'Nao configurada'}</p>
+                </div>
+                <div className="rounded-lg border border-red-500/20 bg-red-950/20 px-3 py-2 text-[11px] leading-5 text-red-200">
+                  Assim que o prazo for renovado pelo proprietario, o acesso volta a ser liberado automaticamente.
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
       </div>
     );
   }

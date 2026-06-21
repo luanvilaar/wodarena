@@ -6,6 +6,7 @@ import { useLocalStorage } from '../hooks/useLocalStorage';
 import { INITIAL_EVENTS, INITIAL_ATHLETES, INITIAL_SCORES, INITIAL_USERS } from '../data/mockData';
 import { buildFitnessRacingCourse, buildFitnessRacingDefaults, normalizeInstagram } from '@/lib/fitnessRacing';
 import { mapContestationFromDb } from '@/lib/contestations';
+import { getManagerAccessStatus, normalizeServiceValidUntil } from '@/lib/managerAccess';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type LeaderboardEntry = Record<string, any>;
@@ -57,7 +58,8 @@ interface AppContextType {
   currentUser: User | null;
   login: (email: string, password: string) => Promise<User | null>;
   logout: () => void;
-  createManagerAccount: (name: string, email: string, password: string, organization: string) => Promise<boolean>;
+  createManagerAccount: (name: string, email: string, password: string, organization: string, serviceValidUntil?: string) => Promise<boolean>;
+  updateManagerServiceValidity: (userId: string, serviceValidUntil?: string | null) => Promise<User | null>;
   addEvent: (event: Omit<Event, 'id' | 'organizerId' | 'sponsors' | 'format' | 'ticketPrice' | 'ticketSlots' | 'isTicketingActive'> & { format?: 'individual' | 'duo' | 'trio'; ticketPrice?: number; ticketSlots?: number; isTicketingActive?: boolean; eventType?: 'functional_fitness' | 'fitness_racing'; }) => Promise<Event>;
   addDivision: (eventId: string, division: Omit<Division, 'id'>) => Promise<{ division: Division; autoWorkout: Workout | null }>;
   updateDivision: (eventId: string, divisionId: string, updatedData: Partial<Division>) => Promise<void>;
@@ -193,6 +195,21 @@ const mapAthleteFromDb = (a: AthleteDbRow): Athlete => {
   };
 };
 
+const mapUserFromDb = (user: Record<string, unknown>): User => {
+  const serviceValidUntil = normalizeServiceValidUntil(user.service_valid_until || user.serviceValidUntil);
+  const role = String(user.role || 'athlete') as User['role'];
+
+  return {
+    id: String(user.id),
+    name: String(user.name || ''),
+    email: String(user.email || ''),
+    role,
+    organization: optionalString(user.organization),
+    serviceValidUntil,
+    managerAccessStatus: role === 'manager' ? getManagerAccessStatus(serviceValidUntil) : undefined
+  };
+};
+
 const adminPersist = async (action: string, payload: Record<string, unknown>) => {
   const response = await fetch('/api/admin/persistence', {
     method: 'POST',
@@ -244,13 +261,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // 1. Carregar usuários e sincronizar sessão
         const dbUsers = payload.users;
         if (dbUsers && dbUsers.length > 0) {
-          setUsers(dbUsers as User[]);
+          setUsers(dbUsers.map(mapUserFromDb));
         } else {
           setUsers(INITIAL_USERS);
         }
 
         if (payload.currentUser !== undefined) {
-          setCurrentUser(payload.currentUser);
+          setCurrentUser(payload.currentUser ? mapUserFromDb(payload.currentUser as unknown as Record<string, unknown>) : null);
         } else {
           if (currentUser && dbUsers && !dbUsers.some(u => u.id === currentUser.id)) {
             setCurrentUser(null);
@@ -404,7 +421,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 ? (typeof evt.event_schedule === 'string' ? JSON.parse(evt.event_schedule) : evt.event_schedule)
                 : [],
               mpPublicKey: evt.mp_public_key || organizerMp?.public_key || '',
-              mpAccessToken: ''
+              mpAccessToken: '',
+              registrationDeadline: evt.registration_deadline || undefined
             };
           });
           setEvents(combinedEvents);
@@ -543,7 +561,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Lógica para Proprietário cadastrar Gestor
-  const createManagerAccount = async (name: string, emailInput: string, passwordInput: string, organization: string): Promise<boolean> => {
+  const createManagerAccount = async (
+    name: string,
+    emailInput: string,
+    passwordInput: string,
+    organization: string,
+    serviceValidUntil?: string
+  ): Promise<boolean> => {
     try {
       const response = await fetch('/api/admin/create-user', {
         method: 'POST',
@@ -554,7 +578,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           name,
           email: emailInput,
           password: passwordInput,
-          organization
+          organization,
+          serviceValidUntil
         })
       });
 
@@ -569,6 +594,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch (err) {
       console.error('Erro crítico ao cadastrar gestor:', err);
       return false;
+    }
+  };
+
+  const updateManagerServiceValidity = async (userId: string, serviceValidUntil?: string | null): Promise<User | null> => {
+    try {
+      const response = await fetch('/api/admin/create-user', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          userId,
+          serviceValidUntil: serviceValidUntil || null
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.user) {
+        throw new Error(data.error || 'Erro ao atualizar validade do gestor.');
+      }
+
+      setUsers(prev => prev.map(user => user.id === userId ? data.user as User : user));
+      return data.user as User;
+    } catch (err) {
+      console.error('Erro ao atualizar validade do gestor:', err);
+      return null;
     }
   };
 
@@ -1768,6 +1819,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         login,
         logout,
         createManagerAccount,
+        updateManagerServiceValidity,
         addEvent,
         addDivision,
         updateDivision,

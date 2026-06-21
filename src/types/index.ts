@@ -2,6 +2,7 @@ export type EventStatus = 'upcoming' | 'live' | 'finished';
 export type WorkoutType = 'fortime' | 'amrap' | 'maxweight' | 'reps' | 'points' | 'distance';
 export type CategoryType = 'male' | 'female' | 'team';
 export type ShirtSize = 'PP' | 'P' | 'M' | 'G' | 'GG' | 'XG' | 'XXG';
+export type ManagerAccessStatus = 'active' | 'expired' | 'expiring_soon' | 'unconfigured';
 
 export interface User {
   id: string;
@@ -10,6 +11,8 @@ export interface User {
   password?: string; // Opcional no client-side por segurança conceitual
   role: 'owner' | 'manager' | 'athlete';
   organization?: string;
+  serviceValidUntil?: string;
+  managerAccessStatus?: ManagerAccessStatus;
 }
 
 export type RegistrationPaymentStatus =
@@ -147,6 +150,7 @@ export interface Event {
   mpPublicKey?: string;
   mpAccessToken?: string;
   marketplace_fee?: number;
+  registrationDeadline?: string;
 }
 
 export interface Registration {

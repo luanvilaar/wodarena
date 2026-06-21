@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { applyCouponUsageForApprovedRegistration, calculateSecureRegistrationSnapshot } from '@/lib/serverCheckout';
+import { ManagerAccessError, managerAccessErrorResponse } from '@/lib/serverManagerAccess';
 import { createSupabaseAdmin, hashPassword } from '@/lib/serverSecurity';
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
@@ -241,6 +242,9 @@ export async function POST(request: Request) {
       }
     });
   } catch (err) {
+    if (err instanceof ManagerAccessError) {
+      return managerAccessErrorResponse(err);
+    }
     console.error('[Registration Start] Erro crítico:', err);
     return NextResponse.json({ error: 'Erro crítico ao iniciar inscrição.' }, { status: 500 });
   }

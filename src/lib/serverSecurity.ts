@@ -10,6 +10,10 @@ export type SessionUser = {
   organization?: string;
 };
 
+export type DbUserRecord = SessionUser & {
+  service_valid_until?: string | null;
+};
+
 const SESSION_COOKIE = 'woda_session';
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 12;
 const PASSWORD_PREFIX = 'scrypt';
@@ -201,9 +205,9 @@ export const getClientIp = (request: Request) => (
 export const loadUserById = async (supabaseAdmin: SupabaseClient, userId: string) => {
   const { data, error } = await supabaseAdmin
     .from('users')
-    .select('id, name, email, role, organization')
+    .select('id, name, email, role, organization, service_valid_until')
     .eq('id', userId)
-    .maybeSingle<SessionUser>();
+    .maybeSingle<DbUserRecord>();
 
   if (error) throw error;
   return data;

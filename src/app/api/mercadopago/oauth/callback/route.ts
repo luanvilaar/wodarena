@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { ManagerAccessError, assertManagerOperationalAccess } from '@/lib/serverManagerAccess';
 import {
   canActOnUser,
   createSupabaseAdmin,
@@ -33,6 +34,7 @@ export async function GET(request: Request) {
     }
 
     const supabaseAdmin = createSupabaseAdmin();
+    await assertManagerOperationalAccess(supabaseAdmin, auth.user);
 
     console.log(`[OAuth Callback] Iniciando troca de token para o gestor: ${userId}...`);
 
@@ -101,6 +103,9 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}/admin?tab=payments&success=mp_connected`);
 
   } catch (err) {
+    if (err instanceof ManagerAccessError) {
+      return NextResponse.redirect(`${origin}/admin?tab=payments&error=access_expired`);
+    }
     console.error('[OAuth Callback] Erro crítico inesperado no processamento do callback:', err);
     return NextResponse.redirect(`${origin}/admin?tab=payments&error=critical_error`);
   }

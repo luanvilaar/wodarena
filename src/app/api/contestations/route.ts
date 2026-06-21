@@ -6,6 +6,7 @@ import {
   mapContestationFromDb,
   parseScheduleItems
 } from '@/lib/contestations';
+import { ManagerAccessError, assertManagerOperationalAccess, managerAccessErrorResponse } from '@/lib/serverManagerAccess';
 import { createSupabaseAdmin, requireSession } from '@/lib/serverSecurity';
 
 const createContestationId = () => `contest-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -54,6 +55,7 @@ export async function GET(request: Request) {
       if (!eventId) {
         return NextResponse.json({ error: 'Parâmetro event_id obrigatório para gestor.' }, { status: 400 });
       }
+      await assertManagerOperationalAccess(supabaseAdmin, actor);
       await ensureManagerEventAccess(supabaseAdmin, actor.id, eventId);
       query = query.eq('event_id', eventId);
     } else if (eventId) {
@@ -70,6 +72,9 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ contestations, credits });
   } catch (err) {
+    if (err instanceof ManagerAccessError) {
+      return managerAccessErrorResponse(err);
+    }
     console.error('[Contestations API] Erro ao listar contestacoes:', err);
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Erro ao listar contestacoes.' }, { status: 500 });
   }
@@ -200,6 +205,9 @@ export async function POST(request: Request) {
       credits: nextCredits
     });
   } catch (err) {
+    if (err instanceof ManagerAccessError) {
+      return managerAccessErrorResponse(err);
+    }
     console.error('[Contestations API] Erro ao criar contestacao:', err);
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Erro ao criar contestacao.' }, { status: 500 });
   }
