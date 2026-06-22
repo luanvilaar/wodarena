@@ -1,5 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { assertManagerSalesAccessForEvent } from '@/lib/serverManagerAccess';
+import { getRequestSession, verifyRegistrationAccessToken } from '@/lib/serverSecurity';
 
 type RegistrationInput = Record<string, unknown>;
 type AthleteInput = Record<string, unknown>;
@@ -19,6 +20,20 @@ export type CouponValidationResult = {
   ticketPrice: number;
 };
 
+type RegistrationAccessOptions = {
+  registrationId: string;
+  eventId?: string;
+  accessToken?: string | null;
+};
+
+type RegistrationAccessResult = {
+  registration: {
+    id: string;
+    event_id: string;
+    user_id: string | null;
+  };
+};
+
 const asString = (value: unknown, fallback = '') => typeof value === 'string' && value.trim()
   ? value.trim()
   : fallback;
@@ -35,6 +50,77 @@ const calculateDiscount = (ticketPrice: number, discountType: string, discountVa
     ? (ticketPrice * Number(discountValue || 0)) / 100
     : Number(discountValue || 0)
 );
+
+export class RegistrationAccessError extends Error {
+  status: number;
+
+  constructor(message: string, status = 403) {
+    super(message);
+    this.name = 'RegistrationAccessError';
+    this.status = status;
+  }
+}
+
+export const assertRegistrationAccess = async (
+  supabaseAdmin: SupabaseClient,
+  request: Request,
+  options: RegistrationAccessOptions
+): Promise<RegistrationAccessResult> => {
+  const registrationId = asString(options.registrationId);
+  const eventId = asString(options.eventId);
+  if (!registrationId) {
+    throw new RegistrationAccessError('Inscricao obrigatoria para continuar.', 400);
+  }
+
+  const { data: registration, error } = await supabaseAdmin
+    .from('registrations')
+    .select('id, event_id, user_id')
+    .eq('id', registrationId)
+    .maybeSingle<{ id: string; event_id: string; user_id: string | null }>();
+
+  if (error || !registration) {
+    throw new RegistrationAccessError('Inscricao nao encontrada.', 404);
+  }
+
+  if (eventId && registration.event_id !== eventId) {
+    throw new RegistrationAccessError('Inscricao nao pertence ao evento informado.', 403);
+  }
+
+  const actor = getRequestSession(request);
+  if (actor) {
+    if (actor.role === 'owner') {
+      return { registration };
+    }
+
+    if (actor.role === 'athlete' && registration.user_id === actor.id) {
+      return { registration };
+    }
+
+    if (actor.role === 'manager') {
+      const { data: event } = await supabaseAdmin
+        .from('events')
+        .select('organizer_id')
+        .eq('id', registration.event_id)
+        .maybeSingle<{ organizer_id: string }>();
+
+      if (event?.organizer_id === actor.id) {
+        return { registration };
+      }
+    }
+  }
+
+  const tokenClaims = verifyRegistrationAccessToken(options.accessToken || null);
+  if (
+    tokenClaims
+    && tokenClaims.sub === registration.id
+    && tokenClaims.eventId === registration.event_id
+    && (!tokenClaims.userId || !registration.user_id || tokenClaims.userId === registration.user_id)
+  ) {
+    return { registration };
+  }
+
+  throw new RegistrationAccessError('Acesso negado para esta inscricao.', 403);
+};
 
 export const validateCheckoutCoupon = async (
   supabaseAdmin: SupabaseClient,

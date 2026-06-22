@@ -52,6 +52,8 @@ export default function PixPaymentModal({
     qr_code: string;
     qr_code_base64: string;
     paymentId: string;
+    registrationId: string;
+    accessToken?: string;
   } | null>(null);
 
   const activeTotalPaid = registration.totalPaid > 0 && registration.totalPaid < 1.00 ? 1.00 : registration.totalPaid;
@@ -77,7 +79,16 @@ export default function PixPaymentModal({
     let active = true;
     const intervalId = setInterval(async () => {
       try {
-        const res = await fetch(`/api/checkout/status?payment_id=${pixData.paymentId}&event_id=${event.id}`);
+        const statusParams = new URLSearchParams({
+          payment_id: pixData.paymentId,
+          event_id: event.id,
+          registration_id: pixData.registrationId
+        });
+        if (pixData.accessToken) {
+          statusParams.set('access_token', pixData.accessToken);
+        }
+
+        const res = await fetch(`/api/checkout/status?${statusParams.toString()}`);
         if (!res.ok) return;
         const data = await res.json();
         
@@ -90,7 +101,11 @@ export default function PixPaymentModal({
           fetch('/api/checkout/email', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ registrationId: registration.id, cpf: cpf.replace(/\D/g, '') })
+            body: JSON.stringify({
+              registrationId: registration.id,
+              accessToken: registration.accessToken,
+              cpf: cpf.replace(/\D/g, '')
+            })
           }).catch(err => console.error("[PixPaymentModal Email Trigger] Erro ao disparar e-mail:", err));
 
           setTimeout(() => {
@@ -106,7 +121,7 @@ export default function PixPaymentModal({
       active = false;
       clearInterval(intervalId);
     };
-  }, [pixData, event.id, registration.id, cpf, isOpen, onSuccess]);
+  }, [pixData, event.id, registration.id, registration.accessToken, cpf, isOpen, onSuccess]);
 
   const handleCopyPix = () => {
     if (!pixData?.qr_code) return;
@@ -166,7 +181,8 @@ export default function PixPaymentModal({
             isTeam: athlete.isTeam,
             teamMembers: athlete.teamMembers
           },
-          cpf
+          cpf,
+          accessToken: registration.accessToken
         })
       });
 
@@ -179,7 +195,9 @@ export default function PixPaymentModal({
       setPixData({
         qr_code: data.qr_code,
         qr_code_base64: data.qr_code_base64,
-        paymentId: String(data.paymentId)
+        paymentId: String(data.paymentId),
+        registrationId: registration.id,
+        accessToken: registration.accessToken
       });
     } catch (err) {
       console.error("[PixPaymentModal Submit CPF] Erro:", err);

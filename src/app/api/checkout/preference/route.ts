@@ -4,7 +4,7 @@ import {
   resolveMercadoPagoCheckoutConfig
 } from '@/lib/mercadopagoServer';
 import { ManagerAccessError, assertManagerSalesAccessForEvent, managerAccessErrorResponse } from '@/lib/serverManagerAccess';
-import { loadRegistrationCheckoutSnapshot } from '@/lib/serverCheckout';
+import { assertRegistrationAccess, loadRegistrationCheckoutSnapshot, RegistrationAccessError } from '@/lib/serverCheckout';
 import { createSupabaseAdmin } from '@/lib/serverSecurity';
 
 const supabaseAdmin = createSupabaseAdmin();
@@ -12,11 +12,17 @@ const supabaseAdmin = createSupabaseAdmin();
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { registrationData, origin } = body;
+    const { registrationData, origin, accessToken } = body;
 
     if (!registrationData?.id || !origin) {
       return NextResponse.json({ error: 'Parâmetros inválidos.' }, { status: 400 });
     }
+
+    await assertRegistrationAccess(supabaseAdmin, request, {
+      registrationId: registrationData.id,
+      eventId: registrationData.eventId,
+      accessToken
+    });
 
     const checkoutSnapshot = await loadRegistrationCheckoutSnapshot(supabaseAdmin, registrationData.id);
     const { registrationData: safeRegistrationData, athleteProfile, transactionAmount } = checkoutSnapshot;
@@ -101,6 +107,9 @@ export async function POST(request: Request) {
   } catch (err) {
     if (err instanceof ManagerAccessError) {
       return managerAccessErrorResponse(err);
+    }
+    if (err instanceof RegistrationAccessError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
     }
     if (err instanceof MercadoPagoConfigError) {
       console.error("[MercadoPago Preference API] Erro de configuração:", err.message);

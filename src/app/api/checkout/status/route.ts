@@ -4,8 +4,13 @@ import {
   MercadoPagoConfigError,
   resolveMercadoPagoCheckoutConfig
 } from '@/lib/mercadopagoServer';
-import { applyCouponUsageForApprovedRegistration, loadRegistrationCheckoutSnapshot } from '@/lib/serverCheckout';
-import { createSupabaseAdmin, getRequestSession, SessionUser } from '@/lib/serverSecurity';
+import {
+  applyCouponUsageForApprovedRegistration,
+  assertRegistrationAccess,
+  loadRegistrationCheckoutSnapshot,
+  RegistrationAccessError
+} from '@/lib/serverCheckout';
+import { createSupabaseAdmin, getRequestSession } from '@/lib/serverSecurity';
 
 const supabaseAdmin = createSupabaseAdmin();
 
@@ -17,39 +22,13 @@ const toRegistrationPaymentStatus = (status?: string) => {
   return 'payment_pending';
 };
 
-const canReadRegistrationSnapshot = async (
-  actor: SessionUser | null,
-  registrationId: string,
-  eventId: string
-) => {
-  if (!actor) return false;
-  if (actor.role === 'owner') return true;
-
-  const { data: registration, error } = await supabaseAdmin
-    .from('registrations')
-    .select('id, user_id, event_id')
-    .eq('id', registrationId)
-    .eq('event_id', eventId)
-    .maybeSingle();
-
-  if (error || !registration) return false;
-  if (actor.role === 'athlete') return registration.user_id === actor.id;
-
-  const { data: event } = await supabaseAdmin
-    .from('events')
-    .select('organizer_id')
-    .eq('id', registration.event_id)
-    .maybeSingle();
-
-  return event?.organizer_id === actor.id;
-};
-
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const paymentId = searchParams.get('payment_id');
     const registrationIdParam = searchParams.get('registration_id');
     const eventId = searchParams.get('event_id');
+    const accessToken = searchParams.get('access_token');
     const actor = getRequestSession(request);
 
     if (!eventId) {
@@ -59,6 +38,20 @@ export async function GET(request: Request) {
     if (!paymentId && !registrationIdParam) {
       return NextResponse.json({ error: 'Parâmetro payment_id ou registration_id obrigatório.' }, { status: 400 });
     }
+
+    if (!actor && !registrationIdParam) {
+      return NextResponse.json({
+        error: 'Parâmetro registration_id obrigatório para consultar o status sem sessão autenticada.'
+      }, { status: 400 });
+    }
+
+    let access = registrationIdParam
+      ? await assertRegistrationAccess(supabaseAdmin, request, {
+        registrationId: registrationIdParam,
+        eventId,
+        accessToken
+      })
+      : null;
 
     const checkoutConfig = await resolveMercadoPagoCheckoutConfig(eventId);
     console.log(`[MercadoPago Status API] Usando credenciais ${checkoutConfig.source} do organizador ${checkoutConfig.organizerId} para o evento ${eventId}`);
@@ -136,35 +129,43 @@ export async function GET(request: Request) {
     }
     let registrationPayload = null;
     const registrationId = paymentData.metadata?.registration_id || registrationIdParam;
-    if (registrationId) {
-      await supabaseAdmin
-        .from('registrations')
-        .update({
-          payment_status: toRegistrationPaymentStatus(paymentData.status),
-          payment_method: paymentData.payment_method_id || null,
-          payment_id: String(paymentData.id),
-          payment_status_detail: paymentData.status_detail || null,
-          payment_error_message: paymentData.status === 'rejected' ? 'Pagamento não processado.' : null,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', registrationId)
-        .eq('event_id', eventId);
+    if (!registrationId) {
+      return NextResponse.json({ error: 'Pagamento sem inscricao vinculada.' }, { status: 404 });
+    }
 
-      if (paymentData.status === 'approved') {
-        await applyCouponUsageForApprovedRegistration(supabaseAdmin, registrationId);
-      }
+    if (!access || access.registration.id !== registrationId) {
+      access = await assertRegistrationAccess(supabaseAdmin, request, {
+        registrationId,
+        eventId,
+        accessToken
+      });
+    }
 
-      if (await canReadRegistrationSnapshot(actor, registrationId, eventId)) {
-        try {
-          const snapshot = await loadRegistrationCheckoutSnapshot(supabaseAdmin, registrationId);
-          registrationPayload = {
-            registrationData: snapshot.registrationData,
-            athleteProfile: snapshot.athleteProfile
-          };
-        } catch (snapshotErr) {
-          console.warn("[MercadoPago Status API] Nao foi possivel carregar snapshot da inscricao:", snapshotErr);
-        }
-      }
+    await supabaseAdmin
+      .from('registrations')
+      .update({
+        payment_status: toRegistrationPaymentStatus(paymentData.status),
+        payment_method: paymentData.payment_method_id || null,
+        payment_id: String(paymentData.id),
+        payment_status_detail: paymentData.status_detail || null,
+        payment_error_message: paymentData.status === 'rejected' ? 'Pagamento não processado.' : null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', registrationId)
+      .eq('event_id', eventId);
+
+    if (paymentData.status === 'approved') {
+      await applyCouponUsageForApprovedRegistration(supabaseAdmin, registrationId);
+    }
+
+    try {
+      const snapshot = await loadRegistrationCheckoutSnapshot(supabaseAdmin, registrationId);
+      registrationPayload = {
+        registrationData: snapshot.registrationData,
+        athleteProfile: snapshot.athleteProfile
+      };
+    } catch (snapshotErr) {
+      console.warn("[MercadoPago Status API] Nao foi possivel carregar snapshot da inscricao:", snapshotErr);
     }
 
     return NextResponse.json({
@@ -175,6 +176,9 @@ export async function GET(request: Request) {
     });
 
   } catch (err) {
+    if (err instanceof RegistrationAccessError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
     if (err instanceof MercadoPagoConfigError) {
       console.error("[MercadoPago Status API] Erro de configuração:", err.message);
       return NextResponse.json({ error: err.message }, { status: err.status });

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { applyCouponUsageForApprovedRegistration, calculateSecureRegistrationSnapshot } from '@/lib/serverCheckout';
 import { ManagerAccessError, managerAccessErrorResponse } from '@/lib/serverManagerAccess';
-import { createSupabaseAdmin, hashPassword } from '@/lib/serverSecurity';
+import { createRegistrationAccessToken, createSupabaseAdmin, hashPassword, verifyPassword } from '@/lib/serverSecurity';
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
 
@@ -42,6 +42,8 @@ export async function POST(request: Request) {
 
     const regId = String(safeRegistrationData.id);
     let userId = '';
+    let shouldCreateSecret = false;
+    let shouldRehashSecret = false;
 
     const { data: existingUser, error: existingUserError } = await supabaseAdmin
       .from('users')
@@ -59,6 +61,29 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Este e-mail já pertence a uma conta administrativa.' }, { status: 409 });
       }
       userId = existingUser.id;
+
+      const { data: existingSecret, error: existingSecretError } = await supabaseAdmin
+        .from('users_secrets')
+        .select('password')
+        .eq('user_id', userId)
+        .maybeSingle<{ password: string }>();
+
+      if (existingSecretError) {
+        console.error('[Registration Start] Erro ao validar segredo do atleta existente:', existingSecretError);
+        return NextResponse.json({ error: 'Erro ao validar o acesso existente do atleta.' }, { status: 500 });
+      }
+
+      if (existingSecret?.password) {
+        const passwordCheck = verifyPassword(String(password), existingSecret.password);
+        if (!passwordCheck.valid) {
+          return NextResponse.json({
+            error: 'Este e-mail já possui painel do atleta. Faça login na Área do Atleta ou recupere a senha antes de iniciar uma nova inscrição.'
+          }, { status: 409 });
+        }
+        shouldRehashSecret = passwordCheck.needsRehash;
+      } else {
+        shouldCreateSecret = true;
+      }
     } else {
       userId = `ath-user-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       const { error: userError } = await supabaseAdmin
@@ -86,6 +111,8 @@ export async function POST(request: Request) {
           code: userError.code
         }, { status: 500 });
       }
+
+      shouldCreateSecret = true;
     }
 
     // Verifica se já existe uma inscrição ativa com o mesmo e-mail para o mesmo evento
@@ -112,16 +139,30 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
 
-    const { error: secretError } = await supabaseAdmin
-      .from('users_secrets')
-      .upsert({
-        user_id: userId,
-        password: hashPassword(String(password))
-      }, { onConflict: 'user_id' });
+    if (shouldCreateSecret) {
+      const { error: secretError } = await supabaseAdmin
+        .from('users_secrets')
+        .insert({
+          user_id: userId,
+          password: hashPassword(String(password))
+        });
 
-    if (secretError) {
-      console.error('[Registration Start] Erro ao gravar senha do atleta:', secretError);
-      return NextResponse.json({ error: 'Erro ao gravar senha do painel do atleta.' }, { status: 500 });
+      if (secretError) {
+        console.error('[Registration Start] Erro ao gravar senha do atleta:', secretError);
+        return NextResponse.json({ error: 'Erro ao gravar senha do painel do atleta.' }, { status: 500 });
+      }
+    } else if (shouldRehashSecret) {
+      const { error: secretError } = await supabaseAdmin
+        .from('users_secrets')
+        .update({
+          password: hashPassword(String(password))
+        })
+        .eq('user_id', userId);
+
+      if (secretError) {
+        console.error('[Registration Start] Erro ao rehash da senha do atleta:', secretError);
+        return NextResponse.json({ error: 'Erro ao atualizar a segurança do painel do atleta.' }, { status: 500 });
+      }
     }
 
     let athleteId = String(safeAthleteProfile.id || `ath-${Date.now()}`);
@@ -215,6 +256,12 @@ export async function POST(request: Request) {
       await applyCouponUsageForApprovedRegistration(supabaseAdmin, regId);
     }
 
+    const registrationAccessToken = createRegistrationAccessToken({
+      registrationId: regId,
+      eventId: String(safeRegistrationData.eventId),
+      userId
+    });
+
     return NextResponse.json({
       success: true,
       user: {
@@ -233,7 +280,8 @@ export async function POST(request: Request) {
         createdAt: dbRegistration.created_at,
         paymentStatus,
         paymentMethod: paymentMethod || undefined,
-        updatedAt: dbRegistration.updated_at
+        updatedAt: dbRegistration.updated_at,
+        accessToken: registrationAccessToken
       },
       athleteProfile: {
         ...safeAthleteProfile,

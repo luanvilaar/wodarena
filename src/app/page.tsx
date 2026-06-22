@@ -7,12 +7,10 @@ import { EventCard } from '@/components/EventCard';
 import {
   ArrowRight,
   Building,
-  CalendarDays,
   MapPin,
   Phone,
   Search,
   ShieldCheck,
-  TicketCheck,
   Trophy,
   Users
 } from 'lucide-react';
@@ -43,8 +41,7 @@ const EMPTY_LEAD_FORM: LeadFormState = {
 };
 
 export default function Home() {
-  const { events, athletes, registrations } = useApp();
-  const totalDivisions = events.reduce((sum, event) => sum + (event.divisions?.length || 0), 0);
+  const { events } = useApp();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | EventStatus>('all');
   const [leadFormOpen, setLeadFormOpen] = useState(false);
@@ -160,24 +157,6 @@ export default function Home() {
               >
                 Quero utilizar o WODArena
               </button>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 pt-4 sm:grid-cols-4">
-              {[
-                { value: events.length, label: 'Eventos', icon: Trophy },
-                { value: athletes.length, label: 'Atletas', icon: Users },
-                { value: totalDivisions, label: 'Divisões', icon: CalendarDays },
-                { value: registrations.length, label: 'Inscrições', icon: TicketCheck }
-              ].map((stat) => {
-                const Icon = stat.icon;
-                return (
-                  <div key={stat.label} className="rounded-xl border border-card-border bg-card/85 p-4 backdrop-blur-sm transition-colors hover:border-primary/20">
-                    <Icon className="mb-3 h-4 w-4 text-primary" aria-hidden="true" />
-                    <p className="font-number text-xl font-bold text-primary">{stat.value}</p>
-                    <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">{stat.label}</p>
-                  </div>
-                );
-              })}
             </div>
           </div>
         </div>

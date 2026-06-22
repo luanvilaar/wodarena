@@ -118,7 +118,13 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
   const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'pix' | 'credit_card'>('pix');
   const [cpf, setCpf] = useState('');
-  const [pixData, setPixData] = useState<{ qr_code: string; qr_code_base64: string; paymentId: string } | null>(null);
+  const [pixData, setPixData] = useState<{
+    qr_code: string;
+    qr_code_base64: string;
+    paymentId: string;
+    registrationId: string;
+    accessToken?: string;
+  } | null>(null);
   const [copiado, setCopiado] = useState(false);
   const [cardNumber, setCardNumber] = useState('');
   const [cardholderName, setCardholderName] = useState('');
@@ -150,7 +156,16 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
     let active = true;
     const intervalId = setInterval(async () => {
       try {
-        const res = await fetch(`/api/checkout/status?payment_id=${pixData.paymentId}&event_id=${event.id}`);
+        const statusParams = new URLSearchParams({
+          payment_id: pixData.paymentId,
+          event_id: event.id,
+          registration_id: pixData.registrationId
+        });
+        if (pixData.accessToken) {
+          statusParams.set('access_token', pixData.accessToken);
+        }
+
+        const res = await fetch(`/api/checkout/status?${statusParams.toString()}`);
         if (!res.ok) return;
         const data: CheckoutStatusResponse = await res.json();
         if (data.status === 'approved' && active) {
@@ -190,7 +205,11 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
             fetch('/api/checkout/email', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ registrationId: createdReg.id, cpf: parsedCpf })
+              body: JSON.stringify({
+                registrationId: createdReg.id,
+                accessToken: createdReg.accessToken || registrationPayload?.accessToken,
+                cpf: parsedCpf
+              })
             }).catch(err => console.error("[Local Email Trigger] Erro ao disparar e-mail:", err));
 
             if (onSuccess) {
@@ -452,7 +471,11 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
         fetch('/api/checkout/email', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ registrationId: finalReg.id, cpf })
+          body: JSON.stringify({
+            registrationId: finalReg.id,
+            accessToken: activeRegistrationData.accessToken,
+            cpf
+          })
         }).catch(err => console.error("[Local Email Trigger] Erro ao disparar e-mail gratuito:", err));
 
         if (onSuccess) {
@@ -473,7 +496,8 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
           body: JSON.stringify({
             registrationData: activeRegistrationData,
             athleteProfile: activeAthleteProfile,
-            cpf
+            cpf,
+            accessToken: activeRegistrationData.accessToken
           })
         });
 
@@ -488,7 +512,9 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
         setPixData({
           qr_code: data.qr_code,
           qr_code_base64: data.qr_code_base64,
-          paymentId: data.paymentId
+          paymentId: data.paymentId,
+          registrationId: activeRegistrationData.id,
+          accessToken: activeRegistrationData.accessToken
         });
         setIsProcessing(false);
 
@@ -502,7 +528,8 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
           body: JSON.stringify({
             registrationData: activeRegistrationData,
             athleteProfile: activeAthleteProfile,
-            origin: window.location.origin
+            origin: window.location.origin,
+            accessToken: activeRegistrationData.accessToken
           })
         });
 

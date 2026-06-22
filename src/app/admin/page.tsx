@@ -52,13 +52,7 @@ const currencyFormatter = new Intl.NumberFormat('pt-BR', {
   currency: 'BRL'
 });
 
-const compactNumberFormatter = new Intl.NumberFormat('pt-BR');
 const SHIRT_SIZE_OPTIONS = ['P', 'M', 'G', 'GG'];
-
-const formatInstitutionalMetric = (value: number, fallback: string) => {
-  return value > 0 ? `${compactNumberFormatter.format(value)}+` : fallback;
-};
-
 
 const transactionalLabelClassName = 'mb-1 block text-xs font-bold uppercase tracking-wider text-muted-soft';
 // Mantido para o teste de design system que valida a superfície transacional clara do admin.
@@ -2123,13 +2117,6 @@ export default function AdminPage() {
   };
 
   if (!isLoggedIn) {
-    const loginStats = [
-      { value: formatInstitutionalMetric(athletes.length, '500+'), label: 'Atletas' },
-      { value: formatInstitutionalMetric(events.length, '50+'), label: 'Eventos' },
-      { value: formatInstitutionalMetric(scores.length, '20.000+'), label: 'Resultados' },
-      { value: formatInstitutionalMetric(events.reduce((sum, event) => sum + (event.divisions?.length || 0), 0), '100+'), label: 'Rankings' }
-    ];
-
     const loginBenefits = [
       'Inscrições Online',
       'Rankings Atualizados',
@@ -2200,15 +2187,6 @@ export default function AdminPage() {
                 </div>
 
                 <div className="space-y-7">
-                  <div className="grid grid-cols-4 gap-4">
-                    {loginStats.map((stat) => (
-                      <div key={stat.label} className="border-l border-primary/40 pl-4">
-                        <p className="font-number text-3xl font-bold leading-none text-primary">{stat.value}</p>
-                        <p className="mt-2 text-[10px] font-bold uppercase tracking-wider text-muted">{stat.label}</p>
-                      </div>
-                    ))}
-                  </div>
-
                   <div className="grid max-w-3xl grid-cols-2 gap-3">
                     {loginBenefits.map((benefit) => (
                       <div key={benefit} className="flex items-center gap-2 text-sm font-semibold text-foreground">
@@ -2236,14 +2214,6 @@ export default function AdminPage() {
                     <p className="text-sm leading-6 text-foreground">
                       Gerencie eventos, acompanhe rankings e participe das competições da WOD Arena.
                     </p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    {loginStats.map((stat) => (
-                      <div key={stat.label} className="rounded-lg border border-card-border bg-card/90 p-3">
-                        <p className="font-number text-2xl font-bold leading-none text-primary">{stat.value}</p>
-                        <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-muted">{stat.label}</p>
-                      </div>
-                    ))}
                   </div>
                 </div>
 

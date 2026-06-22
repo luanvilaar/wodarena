@@ -8,6 +8,8 @@ const registerModal = read('../src/components/RegisterModal.tsx');
 const couponRoute = read('../src/app/api/checkout/coupon/route.ts');
 const serverCheckout = read('../src/lib/serverCheckout.ts');
 const bootstrapRoute = read('../src/app/api/app/bootstrap/route.ts');
+const bootstrapPublicRoute = read('../src/app/api/app/bootstrap/public/route.ts');
+const bootstrapPayloadHelper = read('../src/lib/bootstrapPayload.ts');
 
 test('checkout coupon application validates against the server instead of client bootstrap state', () => {
   assert.match(couponRoute, /export async function POST\(request: Request\)/);
@@ -20,7 +22,9 @@ test('checkout coupon application validates against the server instead of client
 });
 
 test('anonymous bootstrap does not expose coupon lists while coupon API returns only applied summary', () => {
-  assert.match(bootstrapRoute, /session \? supabaseAdmin\.from\('coupons'\)\.select\('\*'\) : Promise\.resolve\(\{ data: \[\] \}\)/);
+  assert.match(bootstrapRoute, /requireSession\(request, \['owner', 'manager', 'athlete'\]\)/);
+  assert.match(bootstrapPublicRoute, /buildPublicBootstrapPayload/);
+  assert.match(bootstrapPayloadHelper, /coupons: \[\]/);
   assert.match(couponRoute, /return NextResponse\.json\(result\)/);
   assert.match(serverCheckout, /export type CouponValidationResult = \{/);
   assert.match(serverCheckout, /code: string;/);

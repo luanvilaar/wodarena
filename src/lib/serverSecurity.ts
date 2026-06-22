@@ -16,6 +16,7 @@ export type DbUserRecord = SessionUser & {
 
 const SESSION_COOKIE = 'woda_session';
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 12;
+const REGISTRATION_ACCESS_MAX_AGE_SECONDS = 60 * 60 * 24;
 const PASSWORD_PREFIX = 'scrypt';
 
 export const getRequiredServerEnv = (name: string) => {
@@ -37,7 +38,18 @@ export const createSupabaseAdmin = () => createClient(
   }
 );
 
-const getSessionSecret = () => process.env.WODA_SESSION_SECRET || getRequiredServerEnv('SUPABASE_SERVICE_ROLE_KEY');
+const getSessionSecret = () => {
+  const configuredSecret = process.env.WODA_SESSION_SECRET?.trim();
+  if (configuredSecret) {
+    return configuredSecret;
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Variavel de ambiente obrigatoria ausente: WODA_SESSION_SECRET');
+  }
+
+  return 'wodarena-dev-session-secret';
+};
 
 const base64UrlEncode = (value: Buffer | string) => Buffer
   .from(value)
@@ -45,9 +57,18 @@ const base64UrlEncode = (value: Buffer | string) => Buffer
 
 const base64UrlJson = (value: unknown) => base64UrlEncode(JSON.stringify(value));
 
-const sign = (payload: string) => createHmac('sha256', getSessionSecret())
+const sign = (payload: string, purpose = 'session') => createHmac('sha256', `${getSessionSecret()}:${purpose}`)
   .update(payload)
   .digest('base64url');
+
+type RegistrationAccessClaims = {
+  typ: 'registration-access';
+  sub: string;
+  eventId: string;
+  userId?: string;
+  iat: number;
+  exp: number;
+};
 
 export const createSessionToken = (user: SessionUser) => {
   const now = Math.floor(Date.now() / 1000);
@@ -60,7 +81,25 @@ export const createSessionToken = (user: SessionUser) => {
     iat: now,
     exp: now + SESSION_MAX_AGE_SECONDS
   });
-  return `${payload}.${sign(payload)}`;
+  return `${payload}.${sign(payload, 'session')}`;
+};
+
+export const createRegistrationAccessToken = (input: {
+  registrationId: string;
+  eventId: string;
+  userId?: string;
+}) => {
+  const now = Math.floor(Date.now() / 1000);
+  const payload = base64UrlJson({
+    typ: 'registration-access',
+    sub: input.registrationId,
+    eventId: input.eventId,
+    userId: input.userId,
+    iat: now,
+    exp: now + REGISTRATION_ACCESS_MAX_AGE_SECONDS
+  } satisfies RegistrationAccessClaims);
+
+  return `${payload}.${sign(payload, 'registration-access')}`;
 };
 
 export const getSessionCookieHeader = (token: string) => {
@@ -86,7 +125,7 @@ export const verifySessionToken = (token: string | null): SessionUser | null => 
   const [payload, signature] = token.split('.');
   if (!payload || !signature) return null;
 
-  const expectedSignature = sign(payload);
+  const expectedSignature = sign(payload, 'session');
   const actual = Buffer.from(signature);
   const expected = Buffer.from(expectedSignature);
   if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return null;
@@ -102,6 +141,43 @@ export const verifySessionToken = (token: string | null): SessionUser | null => 
       email: String(decoded.email),
       role: decoded.role,
       organization: decoded.organization ? String(decoded.organization) : undefined
+    };
+  } catch {
+    return null;
+  }
+};
+
+export const verifyRegistrationAccessToken = (
+  token: string | null
+): RegistrationAccessClaims | null => {
+  if (!token || !token.includes('.')) return null;
+  const [payload, signature] = token.split('.');
+  if (!payload || !signature) return null;
+
+  const expectedSignature = sign(payload, 'registration-access');
+  const actual = Buffer.from(signature);
+  const expected = Buffer.from(expectedSignature);
+  if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return null;
+
+  try {
+    const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as Partial<RegistrationAccessClaims>;
+    if (
+      decoded?.typ !== 'registration-access'
+      || !decoded.sub
+      || !decoded.eventId
+      || !decoded.exp
+      || decoded.exp < Math.floor(Date.now() / 1000)
+    ) {
+      return null;
+    }
+
+    return {
+      typ: 'registration-access',
+      sub: String(decoded.sub),
+      eventId: String(decoded.eventId),
+      userId: decoded.userId ? String(decoded.userId) : undefined,
+      iat: Number(decoded.iat || 0),
+      exp: Number(decoded.exp)
     };
   } catch {
     return null;

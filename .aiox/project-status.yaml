@@ -1,16 +1,23 @@
 status:
   branch: main
-  modifiedFiles: []
-  modifiedFilesTotalCount: 0
+  modifiedFiles:
+    - .aiox/project-status.yaml
+    - card-desinger.png
+    - next.config.ts
+    - SECURITY-HEADERS.md
+    - docs/AUDITORIA-APIS-EXPOSTAS-2026-06-21.md
+  modifiedFilesTotalCount: 5
   recentCommits:
-    - 'chore: remover usuario mock org-2 e doc de migration obsoleto'
     - >-
-      feat(ux): logo WODArena no header do leaderboard e ajuste de overlay no
-      EventCard
+      feat: implementa validade de uso do gestor com bloqueio operacional e
+      renovacao (Story 1.15)
+    - >-
+      feat(commercial-leads): implementa modal de captacao comercial na homepage
+      e listagem no painel owner
   currentEpic: null
   currentStory: null
-  lastUpdate: '2026-06-17T13:55:46.558Z'
+  lastUpdate: '2026-06-22T00:59:30.327Z'
   isGitRepo: true
-timestamp: 1781704546563
+timestamp: 1782089970329
 ttl: 60
-gitFingerprint: 1780618055577.6655:1781400803515.2883
+gitFingerprint: 1780618055577.6655:1782066399832.5488

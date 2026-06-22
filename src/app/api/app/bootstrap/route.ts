@@ -1,12 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getManagerAccessStatus, normalizeServiceValidUntil } from '@/lib/managerAccess';
-import { createSupabaseAdmin, getRequestSession } from '@/lib/serverSecurity';
+import { PUBLIC_EVENT_SELECT, sanitizeLeaderboardEntry, sanitizePublicAthlete } from '@/lib/bootstrapPayload';
+import { createSupabaseAdmin, requireSession } from '@/lib/serverSecurity';
 import { mapContestationFromDb } from '@/lib/contestations';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AthleteRow = Record<string, any>;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type RegistrationRow = Record<string, any>;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ContestationRow = Record<string, any>;
 
@@ -23,37 +20,13 @@ const mapUserForClient = (user: Record<string, unknown>) => {
   };
 };
 
-const sanitizePublicAthlete = (athlete: AthleteRow) => ({
-  id: athlete.id,
-  name: athlete.name,
-  box: athlete.box,
-  country: athlete.country,
-  division_id: athlete.division_id,
-  birth_date: athlete.birth_date,
-  gender: athlete.gender,
-  city: athlete.city,
-  state: athlete.state,
-  instagram: athlete.instagram,
-  photo_url: athlete.photo_url,
-  is_team: athlete.is_team,
-  team_members: athlete.team_members
-});
-
-// Sanitizar dados de registration para uso público
-// Remove informações sensíveis: email, phone, payment_id, coupon_code, etc
-const sanitizePublicRegistration = (reg: RegistrationRow) => ({
-  id: String(reg.id),
-  athlete_id: reg.athlete_id ? String(reg.athlete_id) : null,
-  event_id: String(reg.event_id),
-  division_id: String(reg.division_id),
-  payment_status: String(reg.payment_status)
-  // ❌ NÃO incluir: athlete_email, athlete_phone, payment_id, payment_method, coupon_code, total_paid, etc
-});
-
 export async function GET(request: Request) {
   try {
+    const auth = requireSession(request, ['owner', 'manager', 'athlete']);
+    if (auth.response) return auth.response;
+
     const supabaseAdmin = createSupabaseAdmin();
-    const session = getRequestSession(request);
+    const session = auth.user;
 
     const [
       usersResult,
@@ -70,17 +43,15 @@ export async function GET(request: Request) {
     ] = await Promise.all([
       session?.role === 'owner'
         ? supabaseAdmin.from('users').select('id, name, email, role, organization, service_valid_until')
-        : session
-          ? supabaseAdmin.from('users').select('id, name, email, role, organization, service_valid_until').eq('id', session.id)
-          : Promise.resolve({ data: [] }),
+        : supabaseAdmin.from('users').select('id, name, email, role, organization, service_valid_until').eq('id', session.id),
       supabaseAdmin.from('athletes').select('*'),
       supabaseAdmin.from('scores').select('*'),
       supabaseAdmin.from('registrations').select('*'),
-      session ? supabaseAdmin.from('contestations').select('*') : Promise.resolve({ data: [] }),
-      session ? supabaseAdmin.from('coupons').select('*') : Promise.resolve({ data: [] }),
+      supabaseAdmin.from('contestations').select('*'),
+      supabaseAdmin.from('coupons').select('*'),
       supabaseAdmin
         .from('events')
-        .select('id, name, logo_url, banner_url, status, location, date, description, organizer_id, sponsors, format, ticket_price, ticket_slots, is_ticketing_active, time, city, state, rules, instagram, website, event_type, event_schedule, mp_public_key, marketplace_fee, registration_deadline'),
+        .select(PUBLIC_EVENT_SELECT),
       supabaseAdmin.from('divisions').select('*'),
       supabaseAdmin.from('workouts').select('*'),
       supabaseAdmin
@@ -94,6 +65,7 @@ export async function GET(request: Request) {
     const mappedCurrentUser = session
       ? mappedUsers.find(user => user.id === session.id) || session
       : null;
+    const sanitizedLeaderboardEntries = (leaderboardEntriesResult.data || []).map(sanitizeLeaderboardEntry);
 
     if (session?.role === 'manager') {
       const eventIds = new Set((eventsResult.data || [])
@@ -111,7 +83,7 @@ export async function GET(request: Request) {
         divisions: divisionsResult.data || [],
         workouts: workoutsResult.data || [],
         mercadopagoAccounts: mpAccountsResult.data || [],
-        leaderboardEntries: leaderboardEntriesResult.data || []
+        leaderboardEntries: sanitizedLeaderboardEntries
       });
     }
 
@@ -136,25 +108,24 @@ export async function GET(request: Request) {
         divisions: divisionsResult.data || [],
         workouts: workoutsResult.data || [],
         mercadopagoAccounts: mpAccountsResult.data || [],
-        leaderboardEntries: leaderboardEntriesResult.data || []
+        leaderboardEntries: sanitizedLeaderboardEntries
       });
     }
 
     return NextResponse.json({
       currentUser: mappedCurrentUser,
       users: mappedUsers,
-      athletes: (athletesResult.data || []).map(sanitizePublicAthlete),
+      athletes: athletesResult.data || [],
       scores: scoresResult.data || [],
-      registrations: !session
-        ? (registrationsResult.data || []).map(sanitizePublicRegistration)
-        : registrationsResult.data || [],
-      contestations: session ? contestationsResult.data || [] : [],
+      registrations: registrationsResult.data || [],
+      registrationsCount: null,
+      contestations: contestationsResult.data || [],
       coupons: couponsResult.data || [],
       events: eventsResult.data || [],
       divisions: divisionsResult.data || [],
       workouts: workoutsResult.data || [],
       mercadopagoAccounts: mpAccountsResult.data || [],
-      leaderboardEntries: leaderboardEntriesResult.data || []
+      leaderboardEntries: sanitizedLeaderboardEntries
     });
   } catch (err) {
     console.error('[Bootstrap API] Erro ao carregar dados iniciais:', err);

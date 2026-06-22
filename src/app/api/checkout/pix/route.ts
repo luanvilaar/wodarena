@@ -4,7 +4,12 @@ import {
   resolveMercadoPagoCheckoutConfig
 } from '@/lib/mercadopagoServer';
 import { ManagerAccessError, assertManagerSalesAccessForEvent, managerAccessErrorResponse } from '@/lib/serverManagerAccess';
-import { applyCouponUsageForApprovedRegistration, loadRegistrationCheckoutSnapshot } from '@/lib/serverCheckout';
+import {
+  applyCouponUsageForApprovedRegistration,
+  assertRegistrationAccess,
+  loadRegistrationCheckoutSnapshot,
+  RegistrationAccessError
+} from '@/lib/serverCheckout';
 import { checkRateLimit, createSupabaseAdmin, getClientIp } from '@/lib/serverSecurity';
 
 const supabaseAdmin = createSupabaseAdmin();
@@ -12,7 +17,7 @@ const supabaseAdmin = createSupabaseAdmin();
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { registrationData, cpf } = body;
+    const { registrationData, cpf, accessToken } = body;
 
     if (!registrationData?.id || !cpf) {
       return NextResponse.json({ error: 'Parâmetros inválidos.' }, { status: 400 });
@@ -24,6 +29,12 @@ export async function POST(request: Request) {
       windowMs: 15 * 60 * 1000
     });
     if (rateLimited) return rateLimited;
+
+    await assertRegistrationAccess(supabaseAdmin, request, {
+      registrationId: registrationData.id,
+      eventId: registrationData.eventId,
+      accessToken
+    });
 
     const checkoutSnapshot = await loadRegistrationCheckoutSnapshot(supabaseAdmin, registrationData.id);
     const { registrationData: safeRegistrationData, athleteProfile, transactionAmount } = checkoutSnapshot;
@@ -119,6 +130,9 @@ export async function POST(request: Request) {
   } catch (err) {
     if (err instanceof ManagerAccessError) {
       return managerAccessErrorResponse(err);
+    }
+    if (err instanceof RegistrationAccessError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
     }
     if (err instanceof MercadoPagoConfigError) {
       console.error("[MercadoPago Pix API] Erro de configuração:", err.message);

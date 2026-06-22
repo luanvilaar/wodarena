@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { sendRegistrationEmail } from '@/lib/resend';
 import { Registration, Athlete, Event } from '@/types';
+import { assertRegistrationAccess, RegistrationAccessError } from '@/lib/serverCheckout';
 import { checkRateLimit, createSupabaseAdmin, getClientIp } from '@/lib/serverSecurity';
 
 const supabaseAdmin = createSupabaseAdmin();
@@ -8,7 +9,7 @@ const supabaseAdmin = createSupabaseAdmin();
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { registrationId, cpf } = body;
+    const { registrationId, cpf, accessToken } = body;
 
     if (!registrationId) {
       return NextResponse.json({ error: 'Parâmetro registrationId obrigatório.' }, { status: 400 });
@@ -22,6 +23,11 @@ export async function POST(request: Request) {
     if (rateLimited) return rateLimited;
 
     console.log(`[Email API Endpoint] Processando solicitação para inscrição ${registrationId}...`);
+
+    await assertRegistrationAccess(supabaseAdmin, request, {
+      registrationId,
+      accessToken
+    });
 
     // 1. Buscar a inscrição no Supabase
     const { data: dbReg, error: regErr } = await supabaseAdmin
@@ -104,12 +110,20 @@ export async function POST(request: Request) {
     };
 
     // 3. Buscar o atleta (para verificar se é equipe e integrantes)
-    const { data: dbAthlete } = await supabaseAdmin
-      .from('athletes')
-      .select('*')
-      .eq('name', registration.athleteName)
-      .eq('division_id', registration.divisionId)
-      .maybeSingle();
+    const athleteLookup = registration.athleteId
+      ? supabaseAdmin
+        .from('athletes')
+        .select('*')
+        .eq('id', registration.athleteId)
+        .maybeSingle()
+      : supabaseAdmin
+        .from('athletes')
+        .select('*')
+        .eq('name', registration.athleteName)
+        .eq('division_id', registration.divisionId)
+        .maybeSingle();
+
+    const { data: dbAthlete } = await athleteLookup;
 
     const athlete: Athlete = {
       id: dbAthlete?.id || `ath-${Date.now()}`,
@@ -142,6 +156,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, messageId: emailResult.messageId });
   } catch (err) {
+    if (err instanceof RegistrationAccessError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
     console.error('[Email API Endpoint] Erro crítico no endpoint de e-mail:', err);
     return NextResponse.json({ error: 'Erro crítico interno no servidor.' }, { status: 500 });
   }

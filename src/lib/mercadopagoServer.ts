@@ -1,7 +1,6 @@
 import { createSupabaseAdmin } from '@/lib/serverSecurity';
 type MercadoPagoEventRow = {
   organizer_id: string;
-  mp_access_token: string | null;
 };
 
 type MercadoPagoPublicEventRow = {
@@ -21,7 +20,7 @@ export type MercadoPagoCheckoutConfig = {
   accessToken: string;
   marketplaceFee: number;
   organizerId: string;
-  source: 'organizer_secret' | 'event_legacy';
+  source: 'organizer_secret';
 };
 
 export type MercadoPagoPublicConfig = {
@@ -57,7 +56,7 @@ export const resolveMercadoPagoCheckoutConfig = async (eventId: string): Promise
 
   const { data: dbEvent, error: eventError } = await supabaseAdmin
     .from('events')
-    .select('organizer_id, mp_access_token')
+    .select('organizer_id')
     .eq('id', eventId)
     .single<MercadoPagoEventRow>();
 
@@ -85,17 +84,8 @@ export const resolveMercadoPagoCheckoutConfig = async (eventId: string): Promise
     };
   }
 
-  if (dbEvent.mp_access_token) {
-    return {
-      accessToken: dbEvent.mp_access_token,
-      marketplaceFee: 0,
-      organizerId: dbEvent.organizer_id,
-      source: 'event_legacy'
-    };
-  }
-
   throw new MercadoPagoConfigError(
-    'Este evento não aceita pagamentos online no momento. Cadastre as credenciais do Mercado Pago nas configurações do evento.',
+    'Este evento não aceita pagamentos online no momento. Conecte as credenciais do Mercado Pago na conta do gestor responsável.',
     403
   );
 };

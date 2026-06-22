@@ -53,6 +53,7 @@ interface AppContextType {
   athletes: Athlete[];
   scores: Score[];
   registrations: Registration[];
+  registrationsCount: number | null;
   contestations: Contestation[];
   users: User[];
   currentUser: User | null;
@@ -98,6 +99,8 @@ type WorkoutDbUpdate = Partial<{
 }>;
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
+const PRIVATE_BOOTSTRAP_ENDPOINT = '/api/app/bootstrap';
+const PUBLIC_BOOTSTRAP_ENDPOINT = '/api/app/bootstrap/public';
 
 type RegistrationDbRow = Record<string, unknown>;
 type AthleteDbRow = Record<string, unknown>;
@@ -109,6 +112,7 @@ type BootstrapPayload = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   athletes: any[];
   registrations: RegistrationDbRow[];
+  registrationsCount?: number | null;
   contestations: Record<string, unknown>[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   scores: any[];
@@ -230,14 +234,58 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [athletes, setAthletes] = useState<Athlete[]>([]);
   const [scores, setScores] = useState<Score[]>([]);
   const [registrations, setRegistrations] = useState<Registration[]>([]);
+  // Contagem agregada de inscricoes para clientes anonimos, que nao recebem os
+  // registros individuais. Fica null quando o ator autenticado ja recebe a lista.
+  const [registrationsCount, setRegistrationsCount] = useState<number | null>(null);
   const [contestations, setContestations] = useState<Contestation[]>([]);
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [leaderboardEntries, setLeaderboardEntries] = useState<LeaderboardEntry[]>([]);
   const [users, setUsers] = useState<User[]>(INITIAL_USERS);
   const [currentUser, setCurrentUser] = useLocalStorage<User | null>('woda_current_user', null);
+  const currentUserId = currentUser?.id || null;
+
+  const fetchBootstrapPayload = useCallback(async (preferPrivate: boolean): Promise<BootstrapPayload> => {
+    const initialEndpoint = preferPrivate ? PRIVATE_BOOTSTRAP_ENDPOINT : PUBLIC_BOOTSTRAP_ENDPOINT;
+    let response = await fetch(initialEndpoint);
+    let payload: BootstrapPayload = await response.json().catch(() => ({
+      users: [],
+      athletes: [],
+      registrations: [],
+      contestations: [],
+      scores: [],
+      coupons: [],
+      events: [],
+      divisions: [],
+      workouts: [],
+      mercadopagoAccounts: []
+    }));
+
+    if (preferPrivate && response.status === 401) {
+      setCurrentUser(null);
+      response = await fetch(PUBLIC_BOOTSTRAP_ENDPOINT);
+      payload = await response.json().catch(() => ({
+        users: [],
+        athletes: [],
+        registrations: [],
+        contestations: [],
+        scores: [],
+        coupons: [],
+        events: [],
+        divisions: [],
+        workouts: [],
+        mercadopagoAccounts: []
+      }));
+    }
+
+    if (!response.ok) {
+      throw new Error('Erro ao carregar dados iniciais.');
+    }
+
+    return payload;
+  }, [setCurrentUser]);
 
   const refreshRegistrations = useCallback(async () => {
-    const response = await fetch('/api/app/bootstrap');
+    const response = await fetch(PRIVATE_BOOTSTRAP_ENDPOINT);
     const payload: BootstrapPayload = await response.json();
     if (!response.ok) {
       throw new Error('Erro ao atualizar inscrições.');
@@ -245,6 +293,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     const mappedRegs = (payload.registrations || []).map(mapRegistrationFromDb);
     setRegistrations(mappedRegs);
+    setRegistrationsCount(typeof payload.registrationsCount === 'number' ? payload.registrationsCount : null);
     return mappedRegs;
   }, []);
 
@@ -253,11 +302,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const fetchAllData = async () => {
       try {
         setIsLoading(true);
-        const response = await fetch('/api/app/bootstrap');
-        const payload: BootstrapPayload = await response.json();
-        if (!response.ok) {
-          throw new Error('Erro ao carregar dados iniciais.');
-        }
+        const payload = await fetchBootstrapPayload(Boolean(currentUserId));
         // 1. Carregar usuários e sincronizar sessão
         const dbUsers = payload.users;
         if (dbUsers && dbUsers.length > 0) {
@@ -269,7 +314,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (payload.currentUser !== undefined) {
           setCurrentUser(payload.currentUser ? mapUserFromDb(payload.currentUser as unknown as Record<string, unknown>) : null);
         } else {
-          if (currentUser && dbUsers && !dbUsers.some(u => u.id === currentUser.id)) {
+          if (currentUserId && dbUsers && !dbUsers.some(u => u.id === currentUserId)) {
             setCurrentUser(null);
           }
         }
@@ -318,6 +363,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         } else {
           setRegistrations([]);
         }
+        setRegistrationsCount(typeof payload.registrationsCount === 'number' ? payload.registrationsCount : null);
 
         const dbContestations = payload.contestations;
         if (dbContestations && dbContestations.length > 0) {
@@ -353,7 +399,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           setLeaderboardEntries([]);
         }
 
-        // 5. Carregar eventos (excluindo mp_access_token por segurança), divisões, workouts e credenciais Mercado Pago dos gestores
+        // 5. Carregar eventos, divisões, workouts e credenciais públicas do Mercado Pago dos gestores
         const dbEvents = payload.events;
         const dbDivisions = payload.divisions;
         const dbWorkouts = payload.workouts;
@@ -421,7 +467,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 ? (typeof evt.event_schedule === 'string' ? JSON.parse(evt.event_schedule) : evt.event_schedule)
                 : [],
               mpPublicKey: evt.mp_public_key || organizerMp?.public_key || '',
-              mpAccessToken: '',
               registrationDeadline: evt.registration_deadline || undefined
             };
           });
@@ -443,7 +488,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     fetchAllData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [currentUserId, fetchBootstrapPayload, setCurrentUser]);
 
   // Rotina de reparo automático (Self-Healing) de dados legados do Fitness Racing
   useEffect(() => {
@@ -747,7 +792,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       workouts: defaultFitnessRacing.workouts,
       scheduleItems: eventData.scheduleItems || [],
       mpPublicKey: eventData.mpPublicKey || '',
-      mpAccessToken: eventData.mpAccessToken || ''
     };
 
     const eventRow = {
@@ -773,8 +817,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       website: newEvent.website,
       event_type: newEvent.eventType,
       event_schedule: newEvent.scheduleItems,
-      mp_public_key: newEvent.mpPublicKey || null,
-      mp_access_token: newEvent.mpAccessToken || null
+      mp_public_key: newEvent.mpPublicKey || null
     };
 
     const divisionRows = eventData.eventType === 'fitness_racing'
@@ -1727,7 +1770,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (updatedData.eventType !== undefined) dbPayload.event_type = updatedData.eventType;
     if (updatedData.scheduleItems !== undefined) dbPayload.event_schedule = updatedData.scheduleItems as EventScheduleItem[];
     if (updatedData.mpPublicKey !== undefined) dbPayload.mp_public_key = updatedData.mpPublicKey;
-    if (updatedData.mpAccessToken !== undefined) dbPayload.mp_access_token = updatedData.mpAccessToken;
 
     try {
       await adminPersist('updateEvent', { eventId, data: dbPayload });
@@ -1812,6 +1854,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         athletes,
         scores,
         registrations,
+        registrationsCount,
         contestations,
         coupons,
         users,

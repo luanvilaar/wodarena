@@ -29,7 +29,9 @@ test('registration form collects shirt size instead of athlete photo', () => {
 test('shirt size is persisted in athlete storage and checkout recovery flows', () => {
   assert.match(migration, /ALTER TABLE athletes ADD COLUMN IF NOT EXISTS shirt_size TEXT/);
   assert.match(context, /shirtSize: a\.shirt_size/);
-  assert.match(context, /fetch\('\/api\/app\/bootstrap'\)/);
+  assert.match(context, /const PRIVATE_BOOTSTRAP_ENDPOINT = '\/api\/app\/bootstrap'/);
+  assert.match(context, /const PUBLIC_BOOTSTRAP_ENDPOINT = '\/api\/app\/bootstrap\/public'/);
+  assert.match(context, /const response = await fetch\(PRIVATE_BOOTSTRAP_ENDPOINT\)/);
   assert.match(bootstrapRoute, /supabaseAdmin\.from\('athletes'\)/);
   assert.match(context, /shirtSize: m\.shirtSize/);
   assert.match(startRoute, /shirt_size: safeAthleteProfile\.shirtSize/);

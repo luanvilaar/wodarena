@@ -148,7 +148,6 @@ export interface Event {
   eventType?: 'functional_fitness' | 'fitness_racing';
   scheduleItems?: EventScheduleItem[];
   mpPublicKey?: string;
-  mpAccessToken?: string;
   marketplace_fee?: number;
   registrationDeadline?: string;
 }
@@ -169,6 +168,7 @@ export interface Registration {
   quantity: number;
   totalPaid: number;
   createdAt: string;
+  accessToken?: string;
   couponCode?: string;
   paymentStatus?: RegistrationPaymentStatus;
   paymentMethod?: string;

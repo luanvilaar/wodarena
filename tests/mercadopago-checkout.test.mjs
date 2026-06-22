@@ -19,9 +19,10 @@ const appContext = read('../src/context/AppContext.tsx');
 const eventPage = read('../src/app/event/[id]/page.tsx');
 
 test('Mercado Pago checkout resolves credentials from organizer secrets', () => {
-  assert.match(helper, /from\('events'\)[\s\S]*select\('organizer_id, mp_access_token'\)/);
+  assert.match(helper, /from\('events'\)[\s\S]*select\('organizer_id'\)/);
   assert.match(helper, /mercadopago_secrets/);
   assert.match(helper, /source: 'organizer_secret'/);
+  assert.doesNotMatch(helper, /mp_access_token/);
 });
 
 test('event payment routes use the centralized Mercado Pago credential resolver', () => {
@@ -60,7 +61,7 @@ test('transparent checkout sends payer CPF and does not send application fee', (
 
 test('Pix approval can render voucher without relying only on sessionStorage', () => {
   assert.match(statusRoute, /loadRegistrationCheckoutSnapshot/);
-  assert.match(statusRoute, /canReadRegistrationSnapshot/);
+  assert.match(statusRoute, /assertRegistrationAccess/);
   assert.match(statusRoute, /getRequestSession\(request\)/);
   assert.match(statusRoute, /registrationData: registrationPayload\?\.registrationData \|\| null/);
   assert.match(statusRoute, /athleteProfile: registrationPayload\?\.athleteProfile \|\| null/);
@@ -74,6 +75,16 @@ test('checkout payment routes apply rate limits by registration and method', () 
   assert.match(cardRoute, /checkout:\$\{getClientIp\(request\)\}:\$\{registrationData\.id\}:card/);
   assert.match(pixRoute, /checkRateLimit/);
   assert.match(pixRoute, /checkout:\$\{getClientIp\(request\)\}:\$\{registrationData\.id\}:pix/);
+});
+
+test('public checkout propagates the signed registration access token through polling and follow-up endpoints', () => {
+  assert.match(registerModal, /accessToken: activeRegistrationData\.accessToken/);
+  assert.match(registerModal, /registration_id: pixData\.registrationId/);
+  assert.match(registerModal, /statusParams\.set\('access_token', pixData\.accessToken\)/);
+  assert.match(registerModal, /body: JSON\.stringify\(\{[\s\S]*accessToken: createdReg\.accessToken \|\| registrationPayload\?\.accessToken/);
+  assert.match(pixRoute, /const \{ registrationData, cpf, accessToken \} = body/);
+  assert.match(cardRoute, /const \{ registrationData, token, payment_method_id, installments, cpf, deviceId, accessToken \} = body/);
+  assert.match(preferenceRoute, /const \{ registrationData, origin, accessToken \} = body/);
 });
 
 test('payment failures surface athlete-area recovery guidance', () => {

@@ -225,6 +225,7 @@ export default function CardPaymentModal({
           payment_method_id: paymentMethodId,
           installments: 1,
           cpf,
+          accessToken: registration.accessToken,
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           deviceId: (window as any).MP_DEVICE_SESSION_ID || undefined
         })
