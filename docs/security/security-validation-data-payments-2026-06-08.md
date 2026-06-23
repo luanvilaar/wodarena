@@ -1,7 +1,7 @@
 # Auditoria de Validacao: Dados, Pagamentos e RLS
 
 Data: 2026-06-08
-Escopo: validacao das correcoes aplicadas apos `docs/security-audit-data-payments-2026-06-08.md`.
+Escopo: validacao das correcoes aplicadas apos `docs/security/security-audit-data-payments-2026-06-08.md`.
 
 ## Veredito
 

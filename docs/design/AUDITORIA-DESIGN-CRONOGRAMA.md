@@ -2,14 +2,14 @@
 
 **Data:** 17 de Junho de 2026  
 **Auditor:** Uma (Empathizer) — UX/UI Designer & Design System Architect  
-**Documento de Referência:** `desinger-novo.md`  
+**Documento de Referência:** `docs/design/desinger-novo.md`  
 **Status Final:** ✅ **100% Conformidade**
 
 ---
 
 ## 📊 Resumo Executivo
 
-A rota de **Cronograma de Baterias** (`/admin`, seção de montagem de baterias por prova) foi auditada contra o design system documentado em `desinger-novo.md`.
+A rota de **Cronograma de Baterias** (`/admin`, seção de montagem de baterias por prova) foi auditada contra o design system documentado em `docs/design/desinger-novo.md`.
 
 | Métrica | Antes | Depois | Delta |
 |---------|-------|--------|-------|
@@ -227,7 +227,7 @@ npm run dev         # ✓ Servidor iniciado com sucesso
 
 ## ✨ Conclusão
 
-A rota de **Cronograma de Baterias** agora está **100% alinhada** com `desinger-novo.md`, com todos os tokens, componentes e padrões seguindo a documentação do design system.
+A rota de **Cronograma de Baterias** agora está **100% alinhada** com `docs/design/desinger-novo.md`, com todos os tokens, componentes e padrões seguindo a documentação do design system.
 
 **Data de conclusão:** 2026-06-17  
 **Commit:** `e27689b` (design(ui): conformidade 100%)

@@ -41,7 +41,7 @@ const EMPTY_LEAD_FORM: LeadFormState = {
 };
 
 export default function Home() {
-  const { events } = useApp();
+  const { events, athletes, registrations } = useApp();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | EventStatus>('all');
   const [leadFormOpen, setLeadFormOpen] = useState(false);
@@ -49,6 +49,13 @@ export default function Home() {
   const [leadSubmitting, setLeadSubmitting] = useState(false);
   const [leadErrorMessage, setLeadErrorMessage] = useState('');
   const [leadSuccessMessage, setLeadSuccessMessage] = useState('');
+  const totalDivisions = events.reduce((total, event) => total + event.divisions.length, 0);
+  const platformStats = [
+    { label: 'Eventos', value: events.length },
+    { label: 'Atletas', value: athletes.length },
+    { label: 'Categorias', value: totalDivisions },
+    { label: 'Inscrições', value: registrations.length },
+  ];
 
   const filteredEvents = events.filter((event) => {
     const matchesSearch = event.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -157,6 +164,14 @@ export default function Home() {
               >
                 Quero utilizar o WODArena
               </button>
+            </div>
+            <div className="grid gap-3 pt-2 sm:grid-cols-2 xl:grid-cols-4">
+              {platformStats.map((stat) => (
+                <div key={stat.label} className="rounded-2xl border border-card-border bg-card/90 p-4">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">{stat.label}</p>
+                  <p className="mt-2 text-3xl font-black tracking-[-0.04em] text-white">{stat.value}</p>
+                </div>
+              ))}
             </div>
           </div>
         </div>

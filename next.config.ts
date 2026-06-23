@@ -16,10 +16,12 @@ const supabaseWss = supabaseUrl
 /**
  * Content-Security-Policy (Opção B — sem nonce).
  * Modo: ENFORCE (bloqueia recursos fora da allowlist e pontua no Observatory/SecurityHeaders).
- * A CSP foi desenhada para ser livre de regressões (vide SECURITY-HEADERS.md).
+ * A CSP foi desenhada para ser livre de regressões
+ * (vide docs/security/security-headers.md).
  * Para validar antes de bloquear, troque a chave do header abaixo para
  * "Content-Security-Policy-Report-Only" (apenas reporta, não bloqueia).
- * Domínios liberados estão documentados em SECURITY-HEADERS.md.
+ * Domínios liberados estão documentados em
+ * docs/security/security-headers.md.
  */
 const cspDirectives: string[] = [
   "default-src 'self'",

@@ -2,7 +2,7 @@
 
 **Status:** Aguardando verificação manual antes da implementação
 **Arquivo-alvo:** `src/lib/resend.ts` → função `sendRegistrationEmail` (linhas 139-464)
-**Design de referência:** `desinger-novo.md` (Binance flat — canvas escuro, accent único `#FCD535`, hairlines `#eaecef`, cards radius 12px)
+**Design de referência:** `docs/design/desinger-novo.md` (Binance flat — canvas escuro, accent único `#FCD535`, hairlines `#eaecef`, cards radius 12px)
 
 ---
 

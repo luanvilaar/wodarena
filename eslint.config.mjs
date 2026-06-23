@@ -16,7 +16,7 @@ const eslintConfig = defineConfig([
     ".claude/**",
     ".codex/**",
     ".github/**",
-    "meu-projeto/**",
+    "archive/**",
   ]),
 ]);
 

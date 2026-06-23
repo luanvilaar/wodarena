@@ -260,7 +260,7 @@ Cards devem ter full width
 - `src/hooks/useMediaQuery.ts` - Hook mobile detection
 - `src/components/MobileLeaderboardCard.tsx` - Componente card
 - `src/components/Leaderboard.tsx` - Componente principal (linhas ~170)
-- Docs exemplo: `docs/LEADERBOARD-MOBILE-FIX-EXAMPLES.md`
+- Docs exemplo: `LEADERBOARD-MOBILE-FIX-EXAMPLES.md`
 
 ---
 

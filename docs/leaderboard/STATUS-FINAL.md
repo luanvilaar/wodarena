@@ -64,9 +64,9 @@ Mobile                 │ Desktop
 ✅ src/hooks/useMediaQuery.ts
 ✅ src/components/MobileLeaderboardCard.tsx
 ✅ AUDITORIA-LEADERBOARD-MOBILE.md
-✅ docs/LEADERBOARD-MOBILE-FIX-EXAMPLES.md
-✅ docs/LEADERBOARD-MOBILE-PROGRESS.md
-✅ docs/NEXT-STEPS-MOBILE.md
+✅ LEADERBOARD-MOBILE-FIX-EXAMPLES.md
+✅ LEADERBOARD-MOBILE-PROGRESS.md
+✅ NEXT-STEPS-MOBILE.md
 ✅ IMPLEMENTACAO-LEADERBOARD-MOBILE-SUMMARY.md
 ✅ FASE-2-COMPLETA.md
 ```
@@ -256,7 +256,7 @@ b4ab102 feat(leaderboard): filtros de categorias responsivos
 ```
 Próximo passo: Implementar drawers responsivos
 Tempo estimado: 2-4 horas
-Referência: docs/NEXT-STEPS-MOBILE.md
+Referência: NEXT-STEPS-MOBILE.md
 ```
 
 ---
@@ -270,7 +270,7 @@ Referência: docs/NEXT-STEPS-MOBILE.md
 ## 🎓 Referências
 
 - [Auditoria Completa](AUDITORIA-LEADERBOARD-MOBILE.md)
-- [Exemplos de Código](docs/LEADERBOARD-MOBILE-FIX-EXAMPLES.md)
-- [Progresso Detalhado](docs/LEADERBOARD-MOBILE-PROGRESS.md)
-- [Próximos Passos](docs/NEXT-STEPS-MOBILE.md)
+- [Exemplos de Código](LEADERBOARD-MOBILE-FIX-EXAMPLES.md)
+- [Progresso Detalhado](LEADERBOARD-MOBILE-PROGRESS.md)
+- [Próximos Passos](NEXT-STEPS-MOBILE.md)
 - [Fase 2 Completa](FASE-2-COMPLETA.md)

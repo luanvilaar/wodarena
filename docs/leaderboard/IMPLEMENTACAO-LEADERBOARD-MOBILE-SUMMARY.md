@@ -25,7 +25,7 @@
 ---
 
 ### ✅ Exemplos de Código
-- **Arquivo:** `docs/LEADERBOARD-MOBILE-FIX-EXAMPLES.md`
+- **Arquivo:** `LEADERBOARD-MOBILE-FIX-EXAMPLES.md`
 - **Inclui:**
   1. Hook `useMediaQuery` (pronto para copiar)
   2. Componente `MobileLeaderboardCard` (pronto para copiar)
@@ -84,13 +84,13 @@ Próximo:
 📄 AUDITORIA-LEADERBOARD-MOBILE.md (4.2 KB)
    └─ Análise completa com 8 problemas, recomendações, sprints
 
-📄 docs/LEADERBOARD-MOBILE-FIX-EXAMPLES.md (12 KB)
+📄 LEADERBOARD-MOBILE-FIX-EXAMPLES.md (12 KB)
    └─ 7 exemplos de código prontos para usar
 
-📄 docs/LEADERBOARD-MOBILE-PROGRESS.md (7.8 KB)
+📄 LEADERBOARD-MOBILE-PROGRESS.md (7.8 KB)
    └─ Progresso de implementação, checklist, métricas
 
-📄 docs/NEXT-STEPS-MOBILE.md (6.5 KB)
+📄 NEXT-STEPS-MOBILE.md (6.5 KB)
    └─ Guia passo-a-passo para renderização condicional
 
 📄 IMPLEMENTACAO-LEADERBOARD-MOBILE-SUMMARY.md (este arquivo)
@@ -120,7 +120,7 @@ Próximo:
 - [ ] Cards em mobile (usar MobileLeaderboardCard)
 - [ ] Tabelas em desktop (manter original)
 - [ ] Teste em 320px, 640px, 1024px
-- **Guia:** `docs/NEXT-STEPS-MOBILE.md`
+- **Guia:** `NEXT-STEPS-MOBILE.md`
 
 #### 2. **Filtros de Categorias Responsivos**
 - [ ] Dropdown em mobile
@@ -193,9 +193,9 @@ Próximo:
 ✅ src/hooks/useMediaQuery.ts (novo)
 ✅ src/components/MobileLeaderboardCard.tsx (novo)
 ✅ AUDITORIA-LEADERBOARD-MOBILE.md (novo)
-✅ docs/LEADERBOARD-MOBILE-FIX-EXAMPLES.md (novo)
-✅ docs/LEADERBOARD-MOBILE-PROGRESS.md (novo)
-✅ docs/NEXT-STEPS-MOBILE.md (novo)
+✅ LEADERBOARD-MOBILE-FIX-EXAMPLES.md (novo)
+✅ LEADERBOARD-MOBILE-PROGRESS.md (novo)
+✅ NEXT-STEPS-MOBILE.md (novo)
 ✅ IMPLEMENTACAO-LEADERBOARD-MOBILE-SUMMARY.md (novo - este)
 📝 src/components/Leaderboard.tsx (modificado)
 ```
@@ -206,7 +206,7 @@ Próximo:
 
 ### 1. **Copie o Guia**
 ```bash
-cat docs/NEXT-STEPS-MOBILE.md
+cat NEXT-STEPS-MOBILE.md
 ```
 
 ### 2. **Implemente a Renderização Condicional**
@@ -266,7 +266,7 @@ git commit -m "feat(leaderboard): renderização condicional mobile"
 
 **Implementar renderização condicional (Fase 2.1)**
 
-Segue o guia em `docs/NEXT-STEPS-MOBILE.md` - são ~15 minutos de codificação pura.
+Segue o guia em `NEXT-STEPS-MOBILE.md` - são ~15 minutos de codificação pura.
 
 Depois:
 ```bash

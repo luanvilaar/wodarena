@@ -1,6 +1,6 @@
 # Security Headers — WODArena
 
-Documentação dos headers de segurança configurados em [`next.config.ts`](next.config.ts).
+Documentação dos headers de segurança configurados em [`next.config.ts`](../../next.config.ts).
 
 - **Framework:** Next.js 16 (App Router) · **Deploy:** Vercel
 - **Local de configuração:** `next.config.ts` → `async headers()` (aplicado a `/:path*`)
