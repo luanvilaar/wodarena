@@ -70,6 +70,20 @@ test('Pix approval can render voucher without relying only on sessionStorage', (
   assert.match(registerModal, /createdReg = registerTicket\(registrationPayload, athletePayload\)/);
 });
 
+test('status route prefers persisted payment_id before fallback reconciliation', () => {
+  assert.match(statusRoute, /const persistedPaymentId = typeof registration\.payment_id === 'string'/);
+  assert.match(statusRoute, /const shouldLookupPersistedPaymentDirectly = Boolean\(persistedPaymentId\) && registration\.payment_method !== 'mercadopago_preference'/);
+  assert.match(statusRoute, /Tentando pagamento persistido/);
+  assert.match(statusRoute, /fetchMercadoPagoPaymentById\(checkoutConfig\.accessToken, persistedPaymentId\)/);
+});
+
+test('status route preserves fallback search for mercadopago preference and legacy records', () => {
+  assert.match(statusRoute, /registration\.payment_method !== 'mercadopago_preference'/);
+  assert.match(statusRoute, /Consulta pagamentos recentes no Mercado Pago apenas para fluxos sem payment_id real ou legados/);
+  assert.match(statusRoute, /p\.metadata\?\.registration_id === registrationIdParam/);
+  assert.match(statusRoute, /const payerEmail = p\.payer\?\.email\?\.trim\(\)\.toLowerCase\(\)/);
+});
+
 test('checkout payment routes apply rate limits by registration and method', () => {
   assert.match(cardRoute, /checkRateLimit/);
   assert.match(cardRoute, /checkout:\$\{getClientIp\(request\)\}:\$\{registrationData\.id\}:card/);

@@ -70,6 +70,13 @@ test('athlete area refreshes registrations to reflect Mercado Pago status update
   assert.match(adminPage, /window\.setInterval\(syncAthleteRegistrations, 15000\)/);
 });
 
+test('manager manual sync prefers payment_id and falls back to registration_id for preference flows', () => {
+  assert.match(adminPage, /const statusQuery = registration\.paymentId && registration\.paymentMethod !== 'mercadopago_preference'/);
+  assert.match(adminPage, /payment_id=\$\{encodeURIComponent\(registration\.paymentId\)\}&event_id=\$\{encodeURIComponent\(registration\.eventId\)\}/);
+  assert.match(adminPage, /registration_id=\$\{encodeURIComponent\(registration\.id\)\}&event_id=\$\{encodeURIComponent\(registration\.eventId\)\}/);
+  assert.match(adminPage, /fetch\(`\/api\/checkout\/status\?\$\{statusQuery\}`\)/);
+});
+
 test('voucher reflects non-approved payment status', () => {
   assert.match(voucher, /Pagamento não processado/);
   assert.match(voucher, /Inscrição registrada/);

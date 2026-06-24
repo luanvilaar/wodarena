@@ -2041,7 +2041,10 @@ export default function AdminPage() {
     setAdminNotice(null);
 
     try {
-      const response = await fetch(`/api/checkout/status?registration_id=${encodeURIComponent(registration.id)}&event_id=${encodeURIComponent(registration.eventId)}`);
+      const statusQuery = registration.paymentId && registration.paymentMethod !== 'mercadopago_preference'
+        ? `payment_id=${encodeURIComponent(registration.paymentId)}&event_id=${encodeURIComponent(registration.eventId)}`
+        : `registration_id=${encodeURIComponent(registration.id)}&event_id=${encodeURIComponent(registration.eventId)}`;
+      const response = await fetch(`/api/checkout/status?${statusQuery}`);
       const payload = await response.json().catch(() => ({}));
 
       if (!response.ok) {

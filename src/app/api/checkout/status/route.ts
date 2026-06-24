@@ -22,6 +22,17 @@ const toRegistrationPaymentStatus = (status?: string) => {
   return 'payment_pending';
 };
 
+const fetchMercadoPagoPaymentById = async (accessToken: string, paymentId: string) => {
+  const response = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`
+    }
+  });
+
+  if (!response.ok) return null;
+  return response.json();
+};
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -60,18 +71,12 @@ export async function GET(request: Request) {
 
     if (paymentId) {
       console.log(`[MercadoPago Status API] Buscando status do pagamento por ID: ${paymentId}`);
-      const response = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
-        headers: {
-          'Authorization': `Bearer ${checkoutConfig.accessToken}`
-        }
-      });
+      paymentData = await fetchMercadoPagoPaymentById(checkoutConfig.accessToken, paymentId);
 
-      if (!response.ok) {
+      if (!paymentData) {
         console.error(`[MercadoPago Status API] Erro ao buscar pagamento ${paymentId} no Mercado Pago.`);
         return NextResponse.json({ error: 'Erro ao buscar status do pagamento.' }, { status: 500 });
       }
-
-      paymentData = await response.json();
     } else if (registrationIdParam) {
       console.log(`[MercadoPago Status API] Conciliando pagamento por registration_id: ${registrationIdParam}`);
 
@@ -88,44 +93,60 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: 'Inscrição não encontrada para conciliação.' }, { status: 404 });
       }
 
-      // Consulta pagamentos recentes no Mercado Pago
-      const mpUrl = "https://api.mercadopago.com/v1/payments/search?sort=date_created&criteria=desc&limit=50";
-      const mpSearchResponse = await fetch(mpUrl, {
-        headers: {
-          'Authorization': `Bearer ${checkoutConfig.accessToken}`
+      const persistedPaymentId = typeof registration.payment_id === 'string'
+        ? registration.payment_id.trim()
+        : '';
+      const shouldLookupPersistedPaymentDirectly = Boolean(persistedPaymentId) && registration.payment_method !== 'mercadopago_preference';
+
+      if (shouldLookupPersistedPaymentDirectly) {
+        console.log(`[MercadoPago Status API] Tentando pagamento persistido ${persistedPaymentId} para a inscrição ${registrationIdParam}.`);
+        paymentData = await fetchMercadoPagoPaymentById(checkoutConfig.accessToken, persistedPaymentId);
+
+        if (!paymentData) {
+          console.warn(`[MercadoPago Status API] Pagamento persistido ${persistedPaymentId} não pôde ser carregado; seguindo para fallback por registration_id.`);
         }
-      });
-
-      if (!mpSearchResponse.ok) {
-        console.error(`[MercadoPago Status API] Erro ao buscar pagamentos recentes no Mercado Pago.`);
-        return NextResponse.json({ error: 'Erro ao consultar transações no Mercado Pago.' }, { status: 500 });
       }
 
-      const searchResult = await mpSearchResponse.json();
-      const results = searchResult.results || [];
-
-      // Procura transação que corresponda à inscrição no metadata ou dados do pagador
-      let foundPayment = results.find((p: any) => {
-        return p.metadata?.registration_id === registrationIdParam;
-      });
-
-      if (!foundPayment) {
-        const emailToMatch = registration.athlete_email?.trim().toLowerCase();
-        foundPayment = results.find((p: any) => {
-          const payerEmail = p.payer?.email?.trim().toLowerCase();
-          const amountMatches = Math.abs((p.transaction_amount || 0) - (registration.total_paid || 0)) < 0.1;
-          const emailMatches = payerEmail === emailToMatch;
-          return emailMatches && amountMatches && p.status === 'approved';
+      if (!paymentData) {
+        // Consulta pagamentos recentes no Mercado Pago apenas para fluxos sem payment_id real ou legados.
+        const mpUrl = "https://api.mercadopago.com/v1/payments/search?sort=date_created&criteria=desc&limit=50";
+        const mpSearchResponse = await fetch(mpUrl, {
+          headers: {
+            'Authorization': `Bearer ${checkoutConfig.accessToken}`
+          }
         });
-      }
 
-      if (!foundPayment) {
-        console.log(`[MercadoPago Status API] Nenhum pagamento correspondente encontrado no Mercado Pago para a inscrição ${registrationIdParam}.`);
-        return NextResponse.json({ status: 'pending', message: 'Nenhum pagamento correspondente localizado.' });
-      }
+        if (!mpSearchResponse.ok) {
+          console.error(`[MercadoPago Status API] Erro ao buscar pagamentos recentes no Mercado Pago.`);
+          return NextResponse.json({ error: 'Erro ao consultar transações no Mercado Pago.' }, { status: 500 });
+        }
 
-      console.log(`[MercadoPago Status API] Pagamento correspondente localizado no Mercado Pago: ${foundPayment.id} (status: ${foundPayment.status})`);
-      paymentData = foundPayment;
+        const searchResult = await mpSearchResponse.json();
+        const results = searchResult.results || [];
+
+        // Procura transação que corresponda à inscrição no metadata ou dados do pagador
+        let foundPayment = results.find((p: any) => {
+          return p.metadata?.registration_id === registrationIdParam;
+        });
+
+        if (!foundPayment) {
+          const emailToMatch = registration.athlete_email?.trim().toLowerCase();
+          foundPayment = results.find((p: any) => {
+            const payerEmail = p.payer?.email?.trim().toLowerCase();
+            const amountMatches = Math.abs((p.transaction_amount || 0) - (registration.total_paid || 0)) < 0.1;
+            const emailMatches = payerEmail === emailToMatch;
+            return emailMatches && amountMatches && p.status === 'approved';
+          });
+        }
+
+        if (!foundPayment) {
+          console.log(`[MercadoPago Status API] Nenhum pagamento correspondente encontrado no Mercado Pago para a inscrição ${registrationIdParam}.`);
+          return NextResponse.json({ status: 'pending', message: 'Nenhum pagamento correspondente localizado.' });
+        }
+
+        console.log(`[MercadoPago Status API] Pagamento correspondente localizado no Mercado Pago: ${foundPayment.id} (status: ${foundPayment.status})`);
+        paymentData = foundPayment;
+      }
     }
     let registrationPayload = null;
     const registrationId = paymentData.metadata?.registration_id || registrationIdParam;
