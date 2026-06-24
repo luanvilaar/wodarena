@@ -18,7 +18,7 @@ No fluxo atual do WODArena, o Mercado Pago está configurado para redirecionar o
 
 ## 2. Paralelo Técnico: Integração Atual vs. Modelo Recomendado
 
-| Característica | Fluxo Atual no WODArena | Modelo Recomendado ([mercado-pago-oauth-spec.md](file:///Users/luanvilaar/Desktop/Projetos/wodarena/mercado-pago-oauth-spec.md)) | O que deve ser ajustado no WODArena |
+| Característica | Fluxo Atual no WODArena | Modelo Recomendado ([mercado-pago-oauth-spec.md](/Users/luanvilaar/Desktop/Projetos/wodarena/docs/mercado-pago-oauth-spec.md)) | O que deve ser ajustado no WODArena |
 | :--- | :--- | :--- | :--- |
 | **Ponto de Retorno (Redirect URI)** | Rota direta da API Backend:<br/>`GET /api/mercadopago/oauth/callback` | Rota do Frontend da Plataforma:<br/>`/admin?tab=payments` | Alterar a `MERCADOPAGO_REDIRECT_URI` para apontar para o frontend administratório. |
 | **Método do Callback** | HTTP `GET` direto na API pelo navegador. | HTTP `POST` assíncrono local disparado pelo Frontend (`fetch`). | Mudar o callback da API para aceitar requisições `POST` de mesma origem. |

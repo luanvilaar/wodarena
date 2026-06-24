@@ -13,7 +13,9 @@ const configRoute = read('../src/app/api/checkout/config/route.ts');
 const webhookRoute = read('../src/app/api/webhooks/mercadopago/route.ts');
 const oauthCallback = read('../src/app/api/mercadopago/oauth/callback/route.ts');
 const adminMercadoPagoRoute = read('../src/app/api/admin/mercadopago/route.ts');
+const adminPage = read('../src/app/admin/page.tsx');
 const relaxMercadoPagoUserMigration = read('../supabase/migrations/20260607230131_relax_mercadopago_user_unique.sql');
+const oauthStatesMigration = read('../supabase/migrations/20260624140000_create_mercadopago_oauth_states.sql');
 const registerModal = read('../src/components/RegisterModal.tsx');
 const appContext = read('../src/context/AppContext.tsx');
 const eventPage = read('../src/app/event/[id]/page.tsx');
@@ -125,6 +127,29 @@ test('Mercado Pago OAuth callback persists secrets with Supabase service role', 
   assert.match(oauthCallback, /canActOnUser\(auth\.user, userId\)/);
   assert.match(oauthCallback, /createSupabaseAdmin\(\)/);
   assert.match(oauthCallback, /from\('mercadopago_secrets'\)/);
+});
+
+test('Mercado Pago OAuth uses single-use state and same-origin callback completion', () => {
+  assert.match(adminMercadoPagoRoute, /randomUUID\(\)/);
+  assert.match(adminMercadoPagoRoute, /from\('mercadopago_oauth_states'\)/);
+  assert.match(adminMercadoPagoRoute, /redirectUri = process\.env\.MERCADOPAGO_REDIRECT_URI \|\| `\$\{origin\}\/admin`/);
+  assert.match(oauthStatesMigration, /CREATE TABLE IF NOT EXISTS public\.mercadopago_oauth_states/);
+  assert.match(oauthStatesMigration, /expires_at TIMESTAMPTZ NOT NULL DEFAULT \(NOW\(\) \+ INTERVAL '10 minutes'\)/);
+  assert.match(oauthCallback, /export async function POST/);
+  assert.match(oauthCallback, /from\('mercadopago_oauth_states'\)/);
+  assert.match(oauthCallback, /delete\(\)\.eq\('state', state\)/);
+  assert.match(adminPage, /const code = params\.get\('code'\)/);
+  assert.match(adminPage, /window\.history\.replaceState\(\{\}, '', newUrl\)/);
+  assert.match(adminPage, /fetch\('\/api\/mercadopago\/oauth\/callback', \{[\s\S]*method: 'POST'/);
+});
+
+test('Mercado Pago callbacks sanitize production URLs and fall back to secure API validation', () => {
+  assert.match(preferenceRoute, /const sanitizedOrigin = isLocalhost \? origin : origin\.replace\(/);
+  assert.match(preferenceRoute, /success: `\$\{sanitizedOrigin\}\/event\/\$\{checkoutSnapshot\.eventId\}\?payment=success`/);
+  assert.match(preferenceRoute, /notification_url: `\$\{sanitizedOrigin\}\/api\/webhooks\/mercadopago\?event_id=\$\{checkoutSnapshot\.eventId\}`/);
+  assert.match(webhookRoute, /Assinatura HMAC invalida/);
+  assert.match(webhookRoute, /Continuando validacao por canal seguro/);
+  assert.match(webhookRoute, /Assinatura Mercado Pago invalida e transacao nao pode ser confirmada\./);
 });
 
 test('manual Mercado Pago credentials are validated and store the real collector id', () => {
