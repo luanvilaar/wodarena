@@ -83,8 +83,14 @@ export async function POST(request: Request) {
 
     if (!mpResponse.ok) {
       const errorData = await mpResponse.json();
+      const mpErrorCode = errorData?.error || 'unknown';
+      const mpErrorMessage = errorData?.message || errorData?.cause?.[0]?.description || '';
       console.error('[OAuth Callback] Erro retornado pela API do Mercado Pago:', errorData);
-      return NextResponse.json({ error: 'Erro de comunicação com o Mercado Pago.' }, { status: 400 });
+      console.error(`[OAuth Callback] Código do erro MP: ${mpErrorCode}. Mensagem: ${mpErrorMessage}`);
+      return NextResponse.json({
+        error: 'Erro de comunicação com o Mercado Pago.',
+        detail: mpErrorCode
+      }, { status: 400 });
     }
 
     const tokenData = await mpResponse.json();

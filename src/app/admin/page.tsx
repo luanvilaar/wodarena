@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import Script from 'next/script';
@@ -173,6 +173,7 @@ export default function AdminPage() {
   const [manualPublicKey, setManualPublicKey] = useState('');
   const [manualAccessToken, setManualAccessToken] = useState('');
   const [savingManualMp, setSavingManualMp] = useState(false);
+  const oauthCallbackProcessed = useRef(false);
 
   // Estados para re-tentativa de pagamento por Pix
   const [payingPixRegistration, setPayingPixRegistration] = useState<{ reg: Registration; event: Event; athlete: Athlete } | null>(null);
@@ -280,15 +281,19 @@ export default function AdminPage() {
     }
   }, []);
 
-  // Efeito para interceptar e processar o callback do OAuth do Mercado Pago (Solução B)
+  // Efeito para interceptar e processar o callback do OAuth do Mercado Pago
+  // useRef garante execução única mesmo que currentUser mude durante o carregamento
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    if (oauthCallbackProcessed.current) return;
 
     const params = new URLSearchParams(window.location.search);
     const code = params.get('code');
     const state = params.get('state');
 
     if (code && state) {
+      oauthCallbackProcessed.current = true;
+
       // Limpar os parâmetros da URL imediatamente para evitar duplicação em reloads
       const nextTab = params.get('tab') || 'payments';
       const newUrl = `${window.location.pathname}?tab=${nextTab}`;
@@ -308,7 +313,8 @@ export default function AdminPage() {
 
           const data = await response.json().catch(() => ({}));
           if (!response.ok) {
-            throw new Error(data.error || 'Erro no processamento do callback do Mercado Pago.');
+            const detail = data.detail ? ` (${data.detail})` : '';
+            throw new Error((data.error || 'Erro no processamento do callback do Mercado Pago.') + detail);
           }
 
           setAdminNotice({ text: 'Conta do Mercado Pago conectada com sucesso!', tone: 'success' });
@@ -336,7 +342,7 @@ export default function AdminPage() {
 
       processOauth();
     }
-  }, [currentUser]);
+  }, []);
 
   useEffect(() => {
     const fetchMpAccount = async () => {
