@@ -146,3 +146,58 @@ export const getMercadoPagoApplicationFee = (totalPaid: number, marketplaceFee: 
   if (totalPaid <= 0 || marketplaceFee <= 0) return undefined;
   return Math.min(totalPaid, marketplaceFee);
 };
+
+/**
+ * Resolve a URL de retorno do OAuth do Mercado Pago a partir de `MERCADOPAGO_REDIRECT_URI`
+ * (com fallback para `${origin}/admin`, o fluxo same-origin da Story 1.19).
+ *
+ * A mesma URL precisa ser usada na geracao da URL de autorizacao e na troca do
+ * `authorization_code` por Access Token, e precisa casar exatamente com a URL
+ * cadastrada no painel da aplicacao Mercado Pago. Esta funcao falha cedo com uma
+ * mensagem acionavel quando a configuracao nao pode funcionar em producao
+ * (ex.: aponta para localhost) e normaliza `http` -> `https` fora de localhost.
+ */
+export const resolveMercadoPagoRedirectUri = (origin: string): string => {
+  const configured = process.env.MERCADOPAGO_REDIRECT_URI?.trim();
+  const candidate = configured || `${origin}/admin`;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(candidate);
+  } catch {
+    console.error(`[MercadoPago OAuth] MERCADOPAGO_REDIRECT_URI malformada: ${candidate}`);
+    throw new MercadoPagoConfigError(
+      'A URL de retorno do Mercado Pago esta malformada no servidor da plataforma. Contate o suporte.',
+      500
+    );
+  }
+
+  const isLocalhost = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  if (isProduction && isLocalhost) {
+    console.error(
+      `[MercadoPago OAuth] MERCADOPAGO_REDIRECT_URI aponta para localhost em producao (${candidate}). ` +
+        'Configure a URL publica HTTPS registrada no painel do Mercado Pago (ex.: https://wodarena.com.br/admin).'
+    );
+    throw new MercadoPagoConfigError(
+      'A conexao automatica do Mercado Pago esta indisponivel por um erro de configuracao do servidor. Contate o suporte da plataforma.',
+      500
+    );
+  }
+
+  // O fluxo same-origin da Story 1.19 espera o retorno na pagina /admin.
+  if (!parsed.pathname.startsWith('/admin')) {
+    console.warn(
+      `[MercadoPago OAuth] MERCADOPAGO_REDIRECT_URI nao aponta para /admin (${parsed.pathname}); ` +
+        'o fluxo same-origin espera o retorno em /admin.'
+    );
+  }
+
+  // Fora de localhost, forca HTTPS (mesma politica de normalizacao do checkout).
+  if (!isLocalhost && parsed.protocol === 'http:') {
+    return candidate.replace(/^http:/, 'https:');
+  }
+
+  return candidate;
+};

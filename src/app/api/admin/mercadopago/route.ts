@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
+import { MercadoPagoConfigError, resolveMercadoPagoRedirectUri } from '@/lib/mercadopagoServer';
 import { ManagerAccessError, assertManagerOperationalAccess, managerAccessErrorResponse } from '@/lib/serverManagerAccess';
 import {
   canActOnUser,
@@ -45,12 +46,13 @@ export async function GET(request: Request) {
     if (action === 'oauth_url') {
       const clientId = process.env.MERCADOPAGO_CLIENT_ID;
       const origin = request.headers.get('origin') || new URL(request.url).origin;
-      const redirectUri = process.env.MERCADOPAGO_REDIRECT_URI || `${origin}/admin`;
 
       if (!clientId) {
         console.error('[API Admin MercadoPago GET] Erro de configuracao: MERCADOPAGO_CLIENT_ID nao esta definido nas variaveis de ambiente.');
         return NextResponse.json({ error: 'A conexao automatica do Mercado Pago nao esta configurada no servidor da plataforma.' }, { status: 500 });
       }
+
+      const redirectUri = resolveMercadoPagoRedirectUri(origin);
 
       const state = randomUUID();
       const { error: stateError } = await supabaseAdmin
@@ -84,6 +86,9 @@ export async function GET(request: Request) {
   } catch (err) {
     if (err instanceof ManagerAccessError) {
       return managerAccessErrorResponse(err);
+    }
+    if (err instanceof MercadoPagoConfigError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
     }
     console.error('[API Admin MercadoPago GET] Erro crítico inesperado:', err);
     return NextResponse.json({ error: 'Erro crítico interno no servidor.' }, { status: 500 });

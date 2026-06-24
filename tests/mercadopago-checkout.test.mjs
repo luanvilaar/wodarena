@@ -132,7 +132,14 @@ test('Mercado Pago OAuth callback persists secrets with Supabase service role', 
 test('Mercado Pago OAuth uses single-use state and same-origin callback completion', () => {
   assert.match(adminMercadoPagoRoute, /randomUUID\(\)/);
   assert.match(adminMercadoPagoRoute, /from\('mercadopago_oauth_states'\)/);
-  assert.match(adminMercadoPagoRoute, /redirectUri = process\.env\.MERCADOPAGO_REDIRECT_URI \|\| `\$\{origin\}\/admin`/);
+  // Resolucao do redirect_uri centralizada no helper e compartilhada entre autorizacao e troca de token.
+  assert.match(adminMercadoPagoRoute, /resolveMercadoPagoRedirectUri\(origin\)/);
+  assert.match(oauthCallback, /resolveMercadoPagoRedirectUri\(origin\)/);
+  assert.match(helper, /export const resolveMercadoPagoRedirectUri/);
+  assert.match(helper, /process\.env\.MERCADOPAGO_REDIRECT_URI/);
+  assert.match(helper, /`\$\{origin\}\/admin`/);
+  // Blindagem: falha cedo quando aponta para localhost em producao.
+  assert.match(helper, /isProduction && isLocalhost/);
   assert.match(oauthStatesMigration, /CREATE TABLE IF NOT EXISTS public\.mercadopago_oauth_states/);
   assert.match(oauthStatesMigration, /expires_at TIMESTAMPTZ NOT NULL DEFAULT \(NOW\(\) \+ INTERVAL '10 minutes'\)/);
   assert.match(oauthCallback, /export async function POST/);

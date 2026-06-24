@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { MercadoPagoConfigError, resolveMercadoPagoRedirectUri } from '@/lib/mercadopagoServer';
 import { ManagerAccessError, assertManagerOperationalAccess } from '@/lib/serverManagerAccess';
 import {
   canActOnUser,
@@ -54,7 +55,7 @@ export async function POST(request: Request) {
 
     const clientId = process.env.MERCADOPAGO_CLIENT_ID;
     const clientSecret = process.env.MERCADOPAGO_CLIENT_SECRET;
-    const redirectUri = process.env.MERCADOPAGO_REDIRECT_URI || `${origin}/admin`;
+    const redirectUri = resolveMercadoPagoRedirectUri(origin);
 
     if (!clientId || !clientSecret) {
       console.error('[OAuth Callback] Variáveis de ambiente MERCADOPAGO_CLIENT_ID ou MERCADOPAGO_CLIENT_SECRET não configuradas.');
@@ -132,6 +133,9 @@ export async function POST(request: Request) {
   } catch (err) {
     if (err instanceof ManagerAccessError) {
       return NextResponse.json({ error: 'O período de uso da plataforma expirou.' }, { status: 403 });
+    }
+    if (err instanceof MercadoPagoConfigError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
     }
     console.error('[OAuth Callback] Erro crítico inesperado no processamento do callback:', err);
     return NextResponse.json({ error: 'Erro crítico interno no servidor.' }, { status: 500 });
