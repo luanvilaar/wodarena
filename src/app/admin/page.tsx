@@ -314,7 +314,8 @@ export default function AdminPage() {
           const data = await response.json().catch(() => ({}));
           if (!response.ok) {
             const detail = data.detail ? ` (${data.detail})` : '';
-            throw new Error((data.error || 'Erro no processamento do callback do Mercado Pago.') + detail);
+            const message = data.message ? ` — ${data.message}` : '';
+            throw new Error((data.error || 'Erro no processamento do callback do Mercado Pago.') + detail + message);
           }
 
           setAdminNotice({ text: 'Conta do Mercado Pago conectada com sucesso!', tone: 'success' });

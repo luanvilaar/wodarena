@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     // 1. Buscar e validar o state na tabela mercadopago_oauth_states
     const { data: stateData, error: dbStateError } = await supabaseAdmin
       .from('mercadopago_oauth_states')
-      .select('user_id, expires_at')
+      .select('user_id, expires_at, code_verifier')
       .eq('state', state)
       .maybeSingle();
 
@@ -64,7 +64,20 @@ export async function POST(request: Request) {
 
     await assertManagerOperationalAccess(supabaseAdmin, auth.user);
 
-    console.log(`[OAuth Callback] Iniciando troca de token para o gestor: ${userId}...`);
+    const codeVerifier = stateData.code_verifier as string | null | undefined;
+    console.log(`[OAuth Callback] Iniciando troca de token para o gestor: ${userId}. PKCE=${codeVerifier ? 'sim' : 'nao'}. redirect_uri=${redirectUri}`);
+
+    const tokenParams: Record<string, string> = {
+      client_id: clientId,
+      client_secret: clientSecret,
+      grant_type: 'authorization_code',
+      code: code,
+      redirect_uri: redirectUri,
+    };
+
+    if (codeVerifier) {
+      tokenParams.code_verifier = codeVerifier;
+    }
 
     const mpResponse = await fetch('https://api.mercadopago.com/oauth/token', {
       method: 'POST',
@@ -72,24 +85,19 @@ export async function POST(request: Request) {
         'Content-Type': 'application/x-www-form-urlencoded',
         'accept': 'application/json'
       },
-      body: new URLSearchParams({
-        client_id: clientId,
-        client_secret: clientSecret,
-        grant_type: 'authorization_code',
-        code: code,
-        redirect_uri: redirectUri
-      }).toString()
+      body: new URLSearchParams(tokenParams).toString()
     });
 
     if (!mpResponse.ok) {
       const errorData = await mpResponse.json();
       const mpErrorCode = errorData?.error || 'unknown';
       const mpErrorMessage = errorData?.message || errorData?.cause?.[0]?.description || '';
-      console.error('[OAuth Callback] Erro retornado pela API do Mercado Pago:', errorData);
-      console.error(`[OAuth Callback] Código do erro MP: ${mpErrorCode}. Mensagem: ${mpErrorMessage}`);
+      console.error('[OAuth Callback] Erro retornado pela API do Mercado Pago:', JSON.stringify(errorData));
+      console.error(`[OAuth Callback] Código do erro MP: ${mpErrorCode}. Mensagem: ${mpErrorMessage}. redirect_uri_usado=${redirectUri}`);
       return NextResponse.json({
         error: 'Erro de comunicação com o Mercado Pago.',
-        detail: mpErrorCode
+        detail: mpErrorCode,
+        message: mpErrorMessage || undefined
       }, { status: 400 });
     }
 

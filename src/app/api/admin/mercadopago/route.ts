@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { randomUUID } from 'crypto';
+import { createHash, randomBytes, randomUUID } from 'crypto';
 import { MercadoPagoConfigError, resolveMercadoPagoRedirectUri } from '@/lib/mercadopagoServer';
 import { ManagerAccessError, assertManagerOperationalAccess, managerAccessErrorResponse } from '@/lib/serverManagerAccess';
 import {
@@ -54,12 +54,18 @@ export async function GET(request: Request) {
 
       const redirectUri = resolveMercadoPagoRedirectUri(origin);
 
+      // PKCE: gera code_verifier (32 bytes aleatórios) e code_challenge (SHA-256 do verifier)
+      const codeVerifierBytes = randomBytes(32);
+      const codeVerifier = codeVerifierBytes.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+      const codeChallenge = createHash('sha256').update(codeVerifier).digest('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+
       const state = randomUUID();
       const { error: stateError } = await supabaseAdmin
         .from('mercadopago_oauth_states')
         .insert({
           state: state,
-          user_id: userId
+          user_id: userId,
+          code_verifier: codeVerifier
         });
 
       if (stateError) {
@@ -67,7 +73,8 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: 'Erro interno ao iniciar o fluxo de autenticação.' }, { status: 500 });
       }
 
-      const oauthUrl = `https://auth.mercadopago.com.br/authorization?client_id=${clientId}&response_type=code&platform_id=mp&state=${state}&redirect_uri=${encodeURIComponent(redirectUri)}`;
+      const oauthUrl = `https://auth.mercadopago.com.br/authorization?client_id=${clientId}&response_type=code&platform_id=mp&state=${state}&redirect_uri=${encodeURIComponent(redirectUri)}&code_challenge=${codeChallenge}&code_challenge_method=S256`;
+      console.log(`[API Admin MercadoPago GET] OAuth URL gerada com PKCE para o gestor ${userId}. redirect_uri=${redirectUri}`);
       return NextResponse.json({ url: oauthUrl });
     }
 
