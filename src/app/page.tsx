@@ -4,6 +4,8 @@ import Link from 'next/link';
 import React, { useState } from 'react';
 import { useApp } from '@/context/AppContext';
 import { EventCard } from '@/components/EventCard';
+import { SectionOperations } from '@/components/home/SectionOperations';
+import { FeaturedEventBanner } from '@/components/home/FeaturedEventBanner';
 import {
   ArrowRight,
   Building,
@@ -243,6 +245,9 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      <SectionOperations />
+      <FeaturedEventBanner />
 
       <section id="eventos" className="mx-auto w-full max-w-7xl space-y-8 px-4 py-12 sm:px-6 lg:px-8">
         <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">

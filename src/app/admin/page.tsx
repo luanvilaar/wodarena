@@ -2044,11 +2044,35 @@ export default function AdminPage() {
       const statusQuery = registration.paymentId && registration.paymentMethod !== 'mercadopago_preference'
         ? `payment_id=${encodeURIComponent(registration.paymentId)}&event_id=${encodeURIComponent(registration.eventId)}`
         : `registration_id=${encodeURIComponent(registration.id)}&event_id=${encodeURIComponent(registration.eventId)}`;
-      const response = await fetch(`/api/checkout/status?${statusQuery}`);
-      const payload = await response.json().catch(() => ({}));
+      
+      let response = await fetch(`/api/checkout/status?${statusQuery}`);
+      let payload = await response.json().catch(() => ({}));
 
       if (!response.ok) {
         throw new Error(payload.error || 'Erro ao sincronizar status do pagamento.');
+      }
+
+      if (payload.status === 'pending') {
+        const message = `Não localizamos nenhum pagamento automático correspondente no Mercado Pago para a inscrição de "${registration.athleteName}".\n\nSe você possui o comprovante do pagamento, digite o ID da Transação do Mercado Pago abaixo para forçar a conciliação manual:`;
+        const manualPaymentIdInput = window.prompt(message);
+        const manualPaymentId = manualPaymentIdInput?.trim();
+
+        if (manualPaymentId) {
+          const manualQuery = `payment_id=${encodeURIComponent(manualPaymentId)}&event_id=${encodeURIComponent(registration.eventId)}&registration_id=${encodeURIComponent(registration.id)}`;
+          response = await fetch(`/api/checkout/status?${manualQuery}`);
+          payload = await response.json().catch(() => ({}));
+
+          if (!response.ok) {
+            throw new Error(payload.error || 'Erro ao buscar pagamento com o ID informado.');
+          }
+        } else {
+          setAdminNotice({
+            text: `Nenhum pagamento correspondente localizado automaticamente no Mercado Pago. Status atual: PENDENTE.`,
+            tone: 'error'
+          });
+          setSyncingRegistrationId(null);
+          return;
+        }
       }
 
       if (payload.status === 'approved') {
@@ -2057,11 +2081,6 @@ export default function AdminPage() {
           tone: 'success'
         });
         await refreshRegistrations();
-      } else if (payload.status === 'pending') {
-        setAdminNotice({
-          text: `Nenhum pagamento correspondente localizado no Mercado Pago. Status atual: PENDENTE.`,
-          tone: 'error'
-        });
       } else {
         setAdminNotice({
           text: `Status do pagamento sincronizado: ${payload.status || 'Pendente'}.`,

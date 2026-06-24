@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Proposta v4 — WODArena Homepage</title>
+  <style>
+    :root {
+      --bg:    #0b0e11;
+      --card:  #1e2329;
+      --bdr:   #2b3139;
+      --pri:   #fcd535;
+      --prih:  #f0b90b;
+      --muted: #929aa5;
+      --dark:  #181a20;
+      --fg:    #eaecef;
+      --grn:   #0ecb81;
+      --ink:   #181a20;
+      --pill:  999px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #f0f2f5;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #1c1c1c;
+    }
+
+    /* ── Doc bar ────────────────────────────────── */
+    .doc-bar {
+      position: sticky; top: 0; z-index: 100;
+      background: #fff; border-bottom: 1px solid #e0e0e0;
+      padding: 14px 32px;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 16px; flex-wrap: wrap;
+    }
+    .doc-bar-title { font-size: 14px; font-weight: 800; color: #111; letter-spacing: -0.02em; }
+    .doc-bar-meta  { font-size: 11px; color: #888; margin-top: 1px; }
+    .badge-pend {
+      display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px;
+      border-radius: 999px; font-size: 11px; font-weight: 800; letter-spacing: 0.06em;
+      text-transform: uppercase; background: #fff8e6; color: #b45309; border: 1px solid #fcd34d;
+    }
+    .dot { width: 6px; height: 6px; border-radius: 50%; background: #f59e0b; }
+
+    /* ── Doc body ───────────────────────────────── */
+    .doc-body { max-width: 960px; margin: 0 auto; padding: 32px 20px 48px; }
+
+    .panel {
+      background: #fff; border: 1px solid #e0e0e0; border-radius: 14px;
+      padding: 24px 28px; margin-bottom: 20px;
+    }
+    .panel-title {
+      font-size: 11px; font-weight: 800; letter-spacing: 0.12em;
+      text-transform: uppercase; color: #888; margin-bottom: 16px;
+    }
+
+    .page-map { display: flex; flex-direction: column; gap: 6px; }
+    .mrow {
+      display: flex; align-items: center; gap: 12px; padding: 10px 14px;
+      border-radius: 8px; border: 1px solid #e9ecef; background: #f8f9fa;
+      font-size: 13px; color: #555;
+    }
+    .mrow.ra { background: #fffbeb; border: 1.5px solid #fcd535; color: #111; font-weight: 700; }
+    .mrow.rb { background: #f0fdf4; border: 1.5px solid #86efac; color: #111; font-weight: 700; }
+    .mnum {
+      width: 22px; height: 22px; border-radius: 6px; background: #e9ecef;
+      display: grid; place-items: center; font-size: 11px; font-weight: 800; color: #666; flex: 0 0 22px;
+    }
+    .mrow.ra .mnum { background: #fcd535; color: #181a20; }
+    .mrow.rb .mnum { background: #86efac; color: #14532d; }
+    .mtag {
+      margin-left: auto; font-size: 10px; font-weight: 800; letter-spacing: 0.08em;
+      text-transform: uppercase; padding: 2px 8px; border-radius: 4px;
+    }
+    .mtag.ex { background: #e0f2fe; color: #0369a1; }
+    .mtag.ta { background: #fef9c3; color: #854d0e; }
+    .mtag.tb { background: #dcfce7; color: #166534; }
+
+    .ctx-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+    .ctx-item { background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 8px; padding: 14px 16px; }
+    .ctx-lbl  { font-size: 10px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: #999; margin-bottom: 5px; }
+    .ctx-val  { font-size: 13px; font-weight: 600; color: #222; }
+
+    .file-list { display: flex; flex-direction: column; gap: 7px; }
+    .file-row {
+      display: flex; align-items: center; gap: 10px; padding: 9px 12px;
+      background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px;
+      font-family: "SF Mono", Menlo, monospace; font-size: 12px; color: #333;
+    }
+    .fb { font-family: Inter, sans-serif; font-size: 10px; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; padding: 2px 7px; border-radius: 4px; flex: 0 0 auto; }
+    .fb.mod { background: #dbeafe; color: #1d4ed8; }
+    .fb.new { background: #d1fae5; color: #065f46; }
+    .fn { color: #999; font-size: 11px; margin-left: auto; font-family: Inter, sans-serif; }
+
+    .prev-hdr {
+      max-width: 960px; margin: 28px auto 16px; padding: 0 20px;
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    }
+    .prev-hdr h2 { font-size: 11px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: #888; }
+    .prev-hdr p  { font-size: 11px; color: #bbb; }
+
+    /* ── Simulação ──────────────────────────────── */
+    .vp { width: 100%; background: var(--bg); }
+
+    .ph {
+      background: var(--bg); opacity: 0.38;
+      pointer-events: none; position: relative;
+    }
+    .ph::after {
+      content: attr(data-label); position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%); font-size: 11px; font-weight: 800;
+      letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted);
+      background: rgba(43,49,57,0.7); padding: 6px 14px; border-radius: 999px;
+      border: 1px solid var(--bdr); white-space: nowrap;
+    }
+    .ph-h { height: 220px; border-bottom: 1px solid var(--bdr); }
+    .ph-c { height: 180px; background: rgba(30,35,41,0.4); border-bottom: 1px solid var(--bdr); }
+    .ph-e { height: 180px; border-top: 1px solid var(--bdr); }
+
+    .sw { position: relative; }
+    .sbdg {
+      position: absolute; top: -13px; left: 50%; transform: translateX(-50%);
+      z-index: 10; font-size: 10px; font-weight: 900; letter-spacing: 0.14em;
+      text-transform: uppercase; padding: 4px 16px; border-radius: 999px; white-space: nowrap;
+    }
+    .sbdg-a { background: var(--pri); color: var(--ink); }
+    .sbdg-b { background: #22c55e; color: #052e16; }
+
+
+    /* ═══════════════════════════════════════════════
+       PROPOSTA A — HERO VIDEO FULL-BLEED + FEATURE GRID
+       ═══════════════════════════════════════════════ */
+    .ops {
+      background: var(--bg);
+      border-top: 1px solid var(--bdr); border-bottom: 1px solid var(--bdr);
+      position: relative; overflow: hidden;
+    }
+
+    /* Vídeo de fundo — preenche toda a seção */
+    .ops-bg-video {
+      position: absolute; inset: 0; z-index: 0;
+      width: 100%; height: 100%;
+      object-fit: cover;
+      filter: grayscale(0.35) contrast(1.12) brightness(0.42);
+      transform: scale(1.02);
+    }
+
+    /* Gradiente: vídeo visível no topo, funde para dark na área das features */
+    .ops-grad {
+      position: absolute; inset: 0; z-index: 1; pointer-events: none;
+      background:
+        linear-gradient(180deg,
+          rgba(11,14,17,0.08) 0%,
+          rgba(11,14,17,0.0)  10%,
+          rgba(11,14,17,0.5)  42%,
+          rgba(11,14,17,0.96) 60%,
+          rgba(11,14,17,1.0)  68%),
+        linear-gradient(90deg,
+          rgba(11,14,17,0.55) 0%,
+          rgba(11,14,17,0.0)  50%);
+    }
+
+    .ops-in {
+      position: relative; z-index: 2;
+      max-width: 1280px; margin: 0 auto;
+      padding: 0 56px 72px;
+    }
+
+    /* Área hero — vídeo visível através do gradiente, conteúdo ancorado no bottom */
+    .ops-overlay {
+      min-height: 580px;
+      display: flex; align-items: flex-end;
+      padding-bottom: 52px;
+    }
+
+    .ops-hdr {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 40px; align-items: end; width: 100%;
+    }
+    .ops-eyebrow {
+      display: inline-flex; color: var(--pri);
+      font-size: 12px; font-weight: 900; letter-spacing: 0.18em;
+      text-transform: uppercase; margin-bottom: 18px;
+    }
+    .ops-h2 {
+      font-size: clamp(38px, 4.8vw, 72px); line-height: 0.92;
+      letter-spacing: -0.058em; font-weight: 900; text-transform: uppercase; color: #fff;
+    }
+    .ops-desc {
+      color: var(--muted); font-size: 16px; line-height: 1.6; margin-top: 20px;
+    }
+    .ops-types-lbl {
+      font-size: 10px; font-weight: 800; letter-spacing: 0.14em;
+      text-transform: uppercase; color: rgba(146,154,165,0.7); margin-bottom: 14px;
+    }
+    .ops-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+    .ops-tag {
+      border-radius: var(--pill); border: 1px solid rgba(43,49,57,0.65);
+      background: rgba(30,35,41,0.7); color: var(--fg);
+      padding: 9px 16px; font-size: 13px; font-weight: 800;
+      backdrop-filter: blur(4px);
+    }
+
+    /* Feature grid 4 colunas — fica abaixo do gradient, sobre fundo escuro */
+    .ops-feat {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      gap: 8px; margin-top: 48px; margin-bottom: 14px;
+    }
+    .ops-f {
+      background: rgba(30,35,41,0.5); border: 1px solid var(--bdr);
+      border-radius: 8px; padding: 13px 16px;
+      font-size: 13px; font-weight: 600; color: var(--muted);
+      letter-spacing: 0.01em;
+    }
+
+    /* Impact */
+    .ops-impact {
+      display: grid; grid-template-columns: 0.65fr 1.35fr;
+      gap: 14px; align-items: stretch;
+    }
+    .ops-imp-num {
+      border-radius: 18px; background: var(--pri); color: var(--ink);
+      padding: 32px 28px; display: flex; flex-direction: column; justify-content: center;
+      min-height: 170px;
+    }
+    .ops-imp-num strong {
+      font-size: clamp(60px, 8vw, 108px); line-height: 0.82;
+      letter-spacing: -0.08em; font-weight: 950;
+    }
+    .ops-imp-num span {
+      margin-top: 14px; font-size: 14px; line-height: 1.25;
+      font-weight: 950; letter-spacing: 0.06em; text-transform: uppercase;
+    }
+    .ops-imp-copy {
+      border-radius: 18px; background: var(--card); border: 1px solid var(--bdr);
+      padding: 32px; display: flex; flex-direction: column; justify-content: center;
+    }
+    .ops-imp-copy h3 {
+      font-size: clamp(26px, 3vw, 48px); line-height: 1;
+      letter-spacing: -0.05em; text-transform: uppercase; font-weight: 900; color: #fff;
+    }
+    .ops-imp-copy p { color: var(--muted); margin-top: 14px; font-size: 16px; line-height: 1.6; }
+
+    @media (max-width: 1024px) {
+      .ops-in { padding: 0 32px 64px; }
+      .ops-hdr { grid-template-columns: 1fr; gap: 24px; align-items: start; }
+      .ops-feat { grid-template-columns: repeat(2, 1fr); margin-top: 36px; }
+    }
+    @media (max-width: 640px) {
+      .ops-in { padding: 0 18px 48px; }
+      .ops-overlay { min-height: 440px; padding-bottom: 32px; }
+      .ops-feat { grid-template-columns: 1fr; margin-top: 28px; }
+      .ops-impact { grid-template-columns: 1fr; }
+    }
+
+
+    /* ═══════════════════════════════════════════════
+       PROPOSTA B — EVENT POSTER IMERSIVO
+       ═══════════════════════════════════════════════ */
+    .poster {
+      position: relative; overflow: hidden;
+      min-height: 600px;
+      background-image: url("../../banner_compor.png");
+      background-size: cover; background-position: center 30%;
+      border-top: 1px solid var(--bdr); border-bottom: 1px solid var(--bdr);
+      display: flex; flex-direction: column; justify-content: flex-end;
+    }
+    .poster::before {
+      content: ""; position: absolute; inset: 0; z-index: 1;
+      background:
+        linear-gradient(180deg,
+          rgba(11,14,17,0.18) 0%,
+          rgba(11,14,17,0.0)  28%,
+          rgba(11,14,17,0.72) 62%,
+          rgba(11,14,17,0.97) 100%),
+        linear-gradient(90deg,
+          rgba(11,14,17,0.55) 0%,
+          rgba(11,14,17,0.0)  52%);
+    }
+    .poster-in {
+      position: relative; z-index: 2;
+      max-width: 1280px; width: 100%;
+      margin: 0 auto; padding: 0 56px 56px;
+    }
+
+    .p-eyebrow {
+      display: inline-flex; align-items: center; gap: 8px; margin-bottom: 20px;
+    }
+    .p-edot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--grn); box-shadow: 0 0 8px rgba(14,203,129,0.7);
+      animation: pd 1.8s ease-in-out infinite;
+    }
+    @keyframes pd {
+      0%,100% { opacity: 1; transform: scale(1); }
+      50%      { opacity: 0.4; transform: scale(0.75); }
+    }
+    .p-etxt {
+      font-size: 11px; font-weight: 900; letter-spacing: 0.18em;
+      text-transform: uppercase; color: var(--grn);
+    }
+
+    .p-badges { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+    .p-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px 12px; border-radius: var(--pill);
+      font-size: 11px; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase;
+      backdrop-filter: blur(6px);
+    }
+    .pb-open { background: rgba(14,203,129,0.15); color: var(--grn);  border: 1px solid rgba(14,203,129,0.3); }
+    .pb-type { background: rgba(252,213,53,0.12); color: var(--pri);  border: 1px solid rgba(252,213,53,0.25); }
+    .pb-loc  { background: rgba(43,49,57,0.7);    color: var(--muted); border: 1px solid rgba(43,49,57,0.9); }
+
+    .p-title {
+      font-size: clamp(52px, 7vw, 100px); line-height: 0.9;
+      letter-spacing: -0.065em; font-weight: 900;
+      text-transform: uppercase; color: #fff; margin-bottom: 22px;
+    }
+    .p-title span { color: var(--pri); }
+
+    .p-meta { display: flex; align-items: center; gap: 0; margin-bottom: 24px; flex-wrap: wrap; }
+    .p-meta-item { font-size: 15px; font-weight: 700; color: rgba(255,255,255,0.72); }
+    .p-meta-dot {
+      width: 4px; height: 4px; border-radius: 50%;
+      background: rgba(255,255,255,0.28); margin: 0 14px; flex: 0 0 4px; align-self: center;
+    }
+
+    /* Faixa de dados unificada */
+    .p-data {
+      display: flex; align-items: stretch;
+      width: 100%; max-width: 680px; margin-bottom: 14px;
+      background: rgba(11,14,17,0.65); backdrop-filter: blur(10px);
+      border: 1px solid rgba(43,49,57,0.75); border-radius: 14px;
+      overflow: hidden; flex-wrap: wrap;
+    }
+
+    .p-cd-unit {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 3px; padding: 16px 20px;
+      border-right: 1px solid rgba(43,49,57,0.8);
+      min-width: 72px;
+    }
+    .p-cd-num {
+      font-size: 28px; font-weight: 900; letter-spacing: -0.06em;
+      color: #fff; line-height: 1; font-variant-numeric: tabular-nums;
+    }
+    .p-cd-lbl {
+      font-size: 9px; font-weight: 800; letter-spacing: 0.12em;
+      text-transform: uppercase; color: var(--muted);
+    }
+
+    .p-data-sep {
+      width: 1px; background: rgba(43,49,57,0.8); margin: 12px 0; flex: 0 0 1px;
+    }
+
+    .p-stat {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 3px; padding: 16px 20px;
+      border-right: 1px solid rgba(43,49,57,0.8);
+      min-width: 80px;
+    }
+    .p-stat:last-child { border-right: none; }
+    .p-stat-num { font-size: 22px; font-weight: 900; letter-spacing: -0.04em; line-height: 1; }
+    .p-stat-lbl { font-size: 9px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+
+    /* Progress bar */
+    .p-prog {
+      width: 100%; max-width: 680px; height: 3px;
+      background: rgba(43,49,57,0.6); border-radius: 999px;
+      overflow: hidden; margin-bottom: 28px;
+    }
+    .p-prog-fill { height: 100%; border-radius: 999px; background: var(--pri); width: 58.5%; }
+
+    /* CTAs */
+    .p-cta { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .p-btn-pri {
+      display: inline-flex; align-items: center; gap: 8px;
+      height: 52px; padding: 0 32px; border-radius: 10px;
+      background: var(--pri); color: var(--ink); font-size: 15px; font-weight: 800;
+      border: none; cursor: pointer; font-family: inherit; transition: background 0.15s;
+    }
+    .p-btn-pri:hover { background: var(--prih); }
+    .p-btn-sec {
+      display: inline-flex; align-items: center; gap: 8px;
+      height: 52px; padding: 0 24px; border-radius: 10px;
+      background: rgba(30,35,41,0.7); color: var(--fg); font-size: 14px; font-weight: 700;
+      border: 1px solid var(--bdr); cursor: pointer; font-family: inherit;
+      backdrop-filter: blur(8px); transition: border-color 0.15s;
+    }
+    .p-btn-sec:hover { border-color: var(--muted); color: #fff; }
+
+    @media (max-width: 900px) {
+      .poster-in { padding: 0 24px 40px; }
+      .p-title { font-size: 52px; }
+    }
+    @media (max-width: 600px) {
+      .poster { min-height: 640px; }
+      .poster-in { padding: 0 18px 32px; }
+      .p-title { font-size: 40px; margin-bottom: 16px; }
+      .p-meta { flex-direction: column; align-items: flex-start; gap: 5px; }
+      .p-meta-dot { display: none; }
+      .p-data { flex-wrap: wrap; }
+      .p-cd-unit, .p-stat { flex: 1 1 calc(25% - 1px); padding: 12px 10px; }
+      .p-cd-unit:nth-child(4) { border-right: none; }
+      .p-stat { flex: 1 1 calc(33% - 1px); }
+      .p-stat:last-child { border-right: none; }
+      .p-cta { flex-direction: column; }
+      .p-btn-pri, .p-btn-sec { width: 100%; justify-content: center; height: 46px; }
+    }
+
+
+    /* ═══════════════════════════════════════════════
+       APROVAÇÃO
+       ═══════════════════════════════════════════════ */
+    .appr-sec { max-width: 960px; margin: 32px auto 64px; padding: 0 20px; }
+    .appr-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .appr-card { background: #fff; border: 1px solid #e0e0e0; border-radius: 14px; padding: 22px 24px; }
+    .appr-card.full { grid-column: 1 / -1; }
+    .appr-card h3 { font-size: 13px; font-weight: 800; color: #111; margin-bottom: 4px; }
+    .appr-card p  { font-size: 12px; color: #666; line-height: 1.6; margin-top: 4px; }
+    .appr-bdg {
+      display: inline-flex; align-items: center; gap: 5px; margin-bottom: 10px;
+      font-size: 10px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
+      padding: 3px 9px; border-radius: 4px;
+    }
+    .ab-a { background: #fef9c3; color: #854d0e; border: 1px solid #fcd535; }
+    .ab-b { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
+    .appr-acts { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px; padding: 9px 18px;
+      border-radius: 8px; font-size: 12px; font-weight: 700; border: none;
+      font-family: inherit; cursor: pointer;
+    }
+    .btn-yes { background: #16a34a; color: #fff; }
+    .btn-no  { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+    .btn-adj { background: #f1f3f5; color: #444; border: 1px solid #dee2e6; }
+
+
+    /* ═══════════════════════════════════════════════
+       MOBILE PREVIEW
+       ═══════════════════════════════════════════════ */
+    .mob-hdr {
+      max-width: 960px; margin: 40px auto 20px; padding: 0 20px;
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    }
+    .mob-hdr h2 { font-size: 11px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: #888; }
+    .mob-hdr p  { font-size: 11px; color: #bbb; }
+
+    .mob-strip {
+      width: 100%; background: #0d0f13; padding: 52px 20px 64px;
+      border-top: 2px dashed var(--bdr); border-bottom: 2px dashed var(--bdr);
+    }
+    .phones-row {
+      display: flex; gap: 48px; justify-content: center; align-items: flex-start; flex-wrap: wrap;
+    }
+    .ph-col { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+    .ph-lbl {
+      font-size: 10px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase;
+      padding: 4px 14px; border-radius: 999px;
+    }
+    .ph-lbl-a { background: #fef9c3; color: #854d0e; border: 1px solid #fcd535; }
+    .ph-lbl-b { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
+
+    .phone-chrome {
+      width: 390px; background: var(--bg); border: 10px solid #252a31; border-radius: 50px;
+      box-shadow: 0 0 0 1.5px #3a3f47, inset 0 0 0 1px #1e2329, 0 48px 96px rgba(0,0,0,0.75);
+      overflow: hidden;
+    }
+    .phone-notch {
+      height: 38px; background: #0a0c0f;
+      display: flex; align-items: center; justify-content: center;
+      border-bottom: 1px solid #1a1e24;
+    }
+    .notch-pill {
+      width: 130px; height: 20px; border-radius: 999px;
+      background: #0b0e11; border: 1.5px solid #252a31;
+      display: flex; align-items: center; justify-content: flex-end; padding-right: 5px;
+    }
+    .notch-cam { width: 12px; height: 12px; border-radius: 50%; background: #181c22; border: 1.5px solid #2b3139; }
+
+    .ph-screen {
+      overflow-y: auto; max-height: 760px;
+      scrollbar-width: none; -ms-overflow-style: none;
+    }
+    .ph-screen::-webkit-scrollbar { display: none; }
+
+    /* ── Overrides mobile Proposta A ── */
+    .mob .ops-in        { padding: 0 16px 32px !important; }
+    .mob .ops-overlay   { min-height: 360px !important; padding-bottom: 22px !important; }
+    .mob .ops-hdr       { grid-template-columns: 1fr !important; gap: 14px !important; align-items: start !important; }
+    .mob .ops-eyebrow   { font-size: 10px !important; letter-spacing: 0.14em !important; margin-bottom: 10px !important; }
+    .mob .ops-h2        { font-size: 22px !important; line-height: 0.95 !important; }
+    .mob .ops-desc      { font-size: 13px !important; margin-top: 10px !important; line-height: 1.5 !important; }
+    .mob .ops-types-lbl { font-size: 9px !important; margin-bottom: 8px !important; }
+    .mob .ops-tag       { padding: 6px 11px !important; font-size: 11px !important; }
+    /* Grid de features: 2 colunas no mobile (mais compacto que 1) */
+    .mob .ops-feat      { grid-template-columns: 1fr 1fr !important; gap: 6px !important; margin-top: 20px !important; margin-bottom: 8px !important; }
+    .mob .ops-f         { padding: 10px 11px !important; font-size: 11px !important; }
+    .mob .ops-impact    { grid-template-columns: 1fr !important; gap: 8px !important; }
+    .mob .ops-imp-num   { min-height: 100px !important; padding: 18px 20px !important; }
+    .mob .ops-imp-num strong { font-size: 50px !important; }
+    .mob .ops-imp-num span   { font-size: 11px !important; margin-top: 8px !important; }
+    .mob .ops-imp-copy  { padding: 18px !important; }
+    .mob .ops-imp-copy h3    { font-size: 17px !important; }
+    .mob .ops-imp-copy p     { font-size: 12px !important; margin-top: 8px !important; line-height: 1.5 !important; }
+
+    /* ── Overrides mobile Proposta B ── */
+    .mob .poster        { min-height: 620px !important; background-position: center 18% !important; }
+    .mob .poster-in     { padding: 0 16px 24px !important; }
+    .mob .p-eyebrow     { margin-bottom: 12px !important; }
+    .mob .p-badges      { gap: 6px !important; margin-bottom: 12px !important; }
+    .mob .p-badge       { font-size: 10px !important; padding: 4px 10px !important; }
+    .mob .p-title       { font-size: 32px !important; line-height: 0.92 !important; margin-bottom: 12px !important; }
+    /* Meta: empilhada verticalmente com separadores escondidos */
+    .mob .p-meta        { flex-direction: column !important; align-items: flex-start !important; gap: 3px !important; margin-bottom: 16px !important; }
+    .mob .p-meta-dot    { display: none !important; }
+    .mob .p-meta-item   { font-size: 12px !important; }
+    /* Faixa de dados: countdown em 4 colunas, stats abaixo */
+    .mob .p-data        { max-width: 100% !important; flex-wrap: wrap !important; margin-bottom: 8px !important; }
+    .mob .p-cd-unit     { flex: 1 1 22% !important; min-width: unset !important; padding: 12px 4px !important; }
+    .mob .p-cd-unit:nth-child(4) { border-right: none !important; }
+    .mob .p-cd-num      { font-size: 20px !important; }
+    .mob .p-cd-lbl      { font-size: 8px !important; }
+    /* Separador vertical escondido; stats passam p/ linha abaixo */
+    .mob .p-data-sep    { display: none !important; }
+    .mob .p-stat        { flex: 1 1 30% !important; min-width: unset !important; padding: 10px 6px !important; border-top: 1px solid rgba(43,49,57,0.7) !important; }
+    .mob .p-stat:nth-child(5) { border-top: 1px solid rgba(43,49,57,0.7) !important; }
+    .mob .p-stat-num    { font-size: 17px !important; }
+    .mob .p-stat-lbl    { font-size: 8px !important; }
+    .mob .p-prog        { max-width: 100% !important; margin-bottom: 16px !important; }
+    /* CTAs full-width empilhados */
+    .mob .p-cta         { flex-direction: column !important; gap: 8px !important; }
+    .mob .p-btn-pri,
+    .mob .p-btn-sec     { width: 100% !important; justify-content: center !important; height: 44px !important; font-size: 14px !important; padding: 0 !important; }
+
+    @media (max-width: 640px) {
+      .appr-grid { grid-template-columns: 1fr; }
+      .doc-bar { padding: 12px 16px; }
+      .doc-body { padding: 20px 12px 40px; }
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="doc-bar">
+    <div>
+      <div class="doc-bar-title">WODArena — Proposta v4: Cinemática + Event Poster</div>
+      <div class="doc-bar-meta">Redesign completo · Vídeo real · Imagem do evento · 23 jun 2026</div>
+    </div>
+    <div class="badge-pend"><span class="dot"></span> Aguardando aprovação</div>
+  </div>
+
+  <div class="doc-body">
+
+    <div class="panel">
+      <div class="panel-title">Estrutura da homepage — 2 novas seções</div>
+      <div class="page-map">
+        <div class="mrow"><span class="mnum">1</span> Hero — vídeo + stats + CTAs <span class="mtag ex">Existe</span></div>
+        <div class="mrow"><span class="mnum">2</span> Campanha Comercial — formulário de lead <span class="mtag ex">Existe</span></div>
+        <div class="mrow ra"><span class="mnum">3</span> ✦ Seção de Operações — vídeo cinemático + feature grid <span class="mtag ta">Proposta A</span></div>
+        <div class="mrow rb"><span class="mnum">4</span> ✦ Event Poster — banner imersivo com countdown e CTA <span class="mtag tb">Proposta B</span></div>
+        <div class="mrow"><span class="mnum">5</span> Eventos em destaque — listagem e busca <span class="mtag ex">Existe</span></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">O que mudou nesta versão (v4)</div>
+      <div class="ctx-grid">
+        <div class="ctx-item"><div class="ctx-lbl">Proposta A</div><div class="ctx-val">Vídeo full-width cinemático (460px) + 8 features em grid 4 colunas</div></div>
+        <div class="ctx-item"><div class="ctx-lbl">Proposta B</div><div class="ctx-val">Imagem do evento como fundo full-bleed — conteúdo flutua sobre ela</div></div>
+        <div class="ctx-item"><div class="ctx-lbl">Mobile</div><div class="ctx-val">Phones lado a lado com overrides para layout empilhado correto</div></div>
+        <div class="ctx-item"><div class="ctx-lbl">Tokens</div><div class="ctx-val">Idênticos ao globals.css do projeto</div></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Arquivos a modificar na implementação</div>
+      <div class="file-list">
+        <div class="file-row"><span class="fb mod">Modificar</span> src/app/page.tsx <span class="fn">Inserir componentes após #quero-utilizar-wodarena</span></div>
+        <div class="file-row"><span class="fb new">Novo</span> src/components/home/SectionOperations.tsx <span class="fn">Proposta A — cinemática + grid</span></div>
+        <div class="file-row"><span class="fb new">Novo</span> src/components/home/FeaturedEventBanner.tsx <span class="fn">Proposta B — event poster imersivo</span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="prev-hdr">
+    <h2>Preview desktop — 2 novas seções</h2>
+    <p>Seções existentes desfocadas · Novas em destaque</p>
+  </div>
+
+  <div class="vp">
+
+    <div class="ph ph-h" data-label="Seção 1 — Hero (já existe)">
+      <div style="position:absolute;inset:0;background:linear-gradient(135deg,rgba(252,213,53,0.05),transparent 55%)"></div>
+    </div>
+    <div class="ph ph-c" data-label="Seção 2 — Campanha Comercial (já existe)"></div>
+
+    <!-- ══ PROPOSTA A ══════════════════════════════ -->
+    <div class="sw">
+      <div class="sbdg sbdg-a">✦ Proposta A — Hero Video Full-Bleed</div>
+      <section class="ops">
+
+        <!-- Vídeo de fundo -->
+        <video class="ops-bg-video" src="../../public/hero-vertical.mp4" autoplay loop muted playsinline></video>
+        <!-- Gradiente: transparente no topo, dark no fundo -->
+        <div class="ops-grad"></div>
+
+        <div class="ops-in">
+
+          <!-- Conteúdo sobreposto ao vídeo -->
+          <div class="ops-overlay">
+            <div class="ops-hdr">
+              <div>
+                <span class="ops-eyebrow">Plataforma profissional</span>
+                <h2 class="ops-h2">Gestão completa<br>para eventos de<br>alto rendimento</h2>
+                <p class="ops-desc">Do planejamento à publicação dos resultados, o WODArena centraliza toda a operação em uma única plataforma.</p>
+              </div>
+              <div>
+                <div class="ops-types-lbl">Eventos suportados</div>
+                <div class="ops-tags">
+                  <span class="ops-tag">Functional Fitness</span>
+                  <span class="ops-tag">Fitness Race</span>
+                  <span class="ops-tag">Competições Individuais</span>
+                  <span class="ops-tag">Competições por Equipes</span>
+                  <span class="ops-tag">Ligas Estaduais</span>
+                  <span class="ops-tag">Federações</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Feature grid — abaixo do vídeo, fundo dark -->
+          <div class="ops-feat">
+            <div class="ops-f">Inscrições Online</div>
+            <div class="ops-f">Controle de Categorias</div>
+            <div class="ops-f">Cronograma de Baterias</div>
+            <div class="ops-f">Lançamento de Scores</div>
+            <div class="ops-f">Leaderboard em Tempo Real</div>
+            <div class="ops-f">Rankings Automáticos</div>
+            <div class="ops-f">Contestação de Resultados</div>
+            <div class="ops-f">Gestão de Equipes</div>
+          </div>
+
+          <div class="ops-impact">
+            <div class="ops-imp-num">
+              <strong>100%</strong>
+              <span>da operação centralizada em um único sistema</span>
+            </div>
+            <div class="ops-imp-copy">
+              <h3>Uma plataforma para gerenciar toda a jornada do evento.</h3>
+              <p>Organize inscrições, acompanhe atletas, controle baterias, publique scores e entregue uma experiência profissional para gestores, árbitros, atletas e público.</p>
+            </div>
+          </div>
+
+        </div>
+      </section>
+    </div>
+
+    <!-- ══ PROPOSTA B ══════════════════════════════ -->
+    <div class="sw">
+      <div class="sbdg sbdg-b">✦ Proposta B — Event Poster Imersivo</div>
+      <section class="poster">
+        <div class="poster-in">
+
+          <div class="p-eyebrow">
+            <span class="p-edot"></span>
+            <span class="p-etxt">Evento em destaque</span>
+          </div>
+
+          <div class="p-badges">
+            <span class="p-badge pb-open"><span style="width:6px;height:6px;border-radius:50%;background:#0ecb81;flex:0 0 6px;"></span>Inscrições abertas</span>
+            <span class="p-badge pb-type">Functional Fitness</span>
+            <span class="p-badge pb-loc">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex:0 0 11px"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+              Fortaleza, CE
+            </span>
+          </div>
+
+          <h2 class="p-title">Arena Summer<br><span>Challenge 2026</span></h2>
+
+          <div class="p-meta">
+            <span class="p-meta-item">15 JUL 2026</span>
+            <span class="p-meta-dot"></span>
+            <span class="p-meta-item">Centro de Convenções</span>
+            <span class="p-meta-dot"></span>
+            <span class="p-meta-item">Individual + Duplas</span>
+          </div>
+
+          <div class="p-data">
+            <div class="p-cd-unit"><span class="p-cd-num">22</span><span class="p-cd-lbl">Dias</span></div>
+            <div class="p-cd-unit"><span class="p-cd-num">14</span><span class="p-cd-lbl">Horas</span></div>
+            <div class="p-cd-unit"><span class="p-cd-num">37</span><span class="p-cd-lbl">Min</span></div>
+            <div class="p-cd-unit" style="border-right:none;"><span class="p-cd-num">09</span><span class="p-cd-lbl">Seg</span></div>
+            <div class="p-data-sep"></div>
+            <div class="p-stat"><span class="p-stat-num" style="color:#0ecb81;">234</span><span class="p-stat-lbl">Inscritos</span></div>
+            <div class="p-stat"><span class="p-stat-num" style="color:var(--pri);">58%</span><span class="p-stat-lbl">Vagas</span></div>
+            <div class="p-stat" style="border-right:none;"><span class="p-stat-num">12</span><span class="p-stat-lbl">Categorias</span></div>
+          </div>
+
+          <div class="p-prog"><div class="p-prog-fill"></div></div>
+
+          <div class="p-cta">
+            <button class="p-btn-pri">
+              Inscreva-se agora
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </button>
+            <button class="p-btn-sec">Ver evento completo</button>
+          </div>
+
+        </div>
+      </section>
+    </div>
+
+    <div class="ph ph-e" data-label="Seção 5 — Eventos em Destaque (já existe)"></div>
+
+  </div>
+
+  <!-- ── Mobile header ──────────────────────────── -->
+  <div class="mob-hdr">
+    <h2>Versão Mobile — 390px (iPhone 14/15)</h2>
+    <p>Layout responsivo empilhado · Role dentro de cada phone</p>
+  </div>
+
+  <!-- ── Phones ─────────────────────────────────── -->
+  <div class="mob-strip">
+    <div class="phones-row">
+
+      <!-- Phone A -->
+      <div class="ph-col">
+        <div class="ph-lbl ph-lbl-a">✦ Proposta A — Operações</div>
+        <div class="phone-chrome">
+          <div class="phone-notch"><div class="notch-pill"><div class="notch-cam"></div></div></div>
+          <div class="ph-screen">
+            <div class="mob">
+              <section class="ops">
+                <video class="ops-bg-video" src="../../public/hero-vertical.mp4" autoplay loop muted playsinline></video>
+                <div class="ops-grad"></div>
+                <div class="ops-in">
+                  <div class="ops-overlay">
+                    <div class="ops-hdr">
+                      <div>
+                        <span class="ops-eyebrow">Plataforma profissional</span>
+                        <h2 class="ops-h2">Gestão completa para eventos de alto rendimento</h2>
+                        <p class="ops-desc">Do planejamento à publicação dos resultados, o WODArena centraliza toda a operação.</p>
+                      </div>
+                      <div>
+                        <div class="ops-types-lbl">Eventos suportados</div>
+                        <div class="ops-tags">
+                          <span class="ops-tag">Functional Fitness</span>
+                          <span class="ops-tag">Fitness Race</span>
+                          <span class="ops-tag">Individuais</span>
+                          <span class="ops-tag">Equipes</span>
+                          <span class="ops-tag">Ligas</span>
+                          <span class="ops-tag">Federações</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="ops-feat">
+                    <div class="ops-f">Inscrições Online</div>
+                    <div class="ops-f">Controle de Categorias</div>
+                    <div class="ops-f">Cronograma de Baterias</div>
+                    <div class="ops-f">Lançamento de Scores</div>
+                    <div class="ops-f">Leaderboard em Tempo Real</div>
+                    <div class="ops-f">Rankings Automáticos</div>
+                    <div class="ops-f">Contestação de Resultados</div>
+                    <div class="ops-f">Gestão de Equipes</div>
+                  </div>
+                  <div class="ops-impact">
+                    <div class="ops-imp-num"><strong>100%</strong><span>da operação centralizada</span></div>
+                    <div class="ops-imp-copy">
+                      <h3>Uma plataforma para toda a jornada.</h3>
+                      <p>Inscrições, baterias, scores e leaderboard — tudo em um lugar.</p>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Phone B -->
+      <div class="ph-col">
+        <div class="ph-lbl ph-lbl-b">✦ Proposta B — Event Poster</div>
+        <div class="phone-chrome">
+          <div class="phone-notch"><div class="notch-pill"><div class="notch-cam"></div></div></div>
+          <div class="ph-screen">
+            <div class="mob">
+              <section class="poster">
+                <div class="poster-in">
+                  <div class="p-eyebrow"><span class="p-edot"></span><span class="p-etxt">Evento em destaque</span></div>
+                  <div class="p-badges">
+                    <span class="p-badge pb-open"><span style="width:6px;height:6px;border-radius:50%;background:#0ecb81;flex:0 0 6px;"></span>Inscrições abertas</span>
+                    <span class="p-badge pb-type">Functional Fitness</span>
+                    <span class="p-badge pb-loc">
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex:0 0 10px"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                      Fortaleza, CE
+                    </span>
+                  </div>
+                  <h2 class="p-title">Arena Summer<br><span>Challenge 2026</span></h2>
+                  <div class="p-meta">
+                    <span class="p-meta-item">15 JUL 2026</span>
+                    <span class="p-meta-item">Centro de Convenções</span>
+                    <span class="p-meta-item">Individual + Duplas</span>
+                  </div>
+                  <div class="p-data">
+                    <div class="p-cd-unit"><span class="p-cd-num">22</span><span class="p-cd-lbl">Dias</span></div>
+                    <div class="p-cd-unit"><span class="p-cd-num">14</span><span class="p-cd-lbl">Horas</span></div>
+                    <div class="p-cd-unit"><span class="p-cd-num">37</span><span class="p-cd-lbl">Min</span></div>
+                    <div class="p-cd-unit"><span class="p-cd-num">09</span><span class="p-cd-lbl">Seg</span></div>
+                    <div class="p-stat"><span class="p-stat-num" style="color:#0ecb81;">234</span><span class="p-stat-lbl">Inscritos</span></div>
+                    <div class="p-stat"><span class="p-stat-num" style="color:var(--pri);">58%</span><span class="p-stat-lbl">Vagas</span></div>
+                    <div class="p-stat"><span class="p-stat-num">12</span><span class="p-stat-lbl">Categorias</span></div>
+                  </div>
+                  <div class="p-prog"><div class="p-prog-fill"></div></div>
+                  <div class="p-cta">
+                    <button class="p-btn-pri">Inscreva-se agora <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button>
+                    <button class="p-btn-sec">Ver evento completo</button>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Aprovação ──────────────────────────────── -->
+  <div class="appr-sec">
+    <div class="appr-grid">
+
+      <div class="appr-card">
+        <div class="appr-bdg ab-a">✦ Proposta A</div>
+        <h3>Seção de Operações — Cinemática</h3>
+        <p>Vídeo full-width (460px) com overlay, título sobreposto, grid 4 colunas de 8 funcionalidades e bloco de impacto "100%".</p>
+        <div class="appr-acts">
+          <button class="btn btn-yes" onclick="this.textContent='✓ Aprovada';this.style.opacity='0.6';this.disabled=true;">✓ Aprovar</button>
+          <button class="btn btn-no"  onclick="this.textContent='✗ Rejeitada';this.style.opacity='0.6';this.disabled=true;">✗ Rejeitar</button>
+          <button class="btn btn-adj" onclick="alert('Descreva os ajustes no chat.')">Ajustes</button>
+        </div>
+      </div>
+
+      <div class="appr-card">
+        <div class="appr-bdg ab-b">✦ Proposta B</div>
+        <h3>Event Poster — Imersivo</h3>
+        <p>Imagem do evento como fundo full-bleed com gradiente. Countdown + stats em faixa glassmorphism. Barra de progresso de vagas e CTA.</p>
+        <div class="appr-acts">
+          <button class="btn btn-yes" onclick="this.textContent='✓ Aprovada';this.style.opacity='0.6';this.disabled=true;">✓ Aprovar</button>
+          <button class="btn btn-no"  onclick="this.textContent='✗ Rejeitada';this.style.opacity='0.6';this.disabled=true;">✗ Rejeitar</button>
+          <button class="btn btn-adj" onclick="alert('Descreva os ajustes no chat.')">Ajustes</button>
+        </div>
+      </div>
+
+      <div class="appr-card full">
+        <h3>Nota técnica</h3>
+        <p>
+          Proposta A usa <code style="font-size:11px;background:#f1f3f5;padding:1px 5px;border-radius:3px;">public/hero-vertical.mp4</code> — vídeo já disponível no projeto.
+          Proposta B usa <code style="font-size:11px;background:#f1f3f5;padding:1px 5px;border-radius:3px;">event.bannerUrl</code> (campo do evento no AppContext) como background-image.
+          O componente só renderiza se houver evento <code style="font-size:11px;background:#f1f3f5;padding:1px 5px;border-radius:3px;">upcoming</code> ou <code style="font-size:11px;background:#f1f3f5;padding:1px 5px;border-radius:3px;">live</code> disponível.
+          Countdown calculado via <code style="font-size:11px;background:#f1f3f5;padding:1px 5px;border-radius:3px;">useEffect</code> no cliente.
+        </p>
+      </div>
+
+    </div>
+  </div>
+
+</body>
+</html>
