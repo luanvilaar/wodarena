@@ -2,20 +2,20 @@ status:
   branch: main
   modifiedFiles:
     - .aiox/project-status.yaml
-    - docs/plans/ajustes.md
-    - docs/plans/wodarena-terceira-dobra-proposta.html
-    - gestor/
-    - imagensref/
-  modifiedFilesTotalCount: 5
+    - homepagattt.md
+    - src/app/admin/page.tsx
+    - src/app/api/admin/mercadopago/route.ts
+    - src/app/api/checkout/preference/route.ts
+  modifiedFilesTotalCount: 11
   recentCommits:
-    - 'docs(env): atualiza .env.example com novas variaveis do projeto'
+    - 'fix(countdown): corrige exibição de NaN no banner do evento'
     - >-
-      feat(story-1.17): reorganizacao estrutural da pasta raiz e atualizacao de
-      dependencias
+      feat(homepage): implementa terceira dobra (proposta v4) e conciliacao de
+      pagamento manual por ID
   currentEpic: null
   currentStory: null
-  lastUpdate: '2026-06-23T23:57:46.954Z'
+  lastUpdate: '2026-06-24T17:10:32.036Z'
   isGitRepo: true
-timestamp: 1782259066960
+timestamp: 1782321032048
 ttl: 60
-gitFingerprint: 1780618055577.6655:1782247101611.5688
+gitFingerprint: 1780618055577.6655:1782267136514.858

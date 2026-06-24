@@ -36,6 +36,7 @@ export async function POST(request: Request) {
     };
 
     const isLocalhost = origin.includes('localhost') || origin.includes('127.0.0.1');
+    const sanitizedOrigin = isLocalhost ? origin : origin.replace(/^http:/, 'https:');
 
     // Monta o payload de preferência para o Mercado Pago com a taxa de comissão
     const preferencePayload = {
@@ -57,14 +58,14 @@ export async function POST(request: Request) {
         }
       },
       back_urls: {
-        success: `${origin}/event/${checkoutSnapshot.eventId}?payment=success`,
-        failure: `${origin}/event/${checkoutSnapshot.eventId}?payment=failure`,
-        pending: `${origin}/event/${checkoutSnapshot.eventId}?payment=pending`
+        success: `${sanitizedOrigin}/event/${checkoutSnapshot.eventId}?payment=success`,
+        failure: `${sanitizedOrigin}/event/${checkoutSnapshot.eventId}?payment=failure`,
+        pending: `${sanitizedOrigin}/event/${checkoutSnapshot.eventId}?payment=pending`
       },
       metadata: metadataPayload,
       ...(isLocalhost ? {} : { 
         auto_return: 'approved',
-        notification_url: `${origin}/api/webhooks/mercadopago?event_id=${checkoutSnapshot.eventId}` 
+        notification_url: `${sanitizedOrigin}/api/webhooks/mercadopago?event_id=${checkoutSnapshot.eventId}` 
       })
     };
 

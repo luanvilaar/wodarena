@@ -6,34 +6,61 @@ import {
   requireSession
 } from '@/lib/serverSecurity';
 
-export async function GET(request: Request) {
+export async function POST(request: Request) {
   const origin = request.headers.get('origin') || new URL(request.url).origin;
   try {
-    const { searchParams } = new URL(request.url);
-    const code = searchParams.get('code');
-    const userId = searchParams.get('state'); // O state deve carregar o ID do gestor autenticado
+    const body = await request.json();
+    const { code, state } = body;
 
-    if (!code || !userId) {
-      console.error('[OAuth Callback] Parâmetros de callback inválidos. Code ou User ID ausentes.');
-      return NextResponse.redirect(`${origin}/admin?tab=payments&error=oauth_failed`);
+    if (!code || !state) {
+      console.error('[OAuth Callback] Parâmetros de callback inválidos. Code ou State ausentes.');
+      return NextResponse.json({ error: 'Parâmetros de callback inválidos.' }, { status: 400 });
     }
 
+    const supabaseAdmin = createSupabaseAdmin();
+
+    // 1. Buscar e validar o state na tabela mercadopago_oauth_states
+    const { data: stateData, error: dbStateError } = await supabaseAdmin
+      .from('mercadopago_oauth_states')
+      .select('user_id, expires_at')
+      .eq('state', state)
+      .maybeSingle();
+
+    if (dbStateError || !stateData) {
+      console.error('[OAuth Callback] State inválido ou não encontrado no banco:', state);
+      return NextResponse.json({ error: 'Sessão de autorização inválida ou não encontrada.' }, { status: 400 });
+    }
+
+    const now = new Date();
+    const stateExpiresAt = new Date(stateData.expires_at);
+    if (now > stateExpiresAt) {
+      console.error('[OAuth Callback] State expirado.');
+      // Deleta o state expirado para limpeza
+      await supabaseAdmin.from('mercadopago_oauth_states').delete().eq('state', state);
+      return NextResponse.json({ error: 'A sessão de autorização expirou.' }, { status: 400 });
+    }
+
+    // Deleta o state imediatamente para evitar reuso (idempotência)
+    await supabaseAdmin.from('mercadopago_oauth_states').delete().eq('state', state);
+
+    const userId = stateData.user_id;
+
+    // 2. Validar sessão do usuário que faz a requisição local POST
     const auth = requireSession(request, ['manager', 'owner']);
     if (auth.response || !auth.user || !canActOnUser(auth.user, userId)) {
       console.error('[OAuth Callback] Sessao invalida ou state nao pertence ao usuario autenticado.');
-      return NextResponse.redirect(`${origin}/admin?tab=payments&error=oauth_forbidden`);
+      return NextResponse.json({ error: 'Acesso negado para este gestor.' }, { status: 403 });
     }
 
     const clientId = process.env.MERCADOPAGO_CLIENT_ID;
     const clientSecret = process.env.MERCADOPAGO_CLIENT_SECRET;
-    const redirectUri = process.env.MERCADOPAGO_REDIRECT_URI || `${origin}/api/mercadopago/oauth/callback`;
+    const redirectUri = process.env.MERCADOPAGO_REDIRECT_URI || `${origin}/admin`;
 
     if (!clientId || !clientSecret) {
       console.error('[OAuth Callback] Variáveis de ambiente MERCADOPAGO_CLIENT_ID ou MERCADOPAGO_CLIENT_SECRET não configuradas.');
-      return NextResponse.redirect(`${origin}/admin?tab=payments&error=critical_error`);
+      return NextResponse.json({ error: 'Credenciais do aplicativo Mercado Pago não configuradas no servidor.' }, { status: 500 });
     }
 
-    const supabaseAdmin = createSupabaseAdmin();
     await assertManagerOperationalAccess(supabaseAdmin, auth.user);
 
     console.log(`[OAuth Callback] Iniciando troca de token para o gestor: ${userId}...`);
@@ -56,7 +83,7 @@ export async function GET(request: Request) {
     if (!mpResponse.ok) {
       const errorData = await mpResponse.json();
       console.error('[OAuth Callback] Erro retornado pela API do Mercado Pago:', errorData);
-      return NextResponse.redirect(`${origin}/admin?tab=payments&error=oauth_mp_error`);
+      return NextResponse.json({ error: 'Erro de comunicação com o Mercado Pago.' }, { status: 400 });
     }
 
     const tokenData = await mpResponse.json();
@@ -79,7 +106,7 @@ export async function GET(request: Request) {
 
     if (dbPublicError) {
       console.error('[OAuth Callback] Erro ao gravar dados públicos no Supabase:', dbPublicError);
-      return NextResponse.redirect(`${origin}/admin?tab=payments&error=db_error`);
+      return NextResponse.json({ error: 'Erro ao gravar dados de pagamento no banco de dados.' }, { status: 500 });
     }
 
     // 2. Gravar segredos na tabela privada
@@ -96,17 +123,17 @@ export async function GET(request: Request) {
       console.error('[OAuth Callback] Erro ao gravar segredos no Supabase:', dbSecretError);
       // Remove a conta pública recém-criada para manter consistência
       await supabaseAdmin.from('mercadopago_accounts').delete().eq('user_id', userId);
-      return NextResponse.redirect(`${origin}/admin?tab=payments&error=db_error`);
+      return NextResponse.json({ error: 'Erro ao gravar credenciais de pagamento privadas no banco de dados.' }, { status: 500 });
     }
 
     console.log(`[OAuth Callback] Conta Mercado Pago do gestor ${userId} conectada com sucesso.`);
-    return NextResponse.redirect(`${origin}/admin?tab=payments&success=mp_connected`);
+    return NextResponse.json({ success: true });
 
   } catch (err) {
     if (err instanceof ManagerAccessError) {
-      return NextResponse.redirect(`${origin}/admin?tab=payments&error=access_expired`);
+      return NextResponse.json({ error: 'O período de uso da plataforma expirou.' }, { status: 403 });
     }
     console.error('[OAuth Callback] Erro crítico inesperado no processamento do callback:', err);
-    return NextResponse.redirect(`${origin}/admin?tab=payments&error=critical_error`);
+    return NextResponse.json({ error: 'Erro crítico interno no servidor.' }, { status: 500 });
   }
 }

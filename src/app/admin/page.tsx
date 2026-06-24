@@ -149,13 +149,23 @@ export default function AdminPage() {
   const [resetPasswordSubmitting, setResetPasswordSubmitting] = useState(false);
 
   // 2. Abas Administrativas Principais
-  const initialAdminTab = typeof window !== 'undefined'
-    ? new URLSearchParams(window.location.search).get('tab')
-    : '';
-  const isValidAdminTab = initialAdminTab === 'dashboard' || initialAdminTab === 'my-events' || initialAdminTab === 'event' || initialAdminTab === 'payments' || initialAdminTab === 'security';
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'my-events' | 'event' | 'payments' | 'security'>(
-    isValidAdminTab ? initialAdminTab as 'dashboard' | 'my-events' | 'event' | 'payments' | 'security' : 'dashboard'
-  );
+  type AdminTab = 'dashboard' | 'my-events' | 'event' | 'payments' | 'security';
+  const resolveInitialAdminTab = (): AdminTab => {
+    if (typeof window === 'undefined') return 'dashboard';
+
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab');
+
+    if (tab === 'dashboard' || tab === 'my-events' || tab === 'event' || tab === 'payments' || tab === 'security') {
+      return tab;
+    }
+
+    const code = params.get('code');
+    const state = params.get('state');
+
+    return code && state ? 'payments' : 'dashboard';
+  };
+  const [activeTab, setActiveTab] = useState<AdminTab>(resolveInitialAdminTab);
 
   // Estados para integração do Mercado Pago Marketplace
   const [mpAccount, setMpAccount] = useState<{ id: string; mercadopago_user_id: string; status: string; public_key?: string; access_token?: string } | null>(null);
@@ -270,6 +280,64 @@ export default function AdminPage() {
     }
   }, []);
 
+  // Efeito para interceptar e processar o callback do OAuth do Mercado Pago (Solução B)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    const state = params.get('state');
+
+    if (code && state) {
+      // Limpar os parâmetros da URL imediatamente para evitar duplicação em reloads
+      const nextTab = params.get('tab') || 'payments';
+      const newUrl = `${window.location.pathname}?tab=${nextTab}`;
+      window.history.replaceState({}, '', newUrl);
+
+      const processOauth = async () => {
+        setLoadingMp(true);
+        setAdminNotice({ text: 'Conectando sua conta com o Mercado Pago...', tone: 'success' });
+        try {
+          const response = await fetch('/api/mercadopago/oauth/callback', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ code, state })
+          });
+
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(data.error || 'Erro no processamento do callback do Mercado Pago.');
+          }
+
+          setAdminNotice({ text: 'Conta do Mercado Pago conectada com sucesso!', tone: 'success' });
+
+          // Atualizar o status da conta conectada na tela
+          const checkResponse = await fetch('/api/admin/mercadopago');
+          if (checkResponse.ok) {
+            const { account: updatedAccount } = await checkResponse.json();
+            if (updatedAccount && updatedAccount.status === 'connected') {
+              setMpAccount(updatedAccount);
+              setManualPublicKey(updatedAccount.public_key || '');
+              setManualAccessToken(updatedAccount.public_key ? '••••••••••••••••' : '');
+            }
+          }
+        } catch (err) {
+          console.error('[OAuth Frontend] Falha ao finalizar conexão:', err);
+          setAdminNotice({
+            text: err instanceof Error ? err.message : 'Falha ao conectar conta do Mercado Pago.',
+            tone: 'error'
+          });
+        } finally {
+          setLoadingMp(false);
+        }
+      };
+
+      processOauth();
+    }
+  }, [currentUser]);
+
   useEffect(() => {
     const fetchMpAccount = async () => {
       if (!currentUser) return;
@@ -330,6 +398,36 @@ export default function AdminPage() {
       setAdminNotice({ text: err instanceof Error ? err.message : 'Erro ao desconectar conta do Mercado Pago.', tone: 'error' });
     } finally {
       setLoadingMp(false);
+    }
+  };
+
+  const [connectingOauth, setConnectingOauth] = useState(false);
+
+  const handleConnectOauth = async () => {
+    setConnectingOauth(true);
+    setAdminNotice(null);
+    try {
+      const response = await fetch('/api/admin/mercadopago?action=oauth_url');
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Erro ao obter URL de autenticação do Mercado Pago.');
+      }
+      const { url } = await response.json();
+      if (!url) {
+        throw new Error('URL de autenticação inválida retornada pelo servidor.');
+      }
+      window.location.href = url;
+    } catch (err) {
+      console.error('Erro ao conectar via OAuth:', err);
+      let displayError = 'Não foi possível iniciar a conexão automática com o Mercado Pago. Por favor, tente novamente mais tarde ou contate o suporte.';
+      if (err instanceof Error && !err.message.includes('fetch') && !err.message.includes('network') && !err.message.includes('Failed to fetch') && !err.message.includes('Failed to load')) {
+        displayError = err.message;
+      }
+      setAdminNotice({
+        text: displayError,
+        tone: 'error'
+      });
+      setConnectingOauth(false);
     }
   };
 
@@ -8706,10 +8804,24 @@ export default function AdminPage() {
                           <div className="space-y-1 flex-grow">
                             <p className="text-xs font-bold uppercase text-primary font-sans">Status: Conectado</p>
                             <p className="text-sm font-semibold text-white">
-                              Sua conta está integrada manualmente via credenciais de API v2.
+                              {mpAccount.mercadopago_user_id?.startsWith('manual') ? (
+                                'Sua conta está integrada manualmente via credenciais de API v2.'
+                              ) : (
+                                'Sua conta está integrada com sucesso via conexão automática (OAuth).'
+                              )}
                             </p>
                             <div className="pt-2 text-xs text-muted space-y-1">
-                              <p><strong>Tipo de Integração:</strong> Manual (Chaves de Produção)</p>
+                              <p>
+                                <strong>Tipo de Integração:</strong>{' '}
+                                {mpAccount.mercadopago_user_id?.startsWith('manual') ? (
+                                  'Manual (Chaves de Produção)'
+                                ) : (
+                                  'Automática (Mercado Pago OAuth)'
+                                )}
+                              </p>
+                              {!mpAccount.mercadopago_user_id?.startsWith('manual') && (
+                                <p><strong>ID do Vendedor:</strong> {mpAccount.mercadopago_user_id}</p>
+                              )}
                             </div>
                             <div className="pt-3">
                               <button
@@ -8726,57 +8838,100 @@ export default function AdminPage() {
                     )}
 
                     {!mpAccount && (
-                      <form onSubmit={handleSaveManualMp} className="rounded-lg border border-card-border p-6 bg-dark-gray/10 space-y-4" autoComplete="off">
-                        {/* Dummy inputs to prevent browser autofill */}
-                        <input type="text" name="prevent_autofill_email" style={{ display: 'none' }} tabIndex={-1} autoComplete="off" />
-                        <input type="password" name="prevent_autofill_password" style={{ display: 'none' }} tabIndex={-1} autoComplete="new-password" />
-
-                        <div className="border-b border-card-border pb-3">
-                          <h4 className="text-sm font-bold text-white uppercase tracking-wider font-sans">Integração Financeira Manual (Chaves API v2)</h4>
-                          <p className="text-[11px] text-muted leading-relaxed mt-1">
-                            Cole suas credenciais de produção do Mercado Pago.
-                          </p>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div>
-                            <label htmlFor="manual-mp-public-key" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans">Public Key (Chave Pública)</label>
-                            <input
-                              id="manual-mp-public-key"
-                              type="text"
-                              required
-                              autoComplete="new-password"
-                              placeholder="APP_USR-..."
-                              value={manualPublicKey}
-                              onChange={(e) => setManualPublicKey(e.target.value.trim())}
-                              className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2.5 text-sm text-white focus:border-primary/50 focus:outline-none font-mono"
-                            />
+                      <div className="space-y-6">
+                        {/* Bloco OAuth - Recomendado */}
+                        <div className="rounded-lg border border-primary/20 bg-primary/5 p-6 space-y-4">
+                          <div className="border-b border-primary/10 pb-3 flex justify-between items-start gap-4">
+                            <div>
+                              <h4 className="text-sm font-bold text-white uppercase tracking-wider font-sans">Conexão Automática (Recomendado)</h4>
+                              <p className="text-[11px] text-muted leading-relaxed mt-1">
+                                Conecte sua conta do Mercado Pago de forma rápida e segura em poucos cliques, sem expor suas chaves de acesso.
+                              </p>
+                            </div>
+                            <span className="text-[10px] font-extrabold uppercase bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2.5 py-0.5 rounded-full font-sans tracking-wider shrink-0">
+                              Recomendado
+                            </span>
                           </div>
-                          <div>
-                            <label htmlFor="manual-mp-access-token" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans">Access Token (Token de Acesso)</label>
-                            <input
-                              id="manual-mp-access-token"
-                              type="password"
-                              required
-                              autoComplete="new-password"
-                              placeholder="APP_USR-..."
-                              value={manualAccessToken}
-                              onChange={(e) => setManualAccessToken(e.target.value.trim())}
-                              className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2.5 text-sm text-white focus:border-primary/50 focus:outline-none font-mono"
-                            />
+
+                          <div className="pt-1">
+                            <button
+                              type="button"
+                              onClick={handleConnectOauth}
+                              disabled={connectingOauth}
+                              className="w-full flex min-h-12 items-center justify-center gap-3 rounded-md bg-sky-500 hover:bg-sky-600 disabled:opacity-50 text-white px-6 py-3 text-xs font-bold uppercase tracking-wider transition-colors font-sans"
+                            >
+                              {connectingOauth ? (
+                                'Redirecionando...'
+                              ) : (
+                                <>
+                                  <CreditCard className="h-4 w-4" />
+                                  Conectar com o Mercado Pago
+                                </>
+                              )}
+                            </button>
                           </div>
                         </div>
 
-                        <div className="flex justify-end items-center pt-3 border-t border-card-border/60">
-                          <button
-                            type="submit"
-                            disabled={savingManualMp}
-                            className="flex min-h-10 items-center justify-center rounded-md bg-primary hover:bg-primary-hover text-ink px-6 py-2 text-xs font-bold uppercase tracking-wider transition-colors font-sans"
-                          >
-                            {savingManualMp ? 'Salvando...' : 'Salvar Alterações'}
-                          </button>
+                        {/* Divisor */}
+                        <div className="flex items-center gap-4 text-xs font-bold uppercase text-muted tracking-widest font-sans py-2">
+                          <div className="h-px bg-card-border flex-grow"></div>
+                          <span>Ou configure manualmente</span>
+                          <div className="h-px bg-card-border flex-grow"></div>
                         </div>
-                      </form>
+
+                        {/* Bloco Manual */}
+                        <form onSubmit={handleSaveManualMp} className="rounded-lg border border-card-border p-6 bg-dark-gray/10 space-y-4" autoComplete="off">
+                          {/* Dummy inputs to prevent browser autofill */}
+                          <input type="text" name="prevent_autofill_email" style={{ display: 'none' }} tabIndex={-1} autoComplete="off" />
+                          <input type="password" name="prevent_autofill_password" style={{ display: 'none' }} tabIndex={-1} autoComplete="new-password" />
+
+                          <div className="border-b border-card-border pb-3">
+                            <h4 className="text-sm font-bold text-white uppercase tracking-wider font-sans">Integração Financeira Manual (Chaves API v2)</h4>
+                            <p className="text-[11px] text-muted leading-relaxed mt-1">
+                              Cole suas credenciais de produção do Mercado Pago.
+                            </p>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                              <label htmlFor="manual-mp-public-key" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans">Public Key (Chave Pública)</label>
+                              <input
+                                id="manual-mp-public-key"
+                                type="text"
+                                required
+                                autoComplete="new-password"
+                                placeholder="APP_USR-..."
+                                value={manualPublicKey}
+                                onChange={(e) => setManualPublicKey(e.target.value.trim())}
+                                className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2.5 text-sm text-white focus:border-primary/50 focus:outline-none font-mono"
+                              />
+                            </div>
+                            <div>
+                              <label htmlFor="manual-mp-access-token" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans">Access Token (Token de Acesso)</label>
+                              <input
+                                id="manual-mp-access-token"
+                                type="password"
+                                required
+                                autoComplete="new-password"
+                                placeholder="APP_USR-..."
+                                value={manualAccessToken}
+                                onChange={(e) => setManualAccessToken(e.target.value.trim())}
+                                className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2.5 text-sm text-white focus:border-primary/50 focus:outline-none font-mono"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="flex justify-end items-center pt-3 border-t border-card-border/60">
+                            <button
+                              type="submit"
+                              disabled={savingManualMp}
+                              className="flex min-h-10 items-center justify-center rounded-md bg-primary hover:bg-primary-hover text-ink px-6 py-2 text-xs font-bold uppercase tracking-wider transition-colors font-sans"
+                            >
+                              {savingManualMp ? 'Salvando...' : 'Salvar Alterações'}
+                            </button>
+                          </div>
+                        </form>
+                      </div>
                     )}
                   </div>
                 )}

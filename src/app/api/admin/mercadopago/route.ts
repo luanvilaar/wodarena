@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { randomUUID } from 'crypto';
 import { ManagerAccessError, assertManagerOperationalAccess, managerAccessErrorResponse } from '@/lib/serverManagerAccess';
 import {
   canActOnUser,
@@ -38,6 +39,34 @@ export async function GET(request: Request) {
     const checkUser = await loadUserById(supabaseAdmin, userId);
     if (!checkUser || (checkUser.role !== 'manager' && checkUser.role !== 'owner')) {
       return NextResponse.json({ error: 'Usuário inválido ou sem permissão.' }, { status: 403 });
+    }
+
+    const action = searchParams.get('action');
+    if (action === 'oauth_url') {
+      const clientId = process.env.MERCADOPAGO_CLIENT_ID;
+      const origin = request.headers.get('origin') || new URL(request.url).origin;
+      const redirectUri = process.env.MERCADOPAGO_REDIRECT_URI || `${origin}/admin`;
+
+      if (!clientId) {
+        console.error('[API Admin MercadoPago GET] Erro de configuracao: MERCADOPAGO_CLIENT_ID nao esta definido nas variaveis de ambiente.');
+        return NextResponse.json({ error: 'A conexao automatica do Mercado Pago nao esta configurada no servidor da plataforma.' }, { status: 500 });
+      }
+
+      const state = randomUUID();
+      const { error: stateError } = await supabaseAdmin
+        .from('mercadopago_oauth_states')
+        .insert({
+          state: state,
+          user_id: userId
+        });
+
+      if (stateError) {
+        console.error('[API Admin MercadoPago GET] Erro ao gravar oauth state no banco:', stateError);
+        return NextResponse.json({ error: 'Erro interno ao iniciar o fluxo de autenticação.' }, { status: 500 });
+      }
+
+      const oauthUrl = `https://auth.mercadopago.com.br/authorization?client_id=${clientId}&response_type=code&platform_id=mp&state=${state}&redirect_uri=${encodeURIComponent(redirectUri)}`;
+      return NextResponse.json({ url: oauthUrl });
     }
 
     const { data, error } = await supabaseAdmin
