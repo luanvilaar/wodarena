@@ -8,7 +8,8 @@ import {
   applyCouponUsageForApprovedRegistration,
   assertRegistrationAccess,
   loadRegistrationCheckoutSnapshot,
-  RegistrationAccessError
+  RegistrationAccessError,
+  triggerRegistrationApprovedEmail
 } from '@/lib/serverCheckout';
 import { createSupabaseAdmin, getRequestSession } from '@/lib/serverSecurity';
 
@@ -162,6 +163,16 @@ export async function GET(request: Request) {
       });
     }
 
+    // Buscar status de pagamento atual antes de atualizar
+    const { data: currentReg } = await supabaseAdmin
+      .from('registrations')
+      .select('payment_status')
+      .eq('id', registrationId)
+      .eq('event_id', eventId)
+      .maybeSingle();
+
+    const wasAlreadyApproved = currentReg?.payment_status === 'payment_approved';
+
     await supabaseAdmin
       .from('registrations')
       .update({
@@ -177,6 +188,11 @@ export async function GET(request: Request) {
 
     if (paymentData.status === 'approved') {
       await applyCouponUsageForApprovedRegistration(supabaseAdmin, registrationId);
+      if (!wasAlreadyApproved) {
+        await triggerRegistrationApprovedEmail(supabaseAdmin, registrationId).catch(err =>
+          console.error('[MercadoPago Status API] Erro ao disparar e-mail:', err)
+        );
+      }
     }
 
     try {

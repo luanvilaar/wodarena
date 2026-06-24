@@ -8,7 +8,8 @@ import {
   applyCouponUsageForApprovedRegistration,
   assertRegistrationAccess,
   loadRegistrationCheckoutSnapshot,
-  RegistrationAccessError
+  RegistrationAccessError,
+  triggerRegistrationApprovedEmail
 } from '@/lib/serverCheckout';
 import { checkRateLimit, createSupabaseAdmin, getClientIp } from '@/lib/serverSecurity';
 
@@ -168,6 +169,9 @@ export async function POST(request: Request) {
 
     if (paymentStatus === 'payment_approved') {
       await applyCouponUsageForApprovedRegistration(supabaseAdmin, checkoutSnapshot.registrationId);
+      await triggerRegistrationApprovedEmail(supabaseAdmin, checkoutSnapshot.registrationId).catch(err =>
+        console.error('[MercadoPago Card API] Erro ao disparar e-mail:', err)
+      );
     }
 
     return NextResponse.json({

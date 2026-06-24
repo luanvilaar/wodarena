@@ -10,7 +10,7 @@ const registerModal = read('../src/components/RegisterModal.tsx');
 const admin = read('../src/app/admin/page.tsx');
 const startRoute = read('../src/app/api/registrations/start/route.ts');
 const bootstrapRoute = read('../src/app/api/app/bootstrap/route.ts');
-const webhookRoute = read('../src/app/api/webhooks/mercadopago/route.ts');
+const serverCheckout = read('../src/lib/serverCheckout.ts');
 const emailRoute = read('../src/app/api/checkout/email/route.ts');
 const migration = read('../supabase/migrations/20260607234500_athlete_shirt_size.sql');
 
@@ -36,7 +36,7 @@ test('shirt size is persisted in athlete storage and checkout recovery flows', (
   assert.match(context, /shirtSize: m\.shirtSize/);
   assert.match(startRoute, /shirt_size: safeAthleteProfile\.shirtSize/);
   assert.match(startRoute, /shirt_size: safeAthleteProfile\.shirtSize \|\| null/);
-  assert.match(webhookRoute, /shirtSize: dbAthlete\?\.shirt_size/);
+  assert.match(serverCheckout, /shirtSize: athlete\?\.shirt_size/);
   assert.match(emailRoute, /shirtSize: dbAthlete\?\.shirt_size/);
 });
 
