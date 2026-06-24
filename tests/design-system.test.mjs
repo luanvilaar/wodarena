@@ -31,15 +31,6 @@ test('uses the institutional logo through the reusable brand component', () => {
   assert.match(sourceFiles, /BrandLogo/);
 });
 
-test('derives homepage platform metrics from application data', () => {
-  const homepage = readFileSync(new URL('../src/app/page.tsx', import.meta.url), 'utf8');
-
-  for (const metric of ['events.length', 'athletes.length', 'totalDivisions', 'registrations.length']) {
-    assert.match(homepage, new RegExp(metric.replace('.', '\\.')), `missing real metric ${metric}`);
-  }
-
-  assert.doesNotMatch(homepage, /value:\s*'LIVE'/);
-});
 
 test('documents exact event artwork proportions in the admin upload fields', () => {
   const admin = readFileSync(new URL('../src/app/admin/page.tsx', import.meta.url), 'utf8');

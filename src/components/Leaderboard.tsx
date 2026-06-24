@@ -24,6 +24,7 @@ const InstagramIcon = ({ className = 'h-3.5 w-3.5' }: { className?: string }) =>
 );
 import { Event, Athlete, Workout, Score } from '@/types';
 import { getAgeGroupFromDate } from '@/lib/fitnessRacing';
+import { getTeamDisplayName } from '@/lib/teamDisplay';
 
 interface LeaderboardProps {
   event: Event;
@@ -991,11 +992,8 @@ export function Leaderboard({ event }: LeaderboardProps) {
                   {/* Header */}
                   <div className="px-6 flex items-start justify-between border-b border-card-border pb-4">
                     <div className="space-y-1">
-                      <span className="inline-flex rounded-full bg-primary/20 border border-primary/30 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-primary">
-                        Equipe / Dupla / Revezamento
-                      </span>
                       <h2 className="text-xl font-bold text-white uppercase tracking-wide" id="slide-over-title">
-                        {selectedTeamForProfile.name}
+                        {getTeamDisplayName(selectedTeamForProfile)}
                       </h2>
                     </div>
                     <button
@@ -1024,9 +1022,8 @@ export function Leaderboard({ event }: LeaderboardProps) {
                         </span>
                       </div>
 
-                      {event.eventType === 'fitness_racing' && (
                       <div className="col-span-2 rounded-xl border border-card-border/50 bg-dark-gray/20 p-3.5 space-y-1">
-                        <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">Instagram Equipe</span>
+                        <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">Instagram da Equipe</span>
                         {selectedTeamForProfile.instagram ? (
                           <a
                             href={`https://instagram.com/${selectedTeamForProfile.instagram.replace(/^@/, '')}`}
@@ -1042,7 +1039,6 @@ export function Leaderboard({ event }: LeaderboardProps) {
                           <span className="text-muted">Não informado</span>
                         )}
                       </div>
-                      )}
 
                       {event.eventType === 'fitness_racing' ? (
                       <div className="col-span-2 rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-1">

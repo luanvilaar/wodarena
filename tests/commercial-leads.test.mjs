@@ -11,6 +11,8 @@ const fixOwnerEmailMigration = read('../supabase/migrations/20260620123000_fix_o
 const route = read('../src/app/api/commercial-leads/route.ts');
 const resend = read('../src/lib/resend.ts');
 const homePage = read('../src/app/page.tsx');
+const banner = read('../src/components/home/FeaturedEventBanner.tsx');
+const combinedSource = homePage + '\n' + banner;
 const ownerPage = read('../src/app/owner/page.tsx');
 const story = read('../docs/stories/1.14.story.md');
 
@@ -70,15 +72,15 @@ test('resend service exposes dedicated owner notification template', () => {
 });
 
 test('homepage renders the commercial campaign and inline form with privacy consent', () => {
-  assert.match(homePage, /Seja um dos primeiros gestores a utilizar o WODArena\./);
-  assert.match(homePage, /Quero utilizar o WODArena/);
-  assert.match(homePage, /fetch\('\/api\/commercial-leads'/);
-  assert.match(homePage, /Nome do gestor/);
-  assert.match(homePage, /Telefone/);
-  assert.match(homePage, /Estado \(UF\)/);
-  assert.match(homePage, /Politica de Privacidade/);
-  assert.match(homePage, /\/termos#privacidade/);
-  assert.match(homePage, /Solicitação enviada com sucesso!/);
+  assert.match(combinedSource, /Organize seu evento/);
+  assert.match(combinedSource, /Quero utilizar o WODArena/);
+  assert.match(combinedSource, /fetch\('\/api\/commercial-leads'/);
+  assert.match(combinedSource, /Nome do gestor/);
+  assert.match(combinedSource, /Telefone/);
+  assert.match(combinedSource, /Estado \(UF\)/);
+  assert.match(combinedSource, /Politica de Privacidade/);
+  assert.match(combinedSource, /\/termos#privacidade/);
+  assert.match(combinedSource, /Solicitação enviada com sucesso!/);
 });
 
 test('owner panel exposes a dedicated leads tab with email notification status', () => {

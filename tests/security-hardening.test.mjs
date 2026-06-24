@@ -109,9 +109,12 @@ test('bootstrap API does not expose full athlete PII to anonymous clients', () =
   assert.match(bootstrapRoute, /session\?\.role === 'owner'/);
   assert.match(bootstrapRoute, /\.eq\('id', session\.id\)/);
   assert.match(bootstrapPayloadHelper, /athletes: \(athletesResult\.data \|\| \[\]\)\.map\(sanitizePublicAthlete\)/);
+  // city/state/instagram/team_members são expostos intencionalmente na tela de
+  // detalhes da equipe (nomes dos integrantes passam por sanitizeNamePII). A PII de
+  // contato (e-mail, telefone, nascimento, foto) permanece fora do payload público.
   assert.doesNotMatch(
     bootstrapPayloadHelper.match(/export const sanitizePublicAthlete[\s\S]*?\}\);/)?.[0] || '',
-    /birth_date|city|state|instagram|photo_url|team_members|email|phone|shirt_size/
+    /birth_date|photo_url|email|phone|shirt_size/
   );
   assert.doesNotMatch(
     bootstrapPayloadHelper.match(/export const sanitizeLeaderboardEntry[\s\S]*?\}\);/)?.[0] || '',

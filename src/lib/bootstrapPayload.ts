@@ -27,6 +27,28 @@ export const sanitizeNamePII = (name: unknown): string => {
   return clean.trim();
 };
 
+// Integrantes da equipe são expostos publicamente (tela de detalhes da equipe),
+// mas os nomes passam por sanitizeNamePII para remover telefones/e-mails embutidos.
+// E-mail/telefone individuais e demais PII do atleta seguem fora do payload público.
+const sanitizePublicTeamMembers = (raw: unknown) => {
+  let members: AthleteRow[] = [];
+  if (typeof raw === 'string') {
+    try {
+      members = JSON.parse(raw);
+    } catch {
+      members = [];
+    }
+  } else if (Array.isArray(raw)) {
+    members = raw;
+  }
+  if (!Array.isArray(members)) return [];
+  return members.map((member) => ({
+    name: sanitizeNamePII(member?.name),
+    instagram: member?.instagram ?? '',
+    shirtSize: member?.shirtSize
+  }));
+};
+
 export const sanitizePublicAthlete = (athlete: AthleteRow) => ({
   id: athlete.id,
   name: sanitizeNamePII(athlete.name),
@@ -34,7 +56,11 @@ export const sanitizePublicAthlete = (athlete: AthleteRow) => ({
   country: athlete.country,
   division_id: athlete.division_id,
   gender: athlete.gender,
-  is_team: athlete.is_team
+  is_team: athlete.is_team,
+  city: athlete.city,
+  state: athlete.state,
+  instagram: athlete.instagram,
+  team_members: sanitizePublicTeamMembers(athlete.team_members)
 });
 
 export const sanitizeLeaderboardEntry = (entry: Record<string, unknown>) => ({
@@ -63,7 +89,7 @@ export const buildPublicBootstrapPayload = async (supabaseAdmin: SupabaseClient)
   ] = await Promise.all([
     supabaseAdmin
       .from('athletes')
-      .select('id, name, box, country, division_id, gender, is_team'),
+      .select('id, name, box, country, division_id, gender, is_team, city, state, instagram, team_members'),
     supabaseAdmin
       .from('scores')
       .select(PUBLIC_SCORE_SELECT),

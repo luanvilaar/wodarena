@@ -8,13 +8,10 @@ import { SectionOperations } from '@/components/home/SectionOperations';
 import { FeaturedEventBanner } from '@/components/home/FeaturedEventBanner';
 import {
   ArrowRight,
-  Building,
   MapPin,
   Phone,
   Search,
-  ShieldCheck,
-  Trophy,
-  Users
+  ShieldCheck
 } from 'lucide-react';
 import { EventStatus } from '@/types';
 
@@ -43,7 +40,7 @@ const EMPTY_LEAD_FORM: LeadFormState = {
 };
 
 export default function Home() {
-  const { events, athletes, registrations } = useApp();
+  const { events } = useApp();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | EventStatus>('all');
   const [leadFormOpen, setLeadFormOpen] = useState(false);
@@ -51,13 +48,6 @@ export default function Home() {
   const [leadSubmitting, setLeadSubmitting] = useState(false);
   const [leadErrorMessage, setLeadErrorMessage] = useState('');
   const [leadSuccessMessage, setLeadSuccessMessage] = useState('');
-  const totalDivisions = events.reduce((total, event) => total + event.divisions.length, 0);
-  const platformStats = [
-    { label: 'Eventos', value: events.length },
-    { label: 'Atletas', value: athletes.length },
-    { label: 'Categorias', value: totalDivisions },
-    { label: 'Inscrições', value: registrations.length },
-  ];
 
   const filteredEvents = events.filter((event) => {
     const matchesSearch = event.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -116,138 +106,8 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-background">
-      <section className="relative overflow-hidden border-b border-card-border py-16 sm:py-20 lg:py-24">
-        <div className="absolute inset-0 z-0 pointer-events-none lg:hidden">
-          <video
-            src="/hero-vertical.mp4"
-            autoPlay
-            loop
-            muted
-            playsInline
-            className="h-full w-full object-cover opacity-15"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-background/50"></div>
-        </div>
-
-        <div className="absolute inset-0 z-0 pointer-events-none hidden lg:block">
-          <video
-            src="/hero-vertical.mp4"
-            autoPlay
-            loop
-            muted
-            playsInline
-            className="h-full w-full object-cover opacity-20"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-background/65"></div>
-          <div className="absolute inset-0 bg-gradient-to-r from-background via-transparent to-background/30"></div>
-        </div>
-
-        <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="max-w-4xl space-y-8">
-            <span className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-primary">
-              <Trophy className="h-4 w-4" aria-hidden="true" /> O placar oficial da arena
-            </span>
-            <div className="space-y-5">
-              <h1 className="max-w-4xl text-balance text-4xl font-black leading-[1.03] tracking-[-0.04em] text-white sm:text-6xl lg:text-7xl">
-                COMPITA. ACOMPANHE. <span className="text-primary">DOMINE A ARENA.</span>
-              </h1>
-              <p className="max-w-2xl text-pretty text-base leading-7 text-muted sm:text-lg">
-                Inscrições, cronogramas e leaderboards em tempo real para atletas, boxes e organizadores de Functional Fitness.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              <a href="#eventos" className="flex h-12 items-center gap-2 rounded-md bg-primary px-6 text-sm font-bold text-ink transition-colors hover:bg-primary-hover active:bg-primary-hover">
-                Explorar eventos <ArrowRight className="h-4 w-4" aria-hidden="true" />
-              </a>
-              <button
-                type="button"
-                onClick={() => setLeadFormOpen(true)}
-                className="flex h-12 items-center rounded-md bg-card px-6 text-sm font-bold text-white transition-colors hover:bg-elevated"
-              >
-                Quero utilizar o WODArena
-              </button>
-            </div>
-            <div className="grid gap-3 pt-2 sm:grid-cols-2 xl:grid-cols-4">
-              {platformStats.map((stat) => (
-                <div key={stat.label} className="rounded-2xl border border-card-border bg-card/90 p-4">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">{stat.label}</p>
-                  <p className="mt-2 text-3xl font-black tracking-[-0.04em] text-white">{stat.value}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="quero-utilizar-wodarena" className="border-b border-card-border bg-card/40 py-16 sm:py-20">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
-            <div className="space-y-6">
-              <span className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-primary">
-                <Building className="h-4 w-4" aria-hidden="true" /> Campanha comercial
-              </span>
-              <div className="space-y-4">
-                <h2 className="max-w-2xl text-balance text-3xl font-black uppercase leading-tight text-white sm:text-4xl">
-                  Seja um dos primeiros gestores a utilizar o WODArena.
-                </h2>
-                <p className="max-w-2xl text-sm leading-7 text-muted sm:text-base">
-                  Cadastre seu interesse para apresentar seu evento no WODArena e conversar com nossa equipe sobre a fase promocional para os primeiros gestores.
-                </p>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-4">
-                <button
-                  type="button"
-                  onClick={() => setLeadFormOpen(true)}
-                  className="flex h-12 items-center gap-2 rounded-md bg-primary px-6 text-sm font-bold text-ink transition-colors hover:bg-primary-hover shadow-lg shadow-primary/10"
-                >
-                  Quero utilizar o WODArena <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                </button>
-                <p className="text-xs leading-6 text-muted max-w-xs">
-                  Os primeiros eventos cadastrados poderao usar a plataforma gratuitamente durante o periodo promocional.
-                </p>
-              </div>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-              {[
-                {
-                  title: 'Gestão Centralizada',
-                  desc: 'Operação simplificada de inscrições, baterias e cronogramas do seu evento.',
-                  icon: Trophy
-                },
-                {
-                  title: 'Leaderboard em Tempo Real',
-                  desc: 'Resultados e pontuações públicas atualizadas instantaneamente na arena.',
-                  icon: Users
-                },
-                {
-                  title: 'Contato Prioritário',
-                  desc: 'Suporte exclusivo e contato direto com nossos engenheiros na fase promocional.',
-                  icon: Phone
-                },
-                {
-                  title: 'Parceria de Crescimento',
-                  desc: 'Ajude a moldar a plataforma de acordo com as necessidades do seu box.',
-                  icon: ShieldCheck
-                }
-              ].map((benefit) => {
-                const Icon = benefit.icon;
-                return (
-                  <div key={benefit.title} className="rounded-2xl border border-card-border bg-card p-5 transition-colors hover:border-primary/20">
-                    <Icon className="h-6 w-6 text-primary mb-3" aria-hidden="true" />
-                    <h4 className="font-bold text-white text-sm uppercase tracking-wide">{benefit.title}</h4>
-                    <p className="mt-2 text-xs leading-relaxed text-muted">{benefit.desc}</p>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      </section>
-
       <SectionOperations />
-      <FeaturedEventBanner />
+      <FeaturedEventBanner openLeadModal={() => setLeadFormOpen(true)} />
 
       <section id="eventos" className="mx-auto w-full max-w-7xl space-y-8 px-4 py-12 sm:px-6 lg:px-8">
         <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">

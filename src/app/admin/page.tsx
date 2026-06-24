@@ -46,6 +46,7 @@ const RegDetail = ({ label, value, accent = false }: { label: string; value: str
 import { WorkoutType, CategoryType, EventStatus, Event, Athlete, Division, CourseStage, EventScheduleItemKind, EventScheduleMode, Score, EventScheduleItem, Registration, Contestation } from '@/types';
 import { CONTESTATION_CREDITS_LIMIT, getContestationStatusLabel } from '@/lib/contestations';
 import { FITNESS_RACING_AGE_GROUPS, FITNESS_RACING_STATION_LIBRARY, buildFitnessRacingCourse, getAgeGroupFromDate } from '@/lib/fitnessRacing';
+import { getTeamDisplayName } from '@/lib/teamDisplay';
 
 const currencyFormatter = new Intl.NumberFormat('pt-BR', {
   style: 'currency',
@@ -9370,13 +9371,7 @@ export default function AdminPage() {
             </button>
 
             <div className="border-b border-card-border pb-4">
-              <span className="inline-flex rounded bg-primary/20 border border-primary/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-primary mb-1.5">
-                Perfil de Equipe
-              </span>
-              <h3 className="text-xl font-bold text-white uppercase tracking-wider">{selectedTeamForProfile.name}</h3>
-              <p className="text-xs text-primary font-bold uppercase tracking-wider mt-0.5">
-                {selectedEventToManage?.divisions.find(d => d.id === selectedTeamForProfile.divisionId)?.name || 'Categoria'}
-              </p>
+              <h3 className="text-xl font-bold text-white uppercase tracking-wider">{getTeamDisplayName(selectedTeamForProfile)}</h3>
             </div>
 
             <div className="grid grid-cols-2 gap-4 text-xs border-b border-card-border/50 pb-4">
@@ -9391,7 +9386,7 @@ export default function AdminPage() {
                 </p>
               </div>
               <div className="col-span-2">
-                <p className="text-[10px] uppercase font-bold text-muted tracking-wider">Instagram Equipe</p>
+                <p className="text-[10px] uppercase font-bold text-muted tracking-wider">Instagram da Equipe</p>
                 {selectedTeamForProfile.instagram ? (
                   <a
                     href={`https://instagram.com/${selectedTeamForProfile.instagram.replace(/^@/, '')}`}
