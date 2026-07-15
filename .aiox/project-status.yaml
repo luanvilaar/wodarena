@@ -1,18 +1,14 @@
 status:
   branch: main
-  modifiedFiles:
-    - .aiox/project-status.yaml
-    - mcp-servers/
-  modifiedFilesTotalCount: 2
+  modifiedFiles: []
+  modifiedFilesTotalCount: 0
   recentCommits:
+    - 'feat(mcp): add Mercado Pago MCP server'
     - 'fix(bootstrap): harden app loading flow'
-    - >-
-      style(home): redesign featured event banner layout to be responsive and
-      mobile-first
   currentEpic: null
   currentStory: null
-  lastUpdate: '2026-07-15T17:22:50.770Z'
+  lastUpdate: '2026-07-15T17:42:19.053Z'
   isGitRepo: true
-timestamp: 1784136170775
+timestamp: 1784137339058
 ttl: 60
-gitFingerprint: 1780618055577.6655:1784134145733.354
+gitFingerprint: 1780618055577.6655:1784136280600.0251
