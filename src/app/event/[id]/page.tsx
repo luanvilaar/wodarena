@@ -21,13 +21,27 @@ export default function EventPage({ params }: PageProps) {
   const resolvedParams = use(params);
   const eventId = resolvedParams.id;
   
-  const { events, athletes, registerTicket, refreshRegistrations } = useApp();
+  const {
+    events,
+    athletes,
+    isSessionHydrated,
+    loadPublicEventData,
+    registerTicket,
+    refreshRegistrations
+  } = useApp();
   const [activeTab, setActiveTab] = useState<'details' | 'divisions' | 'schedule' | 'workouts'>('details');
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
   const [shareFeedback, setShareFeedback] = useState(false);
   const [paymentNotice, setPaymentNotice] = useState<{ text: string; tone: 'success' | 'error' } | null>(null);
   const [confirmedVoucher, setConfirmedVoucher] = useState<{ registration: Registration; athlete: Athlete; cpf?: string } | null>(null);
   const [selectedDivisionForCourseId, setSelectedDivisionForCourseId] = useState<string>('');
+
+  useEffect(() => {
+    if (!isSessionHydrated) return;
+    void loadPublicEventData(eventId).catch((error) => {
+      console.error('[EventPage] Erro ao carregar dados públicos do evento:', error);
+    });
+  }, [eventId, isSessionHydrated, loadPublicEventData]);
 
   // Procurar evento correspondente
   const event = events.find(e => e.id === eventId);

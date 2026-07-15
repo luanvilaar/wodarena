@@ -56,7 +56,15 @@ test('story 1.16 tracks the audit remediation scope and quality gates', () => {
 test('bootstrap is split between a public endpoint and an authenticated endpoint', () => {
   assert.match(bootstrapPrivateRoute, /requireSession\(request, \['owner', 'manager', 'athlete'\]\)/);
   assert.match(bootstrapPublicRoute, /buildPublicBootstrapPayload/);
-  assert.match(bootstrapPayloadHelper, /from\('registrations'\)\s*\.select\('id', \{ count: 'exact', head: true \}\)/);
+  assert.match(bootstrapPayloadHelper, /PUBLIC_DIVISION_SELECT/);
+  assert.match(bootstrapPayloadHelper, /PUBLIC_WORKOUT_SELECT/);
+  assert.match(bootstrapPayloadHelper, /registrationsCount: null/);
+  assert.match(bootstrapPayloadHelper, /buildPublicEventBootstrapPayload/);
+  const publicBuilder = bootstrapPayloadHelper.match(/export const buildPublicBootstrapPayload[\s\S]*?export const buildPublicEventBootstrapPayload/)?.[0] || '';
+  assert.doesNotMatch(
+    publicBuilder,
+    /PUBLIC_SCORE_SELECT|PUBLIC_LEADERBOARD_ENTRY_SELECT|from\('athletes'\)|from\('scores'\)|from\('leaderboard_entries'\)/
+  );
   assert.match(bootstrapPayloadHelper, /users: \[\]/);
   assert.match(bootstrapPayloadHelper, /contestations: \[\]/);
   assert.match(bootstrapPayloadHelper, /coupons: \[\]/);
@@ -66,9 +74,10 @@ test('AppContext uses the public bootstrap for anonymous navigation and the priv
   assert.match(appContext, /const PRIVATE_BOOTSTRAP_ENDPOINT = '\/api\/app\/bootstrap'/);
   assert.match(appContext, /const PUBLIC_BOOTSTRAP_ENDPOINT = '\/api\/app\/bootstrap\/public'/);
   assert.match(appContext, /const initialEndpoint = preferPrivate \? PRIVATE_BOOTSTRAP_ENDPOINT : PUBLIC_BOOTSTRAP_ENDPOINT/);
-  assert.match(appContext, /if \(preferPrivate && response\.status === 401\)/);
-  assert.match(appContext, /response = await fetch\(PUBLIC_BOOTSTRAP_ENDPOINT\)/);
-  assert.match(appContext, /const response = await fetch\(PRIVATE_BOOTSTRAP_ENDPOINT\)/);
+  assert.match(appContext, /await fetchWithTimeout\(initialEndpoint, signal\)/);
+  assert.match(appContext, /if \(preferPrivate && httpResponse\.response\.status === 401\)/);
+  assert.match(appContext, /httpResponse = await fetchWithTimeout\(PUBLIC_BOOTSTRAP_ENDPOINT, signal\)/);
+  assert.match(appContext, /cache: 'no-store'/);
 });
 
 test('local storage setter remains stable so bootstrap effects do not enter an infinite render loop', () => {

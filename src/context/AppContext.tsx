@@ -1,9 +1,8 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { WorkoutType, Event, Athlete, Division, Score, CourseStage, Coupon, Registration, User, Workout, AthleteOverall, EventScheduleItem, Contestation } from '../types';
 import { useLocalStorage } from '../hooks/useLocalStorage';
-import { INITIAL_EVENTS, INITIAL_ATHLETES, INITIAL_SCORES, INITIAL_USERS } from '../data/mockData';
 import { buildFitnessRacingCourse, buildFitnessRacingDefaults, normalizeInstagram } from '@/lib/fitnessRacing';
 import { mapContestationFromDb } from '@/lib/contestations';
 import { getManagerAccessStatus, normalizeServiceValidUntil } from '@/lib/managerAccess';
@@ -12,6 +11,9 @@ import { getManagerAccessStatus, normalizeServiceValidUntil } from '@/lib/manage
 type LeaderboardEntry = Record<string, any>;
 
 type RegistrationDraft = Omit<Registration, 'id' | 'createdAt'> & Partial<Pick<Registration, 'id' | 'createdAt'>>;
+
+export type BootstrapStatus = 'loading' | 'ready' | 'degraded' | 'error';
+type PublicEventDataStatus = 'loading' | 'ready' | 'error';
 
 export type RegistrationEditInput = {
   athleteName: string;
@@ -49,6 +51,12 @@ type AthleteProfileDraft = {
 
 interface AppContextType {
   isLoading: boolean;
+  isSessionHydrated: boolean;
+  bootstrapStatus: BootstrapStatus;
+  bootstrapError: string | null;
+  retryBootstrap: () => void;
+  publicEventDataStatus: Record<string, PublicEventDataStatus>;
+  loadPublicEventData: (eventId: string) => Promise<void>;
   events: Event[];
   athletes: Athlete[];
   scores: Score[];
@@ -101,6 +109,12 @@ type WorkoutDbUpdate = Partial<{
 const AppContext = createContext<AppContextType | undefined>(undefined);
 const PRIVATE_BOOTSTRAP_ENDPOINT = '/api/app/bootstrap';
 const PUBLIC_BOOTSTRAP_ENDPOINT = '/api/app/bootstrap/public';
+const PUBLIC_EVENT_BOOTSTRAP_ENDPOINT = '/api/app/bootstrap/public/event';
+const DEFAULT_BOOTSTRAP_TIMEOUT_MS = 12000;
+const configuredBootstrapTimeout = Number(process.env.NEXT_PUBLIC_BOOTSTRAP_TIMEOUT_MS);
+export const BOOTSTRAP_TIMEOUT_MS = Number.isFinite(configuredBootstrapTimeout) && configuredBootstrapTimeout >= 3000
+  ? configuredBootstrapTimeout
+  : DEFAULT_BOOTSTRAP_TIMEOUT_MS;
 
 type RegistrationDbRow = Record<string, unknown>;
 type AthleteDbRow = Record<string, unknown>;
@@ -128,6 +142,11 @@ type BootstrapPayload = {
   workouts: any[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   mercadopagoAccounts: any[];
+};
+
+type BootstrapFetchResult = {
+  payload: BootstrapPayload;
+  authLost: boolean;
 };
 
 const optionalString = (value: unknown) => typeof value === 'string' && value.length > 0 ? value : undefined;
@@ -228,8 +247,78 @@ const adminPersist = async (action: string, payload: Record<string, unknown>) =>
   return data;
 };
 
+type BootstrapHttpResponse = {
+  response: Response;
+  payload: unknown;
+};
+
+const fetchWithTimeout = async (endpoint: string, signal: AbortSignal): Promise<BootstrapHttpResponse> => {
+  const timeoutController = new AbortController();
+  const timeoutId = setTimeout(() => timeoutController.abort(), BOOTSTRAP_TIMEOUT_MS);
+  const propagateAbort = () => timeoutController.abort();
+  signal.addEventListener('abort', propagateAbort, { once: true });
+
+  try {
+    const response = await fetch(endpoint, {
+      cache: 'no-store',
+      signal: timeoutController.signal
+    });
+    let payload: unknown = null;
+    try {
+      payload = await response.json();
+    } catch (error) {
+      if (!signal.aborted && timeoutController.signal.aborted) {
+        throw new Error(`O carregamento excedeu o limite de ${Math.round(BOOTSTRAP_TIMEOUT_MS / 1000)} segundos.`);
+      }
+      if (signal.aborted) throw error;
+    }
+    return { response, payload };
+  } catch (error) {
+    if (!signal.aborted && timeoutController.signal.aborted) {
+      throw new Error(`O carregamento excedeu o limite de ${Math.round(BOOTSTRAP_TIMEOUT_MS / 1000)} segundos.`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+    signal.removeEventListener('abort', propagateAbort);
+  }
+};
+
+const readBootstrapResponse = (response: Response, payload: unknown): BootstrapPayload => {
+  const typedPayload = payload as BootstrapPayload | { error?: string } | null;
+  if (!response.ok) {
+    throw new Error(typedPayload && 'error' in typedPayload && typedPayload.error ? typedPayload.error : 'Erro ao carregar dados iniciais.');
+  }
+  if (!typedPayload || typeof typedPayload !== 'object' || !('events' in typedPayload)) {
+    throw new Error('Resposta inválida do bootstrap.');
+  }
+  return typedPayload as BootstrapPayload;
+};
+
+const getBootstrapErrorMessage = (error: unknown) => {
+  if (error instanceof Error && error.message) return error.message;
+  return 'Não foi possível carregar os dados iniciais. Tente novamente.';
+};
+
+const readBootstrapResponseWithTelemetry = (response: Response, payload: unknown, endpoint: string) => {
+  try {
+    return readBootstrapResponse(response, payload);
+  } catch (error) {
+    console.error('[Bootstrap Client] Falha:', JSON.stringify({
+      endpoint,
+      status: response.status,
+      message: getBootstrapErrorMessage(error)
+    }));
+    throw error;
+  }
+};
+
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
+  const [bootstrapStatus, setBootstrapStatus] = useState<BootstrapStatus>('loading');
+  const [bootstrapError, setBootstrapError] = useState<string | null>(null);
+  const [retryNonce, setRetryNonce] = useState(0);
+  const [publicEventDataStatus, setPublicEventDataStatus] = useState<Record<string, PublicEventDataStatus>>({});
   const [events, setEvents] = useState<Event[]>([]);
   const [athletes, setAthletes] = useState<Athlete[]>([]);
   const [scores, setScores] = useState<Score[]>([]);
@@ -240,49 +329,42 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [contestations, setContestations] = useState<Contestation[]>([]);
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [leaderboardEntries, setLeaderboardEntries] = useState<LeaderboardEntry[]>([]);
-  const [users, setUsers] = useState<User[]>(INITIAL_USERS);
-  const [currentUser, setCurrentUser] = useLocalStorage<User | null>('woda_current_user', null);
+  const [users, setUsers] = useState<User[]>([]);
+  const [currentUser, setCurrentUser, isSessionHydrated] = useLocalStorage<User | null>('woda_current_user', null);
   const currentUserId = currentUser?.id || null;
+  const bootstrapAbortRef = useRef<AbortController | null>(null);
+  const bootstrapRequestIdRef = useRef(0);
+  const skipNextPublicBootstrapRef = useRef(false);
+  const hasLoadedBootstrapRef = useRef(false);
+  const publicEventRequestsRef = useRef(new Map<string, Promise<void>>());
+  const loadedPublicEventIdsRef = useRef(new Set<string>());
 
-  const fetchBootstrapPayload = useCallback(async (preferPrivate: boolean): Promise<BootstrapPayload> => {
+  const retryBootstrap = useCallback(() => {
+    setBootstrapError(null);
+    setRetryNonce(previous => previous + 1);
+  }, []);
+
+  const fetchBootstrapPayload = useCallback(async (preferPrivate: boolean, signal: AbortSignal): Promise<BootstrapFetchResult> => {
     const initialEndpoint = preferPrivate ? PRIVATE_BOOTSTRAP_ENDPOINT : PUBLIC_BOOTSTRAP_ENDPOINT;
-    let response = await fetch(initialEndpoint);
-    let payload: BootstrapPayload = await response.json().catch(() => ({
-      users: [],
-      athletes: [],
-      registrations: [],
-      contestations: [],
-      scores: [],
-      coupons: [],
-      events: [],
-      divisions: [],
-      workouts: [],
-      mercadopagoAccounts: []
-    }));
+    let httpResponse = await fetchWithTimeout(initialEndpoint, signal);
 
-    if (preferPrivate && response.status === 401) {
-      setCurrentUser(null);
-      response = await fetch(PUBLIC_BOOTSTRAP_ENDPOINT);
-      payload = await response.json().catch(() => ({
-        users: [],
-        athletes: [],
-        registrations: [],
-        contestations: [],
-        scores: [],
-        coupons: [],
-        events: [],
-        divisions: [],
-        workouts: [],
-        mercadopagoAccounts: []
+    if (preferPrivate && httpResponse.response.status === 401) {
+      console.info('[Bootstrap Client] Sessão expirada; migrando para o endpoint público:', JSON.stringify({
+        endpoint: initialEndpoint,
+        status: httpResponse.response.status
       }));
+      httpResponse = await fetchWithTimeout(PUBLIC_BOOTSTRAP_ENDPOINT, signal);
+      return {
+        payload: readBootstrapResponseWithTelemetry(httpResponse.response, httpResponse.payload, PUBLIC_BOOTSTRAP_ENDPOINT),
+        authLost: true
+      };
     }
 
-    if (!response.ok) {
-      throw new Error('Erro ao carregar dados iniciais.');
-    }
-
-    return payload;
-  }, [setCurrentUser]);
+    return {
+      payload: readBootstrapResponseWithTelemetry(httpResponse.response, httpResponse.payload, initialEndpoint),
+      authLost: false
+    };
+  }, []);
 
   const refreshRegistrations = useCallback(async () => {
     const response = await fetch(PRIVATE_BOOTSTRAP_ENDPOINT);
@@ -297,18 +379,105 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return mappedRegs;
   }, []);
 
+  const loadPublicEventData = useCallback(async (eventId: string) => {
+    if (!eventId || currentUser?.role === 'owner' || currentUser?.role === 'manager') return;
+    if (loadedPublicEventIdsRef.current.has(eventId)) return;
+
+    const existingRequest = publicEventRequestsRef.current.get(eventId);
+    if (existingRequest) return existingRequest;
+
+    const request = (async () => {
+      setPublicEventDataStatus(previous => ({ ...previous, [eventId]: 'loading' }));
+      const controller = new AbortController();
+
+      try {
+        const endpoint = `${PUBLIC_EVENT_BOOTSTRAP_ENDPOINT}/${encodeURIComponent(eventId)}`;
+        const httpResponse = await fetchWithTimeout(endpoint, controller.signal);
+        const payload = readBootstrapResponseWithTelemetry(httpResponse.response, httpResponse.payload, endpoint);
+        const mappedAthletes = (payload.athletes || []).map(mapAthleteFromDb);
+        const mappedScores = (payload.scores || []).map((score) => {
+          let parsedSplits: Record<string, string> = {};
+          if (score.splits) {
+            try {
+              parsedSplits = typeof score.splits === 'string' ? JSON.parse(score.splits) : score.splits;
+            } catch (err) {
+              console.error('Erro ao fazer parse dos splits do score público:', score.athlete_id, score.workout_id, err);
+            }
+          }
+          return {
+            athleteId: score.athlete_id,
+            workoutId: score.workout_id,
+            result: score.result,
+            value: Number(score.value),
+            rank: score.rank || undefined,
+            points: score.points || undefined,
+            splits: parsedSplits || {}
+          } as Score;
+        });
+
+        setAthletes(previous => [
+          ...previous.filter(athlete => !mappedAthletes.some(incoming => incoming.id === athlete.id)),
+          ...mappedAthletes
+        ]);
+        setScores(previous => [
+          ...previous.filter(score => !mappedScores.some(incoming => incoming.athleteId === score.athleteId && incoming.workoutId === score.workoutId)),
+          ...mappedScores
+        ]);
+        setLeaderboardEntries(previous => [
+          ...previous.filter(entry => entry.event_id !== eventId),
+          ...(payload.leaderboardEntries || [])
+        ]);
+        loadedPublicEventIdsRef.current.add(eventId);
+        setPublicEventDataStatus(previous => ({ ...previous, [eventId]: 'ready' }));
+      } catch (error) {
+        setPublicEventDataStatus(previous => ({ ...previous, [eventId]: 'error' }));
+        throw error;
+      } finally {
+        publicEventRequestsRef.current.delete(eventId);
+      }
+    })();
+
+    publicEventRequestsRef.current.set(eventId, request);
+    return request;
+  }, [currentUser?.role]);
+
   // Carregar dados iniciais do Supabase
   useEffect(() => {
+    if (!isSessionHydrated) return;
+    if (!currentUserId && skipNextPublicBootstrapRef.current) {
+      skipNextPublicBootstrapRef.current = false;
+      return;
+    }
+
+    bootstrapAbortRef.current?.abort();
+    const controller = new AbortController();
+    const requestId = ++bootstrapRequestIdRef.current;
+    bootstrapAbortRef.current = controller;
+
     const fetchAllData = async () => {
       try {
         setIsLoading(true);
-        const payload = await fetchBootstrapPayload(Boolean(currentUserId));
+        setBootstrapStatus('loading');
+        setBootstrapError(null);
+        const startedAt = Date.now();
+        const { payload, authLost } = await fetchBootstrapPayload(Boolean(currentUserId), controller.signal);
+
+        if (controller.signal.aborted || requestId !== bootstrapRequestIdRef.current) return;
+
+        const payloadBytes = new TextEncoder().encode(JSON.stringify(payload)).byteLength;
+        console.info('[Bootstrap Client] Concluído:', JSON.stringify({
+          endpoint: currentUserId ? PRIVATE_BOOTSTRAP_ENDPOINT : PUBLIC_BOOTSTRAP_ENDPOINT,
+          durationMs: Date.now() - startedAt,
+          payloadBytes,
+          events: payload.events?.length || 0
+        }));
+
         // 1. Carregar usuários e sincronizar sessão
         const dbUsers = payload.users;
         if (dbUsers && dbUsers.length > 0) {
           setUsers(dbUsers.map(mapUserFromDb));
         } else {
-          setUsers(INITIAL_USERS);
+          setUsers([]);
         }
 
         if (payload.currentUser !== undefined) {
@@ -325,7 +494,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           const mappedAthletes: Athlete[] = dbAthletes.map(mapAthleteFromDb);
           setAthletes(mappedAthletes);
         } else {
-          setAthletes(INITIAL_ATHLETES);
+          setAthletes([]);
         }
 
         // 3. Carregar scores
@@ -352,7 +521,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           });
           setScores(mappedScores);
         } else {
-          setScores(INITIAL_SCORES);
+          setScores([]);
         }
 
         // 4. Carregar inscrições
@@ -472,27 +641,46 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           });
           setEvents(combinedEvents);
         } else {
-          setEvents(INITIAL_EVENTS);
+          setEvents([]);
         }
+
+        if (authLost) {
+          skipNextPublicBootstrapRef.current = true;
+          setCurrentUser(null);
+        }
+        hasLoadedBootstrapRef.current = true;
+        setBootstrapStatus('ready');
       } catch (err) {
-        console.error("Erro ao carregar dados do Supabase, usando fallbacks:", err);
-        setUsers(INITIAL_USERS);
-        setAthletes(INITIAL_ATHLETES);
-        setScores(INITIAL_SCORES);
-        setContestations([]);
-        setEvents(INITIAL_EVENTS);
+        if (controller.signal.aborted || requestId !== bootstrapRequestIdRef.current) return;
+        const message = getBootstrapErrorMessage(err);
+        console.error('Erro ao carregar dados do bootstrap:', err);
+        setBootstrapError(message);
+        setBootstrapStatus(hasLoadedBootstrapRef.current ? 'degraded' : 'error');
+
+        if (!hasLoadedBootstrapRef.current) {
+          setUsers([]);
+          setAthletes([]);
+          setScores([]);
+          setRegistrations([]);
+          setContestations([]);
+          setCoupons([]);
+          setLeaderboardEntries([]);
+          setEvents([]);
+        }
       } finally {
-        setIsLoading(false);
+        if (!controller.signal.aborted && requestId === bootstrapRequestIdRef.current) {
+          setIsLoading(false);
+        }
       }
     };
 
-    fetchAllData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUserId, fetchBootstrapPayload, setCurrentUser]);
+    void fetchAllData();
+    return () => controller.abort();
+  }, [currentUserId, fetchBootstrapPayload, isSessionHydrated, retryNonce, setCurrentUser]);
 
   // Rotina de reparo automático (Self-Healing) de dados legados do Fitness Racing
   useEffect(() => {
-    if (events.length === 0) return;
+    if (events.length === 0 || !currentUser || (currentUser.role !== 'owner' && currentUser.role !== 'manager')) return;
 
     const repairLegacyEvents = async () => {
       const dbWorkoutsToInsert: {
@@ -567,7 +755,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
 
     repairLegacyEvents();
-  }, [events]);
+  }, [events, currentUser]);
 
   // Lógica de Login
   const login = async (emailInput: string, passwordInput: string): Promise<User | null> => {
@@ -1850,6 +2038,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     <AppContext.Provider
       value={{
         isLoading,
+        isSessionHydrated,
+        bootstrapStatus,
+        bootstrapError,
+        retryBootstrap,
+        publicEventDataStatus,
+        loadPublicEventData,
         events,
         athletes,
         scores,

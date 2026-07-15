@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Search, ShieldAlert, ChevronDown, ChevronUp, X, TrendingUp, User, Flame, Zap, BarChart3, Clock } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -152,7 +152,7 @@ const ScorePerWorkoutList = ({ workouts, scores }: { workouts: Workout[]; scores
 };
 
 export function Leaderboard({ event }: LeaderboardProps) {
-  const { getLeaderboard } = useApp();
+  const { getLeaderboard, loadPublicEventData, publicEventDataStatus } = useApp();
   const isMobile = useMediaQuery('(max-width: 640px)');
   const [selectedCategoryId, setSelectedCategoryId] = useState(event.divisions[0]?.id || '');
   const [searchQuery, setSearchQuery] = useState('');
@@ -177,6 +177,14 @@ export function Leaderboard({ event }: LeaderboardProps) {
   const divisionWorkouts = useMemo(() => {
     return event.workouts.filter(w => !w.divisionId || w.divisionId === activeCategoryId);
   }, [event.workouts, activeCategoryId]);
+
+  useEffect(() => {
+    void loadPublicEventData(event.id).catch((error) => {
+      console.error('[Leaderboard] Erro ao carregar dados públicos do evento:', error);
+    });
+  }, [event.id, loadPublicEventData]);
+
+  const publicDataStatus = publicEventDataStatus[event.id];
 
   const leaderboardData = useMemo(
     () => activeCategoryId ? getLeaderboard(event.id, activeCategoryId) : [],
@@ -280,6 +288,25 @@ export function Leaderboard({ event }: LeaderboardProps) {
           )}
         </div>
       </div>
+
+      {publicDataStatus === 'loading' && (
+        <div className="rounded-lg border border-card-border bg-card px-4 py-3 text-xs font-medium text-muted" role="status">
+          Carregando atletas e resultados deste evento...
+        </div>
+      )}
+
+      {publicDataStatus === 'error' && (
+        <div className="flex items-center justify-between gap-4 rounded-lg border border-red-500/30 bg-red-950/20 px-4 py-3 text-xs text-red-200" role="alert">
+          <span>Não foi possível carregar os resultados deste evento.</span>
+          <button
+            type="button"
+            onClick={() => void loadPublicEventData(event.id).catch((error) => console.error('[Leaderboard] Retry falhou:', error))}
+            className="shrink-0 rounded border border-primary/50 px-3 py-2 font-bold uppercase tracking-wide text-primary hover:bg-primary hover:text-ink"
+          >
+            Tentar novamente
+          </button>
+        </div>
+      )}
 
       {/* Tabela de Classificação */}
       {filteredLeaderboard.length > 0 ? (

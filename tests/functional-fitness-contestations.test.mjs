@@ -36,9 +36,10 @@ test('migration creates contestations table with credit tracking and statuses', 
 });
 
 test('bootstrap and context carry contestations with role isolation', () => {
-  assert.match(bootstrap, /contestationsResult/);
-  assert.match(bootstrap, /contestations: \(contestationsResult\.data \|\| \[\]\)\.filter\(contestation => eventIds\.has\(contestation\.event_id\)\)/);
-  assert.match(bootstrap, /filter\(contestation => contestation\.userId === session\.id\)/);
+  assert.match(bootstrap, /const PRIVATE_CONTESTATION_SELECT/);
+  assert.match(bootstrap, /\.in\('event_id', eventIds\)/);
+  assert.match(bootstrap, /\.eq\('user_id', session\.id\)/);
+  assert.match(bootstrap, /contestations,/);
   assert.match(context, /contestations: Contestation\[]/);
   assert.match(context, /const \[contestations, setContestations\] = useState<Contestation\[]>\(\[]\)/);
   assert.match(context, /const dbContestations = payload\.contestations/);

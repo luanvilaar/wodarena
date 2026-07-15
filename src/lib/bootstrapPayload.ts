@@ -4,9 +4,39 @@ import { SupabaseClient } from '@supabase/supabase-js';
 type AthleteRow = Record<string, any>;
 
 export const PUBLIC_EVENT_SELECT = 'id, name, logo_url, banner_url, status, location, date, description, organizer_id, sponsors, format, ticket_price, ticket_slots, is_ticketing_active, time, city, state, rules, instagram, website, event_type, event_schedule, mp_public_key, marketplace_fee, registration_deadline';
-export const PUBLIC_SCORE_SELECT = '*';
-export const PUBLIC_DIVISION_SELECT = '*';
-export const PUBLIC_WORKOUT_SELECT = '*';
+export const PUBLIC_ATHLETE_SELECT = 'id, name, box, country, division_id, gender, is_team, city, state, instagram, team_members';
+export const PUBLIC_SCORE_SELECT = 'athlete_id, workout_id, result, value, rank, points, splits';
+export const PUBLIC_DIVISION_SELECT = 'id, event_id, name, category, type, slots_limit, price, is_active, use_age_groups, age_groups, course_layout, is_course_published';
+export const PUBLIC_WORKOUT_SELECT = 'id, event_id, name, description, type, time_cap, code, order_index, division_id, tie_breaker';
+export const PUBLIC_LEADERBOARD_ENTRY_SELECT = 'id, event_id, division_id, athlete_id, athlete_name, box_name, country, gender, is_team, payment_approved_at';
+
+type BootstrapQueryResult<T> = {
+  data: T | null;
+  error: { message?: string; code?: string } | null;
+};
+
+export const readBootstrapQuery = async <T>(
+  label: string,
+  query: PromiseLike<BootstrapQueryResult<T>>
+): Promise<T> => {
+  const startedAt = Date.now();
+  const result = await query;
+  const durationMs = Date.now() - startedAt;
+
+  if (result.error) {
+    console.error('[Bootstrap Query] Falha:', JSON.stringify({
+      label,
+      durationMs,
+      code: result.error.code,
+      message: result.error.message
+    }));
+    throw new Error(`Falha ao carregar ${label}.`);
+  }
+
+  const rowCount = Array.isArray(result.data) ? result.data.length : result.data ? 1 : 0;
+  console.info('[Bootstrap Query] Concluída:', JSON.stringify({ label, durationMs, rowCount }));
+  return result.data as T;
+};
 
 export const sanitizeNamePII = (name: unknown): string => {
   if (typeof name !== 'string') return '';
@@ -78,55 +108,99 @@ export const sanitizeLeaderboardEntry = (entry: Record<string, unknown>) => ({
 
 export const buildPublicBootstrapPayload = async (supabaseAdmin: SupabaseClient) => {
   const [
-    athletesResult,
-    scoresResult,
-    registrationsCountResult,
     eventsResult,
     divisionsResult,
     workoutsResult,
-    mpAccountsResult,
-    leaderboardEntriesResult
+    mpAccountsResult
   ] = await Promise.all([
-    supabaseAdmin
-      .from('athletes')
-      .select('id, name, box, country, division_id, gender, is_team, city, state, instagram, team_members'),
-    supabaseAdmin
-      .from('scores')
-      .select(PUBLIC_SCORE_SELECT),
-    supabaseAdmin
-      .from('registrations')
-      .select('id', { count: 'exact', head: true }),
-    supabaseAdmin
+    readBootstrapQuery('eventos públicos', supabaseAdmin
       .from('events')
-      .select(PUBLIC_EVENT_SELECT),
-    supabaseAdmin
+      .select(PUBLIC_EVENT_SELECT)),
+    readBootstrapQuery('divisões públicas', supabaseAdmin
       .from('divisions')
-      .select(PUBLIC_DIVISION_SELECT),
-    supabaseAdmin
+      .select(PUBLIC_DIVISION_SELECT)),
+    readBootstrapQuery('workouts públicos', supabaseAdmin
       .from('workouts')
-      .select(PUBLIC_WORKOUT_SELECT),
-    supabaseAdmin
+      .select(PUBLIC_WORKOUT_SELECT)),
+    readBootstrapQuery('contas públicas de pagamento', supabaseAdmin
       .from('mercadopago_accounts')
       .select('user_id, public_key')
-      .eq('status', 'connected'),
-    supabaseAdmin
-      .from('leaderboard_entries')
-      .select('id, event_id, division_id, athlete_id, athlete_name, box_name, country, gender, is_team, payment_approved_at')
+      .eq('status', 'connected'))
   ]);
 
   return {
     currentUser: null,
     users: [],
-    athletes: (athletesResult.data || []).map(sanitizePublicAthlete),
-    scores: scoresResult.data || [],
+    athletes: [],
+    scores: [],
     registrations: [],
-    registrationsCount: registrationsCountResult.count || 0,
+    registrationsCount: null,
     contestations: [],
     coupons: [],
-    events: eventsResult.data || [],
-    divisions: divisionsResult.data || [],
-    workouts: workoutsResult.data || [],
-    mercadopagoAccounts: mpAccountsResult.data || [],
-    leaderboardEntries: (leaderboardEntriesResult.data || []).map(sanitizeLeaderboardEntry)
+    events: eventsResult,
+    divisions: divisionsResult,
+    workouts: workoutsResult,
+    mercadopagoAccounts: mpAccountsResult,
+    leaderboardEntries: []
+  };
+};
+
+export const buildPublicEventBootstrapPayload = async (
+  supabaseAdmin: SupabaseClient,
+  eventId: string
+) => {
+  const [event, divisions, workouts] = await Promise.all([
+    readBootstrapQuery('evento público', supabaseAdmin
+      .from('events')
+      .select(PUBLIC_EVENT_SELECT)
+      .eq('id', eventId)
+      .maybeSingle()),
+    readBootstrapQuery('divisões do evento', supabaseAdmin
+      .from('divisions')
+      .select(PUBLIC_DIVISION_SELECT)
+      .eq('event_id', eventId)),
+    readBootstrapQuery('workouts do evento', supabaseAdmin
+      .from('workouts')
+      .select(PUBLIC_WORKOUT_SELECT)
+      .eq('event_id', eventId))
+  ]);
+
+  if (!event) return null;
+
+  const divisionIds = divisions.map((division) => division.id);
+  const workoutIds = workouts.map((workout) => workout.id);
+  const [athletes, scores, leaderboardEntries] = await Promise.all([
+    divisionIds.length > 0
+      ? readBootstrapQuery('atletas do evento', supabaseAdmin
+        .from('athletes')
+        .select(PUBLIC_ATHLETE_SELECT)
+        .in('division_id', divisionIds))
+      : Promise.resolve([]),
+    workoutIds.length > 0
+      ? readBootstrapQuery('scores do evento', supabaseAdmin
+        .from('scores')
+        .select(PUBLIC_SCORE_SELECT)
+        .in('workout_id', workoutIds))
+      : Promise.resolve([]),
+    readBootstrapQuery('leaderboard do evento', supabaseAdmin
+      .from('leaderboard_entries')
+      .select(PUBLIC_LEADERBOARD_ENTRY_SELECT)
+      .eq('event_id', eventId))
+  ]);
+
+  return {
+    currentUser: null,
+    users: [],
+    athletes: athletes.map(sanitizePublicAthlete),
+    scores,
+    registrations: [],
+    registrationsCount: null,
+    contestations: [],
+    coupons: [],
+    events: [event],
+    divisions,
+    workouts,
+    mercadopagoAccounts: [],
+    leaderboardEntries: leaderboardEntries.map(sanitizeLeaderboardEntry)
   };
 };
