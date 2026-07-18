@@ -150,6 +150,7 @@ export interface Event {
   mpPublicKey?: string;
   marketplace_fee?: number;
   registrationDeadline?: string;
+  isFeatured?: boolean;
 }
 
 export interface Registration {

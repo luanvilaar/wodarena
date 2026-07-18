@@ -69,6 +69,7 @@ interface AppContextType {
   logout: () => void;
   createManagerAccount: (name: string, email: string, password: string, organization: string, serviceValidUntil?: string) => Promise<boolean>;
   updateManagerServiceValidity: (userId: string, serviceValidUntil?: string | null) => Promise<User | null>;
+  setFeaturedHomeEvent: (eventId: string | null) => Promise<void>;
   addEvent: (event: Omit<Event, 'id' | 'organizerId' | 'sponsors' | 'format' | 'ticketPrice' | 'ticketSlots' | 'isTicketingActive'> & { format?: 'individual' | 'duo' | 'trio'; ticketPrice?: number; ticketSlots?: number; isTicketingActive?: boolean; eventType?: 'functional_fitness' | 'fitness_racing'; }) => Promise<Event>;
   addDivision: (eventId: string, division: Omit<Division, 'id'>) => Promise<{ division: Division; autoWorkout: Workout | null }>;
   updateDivision: (eventId: string, divisionId: string, updatedData: Partial<Division>) => Promise<void>;
@@ -625,6 +626,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               ticketPrice: evt.ticket_price !== undefined && evt.ticket_price !== null ? Number(evt.ticket_price) : 150.00,
               ticketSlots: evt.ticket_slots !== undefined && evt.ticket_slots !== null ? Number(evt.ticket_slots) : 100,
               isTicketingActive: evt.is_ticketing_active !== undefined && evt.is_ticketing_active !== null ? Boolean(evt.is_ticketing_active) : true,
+              isFeatured: evt.is_featured !== undefined && evt.is_featured !== null ? Boolean(evt.is_featured) : false,
               time: evt.time || '',
               city: evt.city || '',
               state: evt.state || '',
@@ -853,6 +855,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch (err) {
       console.error('Erro ao atualizar validade do gestor:', err);
       return null;
+    }
+  };
+
+  const setFeaturedHomeEvent = async (eventId: string | null) => {
+    if (currentUser?.role !== 'owner') {
+      throw new Error('Apenas o owner pode alterar o destaque da home.');
+    }
+
+    if (eventId && !events.some(event => event.id === eventId)) {
+      throw new Error('Evento nao encontrado para destaque.');
+    }
+
+    const previousEvents = events;
+    setEvents(prev => prev.map(event => ({ ...event, isFeatured: event.id === eventId })));
+
+    try {
+      await adminPersist('setFeaturedHomeEvent', { eventId });
+    } catch (error) {
+      setEvents(previousEvents);
+      console.error('Erro ao atualizar destaque da home:', error);
+      throw error;
     }
   };
 
@@ -2085,6 +2108,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         logout,
         createManagerAccount,
         updateManagerServiceValidity,
+        setFeaturedHomeEvent,
         addEvent,
         addDivision,
         updateDivision,

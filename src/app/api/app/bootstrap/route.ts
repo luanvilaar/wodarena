@@ -2,9 +2,11 @@ import { NextResponse } from 'next/server';
 import {
   PUBLIC_DIVISION_SELECT,
   PUBLIC_EVENT_SELECT,
+  PUBLIC_EVENT_SELECT_LEGACY,
   PUBLIC_LEADERBOARD_ENTRY_SELECT,
   PUBLIC_SCORE_SELECT,
   PUBLIC_WORKOUT_SELECT,
+  readEventsWithFeaturedFallback,
   readBootstrapQuery,
   sanitizeLeaderboardEntry
 } from '@/lib/bootstrapPayload';
@@ -59,13 +61,16 @@ export async function GET(request: Request) {
     const session = auth.user;
     const usersPromise = readUsers(supabaseAdmin, session);
     const eventsPromise = session.role === 'manager'
-      ? readBootstrapQuery('eventos do gestor', supabaseAdmin
-        .from('events')
-        .select(PUBLIC_EVENT_SELECT)
-        .eq('organizer_id', session.id))
-      : readBootstrapQuery('eventos autenticados', supabaseAdmin
-        .from('events')
-        .select(PUBLIC_EVENT_SELECT));
+      ? readEventsWithFeaturedFallback(
+        'eventos do gestor',
+        () => supabaseAdmin.from('events').select(PUBLIC_EVENT_SELECT).eq('organizer_id', session.id),
+        () => supabaseAdmin.from('events').select(PUBLIC_EVENT_SELECT_LEGACY).eq('organizer_id', session.id)
+      )
+      : readEventsWithFeaturedFallback(
+        'eventos autenticados',
+        () => supabaseAdmin.from('events').select(PUBLIC_EVENT_SELECT),
+        () => supabaseAdmin.from('events').select(PUBLIC_EVENT_SELECT_LEGACY)
+      );
 
     const [users, events] = await Promise.all([usersPromise, eventsPromise]);
     const eventIds = events.map(event => String(event.id));

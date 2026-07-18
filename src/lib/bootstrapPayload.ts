@@ -3,7 +3,8 @@ import { SupabaseClient } from '@supabase/supabase-js';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AthleteRow = Record<string, any>;
 
-export const PUBLIC_EVENT_SELECT = 'id, name, logo_url, banner_url, status, location, date, description, organizer_id, sponsors, format, ticket_price, ticket_slots, is_ticketing_active, time, city, state, rules, instagram, website, event_type, event_schedule, mp_public_key, marketplace_fee, registration_deadline';
+export const PUBLIC_EVENT_SELECT_LEGACY = 'id, name, logo_url, banner_url, status, location, date, description, organizer_id, sponsors, format, ticket_price, ticket_slots, is_ticketing_active, time, city, state, rules, instagram, website, event_type, event_schedule, mp_public_key, marketplace_fee, registration_deadline';
+export const PUBLIC_EVENT_SELECT = 'id, name, logo_url, banner_url, status, location, date, description, organizer_id, sponsors, format, ticket_price, ticket_slots, is_ticketing_active, is_featured, time, city, state, rules, instagram, website, event_type, event_schedule, mp_public_key, marketplace_fee, registration_deadline';
 export const PUBLIC_ATHLETE_SELECT = 'id, name, box, country, division_id, gender, is_team, city, state, instagram, team_members';
 export const PUBLIC_SCORE_SELECT = 'athlete_id, workout_id, result, value, rank, points, splits';
 export const PUBLIC_DIVISION_SELECT = 'id, event_id, name, category, type, slots_limit, price, is_active, use_age_groups, age_groups, course_layout, is_course_published';
@@ -13,6 +14,22 @@ export const PUBLIC_LEADERBOARD_ENTRY_SELECT = 'id, event_id, division_id, athle
 type BootstrapQueryResult<T> = {
   data: T | null;
   error: { message?: string; code?: string } | null;
+};
+
+const hasMissingFeaturedColumnError = (error: BootstrapQueryResult<unknown>['error']) => (
+  Boolean(error)
+  && (error?.code === '42703' || error?.code === 'PGRST204')
+  && String(error?.message || '').includes('is_featured')
+);
+
+const withDefaultFeaturedFlag = <T>(rows: T): T => {
+  if (Array.isArray(rows)) {
+    return rows.map((row) => ({ ...row, is_featured: false })) as T;
+  }
+  if (rows && typeof rows === 'object') {
+    return { ...rows, is_featured: false };
+  }
+  return rows;
 };
 
 export const readBootstrapQuery = async <T>(
@@ -36,6 +53,22 @@ export const readBootstrapQuery = async <T>(
   const rowCount = Array.isArray(result.data) ? result.data.length : result.data ? 1 : 0;
   console.info('[Bootstrap Query] Concluída:', JSON.stringify({ label, durationMs, rowCount }));
   return result.data as T;
+};
+
+export const readEventsWithFeaturedFallback = async <T>(
+  label: string,
+  primaryQuery: () => PromiseLike<BootstrapQueryResult<T>>,
+  legacyQuery: () => PromiseLike<BootstrapQueryResult<T>>
+): Promise<T> => {
+  const result = await primaryQuery();
+
+  if (hasMissingFeaturedColumnError(result.error)) {
+    console.warn('[Bootstrap Query] Campo is_featured ausente, usando fallback legado:', JSON.stringify({ label }));
+    const legacyRows = await readBootstrapQuery(label, legacyQuery());
+    return withDefaultFeaturedFlag(legacyRows);
+  }
+
+  return readBootstrapQuery(label, Promise.resolve(result));
 };
 
 export const sanitizeNamePII = (name: unknown): string => {
@@ -113,9 +146,11 @@ export const buildPublicBootstrapPayload = async (supabaseAdmin: SupabaseClient)
     workoutsResult,
     mpAccountsResult
   ] = await Promise.all([
-    readBootstrapQuery('eventos públicos', supabaseAdmin
-      .from('events')
-      .select(PUBLIC_EVENT_SELECT)),
+    readEventsWithFeaturedFallback(
+      'eventos públicos',
+      () => supabaseAdmin.from('events').select(PUBLIC_EVENT_SELECT),
+      () => supabaseAdmin.from('events').select(PUBLIC_EVENT_SELECT_LEGACY)
+    ),
     readBootstrapQuery('divisões públicas', supabaseAdmin
       .from('divisions')
       .select(PUBLIC_DIVISION_SELECT)),
@@ -150,11 +185,11 @@ export const buildPublicEventBootstrapPayload = async (
   eventId: string
 ) => {
   const [event, divisions, workouts] = await Promise.all([
-    readBootstrapQuery('evento público', supabaseAdmin
-      .from('events')
-      .select(PUBLIC_EVENT_SELECT)
-      .eq('id', eventId)
-      .maybeSingle()),
+    readEventsWithFeaturedFallback(
+      'evento público',
+      () => supabaseAdmin.from('events').select(PUBLIC_EVENT_SELECT).eq('id', eventId).maybeSingle(),
+      () => supabaseAdmin.from('events').select(PUBLIC_EVENT_SELECT_LEGACY).eq('id', eventId).maybeSingle()
+    ),
     readBootstrapQuery('divisões do evento', supabaseAdmin
       .from('divisions')
       .select(PUBLIC_DIVISION_SELECT)

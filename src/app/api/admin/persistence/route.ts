@@ -60,6 +60,7 @@ export async function POST(request: Request) {
           return NextResponse.json({ error: 'Acesso negado para criar evento em outro gestor.' }, { status: 403 });
         }
 
+        delete event.is_featured;
         const { error: eventError } = await supabaseAdmin.from('events').insert(event);
         if (eventError) throw eventError;
 
@@ -91,7 +92,22 @@ export async function POST(request: Request) {
 
       case 'updateEvent': {
         await ensureEventOwner(supabaseAdmin, actor, payload.eventId);
+        if (payload.data && typeof payload.data === 'object' && 'is_featured' in payload.data) {
+          return NextResponse.json({ error: 'Use a acao setFeaturedHomeEvent para alterar o destaque da home.' }, { status: 400 });
+        }
+
         const { error } = await supabaseAdmin.from('events').update(payload.data).eq('id', payload.eventId);
+        if (error) throw error;
+        return NextResponse.json({ success: true });
+      }
+
+      case 'setFeaturedHomeEvent': {
+        if (actor.role !== 'owner') {
+          return NextResponse.json({ error: 'Apenas o owner pode alterar o destaque da home.' }, { status: 403 });
+        }
+
+        const eventId = typeof payload.eventId === 'string' && payload.eventId.length > 0 ? payload.eventId : null;
+        const { error } = await supabaseAdmin.rpc('admin_set_featured_home_event', { p_event_id: eventId });
         if (error) throw error;
         return NextResponse.json({ success: true });
       }

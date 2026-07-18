@@ -5,12 +5,13 @@ import Image from 'next/image';
 import { useApp } from '@/context/AppContext';
 import { Leaderboard } from '@/components/Leaderboard';
 import { BrandLogo } from '@/components/BrandLogo';
+import { getEventStatus } from '@/lib/eventStatus';
 import { getManagerAccessStatus, getManagerAccessStatusLabel } from '@/lib/managerAccess';
 import { CommercialLead } from '@/types';
 import { getCommercialLeadEmailStatusLabel, getCommercialLeadStatusLabel } from '@/lib/commercialLeads';
 import {
   Shield, LayoutDashboard, Users, Trophy, DollarSign,
-  UserPlus, Calendar, Medal, LogOut, KeyRound, Building, ShieldCheck, ShieldAlert, Clock3
+  UserPlus, Calendar, Medal, LogOut, KeyRound, Building, ShieldCheck, ShieldAlert, Clock3, Star
 } from 'lucide-react';
 
 const formatDateTime = (value?: string) => {
@@ -28,7 +29,7 @@ const formatDateTime = (value?: string) => {
 
 export default function OwnerPage() {
   const {
-    events, registrations, users, currentUser, login, logout, createManagerAccount, updateManagerServiceValidity
+    events, registrations, users, currentUser, login, logout, createManagerAccount, updateManagerServiceValidity, setFeaturedHomeEvent
   } = useApp();
 
   // Estados locais
@@ -52,6 +53,9 @@ export default function OwnerPage() {
   const [commercialLeads, setCommercialLeads] = useState<CommercialLead[]>([]);
   const [leadsLoading, setLeadsLoading] = useState(false);
   const [leadsError, setLeadsError] = useState('');
+  const [featuredHomeDraftId, setFeaturedHomeDraftId] = useState<string | null>(null);
+  const [featuredHomeNotice, setFeaturedHomeNotice] = useState({ text: '', isError: false });
+  const [savingFeaturedHomeEvent, setSavingFeaturedHomeEvent] = useState(false);
 
   // 1. Validar se o usuário atual é o proprietário (role: 'owner')
   const isOwner = currentUser?.role === 'owner';
@@ -163,6 +167,24 @@ export default function OwnerPage() {
     });
   }, [events, registrations, users]);
 
+  const featuredHomeEvent = useMemo(() => (
+    events.find(event => event.isFeatured)
+  ), [events]);
+
+  const featuredHomeCandidates = useMemo(() => (
+    events.filter(event => (
+      (event.status === 'live' || event.status === 'upcoming')
+      && getEventStatus(event) !== 'finished'
+    ))
+  ), [events]);
+
+  const selectableFeaturedHomeEventId = useMemo(() => {
+    const currentFeaturedId = featuredHomeEvent?.id || '';
+    return featuredHomeCandidates.some(event => event.id === currentFeaturedId) ? currentFeaturedId : '';
+  }, [featuredHomeEvent?.id, featuredHomeCandidates]);
+
+  const selectedFeaturedHomeDraftId = featuredHomeDraftId ?? selectableFeaturedHomeEventId;
+
   // Seletor de Evento para Leaderboard
   const [selectedEventIdLead, setSelectedEventIdLead] = useState(events[0]?.id || '');
   const selectedEventForLead = useMemo(() => {
@@ -272,6 +294,28 @@ export default function OwnerPage() {
     setManagerValidityDrafts(prev => ({ ...prev, [managerId]: updatedUser.serviceValidUntil || '' }));
     setManagerNotice({ text: `Prazo de uso atualizado para ${updatedUser.name}.`, isError: false });
     setTimeout(() => setManagerNotice({ text: '', isError: false }), 4000);
+  };
+
+  const handleSaveFeaturedHomeEvent = async () => {
+    setSavingFeaturedHomeEvent(true);
+    setFeaturedHomeNotice({ text: '', isError: false });
+
+    try {
+      await setFeaturedHomeEvent(selectedFeaturedHomeDraftId || null);
+      const eventName = featuredHomeCandidates.find(event => event.id === selectedFeaturedHomeDraftId)?.name;
+      setFeaturedHomeNotice({
+        text: eventName ? `Banner da home atualizado para ${eventName}.` : 'Banner da home voltou para selecao automatica.',
+        isError: false
+      });
+    } catch (err) {
+      setFeaturedHomeNotice({
+        text: err instanceof Error ? err.message : 'Nao foi possivel atualizar o destaque da home.',
+        isError: true
+      });
+    } finally {
+      setSavingFeaturedHomeEvent(false);
+      setTimeout(() => setFeaturedHomeNotice({ text: '', isError: false }), 5000);
+    }
   };
 
   const getManagerStatusClasses = (status: string) => {
@@ -868,6 +912,56 @@ export default function OwnerPage() {
                 <h3 className="text-lg font-bold text-white uppercase tracking-wider border-b border-card-border pb-3">
                   Eventos Ativos na Plataforma
                 </h3>
+
+                <div className="border-b border-card-border pb-5">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                    <div className="space-y-2">
+                      <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-primary">
+                        <Star className="h-4 w-4" aria-hidden="true" />
+                        Banner da home
+                      </div>
+                      <p className="max-w-2xl text-xs leading-5 text-muted">
+                        Selecione qual evento ativo sera priorizado no banner principal. Eventos encerrados ficam fora da lista de candidatos.
+                      </p>
+                      <p className="text-[11px] text-muted-soft">
+                        Atual: <span className="font-bold text-white">{featuredHomeEvent?.name || 'Selecao automatica'}</span>
+                      </p>
+                    </div>
+
+                    <div className="flex w-full flex-col gap-2 sm:flex-row lg:max-w-xl">
+                      <label htmlFor="owner-featured-home-event" className="sr-only">Evento em destaque na home</label>
+                      <select
+                        id="owner-featured-home-event"
+                        name="owner-featured-home-event"
+                        value={selectedFeaturedHomeDraftId}
+                        onChange={(e) => setFeaturedHomeDraftId(e.target.value)}
+                        className="min-h-11 flex-1 rounded-md border border-card-border bg-dark-gray px-3 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"
+                      >
+                        <option value="">Selecao automatica</option>
+                        {featuredHomeCandidates.map(event => (
+                          <option key={event.id} value={event.id}>
+                            {event.name}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={handleSaveFeaturedHomeEvent}
+                        disabled={savingFeaturedHomeEvent || selectedFeaturedHomeDraftId === (featuredHomeEvent?.id || '')}
+                        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-primary px-5 py-2 text-xs font-bold uppercase tracking-wider text-ink transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:bg-primary-disabled disabled:text-muted"
+                      >
+                        <Star className="h-4 w-4" aria-hidden="true" />
+                        {savingFeaturedHomeEvent ? 'Salvando' : 'Salvar destaque'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {featuredHomeNotice.text && (
+                    <p role={featuredHomeNotice.isError ? 'alert' : 'status'} aria-live="polite" className={`mt-3 text-xs font-bold uppercase ${featuredHomeNotice.isError ? 'text-red-400' : 'text-primary'}`}>
+                      {featuredHomeNotice.text}
+                    </p>
+                  )}
+                </div>
 
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse min-w-[600px]">

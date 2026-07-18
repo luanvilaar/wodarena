@@ -19,10 +19,11 @@ export function FeaturedEventBanner({ openLeadModal }: { openLeadModal: () => vo
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
   const [countdown, setCountdown] = useState<CountdownState>({ days: 0, hours: 0, minutes: 0, seconds: 0 });
 
-  const featuredEvent = events.find((event) => (
+  const eligibleEvents = events.filter((event) => (
     (event.status === 'live' || event.status === 'upcoming')
     && getEventStatus(event) !== 'finished'
   ));
+  const featuredEvent = eligibleEvents.find((event) => event.isFeatured) ?? eligibleEvents[0];
 
   useEffect(() => {
     if (!featuredEvent) return;

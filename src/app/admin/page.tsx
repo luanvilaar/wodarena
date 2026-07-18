@@ -8240,7 +8240,7 @@ export default function AdminPage() {
                               {evt.logoUrl && (
                                 <Image src={evt.logoUrl} alt={`${evt.name} logo`} width={48} height={48} unoptimized className="w-12 h-12 rounded-lg object-cover border border-card-border bg-background p-0.5" />
                               )}
-                              <div>
+                              <div className="min-w-0">
                                 <h4 className="text-sm font-bold text-white uppercase tracking-wider line-clamp-1">{evt.name}</h4>
                                 <p className="text-[10px] text-muted line-clamp-1">{evt.location} &middot; {evt.date}</p>
                               </div>
