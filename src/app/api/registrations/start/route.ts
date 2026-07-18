@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { applyCouponUsageForApprovedRegistration, calculateSecureRegistrationSnapshot } from '@/lib/serverCheckout';
+import { applyCouponUsageForApprovedRegistration, calculateSecureRegistrationSnapshot, RegistrationAccessError } from '@/lib/serverCheckout';
 import { ManagerAccessError, managerAccessErrorResponse } from '@/lib/serverManagerAccess';
 import { createRegistrationAccessToken, createSupabaseAdmin, hashPassword, verifyPassword } from '@/lib/serverSecurity';
 
@@ -292,6 +292,9 @@ export async function POST(request: Request) {
   } catch (err) {
     if (err instanceof ManagerAccessError) {
       return managerAccessErrorResponse(err);
+    }
+    if (err instanceof RegistrationAccessError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
     }
     console.error('[Registration Start] Erro crítico:', err);
     return NextResponse.json({ error: 'Erro crítico ao iniciar inscrição.' }, { status: 500 });

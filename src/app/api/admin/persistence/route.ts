@@ -234,7 +234,6 @@ export async function POST(request: Request) {
 
         // Categoria de destino (relocação). Mantém a atual se não for informada.
         const targetDivisionId = asTrimmed(data.divisionId, registration.division_id);
-        let targetDivision: { id: string; name: string; event_id: string } | null = null;
         if (targetDivisionId) {
           const { data: division, error: divisionError } = await supabaseAdmin
             .from('divisions')
@@ -245,7 +244,6 @@ export async function POST(request: Request) {
           if (divisionError || !division) {
             return NextResponse.json({ error: 'Categoria de destino não encontrada para este evento.' }, { status: 400 });
           }
-          targetDivision = division;
         }
 
         const nextAthleteName = asTrimmed(data.athleteName, registration.athlete_name);
@@ -260,106 +258,6 @@ export async function POST(request: Request) {
         const nextIsTeam = typeof data.isTeam === 'boolean' ? data.isTeam : undefined;
         const nextMembers = data.teamMembers !== undefined ? normalizeMembers(data.teamMembers) : undefined;
 
-        // Atualiza a inscrição. O valor pago (total_paid) é preservado: relocação
-        // de categoria é correção de cadastro, não recobrança.
-        const registrationUpdate: Record<string, unknown> = {
-          athlete_name: nextAthleteName,
-          box: nextBox,
-          athlete_email: nextEmail,
-          athlete_phone: nextPhone,
-          gender: nextGender,
-          division_id: targetDivisionId,
-          ticket_type: targetDivision ? targetDivision.name : registration.ticket_type,
-          updated_at: new Date().toISOString()
-        };
-
-        const { data: updatedRegistration, error: updateRegError } = await supabaseAdmin
-          .from('registrations')
-          .update(registrationUpdate)
-          .eq('id', registrationId)
-          .eq('event_id', eventId)
-          .select('*')
-          .single();
-
-        if (updateRegError || !updatedRegistration) {
-          console.error('[Admin Persistence API] Erro ao atualizar inscrição:', updateRegError);
-          return NextResponse.json({ error: 'Erro ao atualizar a inscrição.' }, { status: 500 });
-        }
-
-        // Resolve o atleta vinculado (por id quando disponível; senão pelo nome +
-        // categoria anteriores) e o mantém em sincronia com a inscrição.
-        let athleteRow: Record<string, unknown> | null = null;
-        if (registration.athlete_id) {
-          const { data } = await supabaseAdmin
-            .from('athletes')
-            .select('*')
-            .eq('id', registration.athlete_id)
-            .maybeSingle();
-          athleteRow = data;
-        }
-        if (!athleteRow) {
-          const { data } = await supabaseAdmin
-            .from('athletes')
-            .select('*')
-            .eq('division_id', registration.division_id)
-            .ilike('name', registration.athlete_name)
-            .maybeSingle();
-          athleteRow = data;
-        }
-
-        const athleteUpdate: Record<string, unknown> = {
-          name: nextAthleteName,
-          box: nextBox,
-          division_id: targetDivisionId,
-          instagram: nextInstagram || null,
-          shirt_size: nextShirtSize || null,
-          email: nextEmail || null,
-          phone: nextPhone || null,
-          gender: nextGender || null
-        };
-        if (nextIsTeam !== undefined) athleteUpdate.is_team = nextIsTeam;
-        if (nextMembers !== undefined) athleteUpdate.team_members = JSON.stringify(nextMembers);
-
-        let updatedAthlete: Record<string, unknown> | null = null;
-        if (athleteRow) {
-          const { data, error: athleteUpdateError } = await supabaseAdmin
-            .from('athletes')
-            .update(athleteUpdate)
-            .eq('id', athleteRow.id as string)
-            .select('*')
-            .single();
-          if (athleteUpdateError) {
-            console.error('[Admin Persistence API] Erro ao atualizar atleta vinculado:', athleteUpdateError);
-            return NextResponse.json({ error: 'Erro ao atualizar os dados do atleta.' }, { status: 500 });
-          }
-          updatedAthlete = data;
-        } else {
-          const newAthleteId = registration.athlete_id || `ath-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-          const { data, error: athleteInsertError } = await supabaseAdmin
-            .from('athletes')
-            .insert({
-              id: newAthleteId,
-              country: 'BR',
-              ...athleteUpdate,
-              is_team: nextIsTeam ?? false,
-              team_members: nextMembers !== undefined ? JSON.stringify(nextMembers) : '[]'
-            })
-            .select('*')
-            .single();
-          if (athleteInsertError) {
-            console.error('[Admin Persistence API] Erro ao criar atleta vinculado:', athleteInsertError);
-            return NextResponse.json({ error: 'Erro ao registrar os dados do atleta.' }, { status: 500 });
-          }
-          updatedAthlete = data;
-          if (!registration.athlete_id) {
-            await supabaseAdmin
-              .from('registrations')
-              .update({ athlete_id: newAthleteId })
-              .eq('id', registrationId);
-            updatedRegistration.athlete_id = newAthleteId;
-          }
-        }
-
         const parseMembers = (value: unknown) => {
           if (Array.isArray(value)) return value;
           if (typeof value === 'string') {
@@ -372,6 +270,51 @@ export async function POST(request: Request) {
           }
           return [];
         };
+
+        // O valor pago (total_paid) e preservado: relocacao de categoria e
+        // correcao de cadastro, nao recobranca. A RPC executa inscricao,
+        // atleta vinculado e leaderboard na mesma transacao do banco.
+        const { data: rpcResult, error: updateError } = await supabaseAdmin
+          .rpc('admin_update_registration_details', {
+            p_registration_id: registrationId,
+            p_event_id: eventId,
+            p_division_id: targetDivisionId,
+            p_athlete_name: nextAthleteName,
+            p_box: nextBox,
+            p_athlete_email: nextEmail,
+            p_athlete_phone: nextPhone,
+            p_gender: nextGender,
+            p_instagram: nextInstagram,
+            p_shirt_size: nextShirtSize,
+            p_is_team: nextIsTeam ?? null,
+            p_team_members: nextMembers ?? null
+          });
+
+        if (updateError || !rpcResult) {
+          console.error('[Admin Persistence API] Erro ao atualizar inscrição via RPC:', updateError);
+          const message = updateError?.message || '';
+          if (message.includes('registration_not_found')) {
+            return NextResponse.json({ error: 'Inscrição não encontrada para este evento.' }, { status: 404 });
+          }
+          if (message.includes('target_division_not_found')) {
+            return NextResponse.json({ error: 'Categoria de destino não encontrada para este evento.' }, { status: 400 });
+          }
+          return NextResponse.json({ error: 'Erro ao atualizar a inscrição.' }, { status: 500 });
+        }
+
+        const normalizedResult = rpcResult as {
+          registration?: Record<string, unknown>;
+          athlete?: Record<string, unknown> | null;
+          leaderboardEntry?: Record<string, unknown> | null;
+        };
+        const updatedRegistration = normalizedResult.registration;
+        const updatedAthlete = normalizedResult.athlete;
+        const leaderboardEntry = normalizedResult.leaderboardEntry || null;
+
+        if (!updatedRegistration) {
+          console.error('[Admin Persistence API] RPC retornou inscrição vazia:', rpcResult);
+          return NextResponse.json({ error: 'Erro ao atualizar a inscrição.' }, { status: 500 });
+        }
 
         return NextResponse.json({
           success: true,
@@ -416,7 +359,8 @@ export async function POST(request: Request) {
             phone: updatedAthlete.phone || undefined,
             isTeam: Boolean(updatedAthlete.is_team),
             teamMembers: parseMembers(updatedAthlete.team_members)
-          } : null
+          } : null,
+          leaderboardEntry
         });
       }
 

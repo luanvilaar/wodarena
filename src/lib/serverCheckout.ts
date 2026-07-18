@@ -2,6 +2,7 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { assertManagerSalesAccessForEvent } from '@/lib/serverManagerAccess';
 import { getRequestSession, verifyRegistrationAccessToken } from '@/lib/serverSecurity';
 import { sendRegistrationEmail } from '@/lib/resend';
+import { getEventStatus } from '@/lib/eventStatus';
 import { Registration, Athlete, Event } from '@/types';
 
 type RegistrationInput = Record<string, unknown>;
@@ -137,7 +138,7 @@ export const validateCheckoutCoupon = async (
 
   const { data: event, error: eventError } = await supabaseAdmin
     .from('events')
-    .select('id, ticket_price, is_ticketing_active')
+    .select('id, status, date, registration_deadline, ticket_price, is_ticketing_active')
     .eq('id', eventId)
     .maybeSingle();
 
@@ -147,6 +148,14 @@ export const validateCheckoutCoupon = async (
 
   if (event.is_ticketing_active === false) {
     throw new Error('As inscricoes online deste evento estao encerradas.');
+  }
+
+  if (getEventStatus({
+    status: event.status,
+    date: event.date,
+    registrationDeadline: event.registration_deadline || undefined,
+  }) === 'finished') {
+    throw new RegistrationAccessError('Este evento esta encerrado e nao aceita novas inscricoes.', 409);
   }
 
   await assertManagerSalesAccessForEvent(supabaseAdmin, eventId);
@@ -241,7 +250,7 @@ export const calculateSecureRegistrationSnapshot = async (
 
   const { data: event, error: eventError } = await supabaseAdmin
     .from('events')
-    .select('id, name, ticket_price, ticket_slots, is_ticketing_active')
+    .select('id, name, status, date, registration_deadline, ticket_price, ticket_slots, is_ticketing_active')
     .eq('id', eventId)
     .maybeSingle();
 
@@ -251,6 +260,14 @@ export const calculateSecureRegistrationSnapshot = async (
 
   if (event.is_ticketing_active === false) {
     throw new Error('As inscricoes online deste evento estao encerradas.');
+  }
+
+  if (getEventStatus({
+    status: event.status,
+    date: event.date,
+    registrationDeadline: event.registration_deadline || undefined,
+  }) === 'finished') {
+    throw new RegistrationAccessError('Este evento esta encerrado e nao aceita novas inscricoes.', 409);
   }
 
   await assertManagerSalesAccessForEvent(supabaseAdmin, eventId);

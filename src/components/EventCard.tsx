@@ -49,6 +49,15 @@ export function EventCard({ event, priority = false }: EventCardProps) {
     const base =
       'inline-flex items-center gap-1.5 rounded-[2px] border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider font-mono';
 
+    if (lifecycle === 'finished') {
+      return (
+        <span className={`${base} border-card-border bg-dark-gray/30 text-muted`}>
+          <Lock className="h-3 w-3" />
+          Evento Encerrado
+        </span>
+      );
+    }
+
     if (event.status === 'live') {
       return (
         <span className={`${base} border-primary/30 bg-primary/10 text-primary`}>
@@ -59,14 +68,6 @@ export function EventCard({ event, priority = false }: EventCardProps) {
     }
 
     if (event.status === 'upcoming') {
-      if (lifecycle === 'finished') {
-        return (
-          <span className={`${base} border-card-border bg-dark-gray/30 text-muted`}>
-            <Lock className="h-3 w-3" />
-            Inscrições Encerradas
-          </span>
-        );
-      }
       if (lifecycle === 'closing') {
         return (
           <span className={`${base} border-amber-500/40 bg-amber-600/10 text-amber-300`}>
@@ -120,6 +121,11 @@ export function EventCard({ event, priority = false }: EventCardProps) {
       <p className="flex items-center gap-1.5 text-xs font-medium text-gray-400">
         <Lock className="h-3.5 w-3.5 shrink-0" />
         Inscrições encerradas em {formatDeadlineDate(event.registrationDeadline)}
+      </p>
+    ) : lifecycle === 'finished' ? (
+      <p className="flex items-center gap-1.5 text-xs font-medium text-gray-400">
+        <Lock className="h-3.5 w-3.5 shrink-0" />
+        Este evento não está mais disponível para inscrição.
       </p>
     ) : null;
 

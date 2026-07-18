@@ -8,10 +8,11 @@ import { RegistrationVoucher } from '@/components/RegistrationVoucher';
 import { 
   Calendar, MapPin, Trophy, Share2, Ticket, Clock, 
   Dumbbell, AlignLeft, ShieldCheck, ChevronRight, UserCheck, Medal,
-  Sparkles, Footprints
+  Sparkles, Footprints, Lock
 } from 'lucide-react';
 import Link from 'next/link';
 import { Registration, Athlete } from '@/types';
+import { getEventStatus } from '@/lib/eventStatus';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -208,6 +209,11 @@ export default function EventPage({ params }: PageProps) {
     );
   }
 
+  const lifecycle = getEventStatus(event);
+  const registrationsAvailable = event.status === 'upcoming'
+    && lifecycle !== 'finished'
+    && event.isTicketingActive;
+
   // Copiar link para compartilhar
   const handleShare = () => {
     if (typeof window !== 'undefined') {
@@ -234,8 +240,17 @@ export default function EventPage({ params }: PageProps) {
     window.history.replaceState(null, '', `${window.location.pathname}?tab=${tabId}`);
   };
 
-  const getStatusLabel = (status: typeof event.status) => {
-    switch (status) {
+  const getStatusLabel = () => {
+    if (lifecycle === 'finished') {
+      return (
+        <span className="inline-flex items-center gap-1.5 rounded-[2px] border border-card-border bg-dark-gray/30 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted font-mono">
+          <Lock className="h-3 w-3" />
+          Evento Encerrado
+        </span>
+      );
+    }
+
+    switch (event.status) {
       case 'live':
         return (
           <span className="inline-flex items-center gap-1.5 rounded-[2px] border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary font-mono">
@@ -305,7 +320,7 @@ export default function EventPage({ params }: PageProps) {
               
               <div className="space-y-2">
                 <div className="flex items-center justify-center sm:justify-start gap-2">
-                  {getStatusLabel(event.status)}
+                  {getStatusLabel()}
                 </div>
                 <h1 className="text-balance text-3xl font-extrabold uppercase tracking-tight text-white sm:text-5xl">
                   {event.name}
@@ -342,16 +357,18 @@ export default function EventPage({ params }: PageProps) {
 
               {event.status === 'upcoming' && (
                 <button 
-                  disabled={!event.isTicketingActive}
-                  onClick={() => setIsRegisterOpen(true)}
+                  disabled={!registrationsAvailable}
+                  onClick={() => {
+                    if (registrationsAvailable) setIsRegisterOpen(true);
+                  }}
                   className={`flex flex-1 sm:flex-initial min-h-11 items-center justify-center gap-1.5 rounded-md px-6 py-3 text-xs font-bold uppercase transition-colors ${
-                    event.isTicketingActive
+                    registrationsAvailable
                       ? 'bg-primary text-ink hover:bg-primary-hover active:scale-95'
                       : 'bg-muted/10 text-muted border border-card-border cursor-not-allowed'
                   }`}
                 >
                   <Ticket className="h-4 w-4" />
-                  <span>{event.isTicketingActive ? 'Comprar Ingresso' : 'Inscrições Encerradas'}</span>
+                  <span>{registrationsAvailable ? 'Comprar Ingresso' : 'Inscrições Encerradas'}</span>
                 </button>
               )}
             </div>
@@ -468,7 +485,7 @@ export default function EventPage({ params }: PageProps) {
                           Ideal para atletas que buscam competir dentro das cargas oficiais e movimentos propostos na categoria {div.name}.
                         </p>
                       </div>
-                      {event.status === 'upcoming' && (
+                      {registrationsAvailable && (
                         <button
                           onClick={() => setIsRegisterOpen(true)}
                           className="mt-4 flex items-center justify-between text-xs font-extrabold uppercase text-primary hover:text-white transition-colors"
@@ -813,7 +830,7 @@ export default function EventPage({ params }: PageProps) {
           <div className="space-y-6">
             
             {/* Card de Inscrição na Lateral */}
-            {event.status === 'upcoming' && (
+            {registrationsAvailable && (
               <div className="space-y-4 rounded-xl border border-card-border bg-card p-6 transition-colors hover:border-primary">
                 <h4 className="text-sm font-bold text-white uppercase tracking-wider">Inscrições Disponíveis</h4>
                 <p className="text-xs text-muted font-normal leading-relaxed">

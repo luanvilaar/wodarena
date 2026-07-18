@@ -1371,9 +1371,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     eventId: string,
     data: RegistrationEditInput
   ) => {
+    const previousRegistration = registrations.find(r => r.id === registrationId && r.eventId === eventId);
     const result = await adminPersist('updateRegistration', { registrationId, eventId, data });
     const updatedReg = result.registration as Registration | undefined;
     const updatedAthlete = result.athlete as Athlete | null | undefined;
+    const updatedLeaderboardEntry = result.leaderboardEntry as LeaderboardEntry | null | undefined;
 
     if (updatedReg) {
       setRegistrations(prev => prev.map(r => (r.id === registrationId ? { ...r, ...updatedReg } : r)));
@@ -1385,6 +1387,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return exists
           ? prev.map(a => (a.id === updatedAthlete.id ? updatedAthlete : a))
           : [...prev, updatedAthlete];
+      });
+    }
+
+    const affectedAthleteIds = new Set(
+      [previousRegistration?.athleteId, updatedReg?.athleteId, updatedAthlete?.id, updatedLeaderboardEntry?.athlete_id]
+        .filter(Boolean)
+        .map(String)
+    );
+    const affectedDivisionIds = new Set(
+      [previousRegistration?.divisionId, updatedReg?.divisionId, updatedLeaderboardEntry?.division_id]
+        .filter(Boolean)
+        .map(String)
+    );
+
+    if (affectedAthleteIds.size > 0 && affectedDivisionIds.size > 0) {
+      setLeaderboardEntries(prev => {
+        const withoutRelocatedEntry = prev.filter(entry => {
+          const sameEvent = String(entry.event_id) === eventId;
+          const sameAthlete = affectedAthleteIds.has(String(entry.athlete_id));
+          const sameDivision = affectedDivisionIds.has(String(entry.division_id));
+          return !(sameEvent && sameAthlete && sameDivision);
+        });
+
+        return updatedLeaderboardEntry
+          ? [...withoutRelocatedEntry, updatedLeaderboardEntry]
+          : withoutRelocatedEntry;
       });
     }
   };

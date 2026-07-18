@@ -14,6 +14,7 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import { EventStatus } from '@/types';
+import { getEventStatus } from '@/lib/eventStatus';
 
 type LeadFormState = {
   managerName: string;
@@ -52,7 +53,11 @@ export default function Home() {
   const filteredEvents = events.filter((event) => {
     const matchesSearch = event.name.toLowerCase().includes(searchQuery.toLowerCase())
       || event.location.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || event.status === statusFilter;
+    const lifecycle = getEventStatus(event);
+    const matchesStatus = statusFilter === 'all'
+      || (statusFilter === 'finished' && lifecycle === 'finished')
+      || (statusFilter === 'upcoming' && event.status === 'upcoming' && lifecycle !== 'finished')
+      || (statusFilter === 'live' && event.status === 'live' && lifecycle !== 'finished');
     return matchesSearch && matchesStatus;
   });
 

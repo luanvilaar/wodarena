@@ -5,6 +5,7 @@ import { useApp } from '@/context/AppContext';
 import { RegisterModal } from '@/components/RegisterModal';
 import { MapPin, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
+import { getEventStatus, parseEventDate } from '@/lib/eventStatus';
 
 type CountdownState = {
   days: number;
@@ -13,93 +14,22 @@ type CountdownState = {
   seconds: number;
 };
 
-function parseEventDate(dateText: string): Date {
-  if (!dateText) return new Date();
-
-  // 1. Tenta parse padrão
-  const parsed = new Date(dateText);
-  if (!isNaN(parsed.getTime())) {
-    return parsed;
-  }
-
-  // 2. Limpar a string e converter para maiúsculas
-  const cleanText = dateText.trim().toUpperCase();
-
-  // 3. Verificar formato DD/MM/YYYY ou DD/MM/YY
-  const slashRegex = /(\d{1,2})\/(\d{1,2})\/(\d{2,4})/;
-  const slashMatch = cleanText.match(slashRegex);
-  if (slashMatch) {
-    const day = parseInt(slashMatch[1], 10);
-    const month = parseInt(slashMatch[2], 10) - 1; // 0-indexed no Date do JS
-    let year = parseInt(slashMatch[3], 10);
-    if (year < 100) {
-      year += 2000;
-    }
-    return new Date(year, month, day, 8, 0, 0);
-  }
-
-  // 4. Mapeamento de meses em português e inglês
-  const monthsMap: Record<string, number> = {
-    'JANEIRO': 0, 'JAN': 0, 'FEVEREIRO': 1, 'FEV': 1, 'FEB': 1,
-    'MARÇO': 2, 'MARCO': 2, 'MAR': 2, 'ABRIL': 3, 'ABR': 3, 'APR': 3,
-    'MAIO': 4, 'MAI': 4, 'MAY': 4, 'JUNHO': 5, 'JUN': 5,
-    'JULHO': 6, 'JUL': 6, 'AGOSTO': 7, 'AGO': 7, 'AUG': 7,
-    'SETEMBRO': 8, 'SET': 8, 'SEP': 8, 'OUTUBRO': 9, 'OUT': 9, 'OCT': 9,
-    'NOVEMBRO': 10, 'NOV': 10, 'DEZEMBRO': 11, 'DEZ': 11, 'DEC': 11
-  };
-
-  // 5. Tenta extrair mês, ano e primeiro dia numérico
-  let detectedMonth: number | null = null;
-  let monthKeyLength = 0;
-  let monthIndexInString = -1;
-
-  for (const [key, val] of Object.entries(monthsMap)) {
-    const idx = cleanText.indexOf(key);
-    if (idx !== -1 && key.length > monthKeyLength) {
-      detectedMonth = val;
-      monthKeyLength = key.length;
-      monthIndexInString = idx;
-    }
-  }
-
-  if (detectedMonth !== null) {
-    let year = new Date().getFullYear();
-    const yearMatch = cleanText.match(/\b(20\d{2})\b/);
-    if (yearMatch) {
-      year = parseInt(yearMatch[1], 10);
-    }
-
-    const textBeforeMonth = cleanText.substring(0, monthIndexInString);
-    const dayMatch = textBeforeMonth.match(/\b(\d{1,2})\b/);
-    let day = 1;
-    if (dayMatch) {
-      day = parseInt(dayMatch[1], 10);
-    } else {
-      const generalDayMatch = cleanText.match(/\b(\d{1,2})\b/);
-      if (generalDayMatch) {
-        day = parseInt(generalDayMatch[1], 10);
-      }
-    }
-
-    return new Date(year, detectedMonth, day, 8, 0, 0);
-  }
-
-  return parsed;
-}
-
 export function FeaturedEventBanner({ openLeadModal }: { openLeadModal: () => void }) {
   const { events } = useApp();
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
   const [countdown, setCountdown] = useState<CountdownState>({ days: 0, hours: 0, minutes: 0, seconds: 0 });
 
-  // Encontra o primeiro evento "live" ou "upcoming"
-  const featuredEvent = events.find(e => e.status === 'live' || e.status === 'upcoming');
+  const featuredEvent = events.find((event) => (
+    (event.status === 'live' || event.status === 'upcoming')
+    && getEventStatus(event) !== 'finished'
+  ));
 
   useEffect(() => {
     if (!featuredEvent) return;
 
     const calculateTimeLeft = () => {
       const eventDate = parseEventDate(featuredEvent.date);
+      if (!eventDate) return { days: 0, hours: 0, minutes: 0, seconds: 0 };
       const difference = eventDate.getTime() - Date.now();
       
       if (isNaN(difference) || difference <= 0) {
