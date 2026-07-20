@@ -1,10 +1,9 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { Search, ShieldAlert, ChevronDown, ChevronUp, X, TrendingUp, User, Flame, Zap, BarChart3, Clock } from 'lucide-react';
+import { Search, ShieldAlert, ChevronDown, ChevronUp, X, TrendingUp, User, Flame, Zap, BarChart3, Clock, Info, ArrowLeftRight } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { MobileLeaderboardCard } from './MobileLeaderboardCard';
 
 const InstagramIcon = ({ className = 'h-3.5 w-3.5' }: { className?: string }) => (
   <svg
@@ -70,10 +69,10 @@ const timeToSeconds = (timeStr: string): number => {
 
 // Cores de pódio reutilizadas para o badge numérico de colocação (Functional Fitness)
 const getRankBadgeClasses = (rank?: number): string => {
-  if (rank === 1) return 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30';
-  if (rank === 2) return 'bg-slate-300/20 text-slate-300 border-slate-300/30';
-  if (rank === 3) return 'bg-amber-700/20 text-amber-700 border-amber-700/30';
-  return 'bg-dark-gray/60 text-muted-soft border-card-border/50';
+  if (rank === 1) return 'border-primary bg-primary text-ink';
+  if (rank === 2) return 'border-slate-300 bg-slate-300 text-ink';
+  if (rank === 3) return 'border-amber-600 bg-amber-600 text-ink';
+  return 'border-transparent bg-transparent text-muted-soft';
 };
 
 // Badge numérico estilizado de colocação, com aria-label (não depende só de cor — WCAG AA)
@@ -151,6 +150,149 @@ const ScorePerWorkoutList = ({ workouts, scores }: { workouts: Workout[]; scores
   );
 };
 
+type LeaderboardParticipantCellProps = {
+  athlete: Athlete;
+  rank: number;
+  isExpanded: boolean;
+  onToggleTeam: () => void;
+  onOpenProfile: () => void;
+};
+
+const getLeaderboardRankClasses = (rank: number) => {
+  if (rank === 1) return 'bg-primary text-ink border-primary';
+  if (rank === 2) return 'bg-slate-300 text-ink border-slate-300';
+  if (rank === 3) return 'bg-amber-600 text-ink border-amber-600';
+  return 'border-transparent text-muted';
+};
+
+const LeaderboardParticipantCell = ({
+  athlete,
+  rank,
+  isExpanded,
+  onToggleTeam,
+  onOpenProfile
+}: LeaderboardParticipantCellProps) => {
+  const isTeam = athlete.isTeam;
+  const members = getTeamMembersArray(athlete.teamMembers);
+  const displayName = isTeam ? athlete.name.split('(')[0].trim() : athlete.name;
+
+  return (
+    <div
+      className="grid min-h-[5.5rem] grid-cols-[3.25rem_1fr] items-center px-3 sm:grid-cols-[3.875rem_1fr] sm:px-4"
+      role="button"
+      tabIndex={0}
+      onClick={onOpenProfile}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onOpenProfile();
+        }
+      }}
+      aria-label={`Abrir perfil de ${displayName}`}
+    >
+      <div className="flex justify-center">
+        <span className={`inline-flex h-7 w-7 items-center justify-center rounded-full border font-number text-xs font-black ${getLeaderboardRankClasses(rank)}`}>
+          {rank > 0 ? rank : '–'}
+        </span>
+      </div>
+      <div className="min-w-0 py-3">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <span className="truncate text-xs font-black uppercase tracking-[0.045em] text-white sm:text-sm">
+            {displayName}
+          </span>
+          {isTeam && members.length > 0 && (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onToggleTeam();
+              }}
+              className="inline-flex shrink-0 items-center text-muted-soft transition-colors hover:text-primary"
+              aria-label={isExpanded ? 'Ocultar integrantes' : 'Mostrar integrantes'}
+              aria-expanded={isExpanded}
+            >
+              {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            </button>
+          )}
+          {!isTeam && athlete.instagram && (
+            <a
+              href={`https://instagram.com/${athlete.instagram.trim().replace(/^@/, '')}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex shrink-0 text-primary transition-colors hover:text-primary-hover"
+              title={`Ver Instagram de ${athlete.name}`}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <InstagramIcon className="h-3.5 w-3.5" />
+              <span className="sr-only">Instagram</span>
+            </a>
+          )}
+        </div>
+        <div className="mt-1 flex min-w-0 items-center gap-2">
+          <span className="truncate text-[10px] font-semibold uppercase tracking-wide text-muted-soft">{athlete.box || 'Box não informado'}</span>
+          {athlete.country && (
+            <span className="shrink-0 border-l border-card-border/70 pl-2 text-[9px] font-bold uppercase tracking-wider text-muted">{athlete.country}</span>
+          )}
+        </div>
+        {isTeam && isExpanded && members.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-x-2 gap-y-1 text-[9px] font-medium text-muted animate-fadeIn">
+            {members.map((member, index) => (
+              <span key={`${member.name}-${index}`} className="inline-flex items-center gap-1">
+                {member.name}
+                {member.instagram && (
+                  <a
+                    href={`https://instagram.com/${member.instagram.trim().replace(/^@/, '')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:text-primary-hover"
+                    onClick={(event) => event.stopPropagation()}
+                    aria-label={`Instagram de ${member.name}`}
+                  >
+                    <InstagramIcon className="h-2.5 w-2.5" />
+                  </a>
+                )}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const LeaderboardParticipantHeader = ({
+  searchQuery,
+  onSearchChange
+}: {
+  searchQuery: string;
+  onSearchChange: (value: string) => void;
+}) => (
+  <div className="min-w-[17rem] px-3 pb-3 pt-5 sm:min-w-[21rem] sm:px-4">
+    <span className="text-xs font-black uppercase tracking-[0.08em] text-white">Participante</span>
+    <div className="relative mt-3">
+      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-soft" aria-hidden="true" />
+      <input
+        type="search"
+        placeholder="Buscar atleta ou box"
+        value={searchQuery}
+        onChange={(event) => onSearchChange(event.target.value)}
+        className="h-10 w-full rounded-full border border-muted-soft bg-transparent pl-10 pr-9 text-sm text-white placeholder:text-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+        aria-label="Buscar atleta ou box"
+      />
+      {searchQuery && (
+        <button
+          type="button"
+          onClick={() => onSearchChange('')}
+          className="absolute right-2.5 top-1/2 inline-flex h-5 w-5 -translate-y-1/2 items-center justify-center text-muted transition-colors hover:text-white"
+          aria-label="Limpar busca"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      )}
+    </div>
+  </div>
+);
+
 export function Leaderboard({ event }: LeaderboardProps) {
   const { getLeaderboard, loadPublicEventData, publicEventDataStatus } = useApp();
   const isMobile = useMediaQuery('(max-width: 640px)');
@@ -220,8 +362,8 @@ export function Leaderboard({ event }: LeaderboardProps) {
 
   return (
     <div className="space-y-4">
-      {/* Filtros Superiores */}
-      <div className="flex flex-col gap-4 rounded-lg border border-card-border bg-card p-4">
+      {/* Filtros de categoria */}
+      <div className="border-b border-card-border pb-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           {/* CATEGORIAS: Dropdown em mobile, Botões em desktop */}
           {isMobile ? (
@@ -236,7 +378,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
                   setSelectedCategoryId(e.target.value);
                   setAgeGroupFilter('');
                 }}
-                className="h-10 w-full rounded-md border border-card-border bg-background px-3 text-sm font-bold text-white uppercase tracking-wider focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+                className="h-10 w-full rounded-md border border-card-border bg-dark-gray px-3 text-sm font-bold text-white uppercase tracking-wider focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
               >
                 {event.divisions.map((division) => (
                   <option key={division.id} value={division.id}>
@@ -246,7 +388,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
               </select>
             </div>
           ) : (
-            <div className="flex gap-1 rounded-md border border-card-border bg-background p-1 overflow-x-auto scrollbar-none w-full lg:w-auto">
+            <div className="flex w-full gap-1 overflow-x-auto border-b border-card-border pb-1 scrollbar-none lg:w-auto lg:border-b-0 lg:pb-0">
               {event.divisions.map((division) => (
                 <button
                   key={division.id}
@@ -255,10 +397,10 @@ export function Leaderboard({ event }: LeaderboardProps) {
                     setSelectedCategoryId(division.id);
                     setAgeGroupFilter('');
                   }}
-                  className={`min-h-9 flex-1 lg:flex-initial text-center rounded-sm px-4 py-1.5 text-xs font-bold uppercase tracking-wider transition-colors whitespace-nowrap ${
+                  className={`min-h-9 flex-1 lg:flex-initial text-center rounded-md border px-4 py-1.5 text-xs font-bold uppercase tracking-wider transition-colors whitespace-nowrap ${
                     activeCategoryId === division.id
-                      ? 'bg-primary text-ink'
-                      : 'text-muted hover:bg-card hover:text-white'
+                      ? 'border-primary bg-primary text-ink'
+                      : 'border-transparent text-muted hover:border-card-border hover:bg-dark-gray hover:text-white'
                   }`}
                 >
                   {division.name}
@@ -277,7 +419,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
                 id={`leaderboard-age-${event.id}`}
                 value={ageGroupFilter}
                 onChange={(e) => setAgeGroupFilter(e.target.value)}
-                className="h-10 w-full sm:w-auto rounded-md border border-card-border bg-background px-3 text-sm font-bold uppercase tracking-wider text-white focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+                className="h-10 w-full sm:w-auto rounded-md border border-card-border bg-dark-gray px-3 text-sm font-bold uppercase tracking-wider text-white focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
               >
                 <option value="">Todas</option>
                 {(activeCategory?.ageGroups || ['16-24', '25-29', '30-34', '35-39', '40-44', '45-49', '50-54', '55-59', '60+']).map(ag => (
@@ -308,422 +450,131 @@ export function Leaderboard({ event }: LeaderboardProps) {
         </div>
       )}
 
-      {/* Tabela de Classificação */}
+      {/* Matriz de resultados: o participante permanece visível enquanto as provas são comparadas. */}
       {filteredLeaderboard.length > 0 ? (
-        isMobile ? (
-          // ========== MOBILE: Card Stack ==========
-          <div className="space-y-2 pb-4">
-            {filteredLeaderboard.map((row) => {
-              const hasTime = row.totalPoints < 999999;
-              const diffSecs = hasTime ? row.totalPoints - leaderTime : 0;
-
-              return (
-                <MobileLeaderboardCard
-                  key={row.athlete.id}
-                  rank={row.rank}
-                  athlete={row.athlete}
-                  time={event.eventType === 'fitness_racing' && hasTime ? secondsToTimeStr(row.totalPoints) : undefined}
-                  difference={
-                    event.eventType === 'fitness_racing'
-                      ? hasTime && diffSecs > 0
-                        ? `+${secondsToTimeStr(diffSecs)}`
-                        : hasTime && row.rank === 1
-                          ? 'Líder'
-                          : '-'
-                      : undefined
-                  }
-                  totalPoints={event.eventType !== 'fitness_racing' ? row.totalPoints : undefined}
-                  isExpanded={expandedTeams[row.athlete.id]}
-                  onToggleExpand={() => toggleTeamExpanded(row.athlete.id)}
-                  onViewDetails={() => {
-                    if (row.athlete.isTeam) {
-                      setSelectedTeamForProfile(row.athlete);
-                    } else {
-                      setSelectedAthleteForProfile(row.athlete);
-                    }
-                  }}
-                />
-              );
-            })}
+        <section className="overflow-hidden rounded-xl border border-card-border bg-background shadow-2xl shadow-black/20">
+          <div className="flex items-center gap-2 border-b border-card-border bg-dark-gray px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-muted sm:hidden">
+            <ArrowLeftRight className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+            Deslize para comparar as provas
           </div>
-        ) : (
-          // ========== DESKTOP: Tabela ==========
-          <div className="overflow-x-auto rounded-xl border border-card-border bg-card">
+          <div className="overflow-x-auto">
             {event.eventType === 'fitness_racing' ? (
-              /* =======================================================
-                 DESIGN LEADERBOARD FITNESS RACING (TEMPO E DIFERENÇA)
-                 ======================================================= */
-              <table className="min-w-[760px] w-full border-collapse text-left">
-              <thead>
-                <tr className="border-b border-card-border bg-background">
-                  <th className="w-[340px] p-0">
-                    <div className="flex flex-col h-full justify-between">
-                      <div className="px-4 py-3 flex flex-col gap-1.5 border-b border-card-border/40">
-                        <span className="text-[10px] font-bold text-muted uppercase tracking-wider">Competidor</span>
-                        <div className="relative">
-                          <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-soft pointer-events-none" />
-                          <input
-                            type="text"
-                            placeholder="Nome ou box..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full pl-9 pr-9 py-2 h-10 bg-background border border-card-border/60 rounded text-sm text-white placeholder:text-muted focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
-                            aria-label="Buscar atleta ou box"
-                          />
-                          {searchQuery && (
-                            <button
-                              type="button"
-                              onClick={() => setSearchQuery('')}
-                              className="absolute right-2.5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted hover:text-white transition-colors flex items-center justify-center p-0"
-                              aria-label="Limpar busca"
-                            >
-                              <X className="h-4 w-4" />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-[56px_1fr] text-[9px] font-bold text-muted uppercase text-left py-1.5 bg-background/50">
-                        <div className="text-center border-r border-card-border/20">Pos</div>
-                        <div className="pl-4">Nome & Box</div>
-                      </div>
-                    </div>
-                  </th>
-                  {activeCategory?.useAgeGroups && (
-                    <th className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-widest text-muted border-l border-card-border/40">
-                      Faixa Etária
+              <table className="w-full min-w-[50rem] border-separate border-spacing-0 text-left font-number">
+                <thead className="bg-dark-gray">
+                  <tr>
+                    <th rowSpan={2} className="sticky left-0 z-30 border-b border-r border-card-border bg-dark-gray p-0 align-top shadow-[8px_0_18px_rgba(0,0,0,0.18)]">
+                      <LeaderboardParticipantHeader searchQuery={searchQuery} onSearchChange={setSearchQuery} />
                     </th>
-                  )}
-                  <th className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-widest text-primary border-l border-card-border/40">
-                    Tempo Oficial
-                  </th>
-                  <th className="px-4 py-3 text-right text-[10px] font-bold uppercase tracking-widest text-primary border-l border-card-border/40">
-                    Diferença
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredLeaderboard.map((row, idx) => {
-                  const hasTime = row.totalPoints < 999999;
-                  const diffSecs = hasTime ? row.totalPoints - leaderTime : 0;
-                  const finalRank = row.rank;
-
-                  return (
-                    <React.Fragment key={row.athlete.id}>
-                      <tr 
-                        onClick={() => {
-                          if (row.athlete.isTeam) {
-                            setSelectedTeamForProfile(row.athlete);
-                          } else {
-                            setSelectedAthleteForProfile(row.athlete);
-                          }
-                        }}
-                        className="border-b border-card-border transition-colors last:border-b-0 hover:bg-elevated/50 cursor-pointer"
-                      >
-                        <td className="p-0">
-                          <div className="grid grid-cols-[56px_1fr] items-center h-full min-h-[56px]">
-                            {/* Pos */}
-                            <div className="text-center flex justify-center border-r border-card-border/20 font-bold text-white font-mono text-sm">
-                              {finalRank > 0 ? (
-                                <span className={`inline-flex items-center justify-center h-7 w-7 rounded-full ${
-                                  finalRank === 1 ? 'bg-yellow-500/20 text-yellow-500 border border-yellow-500/30' 
-                                  : finalRank === 2 ? 'bg-slate-300/20 text-slate-300 border border-slate-300/30' 
-                                  : finalRank === 3 ? 'bg-amber-700/20 text-amber-700 border border-amber-700/30' 
-                                  : 'text-muted'
-                                }`}>
-                                  {finalRank}
-                                </span>
-                              ) : (
-                                <span className="text-muted">-</span>
-                              )}
-                            </div>
-                            {/* Nome e Box */}
-                            {(() => {
-                              const isTeam = row.athlete.isTeam;
-                              const isExpanded = expandedTeams[row.athlete.id];
-                              const displayName = isTeam ? row.athlete.name.split('(')[0].trim() : row.athlete.name;
-
-                              return (
-                                <div 
-                                  className={`flex justify-between items-center pl-4 pr-4 py-2 ${isTeam ? 'cursor-pointer select-none hover:bg-elevated/40' : ''}`}
-                                  onClick={isTeam ? () => toggleTeamExpanded(row.athlete.id) : undefined}
-                                >
-                                  <div className="flex flex-col flex-1">
-                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                      <span className="text-xs font-bold text-white uppercase tracking-wide flex items-center gap-1">
-                                        {displayName}
-                                        {isTeam && (
-                                          isExpanded ? <ChevronUp className="h-3 w-3 text-muted-soft" /> : <ChevronDown className="h-3 w-3 text-muted-soft" />
-                                        )}
-                                      </span>
-                                      {!isTeam && row.athlete.instagram && (
-                                        <a
-                                          href={`https://instagram.com/${row.athlete.instagram.trim().replace(/^@/, '')}`}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="inline-flex items-center gap-0.5 text-[10px] text-primary hover:text-primary-hover font-semibold transition-colors"
-                                          title={`Ver Instagram de ${row.athlete.name}`}
-                                          onClick={(e) => e.stopPropagation()}
-                                        >
-                                          <InstagramIcon className="h-3.5 w-3.5" />
-                                          <span className="sr-only">Instagram</span>
-                                        </a>
-                                      )}
-                                    </div>
-                                    <span className="text-[10px] text-muted font-medium mt-0.5">{row.athlete.box}</span>
-                                    {(() => {
-                                      const members = getTeamMembersArray(row.athlete.teamMembers);
-                                      if (!isTeam || !isExpanded || members.length === 0) return null;
-                                      return (
-                                        <span className="text-[9px] text-muted-soft mt-1.5 flex flex-wrap gap-x-2 gap-y-0.5 animate-fadeIn">
-                                          {members.map((m, mIdx) => (
-                                            <span key={mIdx} className="inline-flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
-                                              <span>{m.name}</span>
-                                              {m.instagram && (
-                                                <a
-                                                  href={`https://instagram.com/${m.instagram.trim().replace(/^@/, '')}`}
-                                                  target="_blank"
-                                                  rel="noopener noreferrer"
-                                                  className="text-primary hover:text-primary-hover font-semibold inline-flex items-center"
-                                                  title={`Ver Instagram de ${m.name}`}
-                                                >
-                                                  <InstagramIcon className="h-3 w-3 ml-0.5" />
-                                                </a>
-                                              )}
-                                              {mIdx < members.length - 1 && <span className="text-muted-soft ml-1">&</span>}
-                                            </span>
-                                          ))}
-                                        </span>
-                                      );
-                                    })()}
-                                  </div>
-                                  {row.athlete.country && (
-                                    <span className="rounded bg-dark-gray border border-card-border/40 px-2 py-0.5 text-[9px] font-bold text-muted-soft uppercase font-sans">
-                                      {row.athlete.country}
-                                    </span>
-                                  )}
-                                </div>
-                              );
-                            })()}
-                          </div>
+                    {activeCategory?.useAgeGroups && (
+                      <th rowSpan={2} className="min-w-28 border-b border-r border-card-border px-4 text-center text-xs font-black uppercase tracking-[0.08em] text-white">Faixa etária</th>
+                    )}
+                    <th className="min-w-44 border-b border-r border-card-border px-5 pt-5 text-center align-top text-sm font-black uppercase tracking-[0.06em] text-white">Tempo total</th>
+                    <th className="min-w-36 border-b border-card-border px-5 pt-5 text-center align-top text-sm font-black uppercase tracking-[0.06em] text-white">Diferença</th>
+                  </tr>
+                  <tr>
+                    <th className="border-r border-card-border px-5 pb-4 pt-3 text-center text-[10px] font-bold uppercase tracking-wider text-muted">Resultado</th>
+                    <th className="px-5 pb-4 pt-3 text-center text-[10px] font-bold uppercase tracking-wider text-muted">Para o líder</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredLeaderboard.map((row, index) => {
+                    const hasTime = row.totalPoints < 999999;
+                    const diffSecs = hasTime ? row.totalPoints - leaderTime : 0;
+                    return (
+                      <tr key={row.athlete.id} className="group bg-background transition-colors hover:bg-elevated/30">
+                        <td className="sticky left-0 z-20 border-b border-r border-card-border bg-background p-0 shadow-[8px_0_18px_rgba(0,0,0,0.18)] transition-colors group-hover:bg-elevated/30">
+                          <LeaderboardParticipantCell
+                            athlete={row.athlete}
+                            rank={row.rank}
+                            isExpanded={Boolean(expandedTeams[row.athlete.id])}
+                            onToggleTeam={() => toggleTeamExpanded(row.athlete.id)}
+                            onOpenProfile={() => row.athlete.isTeam ? setSelectedTeamForProfile(row.athlete) : setSelectedAthleteForProfile(row.athlete)}
+                          />
                         </td>
                         {activeCategory?.useAgeGroups && (
-                          <td className="px-4 py-3 text-center text-xs font-mono font-medium text-muted border-l border-card-border/20">
+                          <td className="border-b border-r border-card-border px-4 text-center text-xs font-semibold text-muted">
                             {getAgeGroupFromDate(row.athlete.birthDate, activeCategory.ageGroups)} anos
                           </td>
                         )}
-                        <td className="px-4 py-3 text-center text-sm font-bold font-mono text-white border-l border-card-border/20 bg-primary/[0.02]">
-                          {hasTime ? secondsToTimeStr(row.totalPoints) : '-'}
+                        <td className="border-b border-r border-card-border bg-primary/[0.035] px-5 text-center text-lg font-black text-white">
+                          {hasTime ? secondsToTimeStr(row.totalPoints) : '–'}
                         </td>
-                        <td className="px-4 py-3 text-right text-xs font-bold font-mono text-primary border-l border-card-border/20">
-                          {hasTime && diffSecs > 0 ? `+${secondsToTimeStr(diffSecs)}` : (hasTime && idx === 0 ? 'Líder' : '-')}
+                        <td className="border-b border-card-border px-5 text-center text-sm font-black text-primary">
+                          {hasTime && diffSecs > 0 ? `+${secondsToTimeStr(diffSecs)}` : hasTime && index === 0 ? 'Líder' : '–'}
                         </td>
                       </tr>
-                    </React.Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-          ) : (
-            /* =======================================================
-               DESIGN LEADERBOARD CROSSFIT (CROSSFIT GAMES STYLE)
-               ======================================================= */
-            <table className="min-w-[840px] w-full border-collapse text-left">
-              <thead>
-                <tr className="border-b border-card-border bg-background">
-                  {/* Participant Header com busca */}
-                  <th className="w-[340px] p-0">
-                    <div className="flex flex-col h-full justify-between">
-                      <div className="px-4 py-3 flex flex-col gap-1.5 border-b border-card-border/40">
-                        <span className="text-[10px] font-bold text-muted uppercase tracking-wider">Participant</span>
-                        <div className="relative">
-                          <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-soft pointer-events-none" />
-                          <input
-                            type="text"
-                            placeholder="Nome ou box..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full pl-9 pr-9 py-2 h-10 bg-background border border-card-border/60 rounded text-sm text-white placeholder:text-muted focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
-                            aria-label="Buscar atleta ou box"
-                          />
-                          {searchQuery && (
-                            <button
-                              type="button"
-                              onClick={() => setSearchQuery('')}
-                              className="absolute right-2.5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted hover:text-white transition-colors flex items-center justify-center p-0"
-                              aria-label="Limpar busca"
-                            >
-                              <X className="h-4 w-4" />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-[56px_1fr] text-[9px] font-bold text-muted uppercase text-left py-1.5 bg-background/50">
-                        <div className="text-center border-r border-card-border/20">Pos</div>
-                        <div className="pl-4">Nome & Box</div>
-                      </div>
-                    </div>
-                  </th>
-                  
-                  {/* Total Header */}
-                  <th className="w-24 p-0 border-l border-card-border/40">
-                    <div className="flex flex-col h-full justify-between">
-                      <div className="px-2 py-3 text-center text-[10px] font-bold text-muted uppercase tracking-wider border-b border-card-border/40 min-h-[46px] flex items-center justify-center">
-                        Total
-                      </div>
-                      <div className="text-[9px] font-bold text-muted uppercase text-center py-1.5 bg-background/50">
-                        Points
-                      </div>
-                    </div>
-                  </th>
-
-                  {/* Workouts Headers */}
-                  {divisionWorkouts.map((workout) => (
-                    <th key={workout.id} className="min-w-[190px] p-0 border-l border-card-border/40">
-                      <div className="flex flex-col h-full justify-between">
-                        <div className="px-3 py-3 text-center text-[10px] font-black uppercase tracking-wider text-primary border-b border-card-border/40 min-h-[46px] flex flex-col justify-center gap-0.5">
-                          <span className="line-clamp-1">{workout.name}</span>
-                          <span className="text-[8px] font-medium text-muted normal-case block">
-                            {workout.timeCap ? `Cap: ${workout.timeCap}` : 'Carga'}
-                          </span>
-                        </div>
-                        <div className="grid grid-cols-3 text-[8px] font-bold text-muted uppercase text-center py-1.5 bg-background/50">
-                          <div>Points</div>
-                          <div className="border-l border-card-border/20">Rank</div>
-                          <div className="border-l border-card-border/20">Result</div>
-                        </div>
-                      </div>
+                    );
+                  })}
+                </tbody>
+              </table>
+            ) : (
+              <table className="w-full min-w-[70rem] border-separate border-spacing-0 text-left font-number">
+                <thead className="bg-dark-gray">
+                  <tr>
+                    <th rowSpan={2} className="sticky left-0 z-30 border-b border-r border-card-border bg-dark-gray p-0 align-top shadow-[8px_0_18px_rgba(0,0,0,0.18)]">
+                      <LeaderboardParticipantHeader searchQuery={searchQuery} onSearchChange={setSearchQuery} />
                     </th>
+                    <th className="min-w-28 border-b border-r border-card-border px-4 pt-5 text-center align-top text-sm font-black uppercase tracking-[0.06em] text-white">Total</th>
+                    {divisionWorkouts.map((workout) => (
+                      <th key={workout.id} className="min-w-44 border-b border-r border-card-border px-4 pt-5 align-top last:border-r-0">
+                        <div className="flex items-center justify-center gap-1.5 text-center text-sm font-black uppercase tracking-[0.06em] text-white">
+                          <span className="max-w-36 truncate" title={workout.name}>{workout.name}</span>
+                          <Info className="h-4 w-4 shrink-0 text-muted" aria-label={workout.timeCap ? `Time cap: ${workout.timeCap}` : `Detalhes de ${workout.name}`} />
+                        </div>
+                      </th>
+                    ))}
+                  </tr>
+                  <tr>
+                    <th className="border-b border-r border-card-border px-4 pb-4 pt-3 text-center text-[10px] font-bold uppercase tracking-wider text-muted">Pontos</th>
+                    {divisionWorkouts.map((workout) => (
+                      <th key={`${workout.id}-labels`} className="border-b border-r border-card-border px-3 pb-4 pt-3 last:border-r-0">
+                        <div className="grid grid-cols-3 text-center text-[10px] font-bold uppercase tracking-wider text-muted">
+                          <span>Pontos</span><span>Rank</span><span>Resultado</span>
+                        </div>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredLeaderboard.map((row) => (
+                    <tr key={row.athlete.id} className="group bg-background transition-colors hover:bg-elevated/30">
+                      <td className="sticky left-0 z-20 border-b border-r border-card-border bg-background p-0 shadow-[8px_0_18px_rgba(0,0,0,0.18)] transition-colors group-hover:bg-elevated/30">
+                        <LeaderboardParticipantCell
+                          athlete={row.athlete}
+                          rank={row.rank}
+                          isExpanded={Boolean(expandedTeams[row.athlete.id])}
+                          onToggleTeam={() => toggleTeamExpanded(row.athlete.id)}
+                          onOpenProfile={() => row.athlete.isTeam ? setSelectedTeamForProfile(row.athlete) : setSelectedAthleteForProfile(row.athlete)}
+                        />
+                      </td>
+                      <td className="border-b border-r border-card-border bg-primary/[0.035] px-4 text-center text-xl font-black text-primary">{row.totalPoints}</td>
+                      {divisionWorkouts.map((workout) => {
+                        const score = row.scores[workout.id];
+                        return (
+                          <td key={workout.id} className="border-b border-r border-card-border p-0 text-center last:border-r-0">
+                            {score && score.result !== '-' ? (
+                              <div className="grid min-h-[5.5rem] grid-cols-3 items-center px-3 text-sm font-black text-white">
+                                <span>{score.points ?? 0}</span>
+                                <span className="text-muted">{score.rank ? `${score.rank}º` : '–'}</span>
+                                <span className="truncate px-1 text-xs text-muted" title={score.result}>{score.result}</span>
+                              </div>
+                            ) : (
+                              <div className="flex min-h-[5.5rem] items-center justify-center text-sm font-bold text-muted-soft">–</div>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
                   ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filteredLeaderboard.map((row, idx) => {
-                  return (
-                    <React.Fragment key={row.athlete.id}>
-                      <tr className="border-b border-card-border transition-colors last:border-b-0 hover:bg-elevated/50">
-                        {/* Participant Cell */}
-                        <td className="p-0">
-                          <div className="grid grid-cols-[56px_1fr] items-center h-full min-h-[56px]">
-                            {/* Pos */}
-                            <div className="text-center flex justify-center border-r border-card-border/20 font-bold text-white font-mono text-sm">
-                              <span className={`inline-flex items-center justify-center h-7 w-7 rounded-full ${
-                                row.rank === 1 ? 'bg-yellow-500/20 text-yellow-500 border border-yellow-500/30' 
-                                : row.rank === 2 ? 'bg-slate-300/20 text-slate-300 border border-slate-300/30' 
-                                : row.rank === 3 ? 'bg-amber-700/20 text-amber-700 border border-amber-700/30' 
-                                : 'text-muted'
-                              }`}>
-                                {row.rank}
-                              </span>
-                            </div>
-                            {/* Nome e Box */}
-                            {(() => {
-                              const isTeam = row.athlete.isTeam;
-                              const isExpanded = expandedTeams[row.athlete.id];
-                              const displayName = isTeam ? row.athlete.name.split('(')[0].trim() : row.athlete.name;
-
-                              return (
-                                <div 
-                                  className={`flex justify-between items-center pl-4 pr-4 py-2 ${isTeam ? 'cursor-pointer select-none hover:bg-elevated/40' : ''}`}
-                                  onClick={isTeam ? () => toggleTeamExpanded(row.athlete.id) : undefined}
-                                >
-                                  <div className="flex flex-col flex-1">
-                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                      <span className="text-xs font-bold text-white uppercase tracking-wide flex items-center gap-1">
-                                        {displayName}
-                                        {isTeam && (
-                                          isExpanded ? <ChevronUp className="h-3 w-3 text-muted-soft" /> : <ChevronDown className="h-3 w-3 text-muted-soft" />
-                                        )}
-                                      </span>
-                                      {!isTeam && row.athlete.instagram && (
-                                        <a
-                                          href={`https://instagram.com/${row.athlete.instagram.trim().replace(/^@/, '')}`}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="inline-flex items-center gap-0.5 text-[10px] text-primary hover:text-primary-hover font-semibold transition-colors"
-                                          title={`Ver Instagram de ${row.athlete.name}`}
-                                          onClick={(e) => e.stopPropagation()}
-                                        >
-                                          <InstagramIcon className="h-3.5 w-3.5" />
-                                          <span className="sr-only">Instagram</span>
-                                        </a>
-                                      )}
-                                    </div>
-                                    <span className="text-[10px] text-muted font-medium mt-0.5">{row.athlete.box}</span>
-                                    {(() => {
-                                      const members = getTeamMembersArray(row.athlete.teamMembers);
-                                      if (!isTeam || !isExpanded || members.length === 0) return null;
-                                      return (
-                                        <span className="text-[9px] text-muted-soft mt-1.5 flex flex-wrap gap-x-2 gap-y-0.5 animate-fadeIn">
-                                          {members.map((m, mIdx) => (
-                                            <span key={mIdx} className="inline-flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
-                                              <span>{m.name}</span>
-                                              {m.instagram && (
-                                                <a
-                                                  href={`https://instagram.com/${m.instagram.trim().replace(/^@/, '')}`}
-                                                  target="_blank"
-                                                  rel="noopener noreferrer"
-                                                  className="text-primary hover:text-primary-hover font-semibold inline-flex items-center"
-                                                  title={`Ver Instagram de ${m.name}`}
-                                                >
-                                                  <InstagramIcon className="h-3 w-3 ml-0.5" />
-                                                </a>
-                                              )}
-                                              {mIdx < members.length - 1 && <span className="text-muted-soft ml-1">&</span>}
-                                            </span>
-                                          ))}
-                                        </span>
-                                      );
-                                    })()}
-                                  </div>
-                                  {row.athlete.country && (
-                                    <span className="rounded bg-dark-gray border border-card-border/40 px-2 py-0.5 text-[9px] font-bold text-muted-soft uppercase font-sans">
-                                      {row.athlete.country}
-                                    </span>
-                                  )}
-                                </div>
-                              );
-                            })()}
-                          </div>
-                        </td>
-
-                        {/* Total Cell */}
-                        <td className="p-0 border-l border-card-border/20 bg-primary/[0.02]">
-                          <div className="flex items-center justify-center h-full min-h-[56px] text-center">
-                            <span className="font-mono text-sm font-bold text-primary">{row.totalPoints}</span>
-                          </div>
-                        </td>
-
-                        {/* Workouts Cells */}
-                        {divisionWorkouts.map((workout) => {
-                          const score = row.scores[workout.id];
-                          return (
-                            <td key={workout.id} className="p-0 border-l border-card-border/20 text-center">
-                              {score && score.result !== '-' ? (
-                                <div className="grid grid-cols-3 items-center text-xs h-full min-h-[56px]">
-                                  {/* Points */}
-                                  <div className="font-bold text-white text-xs">{score.points || 0}</div>
-                                  {/* Rank */}
-                                  <div className="text-muted-soft font-semibold border-l border-card-border/20">{score.rank || 0}º</div>
-                                  {/* Result */}
-                                  <div className="text-[10px] font-mono text-muted border-l border-card-border/20 truncate px-1" title={score.result}>
-                                    {score.result}
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="flex items-center justify-center h-full min-h-[56px] text-muted text-xs">-</div>
-                              )}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    </React.Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
-        )
+                </tbody>
+              </table>
+            )}
+          </div>
+          <div className="flex flex-col gap-1 border-t border-card-border bg-dark-gray/60 px-4 py-3 text-[10px] font-semibold uppercase tracking-wider text-muted sm:flex-row sm:items-center sm:justify-between">
+            <span>Classificação atualizada com os resultados publicados</span>
+            <span className="text-muted-soft">{filteredLeaderboard.length} {filteredLeaderboard.length === 1 ? 'competidor' : 'competidores'}</span>
+          </div>
+        </section>
       ) : (
         <div className="space-y-3 rounded-xl border border-card-border bg-card py-16 text-center">
           <ShieldAlert className="mx-auto h-10 w-10 text-muted" aria-hidden="true" />

@@ -34,9 +34,9 @@ export default function EventLeaderboardPage({ params }: PageProps) {
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col">
-      {/* Cabeçalho Minimalista Fullscreen */}
-      <header className="border-b border-card-border bg-[#121214] px-4 py-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      {/* Cabeçalho do placar */}
+      <header className="border-b border-card-border bg-dark-gray px-4 py-4 sm:px-6 lg:px-8">
+        <div className="mx-auto flex max-w-[1600px] flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
             <Link href="/" className="flex items-center justify-center transition-transform duration-300 hover:scale-105 cursor-pointer" aria-label="WODArena - Voltar para a Home">
               <Image
@@ -50,8 +50,8 @@ export default function EventLeaderboardPage({ params }: PageProps) {
             </Link>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-[9px] font-black uppercase tracking-wider text-primary">Placar de Líderes</span>
-                <span className="text-[9px] font-bold uppercase tracking-wider text-muted-soft">| Modo Tela Cheia</span>
+                <span className="text-[9px] font-black uppercase tracking-wider text-primary">Leaderboard</span>
+                <span className="text-[9px] font-bold uppercase tracking-wider text-muted-soft">| Resultados oficiais</span>
               </div>
               <h1 className="text-base font-black uppercase tracking-tight text-white">{event.name}</h1>
             </div>
@@ -68,15 +68,13 @@ export default function EventLeaderboardPage({ params }: PageProps) {
         </div>
       </header>
 
-      {/* Área Principal do Leaderboard Expandido */}
-      <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
-        <div className="rounded-xl bg-card border border-card-border p-1 sm:p-4 shadow-2xl">
-          <Leaderboard event={event} />
-        </div>
+      {/* Área principal: a própria matriz controla sua borda e rolagem horizontal. */}
+      <main className="mx-auto w-full max-w-[1600px] flex-1 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+        <Leaderboard event={event} />
       </main>
 
       {/* Rodapé Minimalista */}
-      <footer className="border-t border-card-border bg-[#121214] py-4 text-center">
+      <footer className="border-t border-card-border bg-dark-gray py-4 text-center">
         <p className="text-[10px] text-muted-soft uppercase font-bold tracking-widest">
           © {new Date().getFullYear()} WODArena - Plataforma Oficial de Resultados
         </p>

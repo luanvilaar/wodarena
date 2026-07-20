@@ -127,79 +127,65 @@ export function FeaturedEventBanner({ openLeadModal }: { openLeadModal: () => vo
     <>
       {/* Banner Versão Mobile */}
       <section 
-        className="md:hidden relative overflow-hidden min-h-[480px] border-b border-card-border bg-cover bg-center flex flex-col justify-end"
-        style={{ backgroundImage: `url(${featuredEvent.bannerUrl || '/banner_compor.png'})` }}
+        className="md:hidden relative overflow-hidden min-h-[520px] border-b border-card-border bg-cover bg-center flex flex-col justify-end"
+        style={{
+          backgroundImage: `url(${featuredEvent.bannerUrl || '/banner_compor.png'})`
+        }}
       >
         {/* Máscara de gradientes reforçada para Mobile */}
         <div className="absolute inset-0 z-0 pointer-events-none"
           style={{
             background: `
-              linear-gradient(180deg, 
-                rgba(11, 14, 17, 0.25) 0%, 
-                rgba(11, 14, 17, 0.1) 25%, 
-                rgba(11, 14, 17, 0.8) 60%, 
-                rgba(11, 14, 17, 0.98) 100%
+              linear-gradient(90deg,
+                rgba(11, 14, 17, 0.72) 0%,
+                rgba(11, 14, 17, 0.28) 100%
+              ),
+              linear-gradient(180deg,
+                rgba(11, 14, 17, 0.12) 0%,
+                rgba(11, 14, 17, 0.48) 48%,
+                rgba(11, 14, 17, 0.96) 100%
               )
             `
           }}
         />
 
-        <div className="relative z-10 w-full px-4 pt-16 pb-8 flex flex-col justify-end">
-          <div className="space-y-4">
+        <div className="relative z-10 w-full px-4 pb-8 pt-20 flex min-h-[520px] flex-col justify-end">
+          <div className="space-y-3.5">
             
             {/* Status e badges */}
-            <div className="flex flex-wrap gap-1.5 items-center">
-              <span className="inline-flex items-center gap-1 rounded-full border border-trading-up/30 bg-trading-up/15 px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-trading-up backdrop-blur-md">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="inline-flex items-center gap-1 rounded-full border border-trading-up/30 bg-dark-gray/85 px-2.5 py-1 text-[9px] font-bold uppercase tracking-normal text-trading-up">
                 <span className="h-1.5 w-1.5 rounded-full bg-trading-up animate-pulse" />
                 Inscrições abertas
               </span>
-              <span className="inline-flex items-center gap-1 rounded-full border border-primary/25 bg-primary/12 px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-primary backdrop-blur-md">
+              <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-dark-gray/85 px-2.5 py-1 text-[9px] font-bold uppercase tracking-normal text-primary">
                 {featuredEvent.eventType === 'fitness_racing' ? 'Fitness Racing' : 'Functional Fitness'}
               </span>
             </div>
 
-            {/* Localização */}
-            <div className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-muted/90 bg-[#0b0e11]/50 backdrop-blur-sm border border-card-border/30 rounded-full px-2.5 py-0.5 w-fit">
-              <MapPin className="h-3 w-3 text-primary" />
-              <span>{featuredEvent.city || featuredEvent.location}, {featuredEvent.state || 'BR'}</span>
-            </div>
-
             {/* Título do Evento */}
-            <h2 className="text-3xl font-black uppercase leading-[1.0] tracking-[-0.04em] text-white">
+            <h2 className="max-w-[19rem] text-4xl font-black uppercase leading-[0.92] tracking-normal text-white text-balance">
               {nameMain}{' '}
               <span className="text-primary">{nameHighlight}</span>
             </h2>
 
-            {/* Metadados adicionais: data e divisões */}
-            <div className="flex flex-wrap items-center text-[11px] font-bold text-white/70 gap-1.5">
+            {/* Informações essenciais */}
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-card-border bg-card px-3 py-2 text-[11px] font-bold text-white">
               <span>{featuredEvent.date}</span>
-              <span className="h-1 w-1 rounded-full bg-white/30" />
+              <span className="h-1 w-1 rounded-full bg-muted-soft" aria-hidden="true" />
+              <span>{featuredEvent.city || featuredEvent.location}, {featuredEvent.state || 'BR'}</span>
+              <span className="h-1 w-1 rounded-full bg-muted-soft" aria-hidden="true" />
               <span>{divisionsSummary}</span>
             </div>
 
             {/* Countdown Compacto */}
-            <div className="flex items-center gap-3 py-1">
-              <span className="text-[10px] font-black uppercase tracking-widest text-muted">Restam:</span>
-              <div className="flex gap-2 items-center">
-                <div className="flex items-baseline gap-0.5 rounded-md bg-[#0b0e11]/60 border border-card-border/30 px-2 py-0.5">
-                  <span className="text-sm font-black text-white font-number">{formatNum(countdown.days)}</span>
-                  <span className="text-[7px] font-bold uppercase text-muted font-mono">d</span>
-                </div>
-                <span className="text-white/40 font-bold">:</span>
-                <div className="flex items-baseline gap-0.5 rounded-md bg-[#0b0e11]/60 border border-card-border/30 px-2 py-0.5">
-                  <span className="text-sm font-black text-white font-number">{formatNum(countdown.hours)}</span>
-                  <span className="text-[7px] font-bold uppercase text-muted font-mono">h</span>
-                </div>
-                <span className="text-white/40 font-bold">:</span>
-                <div className="flex items-baseline gap-0.5 rounded-md bg-[#0b0e11]/60 border border-card-border/30 px-2 py-0.5">
-                  <span className="text-sm font-black text-white font-number">{formatNum(countdown.minutes)}</span>
-                  <span className="text-[7px] font-bold uppercase text-muted font-mono">m</span>
-                </div>
-                <span className="text-white/40 font-bold">:</span>
-                <div className="flex items-baseline gap-0.5 rounded-md bg-[#0b0e11]/60 border border-card-border/30 px-2 py-0.5">
-                  <span className="text-sm font-black text-white font-number">{formatNum(countdown.seconds)}</span>
-                  <span className="text-[7px] font-bold uppercase text-muted font-mono">s</span>
-                </div>
+            <div className="rounded-md border border-card-border bg-dark-gray px-3 py-2 text-[11px] font-bold uppercase text-white">
+              <span className="block text-[10px] font-black tracking-normal text-muted">Restam</span>
+              <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span><strong className="font-number text-sm font-black">{formatNum(countdown.days)}</strong>D</span>
+                <span><strong className="font-number text-sm font-black">{formatNum(countdown.hours)}</strong>H</span>
+                <span><strong className="font-number text-sm font-black">{formatNum(countdown.minutes)}</strong>M</span>
+                <span><strong className="font-number text-sm font-black">{formatNum(countdown.seconds)}</strong>S</span>
               </div>
             </div>
 
@@ -207,14 +193,15 @@ export function FeaturedEventBanner({ openLeadModal }: { openLeadModal: () => vo
             <div className="flex flex-col gap-2.5 pt-2">
               <button 
                 onClick={() => setIsRegisterOpen(true)}
-                className="w-full flex h-12 items-center justify-center gap-2 rounded-md bg-primary px-6 text-sm font-black uppercase text-ink transition-colors hover:bg-primary-hover active:bg-primary-hover shadow-lg shadow-primary/10"
+                aria-label={`Abrir inscricao para ${featuredEvent.name}`}
+                className="w-full flex h-12 items-center justify-center gap-2 rounded-md bg-primary px-6 text-sm font-black uppercase text-ink transition-colors hover:bg-primary-hover active:bg-primary-hover"
               >
                 Inscreva-se agora
                 <ArrowRight className="h-4 w-4" />
               </button>
               <Link 
                 href={`/event/${featuredEvent.id}`}
-                className="w-full flex h-12 items-center justify-center rounded-md border border-card-border bg-card/75 hover:bg-elevated/75 px-6 text-sm font-bold text-white transition-colors backdrop-blur-md"
+                className="w-full flex h-10 items-center justify-center rounded-md px-4 text-xs font-bold uppercase text-white/80 transition-colors hover:text-primary"
               >
                 Ver evento completo
               </Link>
