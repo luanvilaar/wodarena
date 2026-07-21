@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { Search, ShieldAlert, ChevronDown, ChevronUp, X, TrendingUp, User, Flame, Zap, BarChart3, Clock, Info, ArrowLeftRight } from 'lucide-react';
+import { Search, ShieldAlert, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, X, TrendingUp, User, Flame, Zap, BarChart3, Clock, Info } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 
@@ -154,6 +154,7 @@ type LeaderboardParticipantCellProps = {
   athlete: Athlete;
   rank: number;
   isExpanded: boolean;
+  compact?: boolean;
   onToggleTeam: () => void;
   onOpenProfile: () => void;
 };
@@ -169,6 +170,7 @@ const LeaderboardParticipantCell = ({
   athlete,
   rank,
   isExpanded,
+  compact = false,
   onToggleTeam,
   onOpenProfile
 }: LeaderboardParticipantCellProps) => {
@@ -178,7 +180,7 @@ const LeaderboardParticipantCell = ({
 
   return (
     <div
-      className="grid min-h-[5.5rem] grid-cols-[3.25rem_1fr] items-center px-3 sm:grid-cols-[3.875rem_1fr] sm:px-4"
+      className={`grid items-center ${compact ? 'min-h-16 grid-cols-[1.75rem_1fr] px-2' : 'min-h-[5.5rem] grid-cols-[3.25rem_1fr] px-3 sm:grid-cols-[3.875rem_1fr] sm:px-4'}`}
       role="button"
       tabIndex={0}
       onClick={onOpenProfile}
@@ -191,13 +193,13 @@ const LeaderboardParticipantCell = ({
       aria-label={`Abrir perfil de ${displayName}`}
     >
       <div className="flex justify-center">
-        <span className={`inline-flex h-7 w-7 items-center justify-center rounded-full border font-number text-xs font-black ${getLeaderboardRankClasses(rank)}`}>
+        <span className={`inline-flex items-center justify-center rounded-full border font-number text-xs font-black ${compact ? 'h-6 w-6' : 'h-7 w-7'} ${getLeaderboardRankClasses(rank)}`}>
           {rank > 0 ? rank : '–'}
         </span>
       </div>
-      <div className="min-w-0 py-3">
+      <div className={compact ? 'min-w-0 py-2' : 'min-w-0 py-3'}>
         <div className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate text-xs font-black uppercase tracking-[0.045em] text-white sm:text-sm">
+          <span className={`${compact ? 'line-clamp-2 text-[11px] leading-tight' : 'truncate text-xs sm:text-sm'} font-black uppercase tracking-[0.045em] text-white`}>
             {displayName}
           </span>
           {isTeam && members.length > 0 && (
@@ -214,7 +216,7 @@ const LeaderboardParticipantCell = ({
               {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
             </button>
           )}
-          {!isTeam && athlete.instagram && (
+          {!compact && !isTeam && athlete.instagram && (
             <a
               href={`https://instagram.com/${athlete.instagram.trim().replace(/^@/, '')}`}
               target="_blank"
@@ -228,12 +230,14 @@ const LeaderboardParticipantCell = ({
             </a>
           )}
         </div>
-        <div className="mt-1 flex min-w-0 items-center gap-2">
-          <span className="truncate text-[10px] font-semibold uppercase tracking-wide text-muted-soft">{athlete.box || 'Box não informado'}</span>
-          {athlete.country && (
-            <span className="shrink-0 border-l border-card-border/70 pl-2 text-[9px] font-bold uppercase tracking-wider text-muted">{athlete.country}</span>
-          )}
-        </div>
+        {!compact && (
+          <div className="mt-1 flex min-w-0 items-center gap-2">
+            <span className="truncate text-[10px] font-semibold uppercase tracking-wide text-muted-soft">{athlete.box || 'Box não informado'}</span>
+            {athlete.country && (
+              <span className="shrink-0 border-l border-card-border/70 pl-2 text-[9px] font-bold uppercase tracking-wider text-muted">{athlete.country}</span>
+            )}
+          </div>
+        )}
         {isTeam && isExpanded && members.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-x-2 gap-y-1 text-[9px] font-medium text-muted animate-fadeIn">
             {members.map((member, index) => (
@@ -299,6 +303,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
   const [selectedCategoryId, setSelectedCategoryId] = useState(event.divisions[0]?.id || '');
   const [searchQuery, setSearchQuery] = useState('');
   const [ageGroupFilter, setAgeGroupFilter] = useState('');
+  const [mobileWorkoutIndex, setMobileWorkoutIndex] = useState(0);
   const [expandedTeams, setExpandedTeams] = useState<Record<string, boolean>>({});
   const [selectedAthleteForProfile, setSelectedAthleteForProfile] = useState<Athlete | null>(null);
   const [selectedTeamForProfile, setSelectedTeamForProfile] = useState<Athlete | null>(null);
@@ -319,6 +324,16 @@ export function Leaderboard({ event }: LeaderboardProps) {
   const divisionWorkouts = useMemo(() => {
     return event.workouts.filter(w => !w.divisionId || w.divisionId === activeCategoryId);
   }, [event.workouts, activeCategoryId]);
+
+  const maxMobileWorkoutIndex = Math.max(divisionWorkouts.length - 1, 0);
+  const activeMobileWorkoutIndex = Math.min(mobileWorkoutIndex, maxMobileWorkoutIndex);
+  const activeMobileWorkout = divisionWorkouts[activeMobileWorkoutIndex];
+
+  const selectCategory = (divisionId: string) => {
+    setSelectedCategoryId(divisionId);
+    setAgeGroupFilter('');
+    setMobileWorkoutIndex(0);
+  };
 
   useEffect(() => {
     void loadPublicEventData(event.id).catch((error) => {
@@ -374,10 +389,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
               <select
                 id={`divisions-${event.id}`}
                 value={selectedCategoryId}
-                onChange={(e) => {
-                  setSelectedCategoryId(e.target.value);
-                  setAgeGroupFilter('');
-                }}
+                onChange={(e) => selectCategory(e.target.value)}
                 className="h-10 w-full rounded-md border border-card-border bg-dark-gray px-3 text-sm font-bold text-white uppercase tracking-wider focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
               >
                 {event.divisions.map((division) => (
@@ -393,10 +405,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
                 <button
                   key={division.id}
                   type="button"
-                  onClick={() => {
-                    setSelectedCategoryId(division.id);
-                    setAgeGroupFilter('');
-                  }}
+                  onClick={() => selectCategory(division.id)}
                   className={`min-h-9 flex-1 lg:flex-initial text-center rounded-md border px-4 py-1.5 text-xs font-bold uppercase tracking-wider transition-colors whitespace-nowrap ${
                     activeCategoryId === division.id
                       ? 'border-primary bg-primary text-ink'
@@ -450,14 +459,166 @@ export function Leaderboard({ event }: LeaderboardProps) {
         </div>
       )}
 
+      {isMobile && (
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-soft" aria-hidden="true" />
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Buscar atleta ou box"
+            className="h-11 w-full rounded-md border border-card-border bg-dark-gray pl-10 pr-10 text-sm text-white placeholder:text-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+            aria-label="Buscar atleta ou box"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center text-muted transition-colors hover:text-white"
+              aria-label="Limpar busca"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Matriz de resultados: o participante permanece visível enquanto as provas são comparadas. */}
       {filteredLeaderboard.length > 0 ? (
         <section className="overflow-hidden rounded-xl border border-card-border bg-background shadow-2xl shadow-black/20">
-          <div className="flex items-center gap-2 border-b border-card-border bg-dark-gray px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-muted sm:hidden">
-            <ArrowLeftRight className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
-            Deslize para comparar as provas
-          </div>
-          <div className="overflow-x-auto">
+          {isMobile ? (
+            event.eventType === 'fitness_racing' ? (
+              <table className="w-full table-fixed border-separate border-spacing-0 text-left font-number">
+                <thead className="bg-dark-gray">
+                  <tr>
+                    <th className="sticky left-0 z-30 w-[9.5rem] border-b border-r border-card-border bg-dark-gray px-2 py-3 text-left shadow-[6px_0_14px_rgba(0,0,0,0.16)]">
+                      <span className="block text-[10px] font-black uppercase tracking-[0.08em] text-white">Participante</span>
+                      <span className="mt-1 block text-[9px] font-bold uppercase tracking-wider text-muted"># Nome</span>
+                    </th>
+                    <th className="sticky left-[9.5rem] z-30 w-20 border-b border-r border-card-border bg-dark-gray px-1 text-center shadow-[6px_0_14px_rgba(0,0,0,0.12)]">
+                      <span className="block text-[10px] font-black uppercase tracking-[0.06em] text-white">Tempo</span>
+                      <span className="mt-1 block text-[9px] font-bold uppercase tracking-wider text-muted">Oficial</span>
+                    </th>
+                    <th className="border-b border-card-border px-2 text-center">
+                      <span className="block text-[10px] font-black uppercase tracking-[0.06em] text-white">Diferença</span>
+                      <span className="mt-1 block text-[9px] font-bold uppercase tracking-wider text-muted">Para o líder</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredLeaderboard.map((row, index) => {
+                    const hasTime = row.totalPoints < 999999;
+                    const diffSecs = hasTime ? row.totalPoints - leaderTime : 0;
+                    return (
+                      <tr key={row.athlete.id} className="group bg-background transition-colors hover:bg-elevated/30">
+                        <td className="sticky left-0 z-20 border-b border-r border-card-border bg-background p-0 shadow-[6px_0_14px_rgba(0,0,0,0.16)] transition-colors group-hover:bg-elevated/30">
+                          <LeaderboardParticipantCell
+                            athlete={row.athlete}
+                            rank={row.rank}
+                            compact
+                            isExpanded={Boolean(expandedTeams[row.athlete.id])}
+                            onToggleTeam={() => toggleTeamExpanded(row.athlete.id)}
+                            onOpenProfile={() => row.athlete.isTeam ? setSelectedTeamForProfile(row.athlete) : setSelectedAthleteForProfile(row.athlete)}
+                          />
+                        </td>
+                        <td className="sticky left-[9.5rem] z-20 border-b border-r border-card-border bg-background px-1 text-center text-sm font-black text-white shadow-[6px_0_14px_rgba(0,0,0,0.12)] transition-colors group-hover:bg-elevated/30">
+                          {hasTime ? secondsToTimeStr(row.totalPoints) : '–'}
+                        </td>
+                        <td className="border-b border-card-border px-2 text-center text-xs font-black text-primary">
+                          {hasTime && diffSecs > 0 ? `+${secondsToTimeStr(diffSecs)}` : hasTime && index === 0 ? 'Líder' : '–'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            ) : (
+              <div>
+                <table className="w-full table-fixed border-separate border-spacing-0 text-left font-number">
+                  <thead className="bg-dark-gray">
+                    <tr>
+                      <th className="sticky left-0 z-30 w-[9.5rem] border-b border-r border-card-border bg-dark-gray px-2 py-3 text-left shadow-[6px_0_14px_rgba(0,0,0,0.16)]">
+                        <span className="block text-[10px] font-black uppercase tracking-[0.08em] text-white">Participante</span>
+                        <span className="mt-1 block text-[9px] font-bold uppercase tracking-wider text-muted"># Nome</span>
+                      </th>
+                      <th className="sticky left-[9.5rem] z-30 w-[4.5rem] border-b border-r border-card-border bg-dark-gray px-1 text-center shadow-[6px_0_14px_rgba(0,0,0,0.12)]">
+                        <span className="block text-[10px] font-black uppercase tracking-[0.06em] text-white">Total</span>
+                        <span className="mt-1 block text-[9px] font-bold uppercase tracking-wider text-muted">Pontos</span>
+                      </th>
+                      <th className="border-b border-card-border px-2 text-center">
+                        <div className="flex items-center justify-center gap-1 text-[10px] font-black uppercase tracking-[0.06em] text-white">
+                          <span className="max-w-24 truncate" title={activeMobileWorkout?.name}>{activeMobileWorkout?.name || 'Prova'}</span>
+                          {activeMobileWorkout && <Info className="h-3.5 w-3.5 shrink-0 text-muted" aria-label={activeMobileWorkout.timeCap ? `Time cap: ${activeMobileWorkout.timeCap}` : `Detalhes de ${activeMobileWorkout.name}`} />}
+                        </div>
+                        <div className="mt-1 grid grid-cols-3 text-[8px] font-bold uppercase tracking-wide text-muted">
+                          <span>Pts</span><span>Rank</span><span>Tempo</span>
+                        </div>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredLeaderboard.map((row) => {
+                      const score = activeMobileWorkout ? row.scores[activeMobileWorkout.id] : undefined;
+                      return (
+                        <tr key={row.athlete.id} className="group bg-background transition-colors hover:bg-elevated/30">
+                          <td className="sticky left-0 z-20 border-b border-r border-card-border bg-background p-0 shadow-[6px_0_14px_rgba(0,0,0,0.16)] transition-colors group-hover:bg-elevated/30">
+                            <LeaderboardParticipantCell
+                              athlete={row.athlete}
+                              rank={row.rank}
+                              compact
+                              isExpanded={Boolean(expandedTeams[row.athlete.id])}
+                              onToggleTeam={() => toggleTeamExpanded(row.athlete.id)}
+                              onOpenProfile={() => row.athlete.isTeam ? setSelectedTeamForProfile(row.athlete) : setSelectedAthleteForProfile(row.athlete)}
+                            />
+                          </td>
+                          <td className="sticky left-[9.5rem] z-20 border-b border-r border-card-border bg-background px-1 text-center text-sm font-black text-primary shadow-[6px_0_14px_rgba(0,0,0,0.12)] transition-colors group-hover:bg-elevated/30">
+                            {row.totalPoints}
+                          </td>
+                          <td className="border-b border-card-border p-0 text-center">
+                            {score && score.result !== '-' ? (
+                              <div className="grid min-h-16 grid-cols-3 items-center px-1 text-xs font-black text-white">
+                                <span>{score.points ?? 0}</span>
+                                <span className="text-muted">{score.rank ? `${score.rank}º` : '–'}</span>
+                                <span className="truncate px-0.5 text-[10px] text-muted" title={score.result}>{score.result}</span>
+                              </div>
+                            ) : (
+                              <div className="flex min-h-16 items-center justify-center text-xs font-bold text-muted-soft">–</div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                {divisionWorkouts.length > 1 && (
+                  <nav className="grid grid-cols-2 border-t border-card-border bg-dark-gray" aria-label="Navegação entre provas">
+                    <button
+                      type="button"
+                      onClick={() => setMobileWorkoutIndex(Math.max(0, activeMobileWorkoutIndex - 1))}
+                      disabled={activeMobileWorkoutIndex === 0}
+                      className="inline-flex min-h-12 items-center justify-center gap-2 border-r border-card-border px-2 text-[10px] font-black uppercase tracking-wide text-white transition-colors hover:bg-elevated disabled:cursor-not-allowed disabled:text-muted-soft"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                      Exercício anterior
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMobileWorkoutIndex(Math.min(maxMobileWorkoutIndex, activeMobileWorkoutIndex + 1))}
+                      disabled={activeMobileWorkoutIndex === maxMobileWorkoutIndex}
+                      className="inline-flex min-h-12 items-center justify-center gap-2 px-2 text-[10px] font-black uppercase tracking-wide text-white transition-colors hover:bg-elevated disabled:cursor-not-allowed disabled:text-muted-soft"
+                    >
+                      Próximo treino
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </nav>
+                )}
+                <p className="border-t border-card-border bg-dark-gray/60 px-3 py-2 text-center text-[9px] font-bold uppercase tracking-wider text-muted">
+                  Prova {Math.min(activeMobileWorkoutIndex + 1, Math.max(divisionWorkouts.length, 1))} de {Math.max(divisionWorkouts.length, 1)}
+                </p>
+              </div>
+            )
+          ) : (
+            <div className="overflow-x-auto">
             {event.eventType === 'fitness_racing' ? (
               <table className="w-full min-w-[50rem] border-separate border-spacing-0 text-left font-number">
                 <thead className="bg-dark-gray">
@@ -570,6 +731,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
               </table>
             )}
           </div>
+          )}
           <div className="flex flex-col gap-1 border-t border-card-border bg-dark-gray/60 px-4 py-3 text-[10px] font-semibold uppercase tracking-wider text-muted sm:flex-row sm:items-center sm:justify-between">
             <span>Classificação atualizada com os resultados publicados</span>
             <span className="text-muted-soft">{filteredLeaderboard.length} {filteredLeaderboard.length === 1 ? 'competidor' : 'competidores'}</span>

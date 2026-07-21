@@ -12,9 +12,14 @@ test('uses a comparison matrix with a pinned participant column', () => {
   assert.match(leaderboard, /min-w-\[70rem\]/);
 });
 
-test('keeps the workout matrix usable on mobile with a scroll hint', () => {
-  assert.match(leaderboard, /ArrowLeftRight/);
-  assert.match(leaderboard, /Deslize para comparar as provas/);
+test('uses a focused workout view with explicit navigation on mobile', () => {
+  assert.match(leaderboard, /mobileWorkoutIndex/);
+  assert.match(leaderboard, /activeMobileWorkout/);
+  assert.match(leaderboard, /table-fixed/);
+  assert.match(leaderboard, /left-\[9\.5rem\]/);
+  assert.match(leaderboard, /Exercício anterior/);
+  assert.match(leaderboard, /Próximo treino/);
+  assert.match(leaderboard, /Buscar atleta ou box/);
   assert.doesNotMatch(leaderboard, /MobileLeaderboardCard/);
 });
 
