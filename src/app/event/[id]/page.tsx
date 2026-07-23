@@ -26,6 +26,7 @@ export default function EventPage({ params }: PageProps) {
     events,
     athletes,
     isSessionHydrated,
+    publicEventDataStatus,
     loadPublicEventData,
     registerTicket,
     refreshRegistrations
@@ -233,6 +234,11 @@ export default function EventPage({ params }: PageProps) {
     if (mode === 'online') return 'Online';
     if (mode === 'presential') return 'Presencial';
     return 'Evento';
+  };
+
+  const getDivisionName = (divisionId?: string) => {
+    if (!divisionId) return 'Categoria geral';
+    return event.divisions?.find(division => division.id === divisionId)?.name || 'Categoria geral';
   };
 
   const handleTabChange = (tabId: typeof activeTab) => {
@@ -524,10 +530,21 @@ export default function EventPage({ params }: PageProps) {
                 
                 <div className="space-y-6 relative before:absolute before:left-3.5 before:top-2 before:bottom-2 before:w-[2px] before:bg-card-border">
                   {scheduleItems.length > 0 ? (
-                    scheduleItems.map((item, index) => {
-                      const isHeat = item.kind === 'heat';
-                      return (
-                        <div key={item.id} className="flex gap-4 relative">
+	                    scheduleItems.map((item, index) => {
+	                      const isHeat = item.kind === 'heat';
+	                      const heatParticipantSlots = (item.athleteIds || [])
+	                        .map((athleteId, slotIndex) => ({ athleteId: athleteId?.trim?.() || '', slotIndex }))
+	                        .filter(slot => Boolean(slot.athleteId));
+	                      const resolvedHeatParticipants = heatParticipantSlots
+	                        .map(slot => {
+	                          const athlete = athletes.find(a => a.id === slot.athleteId);
+	                          return athlete ? { ...slot, athlete } : null;
+	                        })
+	                        .filter((participant): participant is { athleteId: string; slotIndex: number; athlete: Athlete } => Boolean(participant));
+	                      const unresolvedHeatCount = heatParticipantSlots.length - resolvedHeatParticipants.length;
+	                      const isPublicEventLoading = publicEventDataStatus[eventId] === 'loading';
+	                      return (
+	                        <div key={item.id} className="flex gap-4 relative">
                           <div className={`z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border bg-dark-gray ${
                             index === scheduleItems.length - 1 ? 'border-card-border' : 'border-primary'
                           }`}>
@@ -560,31 +577,63 @@ export default function EventPage({ params }: PageProps) {
                                   <span className="text-white text-xs font-number font-bold">{item.endTime}</span>
                                 </div>
                               </div>
-                              {item.athleteIds && item.athleteIds.length > 0 && (
-                                <div className="mt-3 pt-3 border-t border-card-border/40 space-y-2 text-left">
-                                  <span className="text-[9px] font-black text-muted-soft uppercase tracking-wider block">Atletas / Equipes</span>
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {item.athleteIds.map(athId => {
-                                      const ath = athletes.find(a => a.id === athId);
-                                      if (!ath) return null;
-                                      return (
-                                        <span 
-                                          key={athId} 
-                                          className="inline-flex items-center gap-1 rounded bg-black/40 border border-card-border/60 px-2.5 py-1 text-[10px] font-bold text-white transition-colors hover:border-primary/30"
-                                        >
-                                          {ath.isTeam && (
-                                            <span className="text-[8px] bg-primary/20 text-primary px-1 rounded font-black">EQ</span>
-                                          )}
-                                          {ath.name}
-                                          {ath.box && <span className="text-muted-soft text-[9px] font-normal">({ath.box})</span>}
-                                        </span>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          ) : (
+	                              <div className="mt-3 pt-3 border-t border-card-border/40 space-y-2 text-left">
+	                                <div className="flex flex-wrap items-center justify-between gap-2">
+	                                  <span className="text-[9px] font-black text-muted-soft uppercase tracking-wider block">
+	                                    Atletas / Equipes
+	                                  </span>
+	                                  {heatParticipantSlots.length > 0 && (
+	                                    <span className="rounded border border-card-border/60 bg-black/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-muted-soft font-number">
+	                                      {resolvedHeatParticipants.length}/{heatParticipantSlots.length}
+	                                    </span>
+	                                  )}
+	                                </div>
+
+	                                {resolvedHeatParticipants.length > 0 ? (
+	                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+	                                    {resolvedHeatParticipants.map(({ athlete, athleteId, slotIndex }) => {
+	                                      const safeBox = athlete.box && athlete.box !== 'undefined' ? athlete.box : '';
+	                                      return (
+	                                        <div
+	                                          key={`${item.id}-${athleteId}-${slotIndex}`}
+	                                          className="flex min-w-0 items-center gap-2 rounded bg-black/40 border border-card-border/60 px-2.5 py-2 text-[10px] text-white transition-colors hover:border-primary/30"
+	                                        >
+	                                          <span className="shrink-0 rounded bg-primary/10 border border-primary/20 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-primary">
+	                                            Vaga {slotIndex + 1}
+	                                          </span>
+	                                          {athlete.isTeam && (
+	                                            <span className="shrink-0 text-[8px] bg-primary/20 text-primary px-1 rounded font-black">EQ</span>
+	                                          )}
+	                                          <div className="min-w-0 flex-1">
+	                                            <p className="truncate font-bold uppercase tracking-wider">{athlete.name}</p>
+	                                            <p className="truncate text-[9px] font-medium text-muted-soft">
+	                                              {getDivisionName(athlete.divisionId)}{safeBox ? ` - ${safeBox}` : ''}
+	                                            </p>
+	                                          </div>
+	                                        </div>
+	                                      );
+	                                    })}
+	                                  </div>
+	                                ) : heatParticipantSlots.length > 0 ? (
+	                                  <p className="rounded border border-card-border/50 bg-black/20 px-3 py-2 text-[10px] font-semibold text-muted-soft">
+	                                    {isPublicEventLoading
+	                                      ? 'Participantes em carregamento...'
+	                                      : 'Participantes vinculados, mas os perfis públicos ainda não foram encontrados.'}
+	                                  </p>
+	                                ) : (
+	                                  <p className="rounded border border-card-border/50 bg-black/20 px-3 py-2 text-[10px] font-semibold text-muted-soft">
+	                                    Nenhum participante publicado nesta bateria.
+	                                  </p>
+	                                )}
+
+	                                {unresolvedHeatCount > 0 && resolvedHeatParticipants.length > 0 && (
+	                                  <p className="text-[9px] font-semibold text-muted-soft">
+	                                    {unresolvedHeatCount} participante(s) ainda sem dados públicos carregados.
+	                                  </p>
+	                                )}
+	                              </div>
+	                            </div>
+	                          ) : (
                             <div className="space-y-1">
                               <div className="flex flex-wrap items-center gap-2">
                                 <span className="rounded border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-primary">
