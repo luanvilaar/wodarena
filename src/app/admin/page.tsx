@@ -751,6 +751,7 @@ export default function AdminPage() {
   const [heatCount, setHeatCount] = useState(3);
   const [heatCapacity, setHeatCapacity] = useState(5);
   const [heatAllocations, setHeatAllocations] = useState<Record<string, string[]>>({});
+  const [heatDivisionFilterId, setHeatDivisionFilterId] = useState('');
 
   // Estados de perfis clicáveis (Drawer/Modal)
   const [selectedAthleteForProfile, setSelectedAthleteForProfile] = useState<Athlete | null>(null);
@@ -1494,11 +1495,49 @@ export default function AdminPage() {
     setEditEventIsTicketingActive(evt.isTicketingActive ?? true);
     setEditEventFormat(evt.format || 'individual');
     setEditEventType(evt.eventType || 'functional_fitness');
+    setHeatDivisionFilterId('');
 
 
     // Inicializar estados da calculadora de baterias
     setHeatDate(evt.date);
-    if (evt.workouts && evt.workouts.length > 0) {
+    if (evt.eventType === 'fitness_racing') {
+      setHeatWorkoutId('');
+
+      const existingFitnessRaceHeats = (evt.scheduleItems || [])
+        .filter(item => item.kind === 'heat' && !item.workoutId)
+        .sort((a, b) => (a.heatNumber || 0) - (b.heatNumber || 0));
+
+      if (existingFitnessRaceHeats.length > 0) {
+        const allocations: Record<string, string[]> = {};
+        let foundCapacity = 5;
+
+        existingFitnessRaceHeats.forEach(item => {
+          const cap = item.capacity || 5;
+          const aths = item.athleteIds || [];
+          allocations[item.id] = Array.from({ length: cap }, (_, idx) => aths[idx] || "");
+          if (item.capacity) foundCapacity = item.capacity;
+        });
+
+        const firstHeat = existingFitnessRaceHeats[0];
+        if (firstHeat.date) setHeatDate(firstHeat.date);
+        if (firstHeat.time) setHeatStartTime(firstHeat.time);
+        if (firstHeat.warmupTime && firstHeat.time) {
+          setHeatWarmupDuration(hhmmToMinutes(firstHeat.time) - hhmmToMinutes(firstHeat.warmupTime));
+        }
+        if (firstHeat.checkinTime && firstHeat.time) {
+          setHeatCheckinDuration(hhmmToMinutes(firstHeat.time) - hhmmToMinutes(firstHeat.checkinTime));
+        }
+        if (firstHeat.endTime && firstHeat.time) {
+          setHeatWorkoutDuration(hhmmToMinutes(firstHeat.endTime) - hhmmToMinutes(firstHeat.time));
+        }
+
+        setHeatCount(existingFitnessRaceHeats.length);
+        setHeatCapacity(foundCapacity);
+        setHeatAllocations(allocations);
+      } else {
+        setHeatAllocations({});
+      }
+    } else if (evt.workouts && evt.workouts.length > 0) {
       setHeatWorkoutId(evt.workouts[0].id);
       const w = evt.workouts[0];
       if (w.timeCap) {
@@ -4782,8 +4821,22 @@ export default function AdminPage() {
   const renderAbaSchedule = () => {
     const workouts = selectedEventToManage?.workouts || [];
     const hasWorkouts = workouts.length > 0;
+    const isFitnessRacingEvent = selectedEventToManage?.eventType === 'fitness_racing';
+    const hasHeatScheduler = isFitnessRacingEvent || hasWorkouts;
 
     const selectedWorkout = workouts.find(w => w.id === heatWorkoutId);
+    const divisionId = selectedWorkout?.divisionId;
+    const heatScopeId = isFitnessRacingEvent && selectedEventToManage
+      ? `fitness-race-${selectedEventToManage.id}`
+      : heatWorkoutId;
+    const hasActiveHeatScope = isFitnessRacingEvent || Boolean(heatWorkoutId);
+    const heatKeyPrefix = heatScopeId ? `heat-${heatScopeId}-` : '';
+    const buildHeatKey = (heatNumber: number) => `${heatKeyPrefix}${heatNumber}`;
+    const isHeatInActiveScope = (item: EventScheduleItem) => {
+      if (item.kind !== 'heat') return false;
+      if (isFitnessRacingEvent) return !item.workoutId;
+      return item.workoutId === heatWorkoutId;
+    };
 
     // Identificar as provas equivalentes de Fitness Racing TOTAL
     const getEquivalentWorkoutIds = (workoutId: string) => {
@@ -4825,25 +4878,24 @@ export default function AdminPage() {
     };
 
     const handleSaveWorkoutHeats = async () => {
-      if (!selectedEventToManage || !heatWorkoutId) return;
+      if (!selectedEventToManage || !hasActiveHeatScope) return;
 
-      if (!selectedWorkout) return;
+      if (!isFitnessRacingEvent && !selectedWorkout) return;
 
       // Descobrir se as baterias já existiam e estavam publicadas
       const wasPublishedBefore = (selectedEventToManage.scheduleItems || []).some(
-        item => item.kind === 'heat' && item.workoutId === heatWorkoutId && item.isPublished
+        item => item.kind === 'heat'
+          && (isFitnessRacingEvent ? !item.workoutId : item.workoutId === heatWorkoutId)
+          && item.isPublished
       );
 
       // 1. Gerar as novas baterias em lote para todos os workouts do grupo equivalente
       const newHeatItems: EventScheduleItem[] = [];
 
-      for (const wId of targetWorkoutIds) {
-        const currentWorkout = workouts.find(w => w.id === wId);
-        if (!currentWorkout) continue;
-
-        let currentStartTime = hhmmToMinutes(heatStartTime);
+      if (isFitnessRacingEvent) {
+        const firstStartTime = hhmmToMinutes(heatStartTime);
         for (let i = 1; i <= heatCount; i++) {
-          const startMin = currentStartTime;
+          const startMin = firstStartTime + ((i - 1) * heatIntervalDuration);
           const endMin = startMin + heatWorkoutDuration;
           const filaMin = startMin - heatCheckinDuration;
           const warmupMin = startMin - heatWarmupDuration;
@@ -4852,19 +4904,17 @@ export default function AdminPage() {
           const warmupStr = minutesToHhmm(warmupMin);
           const checkinStr = minutesToHhmm(filaMin);
           const endStr = minutesToHhmm(endMin);
-
-          const currentAlloc = heatAllocations[`heat-${heatWorkoutId}-${i}`] || [];
+          const currentAlloc = heatAllocations[buildHeatKey(i)] || [];
           const finalAlloc = Array.from({ length: heatCapacity }, (_, idx) => currentAlloc[idx] || "");
 
           newHeatItems.push({
-            id: `heat-${wId}-${i}`,
+            id: buildHeatKey(i),
             kind: 'heat',
             date: heatDate,
             time: timeStr,
-            title: `BATERIA ${i} - ${currentWorkout.name}`,
-            description: `Aquecimento: ${warmupStr} | Fila: ${checkinStr} | Início: ${timeStr} | Final: ${endStr}`,
+            title: `BATERIA ${i} - FITNESS RACE`,
+            description: `Aquecimento: ${warmupStr} | Fila: ${checkinStr} | Largada: ${timeStr} | Previsão final: ${endStr}`,
             location: selectedEventToManage.location,
-            workoutId: wId,
             heatNumber: i,
             warmupTime: warmupStr,
             checkinTime: checkinStr,
@@ -4873,16 +4923,57 @@ export default function AdminPage() {
             capacity: heatCapacity,
             isPublished: wasPublishedBefore
           });
+        }
+      } else {
+        for (const wId of targetWorkoutIds) {
+          const currentWorkout = workouts.find(w => w.id === wId);
+          if (!currentWorkout) continue;
 
-          currentStartTime = endMin + heatIntervalDuration;
+          let currentStartTime = hhmmToMinutes(heatStartTime);
+          for (let i = 1; i <= heatCount; i++) {
+            const startMin = currentStartTime;
+            const endMin = startMin + heatWorkoutDuration;
+            const filaMin = startMin - heatCheckinDuration;
+            const warmupMin = startMin - heatWarmupDuration;
+
+            const timeStr = minutesToHhmm(startMin);
+            const warmupStr = minutesToHhmm(warmupMin);
+            const checkinStr = minutesToHhmm(filaMin);
+            const endStr = minutesToHhmm(endMin);
+
+            const currentAlloc = heatAllocations[`heat-${heatWorkoutId}-${i}`] || [];
+            const finalAlloc = Array.from({ length: heatCapacity }, (_, idx) => currentAlloc[idx] || "");
+
+            newHeatItems.push({
+              id: `heat-${wId}-${i}`,
+              kind: 'heat',
+              date: heatDate,
+              time: timeStr,
+              title: `BATERIA ${i} - ${currentWorkout.name}`,
+              description: `Aquecimento: ${warmupStr} | Fila: ${checkinStr} | Início: ${timeStr} | Final: ${endStr}`,
+              location: selectedEventToManage.location,
+              workoutId: wId,
+              heatNumber: i,
+              warmupTime: warmupStr,
+              checkinTime: checkinStr,
+              endTime: endStr,
+              athleteIds: finalAlloc,
+              capacity: heatCapacity,
+              isPublished: wasPublishedBefore
+            });
+
+            currentStartTime = endMin + heatIntervalDuration;
+          }
         }
       }
 
       // 2. Mesclar removendo baterias antigas de todos os workouts do grupo
       const existingItems = selectedEventToManage.scheduleItems || [];
-      const filteredItems = existingItems.filter(
-        item => !(item.kind === 'heat' && item.workoutId && targetWorkoutIds.includes(item.workoutId))
-      );
+      const filteredItems = isFitnessRacingEvent
+        ? existingItems.filter(item => item.kind !== 'heat')
+        : existingItems.filter(
+            item => !(item.kind === 'heat' && item.workoutId && targetWorkoutIds.includes(item.workoutId))
+          );
 
       const updatedSchedule = [...filteredItems, ...newHeatItems];
 
@@ -4890,7 +4981,12 @@ export default function AdminPage() {
       try {
         await updateEvent(selectedEventToManage.id, { scheduleItems: updatedSchedule });
         setSelectedEventToManage(prev => prev ? { ...prev, scheduleItems: updatedSchedule } : null);
-        setAdminNotice({ text: `Baterias salvas com sucesso para o grupo de categorias equivalentes!`, tone: 'success' });
+        setAdminNotice({
+          text: isFitnessRacingEvent
+            ? 'Cronograma de largadas do Fitness Race salvo com sucesso para todos os inscritos.'
+            : 'Baterias salvas com sucesso para o grupo de categorias equivalentes!',
+          tone: 'success'
+        });
       } catch (err) {
         console.error(err);
         setAdminNotice({ text: 'Não foi possível salvar o cronograma de baterias.', tone: 'error' });
@@ -4899,18 +4995,26 @@ export default function AdminPage() {
 
     // Função para limpar baterias salvas do grupo
     const handleClearWorkoutHeats = async () => {
-      if (!selectedEventToManage || !heatWorkoutId) return;
+      if (!selectedEventToManage || !hasActiveHeatScope) return;
 
-      if (!selectedWorkout) return;
+      if (!isFitnessRacingEvent && !selectedWorkout) return;
 
-      const updatedSchedule = (selectedEventToManage.scheduleItems || []).filter(
-        item => !(item.kind === 'heat' && item.workoutId && targetWorkoutIds.includes(item.workoutId))
-      );
+      const updatedSchedule = isFitnessRacingEvent
+        ? (selectedEventToManage.scheduleItems || []).filter(item => item.kind !== 'heat')
+        : (selectedEventToManage.scheduleItems || []).filter(
+            item => !(item.kind === 'heat' && item.workoutId && targetWorkoutIds.includes(item.workoutId))
+          );
 
       try {
         await updateEvent(selectedEventToManage.id, { scheduleItems: updatedSchedule });
         setSelectedEventToManage(prev => prev ? { ...prev, scheduleItems: updatedSchedule } : null);
-        setAdminNotice({ text: `Baterias para o grupo de percursos equivalentes foram removidas.`, tone: 'success' });
+        setHeatAllocations({});
+        setAdminNotice({
+          text: isFitnessRacingEvent
+            ? 'Baterias do Fitness Race foram removidas.'
+            : 'Baterias para o grupo de percursos equivalentes foram removidas.',
+          tone: 'success'
+        });
       } catch (err) {
         console.error(err);
         setAdminNotice({ text: 'Não foi possível remover as baterias.', tone: 'error' });
@@ -4919,37 +5023,20 @@ export default function AdminPage() {
 
     // Função de auto-preenchimento das baterias pelo leaderboard reverso para o grupo
     const handleAutoFillHeats = () => {
-      if (!selectedEventToManage || !heatWorkoutId) return;
+      if (!selectedEventToManage || !hasActiveHeatScope) return;
 
-      if (!selectedWorkout) return;
+      if (!isFitnessRacingEvent && !selectedWorkout) return;
 
-      const isFitnessRacingTotal = selectedEventToManage.eventType === 'fitness_racing' && selectedWorkout.code === 'TOTAL';
       let athletesToAllocate: { id: string }[] = [];
 
-      if (isFitnessRacingTotal) {
-        // Coleta apenas as divisões equivalentes do grupo de percurso
-        const activeDiv = (selectedEventToManage?.divisions || []).find(d => d.id === selectedWorkout.divisionId);
-        const activeLayout = activeDiv?.courseLayout || [];
-        const equivalentDivisions = (selectedEventToManage?.divisions || []).filter(d => {
-          if (d.id === selectedWorkout.divisionId) return true;
-          if (!d.courseLayout || d.courseLayout.length !== activeLayout.length) return false;
-          return d.courseLayout.every((stg, idx) => stg.name === activeLayout[idx]?.name && stg.type === activeLayout[idx]?.type);
-        });
-
-        const allDivisionsAthletes: { id: string }[] = [];
-
-        equivalentDivisions.forEach(div => {
-          const divLeaderboard = getLeaderboard(selectedEventToManage.id, div.id);
-          if (divLeaderboard.length > 0) {
-            const reversedIds = [...divLeaderboard].reverse().map(entry => ({ id: entry.athlete.id }));
-            allDivisionsAthletes.push(...reversedIds);
-          } else {
-            const divAthletes = athletes.filter(a => a.divisionId === div.id && approvedAthleteIds.has(a.id));
-            allDivisionsAthletes.push(...divAthletes.map(a => ({ id: a.id })));
-          }
-        });
-
-        athletesToAllocate = allDivisionsAthletes;
+      if (isFitnessRacingEvent) {
+        const eventDivisionIds = (selectedEventToManage.divisions || []).map(d => d.id);
+        const eventAthletes = athletes.filter(a => eventDivisionIds.includes(a.divisionId) && approvedAthleteIds.has(a.id));
+        if (eventAthletes.length === 0) {
+          setAdminNotice({ text: 'Não há competidores inscritos no evento para alocar.', tone: 'error' });
+          return;
+        }
+        athletesToAllocate = eventAthletes.map(a => ({ id: a.id }));
       } else if (divisionId) {
         const leaderboardList = getLeaderboard(selectedEventToManage.id, divisionId);
         if (leaderboardList.length === 0) {
@@ -4972,14 +5059,14 @@ export default function AdminPage() {
       // Distribui atletas pelas baterias de forma sequencial por raias
       const newAllocations: Record<string, string[]> = {};
       for (let i = 1; i <= heatCount; i++) {
-        newAllocations[`heat-${heatWorkoutId}-${i}`] = Array(heatCapacity).fill("");
+        newAllocations[buildHeatKey(i)] = Array(heatCapacity).fill("");
       }
 
       let heatIndex = 0;
       let laneIndex = 0;
       athletesToAllocate.forEach(entry => {
         if (heatIndex >= heatCount) return; // Sem mais baterias disponíveis
-        const targetHeatKey = `heat-${heatWorkoutId}-${heatIndex + 1}`;
+        const targetHeatKey = buildHeatKey(heatIndex + 1);
         newAllocations[targetHeatKey][laneIndex] = entry.id;
         laneIndex++;
         
@@ -5002,6 +5089,7 @@ export default function AdminPage() {
       } else {
         setAdminNotice({
           text: divisionId
+            && !isFitnessRacingEvent
             ? 'Auto-preenchimento concluído! Os piores resultados foram alocados nas primeiras baterias e os melhores por último.'
             : `Auto-preenchimento concluído! ${allocatedCount} competidor(es) distribuídos em ${heatCount} bateria(s).`,
           tone: 'success'
@@ -5011,10 +5099,14 @@ export default function AdminPage() {
 
     // Gerar baterias na memória para visualização em tempo real na tabela
     const generatedHeatsList: { number: number; warmup: string; fila: string; inicio: string; final: string; }[] = [];
-    if (heatWorkoutId) {
-      let currentStartTime = hhmmToMinutes(heatStartTime);
+    if (hasActiveHeatScope) {
+      const firstStartTime = hhmmToMinutes(heatStartTime);
       for (let i = 1; i <= heatCount; i++) {
-        const startMin = currentStartTime;
+        const startMin = isFitnessRacingEvent
+          ? firstStartTime + ((i - 1) * heatIntervalDuration)
+          : i === 1
+            ? firstStartTime
+            : hhmmToMinutes(generatedHeatsList[i - 2].final) + heatIntervalDuration;
         const endMin = startMin + heatWorkoutDuration;
         const filaMin = startMin - heatCheckinDuration;
         const warmupMin = startMin - heatWarmupDuration;
@@ -5026,13 +5118,12 @@ export default function AdminPage() {
           inicio: minutesToHhmm(startMin),
           final: minutesToHhmm(endMin)
         });
-
-        currentStartTime = endMin + heatIntervalDuration;
       }
     }
 
     // Verifica se a criação de baterias está bloqueada por falta de baterias na prova anterior
     const getPreviousWorkoutLockStatus = () => {
+      if (isFitnessRacingEvent) return { isLocked: false, previousWorkout: null };
       if (!heatWorkoutId || !selectedEventToManage) return { isLocked: false, previousWorkout: null };
 
       const currentWorkout = workouts.find(w => w.id === heatWorkoutId);
@@ -5065,26 +5156,10 @@ export default function AdminPage() {
     const getDivisionName = (divId: string) => {
       return (selectedEventToManage?.divisions || []).find(d => d.id === divId)?.name || 'Geral';
     };
-
-
-
-    const divisionId = selectedWorkout?.divisionId;
-    const isFitnessRacingTotal = selectedEventToManage?.eventType === 'fitness_racing' && selectedWorkout?.code === 'TOTAL';
-    // Se o WOD tem categoria vinculada e não é Fitness Racing TOTAL, filtra atletas dessa categoria
-    // Se for Fitness Racing TOTAL ou WOD geral, mostra todos os atletas das divisões do evento
-    const categoryAthletes = isFitnessRacingTotal
+    const categoryAthletes = isFitnessRacingEvent
       ? (() => {
-          // As divisões que compartilham o mesmo layout que a selecionada
-          const activeDiv = (selectedEventToManage?.divisions || []).find(d => d.id === selectedWorkout?.divisionId);
-          const activeLayout = activeDiv?.courseLayout || [];
-          const equivalentDivisionIds = (selectedEventToManage?.divisions || [])
-            .filter(d => {
-              if (d.id === selectedWorkout?.divisionId) return true;
-              if (!d.courseLayout || d.courseLayout.length !== activeLayout.length) return false;
-              return d.courseLayout.every((stg, idx) => stg.name === activeLayout[idx]?.name && stg.type === activeLayout[idx]?.type);
-            })
-            .map(d => d.id);
-          return athletes.filter(a => equivalentDivisionIds.includes(a.divisionId) && approvedAthleteIds.has(a.id));
+          const eventDivisionIds = (selectedEventToManage?.divisions || []).map(d => d.id);
+          return athletes.filter(a => eventDivisionIds.includes(a.divisionId) && approvedAthleteIds.has(a.id));
         })()
       : (divisionId
           ? athletes.filter(a => a.divisionId === divisionId && approvedAthleteIds.has(a.id))
@@ -5095,10 +5170,17 @@ export default function AdminPage() {
         );
     const allAllocatedIds = Object.values(heatAllocations).flat();
     const pendingAthletes = categoryAthletes.filter(ath => !allAllocatedIds.includes(ath.id));
+    const heatDivisionFilterOptions = (selectedEventToManage?.divisions || [])
+      .filter(div => categoryAthletes.some(ath => ath.divisionId === div.id));
+    const visiblePendingAthletes = pendingAthletes.filter(ath => {
+      const matchesDivision = !heatDivisionFilterId || ath.divisionId === heatDivisionFilterId;
+      const matchesSearch = ath.name.toLowerCase().includes(heatAthleteSearchQuery.toLowerCase());
+      return matchesDivision && matchesSearch;
+    });
 
     // Baterias salvas no banco de dados para a prova selecionada
     const savedHeatsForWorkout = (selectedEventToManage?.scheduleItems || []).filter(
-      item => item.kind === 'heat' && item.workoutId === heatWorkoutId
+      item => isHeatInActiveScope(item)
     );
     const savedAllocatedIds = savedHeatsForWorkout.flatMap(h => h.athleteIds || []);
     const savedPendingAthletes = categoryAthletes.filter(ath => !savedAllocatedIds.includes(ath.id));
@@ -5108,11 +5190,11 @@ export default function AdminPage() {
 
     // Publicar Baterias para o grupo
     const handlePublishHeats = async () => {
-      if (!selectedEventToManage || !heatWorkoutId) return;
+      if (!selectedEventToManage || !hasActiveHeatScope) return;
       if (!isSavedScheduleComplete) return;
 
       const updatedSchedule = (selectedEventToManage.scheduleItems || []).map(item => {
-        if (item.kind === 'heat' && item.workoutId && targetWorkoutIds.includes(item.workoutId)) {
+        if (item.kind === 'heat' && (isFitnessRacingEvent ? !item.workoutId : item.workoutId && targetWorkoutIds.includes(item.workoutId))) {
           return { ...item, isPublished: true };
         }
         return item;
@@ -5121,7 +5203,12 @@ export default function AdminPage() {
       try {
         await updateEvent(selectedEventToManage.id, { scheduleItems: updatedSchedule });
         setSelectedEventToManage(prev => prev ? { ...prev, scheduleItems: updatedSchedule } : null);
-        setAdminNotice({ text: 'Baterias publicadas com sucesso para as categorias vinculadas!', tone: 'success' });
+        setAdminNotice({
+          text: isFitnessRacingEvent
+            ? 'Baterias do Fitness Race publicadas com sucesso!'
+            : 'Baterias publicadas com sucesso para as categorias vinculadas!',
+          tone: 'success'
+        });
       } catch (err) {
         console.error(err);
         setAdminNotice({ text: 'Erro ao publicar baterias.', tone: 'error' });
@@ -5151,6 +5238,35 @@ export default function AdminPage() {
         nextAllocations[heatId] = currentList;
 
         return nextAllocations;
+      });
+    };
+
+    const handleQuickAllocateAthlete = (athleteId: string) => {
+      if (isWorkoutLocked) return;
+      if (Object.values(heatAllocations).some(allocation => allocation.includes(athleteId))) {
+        setAdminNotice({ text: 'Este participante já está alocado em uma bateria.', tone: 'error' });
+        return;
+      }
+
+      for (let heatNumber = 1; heatNumber <= heatCount; heatNumber++) {
+        const heatId = buildHeatKey(heatNumber);
+        const currentList = heatAllocations[heatId] || [];
+        for (let laneIndex = 0; laneIndex < heatCapacity; laneIndex++) {
+          if (!currentList[laneIndex]) {
+            handleAddAthleteToHeatLane(heatId, athleteId, laneIndex);
+            const participantLabel = isFitnessRacingEvent ? 'participante' : 'competidor';
+            setAdminNotice({
+              text: `${participantLabel} alocado na Bateria ${heatNumber}, ${isFitnessRacingEvent ? 'vaga' : 'raia'} ${laneIndex + 1}.`,
+              tone: 'success'
+            });
+            return;
+          }
+        }
+      }
+
+      setAdminNotice({
+        text: 'Não há vagas livres. Aumente a quantidade de baterias/grupos ou a capacidade.',
+        tone: 'error'
       });
     };
 
@@ -5222,11 +5338,11 @@ export default function AdminPage() {
           <button
             type="button"
             onClick={() => {
-              if (hasWorkouts) setScheduleSubTab('heats');
+              if (hasHeatScheduler) setScheduleSubTab('heats');
             }}
-            disabled={!hasWorkouts}
+            disabled={!hasHeatScheduler}
             className={`rounded-md px-4 py-2 text-xs font-semibold uppercase tracking-wider transition-all duration-200 relative ${
-              !hasWorkouts
+              !hasHeatScheduler
                 ? 'bg-card/45 text-muted-soft/40 border border-card-border/30 cursor-not-allowed'
                 : scheduleSubTab === 'heats'
                 ? 'bg-primary text-ink'
@@ -5234,7 +5350,7 @@ export default function AdminPage() {
             }`}
           >
             Baterias de Provas
-            {!hasWorkouts && (
+            {!hasHeatScheduler && (
               <span className="absolute -top-2 -right-2 bg-red-500/20 text-red-400 border border-red-500/30 rounded-full text-[8px] px-1.5 py-0.5 font-bold scale-75">Bloqueado</span>
             )}
           </button>
@@ -5407,7 +5523,9 @@ export default function AdminPage() {
                   </span>
                 </div>
                 <p className="text-xs text-muted-soft font-medium">
-                  Gestão de horários e alocação de equipes para o WOD.
+                  {isFitnessRacingEvent
+                    ? 'Gestão de largadas por janela para todos os inscritos do evento.'
+                    : 'Gestão de horários e alocação de equipes para o WOD.'}
                 </p>
               </div>
 
@@ -5415,10 +5533,10 @@ export default function AdminPage() {
               <div className="flex flex-wrap items-center gap-2.5">
                 <button
                   type="button"
-                  disabled={isWorkoutLocked || !heatWorkoutId}
+                  disabled={isWorkoutLocked || !hasActiveHeatScope}
                   onClick={handleClearWorkoutHeats}
                   className={`inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-xs font-semibold uppercase tracking-wider transition-all duration-200 border ${
-                    isWorkoutLocked || !heatWorkoutId
+                    isWorkoutLocked || !hasActiveHeatScope
                       ? 'bg-card/45 text-muted-soft/40 border border-card-border/30 cursor-not-allowed'
                       : 'bg-dark-gray border border-card-border hover:border-red-500/50 hover:text-red-400 text-foreground cursor-pointer'
                   }`}
@@ -5431,10 +5549,10 @@ export default function AdminPage() {
 
                 <button
                   type="button"
-                  disabled={isWorkoutLocked || !heatWorkoutId}
+                  disabled={isWorkoutLocked || !hasActiveHeatScope}
                   onClick={handleSaveWorkoutHeats}
                   className={`inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-xs font-semibold uppercase tracking-wider transition-all duration-200 border ${
-                    isWorkoutLocked || !heatWorkoutId
+                    isWorkoutLocked || !hasActiveHeatScope
                       ? 'bg-card/45 text-muted-soft/40 border border-card-border/30 cursor-not-allowed'
                       : 'bg-card border border-card-border text-foreground hover:bg-elevated hover:border-primary/50 cursor-pointer'
                   }`}
@@ -5490,120 +5608,94 @@ export default function AdminPage() {
                 </h3>
               </div>
 
-              {/* Seletor do WOD */}
-              <div className="max-w-md">
-                <label htmlFor="heat-wod-select" className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-soft">Selecione a Prova *</label>
-                <select
-                  id="heat-wod-select"
-                  value={heatWorkoutId}
-                  onChange={(e) => {
-                    const wId = e.target.value;
-                    setHeatWorkoutId(wId);
-                    if (!wId) {
-                      setHeatAllocations({});
-                      return;
-                    }
-
-                    const w = workouts.find(work => work.id === wId);
-                    if (w && w.timeCap) {
-                      const match = w.timeCap.match(/^(\d+)/);
-                      if (match) {
-                        setHeatWorkoutDuration(Number(match[1]));
+              {isFitnessRacingEvent ? (
+                <div className="max-w-2xl rounded-lg border border-primary/20 bg-primary/10 px-4 py-3">
+                  <p className="text-xs font-semibold text-primary">
+                    Fitness Race usa todos os inscritos aprovados do evento em um cronograma unico de largadas.
+                  </p>
+                </div>
+              ) : (
+                <div className="max-w-md">
+                  <label htmlFor="heat-wod-select" className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-soft">Selecione a Prova *</label>
+                  <select
+                    id="heat-wod-select"
+                    value={heatWorkoutId}
+                    onChange={(e) => {
+                      const wId = e.target.value;
+                      setHeatWorkoutId(wId);
+                      setHeatDivisionFilterId('');
+                      if (!wId) {
+                        setHeatAllocations({});
+                        return;
                       }
-                    }
 
-                    const allocations: Record<string, string[]> = {};
-                    let foundCapacity = 5;
-                    let foundCount = 3;
-
-                    const existingHeats = (selectedEventToManage?.scheduleItems || []).filter(
-                      item => item.kind === 'heat' && item.workoutId === wId
-                    );
-
-                    if (existingHeats.length > 0) {
-                      existingHeats.forEach(item => {
-                        const cap = item.capacity || 6;
-                        const aths = item.athleteIds || [];
-                        allocations[item.id] = Array.from({ length: cap }, (_, idx) => aths[idx] || "");
-                        if (item.capacity) {
-                          foundCapacity = item.capacity;
+                      const w = workouts.find(work => work.id === wId);
+                      if (w && w.timeCap) {
+                        const match = w.timeCap.match(/^(\d+)/);
+                        if (match) {
+                          setHeatWorkoutDuration(Number(match[1]));
                         }
-                      });
-                      foundCount = existingHeats.length;
-
-                      const firstHeat = existingHeats[0];
-                      if (firstHeat.date) setHeatDate(firstHeat.date);
-                      if (firstHeat.time) setHeatStartTime(firstHeat.time);
-                      if (firstHeat.warmupTime && firstHeat.time) {
-                        setHeatWarmupDuration(hhmmToMinutes(firstHeat.time) - hhmmToMinutes(firstHeat.warmupTime));
                       }
-                      if (firstHeat.checkinTime && firstHeat.time) {
-                        setHeatCheckinDuration(hhmmToMinutes(firstHeat.time) - hhmmToMinutes(firstHeat.checkinTime));
-                      }
-                      if (firstHeat.endTime && firstHeat.time) {
-                        setHeatWorkoutDuration(hhmmToMinutes(firstHeat.endTime) - hhmmToMinutes(firstHeat.time));
-                      }
-                      setHeatCount(foundCount);
-                      setHeatCapacity(foundCapacity);
-                      setHeatAllocations(allocations);
-                    } else {
-                      const initialAllocations: Record<string, string[]> = {};
-                      for (let i = 1; i <= heatCount; i++) {
-                        initialAllocations[`heat-${wId}-${i}`] = Array(heatCapacity).fill("");
-                      }
-                      setHeatAllocations(initialAllocations);
-                    }
-                  }}
-                  className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-foreground focus:ring-1 focus:ring-primary/50 focus:border-primary/50 focus:outline-none transition-all duration-200"
-                >
-                  <option value="">Selecione...</option>
-                  {(() => {
-                    const renderedTotalLayouts: string[] = [];
-                    const options: React.ReactNode[] = [];
 
-                    workouts.forEach((w) => {
-                      const isFRTotal = selectedEventToManage?.eventType === 'fitness_racing' && w.code === 'TOTAL';
+                      const allocations: Record<string, string[]> = {};
+                      let foundCapacity = 5;
+                      let foundCount = 3;
 
-                      if (isFRTotal) {
-                        const div = (selectedEventToManage?.divisions || []).find(d => d.id === w.divisionId);
-                        const layout = div?.courseLayout || [];
-                        const layoutSignature = layout.map(stg => `${stg.name}:${stg.type}`).join('|');
+                      const existingHeats = (selectedEventToManage?.scheduleItems || []).filter(
+                        item => item.kind === 'heat' && item.workoutId === wId
+                      );
 
-                        if (renderedTotalLayouts.includes(layoutSignature)) {
-                          return;
-                        }
-                        renderedTotalLayouts.push(layoutSignature);
-
-                        const equivalentDivs = (selectedEventToManage?.divisions || []).filter(d => {
-                          if (d.id === w.divisionId) return true;
-                          if (!d.courseLayout || d.courseLayout.length !== layout.length) return false;
-                          return d.courseLayout.every((stg, idx) => stg.name === layout[idx]?.name && stg.type === layout[idx]?.type);
+                      if (existingHeats.length > 0) {
+                        existingHeats.forEach(item => {
+                          const cap = item.capacity || 6;
+                          const aths = item.athleteIds || [];
+                          allocations[item.id] = Array.from({ length: cap }, (_, idx) => aths[idx] || "");
+                          if (item.capacity) {
+                            foundCapacity = item.capacity;
+                          }
                         });
+                        foundCount = existingHeats.length;
 
-                        const divNames = equivalentDivs.map(d => d.name).join(', ');
-
-                        options.push(
-                          <option key={w.id} value={w.id}>
-                            {w.code} - {w.name} [{divNames}]
-                          </option>
-                        );
+                        const firstHeat = existingHeats[0];
+                        if (firstHeat.date) setHeatDate(firstHeat.date);
+                        if (firstHeat.time) setHeatStartTime(firstHeat.time);
+                        if (firstHeat.warmupTime && firstHeat.time) {
+                          setHeatWarmupDuration(hhmmToMinutes(firstHeat.time) - hhmmToMinutes(firstHeat.warmupTime));
+                        }
+                        if (firstHeat.checkinTime && firstHeat.time) {
+                          setHeatCheckinDuration(hhmmToMinutes(firstHeat.time) - hhmmToMinutes(firstHeat.checkinTime));
+                        }
+                        if (firstHeat.endTime && firstHeat.time) {
+                          setHeatWorkoutDuration(hhmmToMinutes(firstHeat.endTime) - hhmmToMinutes(firstHeat.time));
+                        }
+                        setHeatCount(foundCount);
+                        setHeatCapacity(foundCapacity);
+                        setHeatAllocations(allocations);
                       } else {
-                        const divName = (selectedEventToManage?.divisions || []).find(d => d.id === w.divisionId)?.name;
-                        options.push(
-                          <option key={w.id} value={w.id}>
-                            {w.code} - {w.name}{divName ? ` [${divName}]` : ' [Geral]'}
-                          </option>
-                        );
+                        const initialAllocations: Record<string, string[]> = {};
+                        for (let i = 1; i <= heatCount; i++) {
+                          initialAllocations[`heat-${wId}-${i}`] = Array(heatCapacity).fill("");
+                        }
+                        setHeatAllocations(initialAllocations);
                       }
-                    });
-
-                    return options;
-                  })()}
-                </select>
-              </div>
+                    }}
+                    className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-foreground focus:ring-1 focus:ring-primary/50 focus:border-primary/50 focus:outline-none transition-all duration-200"
+                  >
+                    <option value="">Selecione...</option>
+                    {workouts.map((w) => {
+                      const divName = (selectedEventToManage?.divisions || []).find(d => d.id === w.divisionId)?.name;
+                      return (
+                        <option key={w.id} value={w.id}>
+                          {w.code} - {w.name}{divName ? ` [${divName}]` : ' [Geral]'}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+              )}
 
               {/* Grid 4 colunas de Inputs */}
-              {heatWorkoutId && (
+              {hasActiveHeatScope && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 pt-2">
                   <div>
                     <label htmlFor="heat-date" className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-soft">Data da Prova *</label>
@@ -5628,7 +5720,9 @@ export default function AdminPage() {
                   </div>
 
                   <div>
-                    <label htmlFor="heat-duration" className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-soft">Duração Prova (min)</label>
+                    <label htmlFor="heat-duration" className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-soft">
+                      {isFitnessRacingEvent ? 'Duração Prevista (min)' : 'Duração Prova (min)'}
+                    </label>
                     <input
                       id="heat-duration"
                       type="number"
@@ -5640,7 +5734,9 @@ export default function AdminPage() {
                   </div>
 
                   <div>
-                    <label htmlFor="heat-interval" className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-soft">Intervalo (min)</label>
+                    <label htmlFor="heat-interval" className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-soft">
+                      {isFitnessRacingEvent ? 'Janela Largada (min)' : 'Intervalo (min)'}
+                    </label>
                     <input
                       id="heat-interval"
                       type="number"
@@ -5652,7 +5748,9 @@ export default function AdminPage() {
                   </div>
 
                   <div>
-                    <label htmlFor="heat-count" className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-soft">Baterias</label>
+                    <label htmlFor="heat-count" className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-soft">
+                      {isFitnessRacingEvent ? 'Grupos' : 'Baterias'}
+                    </label>
                     <input
                       id="heat-count"
                       type="number"
@@ -5661,17 +5759,17 @@ export default function AdminPage() {
                       onChange={(e) => {
                         const newCount = Number(e.target.value);
                         setHeatCount(newCount);
-                        if (heatWorkoutId) {
+                        if (hasActiveHeatScope) {
                           setHeatAllocations(prev => {
                             const nextAllocations = { ...prev };
                             for (let i = 1; i <= newCount; i++) {
-                              const heatId = `heat-${heatWorkoutId}-${i}`;
+                              const heatId = buildHeatKey(i);
                               if (!nextAllocations[heatId]) {
                                 nextAllocations[heatId] = Array(heatCapacity).fill("");
                               }
                             }
                             Object.keys(nextAllocations).forEach(key => {
-                              if (key.startsWith(`heat-${heatWorkoutId}-`)) {
+                              if (key.startsWith(heatKeyPrefix)) {
                                 const num = Number(key.split('-').pop());
                                 if (num > newCount) {
                                   delete nextAllocations[key];
@@ -5687,7 +5785,9 @@ export default function AdminPage() {
                   </div>
 
                   <div>
-                    <label htmlFor="heat-capacity" className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-soft">Raias</label>
+                    <label htmlFor="heat-capacity" className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-soft">
+                      {isFitnessRacingEvent ? 'Vagas por Grupo' : 'Raias'}
+                    </label>
                     <input
                       id="heat-capacity"
                       type="number"
@@ -5696,11 +5796,11 @@ export default function AdminPage() {
                       onChange={(e) => {
                         const newCapacity = Number(e.target.value);
                         setHeatCapacity(newCapacity);
-                        if (heatWorkoutId) {
+                        if (hasActiveHeatScope) {
                           setHeatAllocations(prev => {
                             const nextAllocations = { ...prev };
                             Object.keys(nextAllocations).forEach(key => {
-                              if (key.startsWith(`heat-${heatWorkoutId}-`)) {
+                              if (key.startsWith(heatKeyPrefix)) {
                                 const currentList = nextAllocations[key] || [];
                                 if (currentList.length < newCapacity) {
                                   nextAllocations[key] = [...currentList, ...Array(newCapacity - currentList.length).fill("")];
@@ -5744,7 +5844,7 @@ export default function AdminPage() {
               )}
 
               {/* Botão de Gerar Cronograma e Aviso */}
-              {heatWorkoutId && (
+              {hasActiveHeatScope && (
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-3 border-t border-card-border/40">
                   <div className="flex items-center">
                     {pendingAthletes.length === 0 && categoryAthletes.length > 0 ? (
@@ -5775,7 +5875,7 @@ export default function AdminPage() {
             </div>
 
             {/* Distribuição de Competidores */}
-            {heatWorkoutId && (
+            {hasActiveHeatScope && (
               <div className="border-t border-card-border/60 pt-4 space-y-4">
                 {isWorkoutLocked && previousWorkout && (
                   <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 flex items-start gap-3 text-amber-200">
@@ -5802,19 +5902,34 @@ export default function AdminPage() {
                     <div className="flex items-center justify-between pb-2 border-b border-card-border">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-bold uppercase text-foreground tracking-wider">
-                          EQUIPES
+                          ATLETAS / EQUIPES
                         </span>
-                        <span className="text-[11px] font-semibold bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-full font-number">
-                          {pendingAthletes.length}
-                        </span>
-                      </div>
+	                        <span className="text-[11px] font-semibold bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-full font-number">
+	                          {visiblePendingAthletes.length}/{pendingAthletes.length}
+	                        </span>
+	                      </div>
+	                    </div>
+
+                    <div>
+                      <label htmlFor="heat-category-filter" className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-soft">Categoria</label>
+                      <select
+                        id="heat-category-filter"
+                        value={heatDivisionFilterId}
+                        onChange={(e) => setHeatDivisionFilterId(e.target.value)}
+                        className="w-full rounded-lg border border-card-border bg-dark-gray px-3.5 py-2 text-xs text-foreground focus:ring-1 focus:ring-primary/50 focus:border-primary/50 focus:outline-none transition-all duration-200"
+                      >
+                        <option value="">Todas as categorias</option>
+                        {heatDivisionFilterOptions.map(div => (
+                          <option key={div.id} value={div.id}>{div.name}</option>
+                        ))}
+                      </select>
                     </div>
 
-                    {/* Barra de Busca de Equipes */}
-                    <div className="relative">
-                      <input
+	                    {/* Barra de Busca de Participantes */}
+	                    <div className="relative">
+	                      <input
                         type="text"
-                        placeholder="Buscar equipe..."
+                        placeholder="Buscar participante..."
                         value={heatAthleteSearchQuery}
                         onChange={(e) => setHeatAthleteSearchQuery(e.target.value)}
                         className="w-full rounded-lg border border-card-border bg-dark-gray px-3.5 py-2 pl-9 text-xs text-foreground placeholder:text-muted-soft focus:ring-1 focus:ring-primary/50 focus:border-primary/50 focus:outline-none transition-all duration-200"
@@ -5842,55 +5957,60 @@ export default function AdminPage() {
                       Auto-distribuir
                     </button>
 
-                    {/* Lista das Equipes Pendentes */}
-                    <div className="space-y-2 max-h-[480px] overflow-y-auto pr-1">
-                      {(() => {
-                        const filtered = pendingAthletes.filter(ath =>
-                          ath.name.toLowerCase().includes(heatAthleteSearchQuery.toLowerCase())
-                        );
-
-                        if (filtered.length === 0) {
-                          return (
-                            <p className="text-xs text-muted-soft text-center py-8 italic bg-background/40 rounded-lg border border-card-border/30 font-medium">
-                              Nenhuma equipe pendente
+	                    {/* Lista de Participantes Pendentes */}
+	                    <div className="space-y-2 max-h-[480px] overflow-y-auto pr-1">
+	                      {(() => {
+	                        if (visiblePendingAthletes.length === 0) {
+	                          return (
+	                            <p className="text-xs text-muted-soft text-center py-8 italic bg-background/40 rounded-lg border border-card-border/30 font-medium">
+	                              Nenhum participante pendente
                             </p>
-                          );
-                        }
+	                          );
+	                        }
 
-                        return filtered.map(ath => (
-                          <div
-                            key={ath.id}
-                            draggable={!isWorkoutLocked}
-                            onDragStart={(e) => handleDragStart(e, ath.id)}
-                            className={`flex items-center gap-3 bg-dark-gray border border-card-border/60 rounded-lg p-3 transition-all duration-200 ${
-                              isWorkoutLocked
-                                ? 'opacity-50'
-                                : 'cursor-grab active:cursor-grabbing hover:border-primary/45 hover:bg-elevated'
-                            }`}
-                          >
-                            <div className="shrink-0 flex items-center justify-center h-8 w-8 rounded-full bg-card border border-card-border">
-                              <svg className="h-4 w-4 text-muted-soft" fill="currentColor" viewBox="0 0 24 24">
+	                        return visiblePendingAthletes.map(ath => (
+	                          <button
+                              type="button"
+	                            key={ath.id}
+	                            draggable={!isWorkoutLocked}
+                              disabled={isWorkoutLocked}
+                              onClick={() => handleQuickAllocateAthlete(ath.id)}
+	                            onDragStart={(e) => handleDragStart(e, ath.id)}
+	                            className={`w-full text-left flex items-center gap-3 bg-dark-gray border border-card-border/60 rounded-lg p-3 transition-all duration-200 ${
+	                              isWorkoutLocked
+	                                ? 'opacity-50 cursor-not-allowed'
+	                                : 'cursor-pointer hover:border-primary/45 hover:bg-elevated active:scale-[0.99]'
+	                            }`}
+                              title="Clique para alocar na próxima vaga livre"
+	                          >
+	                            <div className="shrink-0 flex items-center justify-center h-8 w-8 rounded-full bg-card border border-card-border">
+	                              <svg className="h-4 w-4 text-muted-soft" fill="currentColor" viewBox="0 0 24 24">
                                 <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5s-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
                               </svg>
                             </div>
-                            <div className="min-w-0 flex-1 space-y-0.5">
-                              <h5 className="text-xs font-bold text-foreground truncate uppercase tracking-wider">
-                                {ath.name}
+	                            <div className="min-w-0 flex-1 space-y-0.5">
+	                              <h5 className="text-xs font-bold text-foreground truncate uppercase tracking-wider">
+	                                {ath.name}
                               </h5>
                               <p className="text-[11px] text-muted-soft font-medium truncate">
-                                {getDivisionName(ath.divisionId)} &ndash; {ath.isTeam ? 'Equipe' : 'Individual'}
-                              </p>
-                            </div>
-                          </div>
-                        ));
-                      })()}
-                    </div>
+	                                {getDivisionName(ath.divisionId)} &ndash; {ath.isTeam ? 'Equipe' : 'Individual'}
+	                              </p>
+	                            </div>
+                              {!isWorkoutLocked && (
+                                <span className="shrink-0 rounded border border-primary/20 bg-primary/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-primary">
+                                  Alocar
+                                </span>
+                              )}
+	                          </button>
+	                        ));
+	                      })()}
+	                    </div>
                   </div>
 
                   {/* Coluna 2/3: GRID DE BATERIAS */}
                   <div className="xl:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-5">
                     {generatedHeatsList.map((heat) => {
-                      const heatId = `heat-${heatWorkoutId}-${heat.number}`;
+                      const heatId = buildHeatKey(heat.number);
                       const allocatedIds = heatAllocations[heatId] || [];
                       
                       // Filtra os IDs válidos alocados nesta bateria
@@ -5951,7 +6071,7 @@ export default function AdminPage() {
                                   className="space-y-1"
                                 >
                                   <span className="text-[10px] font-semibold uppercase text-muted-soft tracking-wider block">
-                                    Raia {laneIdx + 1}
+                                    {isFitnessRacingEvent ? 'Vaga' : 'Raia'} {laneIdx + 1}
                                   </span>
 
                                   {athlete ? (
@@ -5981,7 +6101,7 @@ export default function AdminPage() {
                                     </div>
                                   ) : (
                                     <div className="flex items-center justify-center border border-dashed border-card-border/60 bg-dark-gray/10 rounded-lg p-2 text-muted-soft/40 text-[10px] uppercase font-bold tracking-wider min-h-[38px]">
-                                      Raia Vazia
+                                      {isFitnessRacingEvent ? 'Vaga Vazia' : 'Raia Vazia'}
                                     </div>
                                   )}
                                 </div>

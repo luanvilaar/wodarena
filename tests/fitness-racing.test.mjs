@@ -29,8 +29,16 @@ test('migração SQL de publicação de percursos existe', () => {
   assert.match(sql, /ALTER TABLE divisions ADD COLUMN IF NOT EXISTS is_course_published/i);
 });
 
-test('alocação mista de atletas e seleção multi-categoria em Fitness Racing', () => {
-  assert.match(admin, /isFitnessRacingTotal/);
-  assert.match(admin, /allDivisionsAthletes/);
-  assert.match(admin, /reversedIds/);
+test('cronograma de Fitness Racing usa escopo global do evento', () => {
+  assert.match(admin, /const isFitnessRacingEvent = selectedEventToManage\?\.eventType === 'fitness_racing'/);
+  assert.match(admin, /Fitness Race usa todos os inscritos aprovados do evento em um cronograma unico de largadas/);
+  assert.match(admin, /firstStartTime \+ \(\(i - 1\) \* heatIntervalDuration\)/);
+  assert.match(admin, /existingItems\.filter\(item => item\.kind !== 'heat'\)/);
+});
+
+test('cronograma permite filtrar categoria e alocar participante com um clique', () => {
+  assert.match(admin, /const \[heatDivisionFilterId, setHeatDivisionFilterId\] = useState\(''\)/);
+  assert.match(admin, /const handleQuickAllocateAthlete = \(athleteId: string\) =>/);
+  assert.match(admin, /id="heat-category-filter"/);
+  assert.match(admin, /onClick=\{\(\) => handleQuickAllocateAthlete\(ath\.id\)\}/);
 });
