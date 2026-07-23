@@ -381,7 +381,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const loadPublicEventData = useCallback(async (eventId: string) => {
-    if (!eventId || currentUser?.role === 'owner' || currentUser?.role === 'manager') return;
+    // A pagina publica do evento tambem pode ser aberta pelo gestor/proprietario.
+    // Nessa situacao o bootstrap privado nao e uma fonte confiavel para a lista
+    // publicada da bateria (por exemplo, apos uma inscricao ou troca de aba).
+    // Sempre hidratamos os perfis publicos do evento e os mesclamos ao contexto.
+    if (!eventId) return;
     if (loadedPublicEventIdsRef.current.has(eventId)) return;
 
     const existingRequest = publicEventRequestsRef.current.get(eventId);
@@ -440,7 +444,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     publicEventRequestsRef.current.set(eventId, request);
     return request;
-  }, [currentUser?.role]);
+  }, []);
 
   // Carregar dados iniciais do Supabase
   useEffect(() => {

@@ -49,6 +49,8 @@ test('public bootstrap is minimal and event data is lazy and single-flight', () 
   assert.match(appContext, /publicEventRequestsRef = useRef\(new Map<string, Promise<void>>\(\)\)/);
   assert.match(appContext, /const existingRequest = publicEventRequestsRef\.current\.get\(eventId\)/);
   assert.match(appContext, /PUBLIC_EVENT_BOOTSTRAP_ENDPOINT/);
+  assert.match(appContext, /const loadPublicEventData = useCallback\(async \(eventId: string\) => \{\s*\/\/ A pagina publica[\s\S]*?if \(!eventId\) return;/);
+  assert.doesNotMatch(appContext, /if \(!eventId \|\| currentUser\?\.role === 'owner' \|\| currentUser\?\.role === 'manager'\) return;/);
   assert.match(eventPage, /loadPublicEventData\(eventId\)/);
   assert.match(leaderboard, /loadPublicEventData\(event\.id\)/);
 });
