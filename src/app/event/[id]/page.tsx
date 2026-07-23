@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { Registration, Athlete } from '@/types';
-import { getEventStatus } from '@/lib/eventStatus';
+import { getEventStatus, getRegistrationAvailability } from '@/lib/eventStatus';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -210,9 +210,9 @@ export default function EventPage({ params }: PageProps) {
   }
 
   const lifecycle = getEventStatus(event);
+  const registrationAvailability = getRegistrationAvailability(event);
   const registrationsAvailable = event.status === 'upcoming'
-    && lifecycle !== 'finished'
-    && event.isTicketingActive;
+    && registrationAvailability.isAvailable;
 
   // Copiar link para compartilhar
   const handleShare = () => {
@@ -241,6 +241,15 @@ export default function EventPage({ params }: PageProps) {
   };
 
   const getStatusLabel = () => {
+    if (registrationAvailability.reason === 'sales_closed') {
+      return (
+        <span className="inline-flex items-center gap-1.5 rounded-[2px] border border-card-border bg-dark-gray/30 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted font-mono">
+          <Lock className="h-3 w-3" />
+          Vendas Encerradas
+        </span>
+      );
+    }
+
     if (lifecycle === 'finished') {
       return (
         <span className="inline-flex items-center gap-1.5 rounded-[2px] border border-card-border bg-dark-gray/30 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted font-mono">
@@ -368,10 +377,16 @@ export default function EventPage({ params }: PageProps) {
                   }`}
                 >
                   <Ticket className="h-4 w-4" />
-                  <span>{registrationsAvailable ? 'Comprar Ingresso' : 'Inscrições Encerradas'}</span>
+                  <span>{registrationsAvailable ? 'Comprar Ingresso' : registrationAvailability.reason === 'sales_closed' ? 'Vendas Encerradas' : 'Inscrições Encerradas'}</span>
                 </button>
               )}
             </div>
+
+            {registrationAvailability.reason === 'sales_closed' && event.status === 'upcoming' && (
+              <p role="status" className="text-center text-xs font-semibold text-gray-300 md:text-right">
+                As vendas online foram encerradas pelo organizador.
+              </p>
+            )}
 
           </div>
         </div>

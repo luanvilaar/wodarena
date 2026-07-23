@@ -6,6 +6,7 @@ import {
 import { ManagerAccessError, assertManagerSalesAccessForEvent, managerAccessErrorResponse } from '@/lib/serverManagerAccess';
 import {
   applyCouponUsageForApprovedRegistration,
+  assertEventRegistrationAvailable,
   assertRegistrationAccess,
   loadRegistrationCheckoutSnapshot,
   RegistrationAccessError
@@ -38,6 +39,7 @@ export async function POST(request: Request) {
 
     const checkoutSnapshot = await loadRegistrationCheckoutSnapshot(supabaseAdmin, registrationData.id);
     const { registrationData: safeRegistrationData, athleteProfile, transactionAmount } = checkoutSnapshot;
+    await assertEventRegistrationAvailable(supabaseAdmin, checkoutSnapshot.eventId);
     await assertManagerSalesAccessForEvent(supabaseAdmin, checkoutSnapshot.eventId);
     const checkoutConfig = await resolveMercadoPagoCheckoutConfig(checkoutSnapshot.eventId);
     console.log(`[MercadoPago Pix API] Usando credenciais ${checkoutConfig.source} do organizador ${checkoutConfig.organizerId} para o evento ${checkoutSnapshot.eventId}`);

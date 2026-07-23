@@ -1,6 +1,13 @@
 import { Event } from '@/types';
 
 export type EventLifecycle = 'active' | 'closing' | 'finished';
+export type RegistrationAvailabilityReason = 'sales_closed' | 'event_finished' | null;
+
+export type RegistrationAvailability = {
+  isAvailable: boolean;
+  lifecycle: EventLifecycle;
+  reason: RegistrationAvailabilityReason;
+};
 
 const CLOSING_THRESHOLD_HOURS = 72;
 
@@ -87,6 +94,22 @@ export function getEventStatus(event: Pick<Event, 'status' | 'date' | 'registrat
   }
 
   return 'active';
+}
+
+export function getRegistrationAvailability(
+  event: Pick<Event, 'status' | 'date' | 'registrationDeadline' | 'isTicketingActive'>,
+): RegistrationAvailability {
+  const lifecycle = getEventStatus(event);
+
+  if (lifecycle === 'finished') {
+    return { isAvailable: false, lifecycle, reason: 'event_finished' };
+  }
+
+  if (event.isTicketingActive === false) {
+    return { isAvailable: false, lifecycle, reason: 'sales_closed' };
+  }
+
+  return { isAvailable: true, lifecycle, reason: null };
 }
 
 export function formatDeadlineCountdown(registrationDeadline: string): string {

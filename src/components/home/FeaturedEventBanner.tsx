@@ -3,9 +3,9 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import { RegisterModal } from '@/components/RegisterModal';
-import { MapPin, ArrowRight } from 'lucide-react';
+import { MapPin, ArrowRight, Lock } from 'lucide-react';
 import Link from 'next/link';
-import { getEventStatus, parseEventDate } from '@/lib/eventStatus';
+import { getEventStatus, getRegistrationAvailability, parseEventDate } from '@/lib/eventStatus';
 
 type CountdownState = {
   days: number;
@@ -105,6 +105,8 @@ export function FeaturedEventBanner({ openLeadModal }: { openLeadModal: () => vo
   }
 
   // Categorias ativas
+  const registrationAvailability = getRegistrationAvailability(featuredEvent);
+  const registrationsAvailable = registrationAvailability.isAvailable;
   const activeDivisions = featuredEvent.divisions?.filter(d => d.isActive) ?? [];
 
   // Formata o subtítulo das divisões (ex: "Individual + Duplas")
@@ -154,9 +156,11 @@ export function FeaturedEventBanner({ openLeadModal }: { openLeadModal: () => vo
             
             {/* Status e badges */}
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="inline-flex items-center gap-1 rounded-full border border-trading-up/30 bg-dark-gray/85 px-2.5 py-1 text-[9px] font-bold uppercase tracking-normal text-trading-up">
-                <span className="h-1.5 w-1.5 rounded-full bg-trading-up animate-pulse" />
-                Inscrições abertas
+              <span className={`inline-flex items-center gap-1 rounded-full border bg-dark-gray/85 px-2.5 py-1 text-[9px] font-bold uppercase tracking-normal ${
+                registrationsAvailable ? 'border-trading-up/30 text-trading-up' : 'border-card-border text-muted'
+              }`}>
+                {registrationsAvailable ? <span className="h-1.5 w-1.5 rounded-full bg-trading-up animate-pulse" /> : <Lock className="h-3 w-3" />}
+                {registrationsAvailable ? 'Inscrições abertas' : 'Vendas encerradas'}
               </span>
               <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-dark-gray/85 px-2.5 py-1 text-[9px] font-bold uppercase tracking-normal text-primary">
                 {featuredEvent.eventType === 'fitness_racing' ? 'Fitness Racing' : 'Functional Fitness'}
@@ -191,13 +195,16 @@ export function FeaturedEventBanner({ openLeadModal }: { openLeadModal: () => vo
 
             {/* Botões de Ação */}
             <div className="flex flex-col gap-2.5 pt-2">
-              <button 
-                onClick={() => setIsRegisterOpen(true)}
-                aria-label={`Abrir inscricao para ${featuredEvent.name}`}
-                className="w-full flex h-12 items-center justify-center gap-2 rounded-md bg-primary px-6 text-sm font-black uppercase text-ink transition-colors hover:bg-primary-hover active:bg-primary-hover"
+              <button
+                disabled={!registrationsAvailable}
+                onClick={() => registrationsAvailable && setIsRegisterOpen(true)}
+                aria-label={registrationsAvailable ? `Abrir inscricao para ${featuredEvent.name}` : 'Vendas encerradas'}
+                className={`w-full flex h-12 items-center justify-center gap-2 rounded-md px-6 text-sm font-black uppercase transition-colors ${
+                  registrationsAvailable ? 'bg-primary text-ink hover:bg-primary-hover active:bg-primary-hover' : 'cursor-not-allowed border border-card-border bg-dark-gray text-muted'
+                }`}
               >
-                Inscreva-se agora
-                <ArrowRight className="h-4 w-4" />
+                {registrationsAvailable ? 'Inscreva-se agora' : 'Vendas encerradas'}
+                {registrationsAvailable ? <ArrowRight className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
               </button>
               <Link 
                 href={`/event/${featuredEvent.id}`}
@@ -246,9 +253,11 @@ export function FeaturedEventBanner({ openLeadModal }: { openLeadModal: () => vo
               </div>
 
               <div className="flex flex-wrap gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-trading-up/30 bg-trading-up/15 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-trading-up backdrop-blur-md">
-                  <span className="h-1.5 w-1.5 rounded-full bg-trading-up animate-pulse" />
-                  Inscrições abertas
+                <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-wider backdrop-blur-md ${
+                  registrationsAvailable ? 'border-trading-up/30 bg-trading-up/15 text-trading-up' : 'border-card-border bg-dark-gray/70 text-muted'
+                }`}>
+                  {registrationsAvailable ? <span className="h-1.5 w-1.5 rounded-full bg-trading-up animate-pulse" /> : <Lock className="h-3 w-3" />}
+                  {registrationsAvailable ? 'Inscrições abertas' : 'Vendas encerradas'}
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/12 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-primary backdrop-blur-md">
                   {featuredEvent.eventType === 'fitness_racing' ? 'Fitness Racing' : 'Functional Fitness'}
@@ -305,12 +314,15 @@ export function FeaturedEventBanner({ openLeadModal }: { openLeadModal: () => vo
 
               {/* Ações do Evento */}
               <div className="flex flex-wrap gap-3">
-                <button 
-                  onClick={() => setIsRegisterOpen(true)}
-                  className="inline-flex h-12 items-center gap-2 rounded-md bg-primary px-6 text-sm font-black uppercase text-ink transition-colors hover:bg-primary-hover active:bg-primary-hover"
+                <button
+                  disabled={!registrationsAvailable}
+                  onClick={() => registrationsAvailable && setIsRegisterOpen(true)}
+                  className={`inline-flex h-12 items-center gap-2 rounded-md px-6 text-sm font-black uppercase transition-colors ${
+                    registrationsAvailable ? 'bg-primary text-ink hover:bg-primary-hover active:bg-primary-hover' : 'cursor-not-allowed border border-card-border bg-dark-gray text-muted'
+                  }`}
                 >
-                  Inscreva-se agora
-                  <ArrowRight className="h-4 w-4" />
+                  {registrationsAvailable ? 'Inscreva-se agora' : 'Vendas encerradas'}
+                  {registrationsAvailable ? <ArrowRight className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
                 </button>
                 <Link 
                   href={`/event/${featuredEvent.id}`}

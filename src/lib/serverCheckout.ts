@@ -2,7 +2,7 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { assertManagerSalesAccessForEvent } from '@/lib/serverManagerAccess';
 import { getRequestSession, verifyRegistrationAccessToken } from '@/lib/serverSecurity';
 import { sendRegistrationEmail } from '@/lib/resend';
-import { getEventStatus } from '@/lib/eventStatus';
+import { getRegistrationAvailability } from '@/lib/eventStatus';
 import { Registration, Athlete, Event } from '@/types';
 
 type RegistrationInput = Record<string, unknown>;
@@ -63,6 +63,48 @@ export class RegistrationAccessError extends Error {
     this.status = status;
   }
 }
+
+type EventRegistrationAvailabilityRow = {
+  id: string;
+  status: Event['status'];
+  date: string;
+  registration_deadline?: string | null;
+  is_ticketing_active?: boolean | null;
+};
+
+const assertRegistrationAvailableForEvent = (event: EventRegistrationAvailabilityRow) => {
+  const availability = getRegistrationAvailability({
+    status: event.status,
+    date: event.date,
+    registrationDeadline: event.registration_deadline || undefined,
+    isTicketingActive: event.is_ticketing_active !== false,
+  });
+
+  if (availability.isAvailable) return;
+
+  if (availability.reason === 'sales_closed') {
+    throw new RegistrationAccessError('As inscricoes online deste evento estao encerradas.', 409);
+  }
+
+  throw new RegistrationAccessError('Este evento esta encerrado e nao aceita novas inscricoes.', 409);
+};
+
+export const assertEventRegistrationAvailable = async (
+  supabaseAdmin: SupabaseClient,
+  eventId: string,
+) => {
+  const { data: event, error } = await supabaseAdmin
+    .from('events')
+    .select('id, status, date, registration_deadline, is_ticketing_active')
+    .eq('id', eventId)
+    .maybeSingle<EventRegistrationAvailabilityRow>();
+
+  if (error || !event) {
+    throw new RegistrationAccessError('Evento nao encontrado para checkout.', 404);
+  }
+
+  assertRegistrationAvailableForEvent(event);
+};
 
 export const assertRegistrationAccess = async (
   supabaseAdmin: SupabaseClient,
@@ -146,17 +188,7 @@ export const validateCheckoutCoupon = async (
     throw new Error('Evento nao encontrado para checkout.');
   }
 
-  if (event.is_ticketing_active === false) {
-    throw new Error('As inscricoes online deste evento estao encerradas.');
-  }
-
-  if (getEventStatus({
-    status: event.status,
-    date: event.date,
-    registrationDeadline: event.registration_deadline || undefined,
-  }) === 'finished') {
-    throw new RegistrationAccessError('Este evento esta encerrado e nao aceita novas inscricoes.', 409);
-  }
+  assertRegistrationAvailableForEvent(event);
 
   await assertManagerSalesAccessForEvent(supabaseAdmin, eventId);
 
@@ -258,17 +290,7 @@ export const calculateSecureRegistrationSnapshot = async (
     throw new Error('Evento nao encontrado para checkout.');
   }
 
-  if (event.is_ticketing_active === false) {
-    throw new Error('As inscricoes online deste evento estao encerradas.');
-  }
-
-  if (getEventStatus({
-    status: event.status,
-    date: event.date,
-    registrationDeadline: event.registration_deadline || undefined,
-  }) === 'finished') {
-    throw new RegistrationAccessError('Este evento esta encerrado e nao aceita novas inscricoes.', 409);
-  }
+  assertRegistrationAvailableForEvent(event);
 
   await assertManagerSalesAccessForEvent(supabaseAdmin, eventId);
 

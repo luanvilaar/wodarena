@@ -12,6 +12,11 @@ const featuredBanner = read('../src/components/home/FeaturedEventBanner.tsx');
 const eventPage = read('../src/app/event/[id]/page.tsx');
 const serverCheckout = read('../src/lib/serverCheckout.ts');
 const registrationStart = read('../src/app/api/registrations/start/route.ts');
+const pixCheckout = read('../src/app/api/checkout/pix/route.ts');
+const cardCheckout = read('../src/app/api/checkout/card/route.ts');
+const preferenceCheckout = read('../src/app/api/checkout/preference/route.ts');
+const checkoutStatus = read('../src/app/api/checkout/status/route.ts');
+const paymentWebhook = read('../src/app/api/webhooks/mercadopago/route.ts');
 const eventStatusModule = await import(`data:text/javascript;base64,${Buffer.from(
   ts.transpileModule(eventStatus, {
     compilerOptions: {
@@ -57,7 +62,8 @@ test('event date parsing accepts supported formats without treating invalid date
 });
 
 test('public surfaces consistently hide registration for derived finished events', () => {
-  assert.match(eventCard, /if \(lifecycle === 'finished'\)/);
+  assert.match(eventCard, /const registrationAvailability = getRegistrationAvailability\(event\)/);
+  assert.match(eventCard, /!registrationAvailability\.isAvailable/);
   assert.match(eventCard, /Evento Encerrado/);
   assert.match(eventCard, /Este evento não está mais disponível para inscrição\./);
   assert.match(homePage, /statusFilter === 'finished' && lifecycle === 'finished'/);
@@ -72,4 +78,27 @@ test('server rejects registrations for derived finished events before persistenc
   assert.match(serverCheckout, /throw new RegistrationAccessError\('Este evento esta encerrado e nao aceita novas inscricoes\.', 409\)/);
   assert.match(registrationStart, /RegistrationAccessError/);
   assert.match(registrationStart, /status: err\.status/);
+});
+
+test('manual ticketing closure has one public signal and blocks only new checkout starts', () => {
+  assert.deepEqual(
+    eventStatusModule.getRegistrationAvailability({
+      status: 'upcoming',
+      date: formatDate(new Date(Date.now() + 86_400_000)),
+      isTicketingActive: false,
+    }),
+    { isAvailable: false, lifecycle: 'active', reason: 'sales_closed' },
+  );
+  assert.match(eventCard, /getRegistrationAvailability\(event\)/);
+  assert.match(eventCard, /Vendas Encerradas/);
+  assert.match(featuredBanner, /const registrationAvailability = getRegistrationAvailability\(featuredEvent\)/);
+  assert.match(featuredBanner, /Vendas encerradas/);
+  assert.match(eventPage, /const registrationAvailability = getRegistrationAvailability\(event\)/);
+  assert.match(eventPage, /Vendas Encerradas/);
+  assert.match(serverCheckout, /export const assertEventRegistrationAvailable/);
+  for (const checkoutRoute of [pixCheckout, cardCheckout, preferenceCheckout]) {
+    assert.match(checkoutRoute, /assertEventRegistrationAvailable\(supabaseAdmin, checkoutSnapshot\.eventId\)/);
+  }
+  assert.doesNotMatch(checkoutStatus, /assertEventRegistrationAvailable/);
+  assert.doesNotMatch(paymentWebhook, /assertEventRegistrationAvailable/);
 });

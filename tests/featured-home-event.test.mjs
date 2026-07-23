@@ -78,6 +78,7 @@ test('home banner mobile layout keeps event content readable and action hierarch
   assert.match(mobileFeaturedBanner, /rounded-md border border-card-border bg-dark-gray px-3 py-2/);
   assert.match(mobileFeaturedBanner, /mt-1 flex flex-wrap items-center gap-x-3 gap-y-1/);
   assert.doesNotMatch(mobileFeaturedBanner, /backdrop-blur-md/);
-  assert.match(mobileFeaturedBanner, /aria-label=\{`Abrir inscricao para \$\{featuredEvent\.name\}`\}/);
+  assert.match(mobileFeaturedBanner, /disabled=\{!registrationsAvailable\}/);
+  assert.match(mobileFeaturedBanner, /aria-label=\{registrationsAvailable \? `Abrir inscricao para \$\{featuredEvent\.name\}` : 'Vendas encerradas'\}/);
   assert.match(mobileFeaturedBanner, /h-10 items-center justify-center rounded-md px-4 text-xs font-bold uppercase text-white\/80 transition-colors hover:text-primary/);
 });

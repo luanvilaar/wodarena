@@ -19,6 +19,7 @@ import { Event } from '@/types';
 import { RegisterModal } from '@/components/RegisterModal';
 import {
   getEventStatus,
+  getRegistrationAvailability,
   formatDeadlineCountdown,
   formatDeadlineDate,
   formatTimeUntilDeadline,
@@ -33,6 +34,7 @@ export function EventCard({ event, priority = false }: EventCardProps) {
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
 
   const lifecycle = getEventStatus(event);
+  const registrationAvailability = getRegistrationAvailability(event);
 
   // Phase 1: preço mínimo entre divisões ativas
   const activeDivisions = event.divisions?.filter((d) => d.isActive) ?? [];
@@ -49,11 +51,11 @@ export function EventCard({ event, priority = false }: EventCardProps) {
     const base =
       'inline-flex items-center gap-1.5 rounded-[2px] border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider font-mono';
 
-    if (lifecycle === 'finished') {
+    if (!registrationAvailability.isAvailable) {
       return (
         <span className={`${base} border-card-border bg-dark-gray/30 text-muted`}>
           <Lock className="h-3 w-3" />
-          Evento Encerrado
+          {registrationAvailability.reason === 'sales_closed' ? 'Vendas Encerradas' : 'Evento Encerrado'}
         </span>
       );
     }
@@ -93,7 +95,7 @@ export function EventCard({ event, priority = false }: EventCardProps) {
   };
 
   const topBorderStyle =
-    lifecycle === 'finished'
+    !registrationAvailability.isAvailable
       ? 'border-t-2 border-t-[#374151]'
       : lifecycle === 'closing'
         ? 'border-t-[3px] border-t-[#F59E0B]'
@@ -112,7 +114,12 @@ export function EventCard({ event, priority = false }: EventCardProps) {
     ) : null;
 
   const auxiliaryText =
-    lifecycle === 'closing' && event.registrationDeadline ? (
+    registrationAvailability.reason === 'sales_closed' ? (
+      <p className="flex items-center gap-1.5 text-xs font-medium text-gray-400">
+        <Lock className="h-3.5 w-3.5 shrink-0" />
+        Vendas online encerradas pelo organizador.
+      </p>
+    ) : lifecycle === 'closing' && event.registrationDeadline ? (
       <p className="flex items-center gap-1.5 text-xs font-medium text-amber-300">
         <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
         Inscrições encerram em {formatTimeUntilDeadline(event.registrationDeadline)}
@@ -135,7 +142,7 @@ export function EventCard({ event, priority = false }: EventCardProps) {
         className={[
           'group flex h-full flex-col overflow-hidden rounded-xl border border-card-border bg-card transition-colors duration-200 hover:border-primary/60',
           topBorderStyle,
-          lifecycle === 'finished' ? 'opacity-70 grayscale-[30%]' : '',
+          !registrationAvailability.isAvailable ? 'opacity-70 grayscale-[30%]' : '',
         ]
           .filter(Boolean)
           .join(' ')}
@@ -250,14 +257,14 @@ export function EventCard({ event, priority = false }: EventCardProps) {
               <ArrowRight className="h-3 w-3 text-primary" />
             </Link>
 
-            {lifecycle === 'finished' ? (
+            {!registrationAvailability.isAvailable ? (
               <button
                 disabled
-                aria-label="Inscrições encerradas"
+                aria-label={registrationAvailability.reason === 'sales_closed' ? 'Vendas encerradas' : 'Inscrições encerradas'}
                 className="flex min-h-11 cursor-not-allowed items-center justify-center gap-1.5 rounded-md border border-card-border bg-dark-gray px-3 py-2.5 text-xs font-bold text-muted"
               >
                 <Lock className="h-3 w-3" />
-                <span>Encerradas</span>
+                <span>{registrationAvailability.reason === 'sales_closed' ? 'Vendas encerradas' : 'Encerradas'}</span>
               </button>
             ) : event.status === 'upcoming' || lifecycle === 'closing' ? (
               <button

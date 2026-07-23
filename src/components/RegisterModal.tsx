@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { Event, Division, Registration, Athlete } from '@/types';
 import { useApp } from '@/context/AppContext';
 import { normalizeInstagram } from '@/lib/fitnessRacing';
+import { getRegistrationAvailability } from '@/lib/eventStatus';
 
 interface RegisterModalProps {
   event: Event;
@@ -584,6 +585,37 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
   ]);
 
   if (!isOpen) return null;
+
+  const registrationAvailability = getRegistrationAvailability(event);
+
+  if (!registrationAvailability.isAvailable) {
+    const isSalesClosed = registrationAvailability.reason === 'sales_closed';
+    return (
+      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4">
+        <div className="transactional-surface relative w-full max-w-md rounded-xl p-6 text-center" role="alertdialog" aria-modal="true" aria-labelledby="registration-unavailable-title">
+          <button
+            onClick={onClose}
+            className="absolute right-3 top-3 flex h-11 w-11 items-center justify-center rounded-md text-muted-soft transition-colors hover:bg-surface-soft-light hover:text-ink"
+            aria-label="Fechar aviso de inscrição"
+          >
+            <X className="h-5 w-5" aria-hidden="true" />
+          </button>
+          <Lock className="mx-auto h-10 w-10 text-muted" aria-hidden="true" />
+          <h3 id="registration-unavailable-title" className="mt-4 text-lg font-bold text-ink">
+            {isSalesClosed ? 'Vendas encerradas' : 'Inscrições encerradas'}
+          </h3>
+          <p className="mt-2 text-sm leading-6 text-muted-soft">
+            {isSalesClosed
+              ? 'As vendas online deste evento foram encerradas pelo organizador.'
+              : 'Este evento não está mais disponível para novas inscrições.'}
+          </p>
+          <button onClick={onClose} className="mt-6 min-h-11 rounded-md bg-primary px-5 py-2 text-xs font-bold uppercase text-ink">
+            Entendi
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4">
