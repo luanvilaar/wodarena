@@ -13,6 +13,7 @@ import {
 import Link from 'next/link';
 import { Registration, Athlete } from '@/types';
 import { getEventStatus, getRegistrationAvailability } from '@/lib/eventStatus';
+import { getHeatSlotLabel, resolveHeatParticipantSlots } from '@/lib/scheduleParticipants';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -530,18 +531,10 @@ export default function EventPage({ params }: PageProps) {
                 
                 <div className="space-y-6 relative before:absolute before:left-3.5 before:top-2 before:bottom-2 before:w-[2px] before:bg-card-border">
                   {scheduleItems.length > 0 ? (
-	                    scheduleItems.map((item, index) => {
+                    scheduleItems.map((item, index) => {
 	                      const isHeat = item.kind === 'heat';
-	                      const heatParticipantSlots = (item.athleteIds || [])
-	                        .map((athleteId, slotIndex) => ({ athleteId: athleteId?.trim?.() || '', slotIndex }))
-	                        .filter(slot => Boolean(slot.athleteId));
-	                      const resolvedHeatParticipants = heatParticipantSlots
-	                        .map(slot => {
-	                          const athlete = athletes.find(a => a.id === slot.athleteId);
-	                          return athlete ? { ...slot, athlete } : null;
-	                        })
-	                        .filter((participant): participant is { athleteId: string; slotIndex: number; athlete: Athlete } => Boolean(participant));
-	                      const unresolvedHeatCount = heatParticipantSlots.length - resolvedHeatParticipants.length;
+	                      const heatParticipants = resolveHeatParticipantSlots(item.athleteIds, athletes);
+	                      const heatSlotLabel = getHeatSlotLabel(event.eventType);
 	                      const isPublicEventLoading = publicEventDataStatus[eventId] === 'loading';
 	                      return (
 	                        <div key={item.id} className="flex gap-4 relative">
@@ -582,24 +575,24 @@ export default function EventPage({ params }: PageProps) {
 	                                  <span className="text-[9px] font-black text-muted-soft uppercase tracking-wider block">
 	                                    Atletas / Equipes
 	                                  </span>
-	                                  {heatParticipantSlots.length > 0 && (
+	                                  {heatParticipants.totalCount > 0 && (
 	                                    <span className="rounded border border-card-border/60 bg-black/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-muted-soft font-number">
-	                                      {resolvedHeatParticipants.length}/{heatParticipantSlots.length}
+	                                      {heatParticipants.resolvedCount}/{heatParticipants.totalCount}
 	                                    </span>
 	                                  )}
 	                                </div>
 
-	                                {resolvedHeatParticipants.length > 0 ? (
+	                                {heatParticipants.resolvedParticipants.length > 0 ? (
 	                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-	                                    {resolvedHeatParticipants.map(({ athlete, athleteId, slotIndex }) => {
+	                                    {heatParticipants.resolvedParticipants.map(({ athlete, athleteId, displayIndex }) => {
 	                                      const safeBox = athlete.box && athlete.box !== 'undefined' ? athlete.box : '';
 	                                      return (
 	                                        <div
-	                                          key={`${item.id}-${athleteId}-${slotIndex}`}
+	                                          key={`${item.id}-${athleteId}-${displayIndex}`}
 	                                          className="flex min-w-0 items-center gap-2 rounded bg-black/40 border border-card-border/60 px-2.5 py-2 text-[10px] text-white transition-colors hover:border-primary/30"
 	                                        >
 	                                          <span className="shrink-0 rounded bg-primary/10 border border-primary/20 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-primary">
-	                                            Vaga {slotIndex + 1}
+	                                            {heatSlotLabel} {displayIndex}
 	                                          </span>
 	                                          {athlete.isTeam && (
 	                                            <span className="shrink-0 text-[8px] bg-primary/20 text-primary px-1 rounded font-black">EQ</span>
@@ -614,7 +607,7 @@ export default function EventPage({ params }: PageProps) {
 	                                      );
 	                                    })}
 	                                  </div>
-	                                ) : heatParticipantSlots.length > 0 ? (
+	                                ) : heatParticipants.totalCount > 0 ? (
 	                                  <p className="rounded border border-card-border/50 bg-black/20 px-3 py-2 text-[10px] font-semibold text-muted-soft">
 	                                    {isPublicEventLoading
 	                                      ? 'Participantes em carregamento...'
@@ -626,9 +619,9 @@ export default function EventPage({ params }: PageProps) {
 	                                  </p>
 	                                )}
 
-	                                {unresolvedHeatCount > 0 && resolvedHeatParticipants.length > 0 && (
+	                                {heatParticipants.unresolvedCount > 0 && heatParticipants.resolvedCount > 0 && (
 	                                  <p className="text-[9px] font-semibold text-muted-soft">
-	                                    {unresolvedHeatCount} participante(s) ainda sem dados públicos carregados.
+	                                    {heatParticipants.unresolvedCount} participante(s) ainda sem dados públicos carregados.
 	                                  </p>
 	                                )}
 	                              </div>
