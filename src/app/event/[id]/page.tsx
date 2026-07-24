@@ -199,6 +199,15 @@ export default function EventPage({ params }: PageProps) {
       .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
   }, [event?.scheduleItems]);
 
+  const eventDivisionIds = React.useMemo(
+    () => new Set((event?.divisions || []).map(division => division.id)),
+    [event?.divisions]
+  );
+  const hasPublicEventAthletes = React.useMemo(
+    () => athletes.some(athlete => eventDivisionIds.has(athlete.divisionId)),
+    [athletes, eventDivisionIds]
+  );
+
   if (!event) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center space-y-4">
@@ -535,7 +544,8 @@ export default function EventPage({ params }: PageProps) {
 	                      const isHeat = item.kind === 'heat';
 	                      const heatParticipants = resolveHeatParticipantSlots(item.athleteIds, athletes);
 	                      const heatSlotLabel = getHeatSlotLabel(event.eventType);
-	                      const isPublicEventLoading = publicEventDataStatus[eventId] === 'loading';
+                      const isPublicEventLoading = publicEventDataStatus[eventId] === 'loading'
+                        || (publicEventDataStatus[eventId] === undefined && !hasPublicEventAthletes);
 	                      return (
 	                        <div key={item.id} className="flex gap-4 relative">
                           <div className={`z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border bg-dark-gray ${

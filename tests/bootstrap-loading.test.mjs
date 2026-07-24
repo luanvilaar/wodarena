@@ -55,6 +55,15 @@ test('public bootstrap is minimal and event data is lazy and single-flight', () 
   assert.match(leaderboard, /loadPublicEventData\(event\.id\)/);
 });
 
+test('public event hydration retries empty athlete payloads with a bounded cache', () => {
+  assert.match(appContext, /const MAX_PUBLIC_EVENT_DATA_ATTEMPTS = 2/);
+  assert.match(appContext, /publicEventLoadAttemptsRef = useRef\(new Map<string, number>\(\)\)/);
+  assert.match(appContext, /if \(previousAttempts >= MAX_PUBLIC_EVENT_DATA_ATTEMPTS\) return/);
+  assert.match(appContext, /do \{[\s\S]*?publicEventLoadAttemptsRef\.current\.set\(eventId, attemptCount\)[\s\S]*?\} while \(mappedAthletes\.length === 0 && attemptCount < MAX_PUBLIC_EVENT_DATA_ATTEMPTS\)/);
+  assert.match(appContext, /setLeaderboardEntries\([\s\S]*?setPublicEventDataStatus\(previous => \(\{ \.\.\.previous, \[eventId\]: 'ready' \}\)\)/);
+  assert.doesNotMatch(appContext, /loadedPublicEventIdsRef/);
+});
+
 test('private bootstrap applies role scope before returning rows', () => {
   assert.match(privateRoute, /\.eq\('organizer_id', session\.id\)/);
   assert.match(privateRoute, /\.in\('event_id', eventIdFilter\)/);

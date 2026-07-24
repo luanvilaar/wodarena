@@ -16,6 +16,9 @@ test('public event schedule hides unpublished heats and deduplicates equivalent 
 test('public event schedule renders heat participants and useful empty states', () => {
   assert.match(eventPage, /resolveHeatParticipantSlots\(item\.athleteIds, athletes\)/);
   assert.match(eventPage, /getHeatSlotLabel\(event\.eventType\)/);
+  assert.match(eventPage, /const eventDivisionIds = React\.useMemo\(/);
+  assert.match(eventPage, /athletes\.some\(athlete => eventDivisionIds\.has\(athlete\.divisionId\)\)/);
+  assert.match(eventPage, /publicEventDataStatus\[eventId\] === undefined && !hasPublicEventAthletes/);
   assert.match(eventPage, /Atletas \/ Equipes/);
   assert.match(eventPage, /Participantes em carregamento\.\.\./);
   assert.match(eventPage, /Nenhum participante publicado nesta bateria\./);

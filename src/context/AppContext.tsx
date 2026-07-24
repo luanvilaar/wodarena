@@ -10,6 +10,8 @@ import { getManagerAccessStatus, normalizeServiceValidUntil } from '@/lib/manage
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type LeaderboardEntry = Record<string, any>;
 
+const MAX_PUBLIC_EVENT_DATA_ATTEMPTS = 2;
+
 type RegistrationDraft = Omit<Registration, 'id' | 'createdAt'> & Partial<Pick<Registration, 'id' | 'createdAt'>>;
 
 export type BootstrapStatus = 'loading' | 'ready' | 'degraded' | 'error';
@@ -362,7 +364,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const skipNextPublicBootstrapRef = useRef(false);
   const hasLoadedBootstrapRef = useRef(false);
   const publicEventRequestsRef = useRef(new Map<string, Promise<void>>());
-  const loadedPublicEventIdsRef = useRef(new Set<string>());
+  const publicEventLoadAttemptsRef = useRef(new Map<string, number>());
 
   const retryBootstrap = useCallback(() => {
     setBootstrapError(null);
@@ -410,7 +412,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     // publicada da bateria (por exemplo, apos uma inscricao ou troca de aba).
     // Sempre hidratamos os perfis publicos do evento e os mesclamos ao contexto.
     if (!eventId) return;
-    if (loadedPublicEventIdsRef.current.has(eventId)) return;
+    const previousAttempts = publicEventLoadAttemptsRef.current.get(eventId) || 0;
+    if (previousAttempts >= MAX_PUBLIC_EVENT_DATA_ATTEMPTS) return;
 
     const existingRequest = publicEventRequestsRef.current.get(eventId);
     if (existingRequest) return existingRequest;
@@ -421,28 +424,39 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       try {
         const endpoint = `${PUBLIC_EVENT_BOOTSTRAP_ENDPOINT}/${encodeURIComponent(eventId)}`;
-        const httpResponse = await fetchWithTimeout(endpoint, controller.signal);
-        const payload = readBootstrapResponseWithTelemetry(httpResponse.response, httpResponse.payload, endpoint);
-        const mappedAthletes = (payload.athletes || []).map(mapAthleteFromDb);
-        const mappedScores = (payload.scores || []).map((score) => {
-          let parsedSplits: Record<string, string> = {};
-          if (score.splits) {
-            try {
-              parsedSplits = typeof score.splits === 'string' ? JSON.parse(score.splits) : score.splits;
-            } catch (err) {
-              console.error('Erro ao fazer parse dos splits do score público:', score.athlete_id, score.workout_id, err);
+        let attemptCount = previousAttempts;
+        let mappedAthletes: Athlete[] = [];
+        let mappedScores: Score[] = [];
+        let mappedLeaderboardEntries: LeaderboardEntry[] = [];
+
+        do {
+          attemptCount += 1;
+          publicEventLoadAttemptsRef.current.set(eventId, attemptCount);
+
+          const httpResponse = await fetchWithTimeout(endpoint, controller.signal);
+          const payload = readBootstrapResponseWithTelemetry(httpResponse.response, httpResponse.payload, endpoint);
+          mappedAthletes = (payload.athletes || []).map(mapAthleteFromDb);
+          mappedScores = (payload.scores || []).map((score) => {
+            let parsedSplits: Record<string, string> = {};
+            if (score.splits) {
+              try {
+                parsedSplits = typeof score.splits === 'string' ? JSON.parse(score.splits) : score.splits;
+              } catch (err) {
+                console.error('Erro ao fazer parse dos splits do score público:', score.athlete_id, score.workout_id, err);
+              }
             }
-          }
-          return {
-            athleteId: score.athlete_id,
-            workoutId: score.workout_id,
-            result: score.result,
-            value: Number(score.value),
-            rank: score.rank || undefined,
-            points: score.points || undefined,
-            splits: parsedSplits || {}
-          } as Score;
-        });
+            return {
+              athleteId: score.athlete_id,
+              workoutId: score.workout_id,
+              result: score.result,
+              value: Number(score.value),
+              rank: score.rank || undefined,
+              points: score.points || undefined,
+              splits: parsedSplits || {}
+            } as Score;
+          });
+          mappedLeaderboardEntries = payload.leaderboardEntries || [];
+        } while (mappedAthletes.length === 0 && attemptCount < MAX_PUBLIC_EVENT_DATA_ATTEMPTS);
 
         setAthletes(previous => [
           ...previous.filter(athlete => !mappedAthletes.some(incoming => incoming.id === athlete.id)),
@@ -454,9 +468,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ]);
         setLeaderboardEntries(previous => [
           ...previous.filter(entry => entry.event_id !== eventId),
-          ...(payload.leaderboardEntries || [])
+          ...mappedLeaderboardEntries
         ]);
-        loadedPublicEventIdsRef.current.add(eventId);
+
+        // Uma resposta com atletas encerra o carregamento para esta sessão. Uma
+        // resposta vazia só é considerada concluída depois das duas tentativas,
+        // evitando tanto o cache prematuro quanto um loop de requests.
+        if (mappedAthletes.length > 0) {
+          publicEventLoadAttemptsRef.current.set(eventId, MAX_PUBLIC_EVENT_DATA_ATTEMPTS);
+        }
+
+        // Este status fica por último para que a UI só deixe o estado de
+        // carregamento depois de atletas, scores e leaderboard serem mesclados.
         setPublicEventDataStatus(previous => ({ ...previous, [eventId]: 'ready' }));
       } catch (error) {
         setPublicEventDataStatus(previous => ({ ...previous, [eventId]: 'error' }));
