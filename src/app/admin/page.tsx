@@ -97,7 +97,7 @@ export default function AdminPage() {
     events, athletes, scores, registrations, contestations, coupons, currentUser,
     login, logout, addEvent, addDivision, updateDivision,
     addWorkout, deleteEvent, deleteDivision, deleteWorkout, submitScore, submitScoresBulk, updateEvent, getLeaderboard, registerTicket, saveCourseLayout, updateWorkout,
-    refreshRegistrations, updateRegistrationDetails, addCoupon, updateCoupon, toggleCouponActive, incrementCouponUsage, changePassword, updateAthleteProfile
+    refreshRegistrations, updateRegistrationDetails, cancelRegistration, markRegistrationRefunded, addCoupon, updateCoupon, toggleCouponActive, incrementCouponUsage, changePassword, updateAthleteProfile
   } = useApp();
 
   // 1. Estados de Login (vinculado ao currentUser do contexto)
@@ -759,6 +759,8 @@ export default function AdminPage() {
   const [selectedRegistrationVoucher, setSelectedRegistrationVoucher] = useState<{ registration: Registration; athlete: Athlete; event: Event } | null>(null);
   const [resendingRegistrationId, setResendingRegistrationId] = useState<string | null>(null);
   const [syncingRegistrationId, setSyncingRegistrationId] = useState<string | null>(null);
+  const [cancellingRegistrationId, setCancellingRegistrationId] = useState<string | null>(null);
+  const [refundingRegistrationId, setRefundingRegistrationId] = useState<string | null>(null);
   const [eventPendingDeletion, setEventPendingDeletion] = useState<Event | null>(null);
   const [deleteEventAcknowledged, setDeleteEventAcknowledged] = useState(false);
   const [deleteEventConfirmation, setDeleteEventConfirmation] = useState('');
@@ -2243,6 +2245,134 @@ export default function AdminPage() {
     }
   };
 
+  const parseRefundAmountInput = (value: string | null) => {
+    if (value === null) return null;
+    const normalized = value.trim().replace(/\./g, '').replace(',', '.');
+    const amount = Number(normalized);
+    return Number.isFinite(amount) && amount >= 0 ? amount : null;
+  };
+
+  const getCreditRefundPolicyText = (registration: Registration) => {
+    const method = `${registration.paymentMethod || ''} ${registration.paymentStatusDetail || ''}`.toLowerCase();
+    const isCredit = method.includes('credit') || method.includes('cartao') || method.includes('cartão');
+    return isCredit
+      ? 'Pagamento no credito: informe o valor liquido a devolver, descontando taxas de servico WODArena e Mercado Pago quando aplicavel.'
+      : 'Informe o valor que sera devolvido manualmente ao atleta, considerando o valor que ja caiu em conta.';
+  };
+
+  const handleCancelRegistration = async (registration: Registration) => {
+    if (!selectedEventToManage) return;
+    if (registration.paymentStatus === 'payment_cancelled') {
+      setAdminNotice({ text: 'Esta inscrição já está cancelada.', tone: 'error' });
+      return;
+    }
+
+    const reason = window.prompt(`Informe o motivo do cancelamento da inscrição de "${registration.athleteName}".`);
+    if (reason === null) return;
+    if (!reason.trim()) {
+      setAdminNotice({ text: 'Informe o motivo do cancelamento.', tone: 'error' });
+      return;
+    }
+
+    const amountInput = window.prompt(
+      `${getCreditRefundPolicyText(registration)}\n\nValor previsto para reembolso manual:`,
+      String(registration.totalPaid.toFixed(2)).replace('.', ',')
+    );
+    if (amountInput === null) return;
+
+    const refundAmount = parseRefundAmountInput(amountInput);
+    if (refundAmount === null) {
+      setAdminNotice({ text: 'Informe um valor de reembolso válido.', tone: 'error' });
+      return;
+    }
+
+    const refundMethod = window.prompt('Método previsto para devolução manual:', registration.paymentMethod || 'pix');
+    if (refundMethod === null) return;
+
+    const confirmed = window.confirm(
+      `Cancelar a inscrição de "${registration.athleteName}"?\n\nA inscrição sairá dos ativos/ranking e o reembolso ficará como manual pendente. Nenhum estorno automático será enviado ao Mercado Pago.`
+    );
+    if (!confirmed) return;
+
+    setCancellingRegistrationId(registration.id);
+    setAdminNotice(null);
+    try {
+      await cancelRegistration(registration.id, selectedEventToManage.id, {
+        reason: reason.trim(),
+        refundAmount,
+        refundMethod: refundMethod.trim(),
+        refundNote: getCreditRefundPolicyText(registration)
+      });
+      setAdminNotice({
+        text: `Inscrição de "${registration.athleteName}" cancelada. Reembolso manual pendente: ${currencyFormatter.format(refundAmount)}.`,
+        tone: 'success'
+      });
+    } catch (err) {
+      setAdminNotice({
+        text: err instanceof Error ? err.message : 'Não foi possível cancelar a inscrição.',
+        tone: 'error'
+      });
+    } finally {
+      setCancellingRegistrationId(null);
+    }
+  };
+
+  const handleMarkRegistrationRefunded = async (registration: Registration) => {
+    if (!selectedEventToManage) return;
+    if (registration.paymentStatus !== 'payment_cancelled') {
+      setAdminNotice({ text: 'Cancele a inscrição antes de registrar o reembolso manual.', tone: 'error' });
+      return;
+    }
+
+    const amountInput = window.prompt(
+      'Valor efetivamente devolvido ao atleta:',
+      String((registration.refundAmount ?? registration.totalPaid).toFixed(2)).replace('.', ',')
+    );
+    if (amountInput === null) return;
+
+    const refundAmount = parseRefundAmountInput(amountInput);
+    if (refundAmount === null) {
+      setAdminNotice({ text: 'Informe um valor de reembolso válido.', tone: 'error' });
+      return;
+    }
+
+    const refundMethod = window.prompt('Método usado no reembolso manual:', registration.refundMethod || 'pix');
+    if (refundMethod === null) return;
+    if (!refundMethod.trim()) {
+      setAdminNotice({ text: 'Informe o método usado no reembolso manual.', tone: 'error' });
+      return;
+    }
+
+    const refundNote = window.prompt('Observação ou referência do comprovante:', registration.refundNote || '');
+    if (refundNote === null) return;
+
+    const confirmed = window.confirm(
+      `Marcar reembolso manual de ${currencyFormatter.format(refundAmount)} como concluído para "${registration.athleteName}"?`
+    );
+    if (!confirmed) return;
+
+    setRefundingRegistrationId(registration.id);
+    setAdminNotice(null);
+    try {
+      await markRegistrationRefunded(registration.id, selectedEventToManage.id, {
+        refundAmount,
+        refundMethod: refundMethod.trim(),
+        refundNote: refundNote.trim()
+      });
+      setAdminNotice({
+        text: `Reembolso manual de "${registration.athleteName}" registrado como concluído.`,
+        tone: 'success'
+      });
+    } catch (err) {
+      setAdminNotice({
+        text: err instanceof Error ? err.message : 'Não foi possível registrar o reembolso manual.',
+        tone: 'error'
+      });
+    } finally {
+      setRefundingRegistrationId(null);
+    }
+  };
+
   const getPaymentStatusMeta = (status?: Registration['paymentStatus']) => {
     switch (status) {
       case 'payment_approved':
@@ -2263,6 +2393,12 @@ export default function AdminPage() {
     if (tone === 'success') return 'border-trading-up/25 bg-trading-up/10 text-trading-up';
     if (tone === 'danger') return 'border-trading-down/30 bg-trading-down/10 text-trading-down';
     return 'border-primary/25 bg-primary/10 text-primary';
+  };
+
+  const getRefundStatusLabel = (status?: Registration['refundStatus']) => {
+    if (status === 'manual_refunded') return 'Reembolsado manualmente';
+    if (status === 'manual_pending') return 'Reembolso manual pendente';
+    return 'Sem reembolso registrado';
   };
 
   const getRegistrationEvent = (registration: Registration) => {
@@ -6891,6 +7027,8 @@ export default function AdminPage() {
                   const canSync = reg.paymentStatus === 'payment_pending'
                     || reg.paymentStatus === 'payment_in_review'
                     || reg.paymentStatus === 'payment_failed';
+                  const canCancel = reg.paymentStatus !== 'payment_cancelled' && reg.paymentStatus !== 'payment_failed';
+                  const canMarkRefunded = reg.paymentStatus === 'payment_cancelled' && reg.refundStatus !== 'manual_refunded';
 
                   return (
                     <div
@@ -6966,6 +7104,31 @@ export default function AdminPage() {
                             <p className="text-[10px] text-trading-down">{reg.paymentErrorMessage || 'Pagamento não processado.'}</p>
                           )}
 
+                          {reg.paymentStatus === 'payment_cancelled' && (
+                            <div className="rounded-lg border border-trading-down/20 bg-trading-down/10 p-3 text-[11px] text-muted-soft">
+                              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                <div>
+                                  <p className="font-bold uppercase tracking-wider text-trading-down font-sans">Inscrição cancelada</p>
+                                  <p className="mt-1">
+                                    {reg.cancellationReason || 'Cancelamento registrado pelo gestor.'}
+                                    {reg.cancelledAt ? ` · ${new Date(reg.cancelledAt).toLocaleDateString('pt-BR')}` : ''}
+                                  </p>
+                                </div>
+                                <span className="shrink-0 rounded border border-primary/25 bg-primary/10 px-2.5 py-1 text-[9px] font-bold uppercase text-primary">
+                                  {getRefundStatusLabel(reg.refundStatus)}
+                                </span>
+                              </div>
+                              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                                <RegDetail label="Valor reembolso" value={reg.refundAmount !== undefined ? currencyFormatter.format(reg.refundAmount) : '-'} />
+                                <RegDetail label="Método reembolso" value={reg.refundMethod || '-'} />
+                                <RegDetail label="Processado em" value={reg.refundProcessedAt ? new Date(reg.refundProcessedAt).toLocaleDateString('pt-BR') : '-'} />
+                              </div>
+                              {reg.refundNote && (
+                                <p className="mt-2 text-[10px] leading-relaxed text-muted">{reg.refundNote}</p>
+                              )}
+                            </div>
+                          )}
+
                           <div className="flex flex-wrap items-center gap-2 border-t border-card-border/40 pt-3">
                             <button
                               type="button"
@@ -7004,6 +7167,30 @@ export default function AdminPage() {
                                 aria-label={`Sincronizar status do pagamento de ${displayName}`}
                               >
                                 {syncingRegistrationId === reg.id ? 'Sincronizando...' : 'Sincronizar pagamento'}
+                              </button>
+                            )}
+                            {canCancel && (
+                              <button
+                                type="button"
+                                onClick={() => handleCancelRegistration(reg)}
+                                disabled={cancellingRegistrationId === reg.id}
+                                className="inline-flex min-h-8 items-center justify-center gap-1.5 rounded border border-trading-down/30 bg-trading-down/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-trading-down transition-colors hover:bg-trading-down/20 disabled:cursor-not-allowed disabled:opacity-60"
+                                aria-label={`Cancelar inscrição de ${displayName}`}
+                              >
+                                <X className="h-3.5 w-3.5" aria-hidden="true" />
+                                {cancellingRegistrationId === reg.id ? 'Cancelando...' : 'Cancelar inscrição'}
+                              </button>
+                            )}
+                            {canMarkRefunded && (
+                              <button
+                                type="button"
+                                onClick={() => handleMarkRegistrationRefunded(reg)}
+                                disabled={refundingRegistrationId === reg.id}
+                                className="inline-flex min-h-8 items-center justify-center gap-1.5 rounded border border-trading-up/25 bg-trading-up/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-trading-up transition-colors hover:bg-trading-up/20 disabled:cursor-not-allowed disabled:opacity-60"
+                                aria-label={`Registrar reembolso manual de ${displayName}`}
+                              >
+                                <ReceiptText className="h-3.5 w-3.5" aria-hidden="true" />
+                                {refundingRegistrationId === reg.id ? 'Registrando...' : 'Marcar reembolso'}
                               </button>
                             )}
                           </div>

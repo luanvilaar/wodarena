@@ -134,6 +134,10 @@ export default function TermosPage() {
                 </li>
                 <li className="flex gap-2">
                   <ArrowRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                  <span>Nos reembolsos sujeitos à política do Organizador Independente, a devolução será processada manualmente. Em pagamentos por crédito, taxas de serviço da WODArena e taxas cobradas pelo Mercado Pago poderão não ser reembolsadas.</span>
+                </li>
+                <li className="flex gap-2">
+                  <ArrowRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
                   <span>Como mecanismo legal e para evitar prejuízos ao atleta que desiste tardiamente da participação, a WODArena disponibiliza a funcionalidade de <strong>Transferência de Titularidade Nominal</strong> da inscrição diretamente no painel do atleta.</span>
                 </li>
               </ul>

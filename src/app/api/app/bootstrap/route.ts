@@ -14,7 +14,7 @@ import { getManagerAccessStatus, normalizeServiceValidUntil } from '@/lib/manage
 import { createSupabaseAdmin, requireSession, type SessionUser } from '@/lib/serverSecurity';
 
 const PRIVATE_ATHLETE_SELECT = 'id, name, box, country, division_id, birth_date, gender, city, state, instagram, photo_url, email, phone, is_team, team_members, shirt_size';
-const PRIVATE_REGISTRATION_SELECT = 'id, event_id, division_id, user_id, athlete_id, athlete_name, athlete_email, athlete_phone, box, gender, ticket_type, ticket_price, quantity, total_paid, created_at, coupon_code, payment_status, payment_method, payment_id, payment_status_detail, payment_error_message, updated_at';
+const PRIVATE_REGISTRATION_SELECT = 'id, event_id, division_id, user_id, athlete_id, athlete_name, athlete_email, athlete_phone, box, gender, ticket_type, ticket_price, quantity, total_paid, created_at, coupon_code, payment_status, payment_method, payment_id, payment_status_detail, payment_error_message, cancellation_reason, cancelled_at, cancelled_by, refund_status, refund_amount, refund_method, refund_note, refund_processed_at, refund_processed_by, updated_at';
 const PRIVATE_CONTESTATION_SELECT = 'id, event_id, registration_id, user_id, athlete_id, workout_id, heat_id, heat_number, lane, description, status, credit_consumed, credit_refunded, manager_note, created_at, updated_at, resolved_at';
 const PRIVATE_COUPON_SELECT = 'id, event_id, code, discount_type, discount_value, usage_limit, usage_count, created_at, is_active';
 

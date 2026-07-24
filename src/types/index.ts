@@ -22,6 +22,8 @@ export type RegistrationPaymentStatus =
   | 'payment_in_review'
   | 'payment_cancelled';
 
+export type RegistrationRefundStatus = 'not_requested' | 'manual_pending' | 'manual_refunded';
+
 export type ContestationStatus = 'under_review' | 'approved' | 'rejected';
 export type CommercialLeadStatus = 'new' | 'contacted' | 'qualified' | 'discarded';
 export type CommercialLeadEmailNotificationStatus = 'pending' | 'sent' | 'failed' | 'skipped';
@@ -176,6 +178,15 @@ export interface Registration {
   paymentId?: string;
   paymentStatusDetail?: string;
   paymentErrorMessage?: string;
+  cancellationReason?: string;
+  cancelledAt?: string;
+  cancelledBy?: string;
+  refundStatus?: RegistrationRefundStatus;
+  refundAmount?: number;
+  refundMethod?: string;
+  refundNote?: string;
+  refundProcessedAt?: string;
+  refundProcessedBy?: string;
   updatedAt?: string;
 }
 

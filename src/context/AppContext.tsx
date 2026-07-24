@@ -29,6 +29,19 @@ export type RegistrationEditInput = {
   teamMembers: { name: string; instagram: string; shirtSize: string }[];
 };
 
+export type RegistrationCancellationInput = {
+  reason: string;
+  refundAmount?: number;
+  refundMethod?: string;
+  refundNote?: string;
+};
+
+export type RegistrationRefundInput = {
+  refundAmount: number;
+  refundMethod: string;
+  refundNote?: string;
+};
+
 export type AthleteProfileUpdateInput = {
   fullName: string;
   birthDate: string;
@@ -79,6 +92,8 @@ interface AppContextType {
   deleteWorkout: (eventId: string, workoutId: string) => Promise<void>;
   registerTicket: (registration: RegistrationDraft, athleteProfile?: AthleteProfileDraft) => Registration;
   updateRegistrationDetails: (registrationId: string, eventId: string, data: RegistrationEditInput) => Promise<void>;
+  cancelRegistration: (registrationId: string, eventId: string, data: RegistrationCancellationInput) => Promise<void>;
+  markRegistrationRefunded: (registrationId: string, eventId: string, data: RegistrationRefundInput) => Promise<void>;
   refreshRegistrations: () => Promise<Registration[]>;
   submitScore: (score: Score) => void;
   submitScoresBulk: (newScores: Score[]) => Promise<void>;
@@ -186,6 +201,15 @@ const mapRegistrationFromDb = (r: RegistrationDbRow): Registration => ({
   paymentId: optionalString(r.payment_id),
   paymentStatusDetail: optionalString(r.payment_status_detail),
   paymentErrorMessage: optionalString(r.payment_error_message),
+  cancellationReason: optionalString(r.cancellation_reason),
+  cancelledAt: optionalString(r.cancelled_at),
+  cancelledBy: optionalString(r.cancelled_by),
+  refundStatus: (optionalString(r.refund_status) as Registration['refundStatus']) || 'not_requested',
+  refundAmount: r.refund_amount !== null && r.refund_amount !== undefined ? Number(r.refund_amount) : undefined,
+  refundMethod: optionalString(r.refund_method),
+  refundNote: optionalString(r.refund_note),
+  refundProcessedAt: optionalString(r.refund_processed_at),
+  refundProcessedBy: optionalString(r.refund_processed_by),
   updatedAt: optionalString(r.updated_at)
 });
 
@@ -1444,6 +1468,43 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const removeRegistrationFromLeaderboardState = (registration: Registration) => {
+    if (!registration.athleteId) return;
+
+    setLeaderboardEntries(prev => prev.filter(entry => !(
+      String(entry.event_id) === registration.eventId
+      && String(entry.division_id) === registration.divisionId
+      && String(entry.athlete_id) === registration.athleteId
+    )));
+  };
+
+  const syncCancelledRegistrationState = (registrationId: string, updatedReg?: Registration) => {
+    if (!updatedReg) return;
+
+    setRegistrations(prev => prev.map(r => (r.id === registrationId ? { ...r, ...updatedReg } : r)));
+    if (updatedReg.paymentStatus === 'payment_cancelled') {
+      removeRegistrationFromLeaderboardState(updatedReg);
+    }
+  };
+
+  const cancelRegistration = async (
+    registrationId: string,
+    eventId: string,
+    data: RegistrationCancellationInput
+  ) => {
+    const result = await adminPersist('cancelRegistration', { registrationId, eventId, data });
+    syncCancelledRegistrationState(registrationId, result.registration as Registration | undefined);
+  };
+
+  const markRegistrationRefunded = async (
+    registrationId: string,
+    eventId: string,
+    data: RegistrationRefundInput
+  ) => {
+    const result = await adminPersist('markRegistrationRefunded', { registrationId, eventId, data });
+    syncCancelledRegistrationState(registrationId, result.registration as Registration | undefined);
+  };
+
   // Cadastrar Cupom de Desconto
   const addCoupon = async (couponData: Omit<Coupon, 'id' | 'usageCount' | 'createdAt' | 'isActive'>) => {
     const event = events.find(e => e.id === couponData.eventId);
@@ -2122,6 +2183,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         deleteWorkout,
         registerTicket,
         updateRegistrationDetails,
+        cancelRegistration,
+        markRegistrationRefunded,
         refreshRegistrations,
         submitScore,
         submitScoresBulk,

@@ -44,6 +44,65 @@ const ensureWorkoutOwner = async (supabaseAdmin: DbClient, actor: SessionUser, w
   return workout;
 };
 
+const asTrimmed = (value: unknown, fallback = '') =>
+  typeof value === 'string' && value.trim() ? value.trim() : fallback;
+
+const optionalText = (value: unknown) => {
+  const trimmed = asTrimmed(value);
+  return trimmed || null;
+};
+
+const parseRefundAmount = (value: unknown, required = false) => {
+  if (value === null || value === undefined || value === '') {
+    if (required) throw new Error('Informe o valor do reembolso manual.');
+    return null;
+  }
+
+  const normalized = typeof value === 'string'
+    ? Number(value.replace(/\./g, '').replace(',', '.'))
+    : Number(value);
+
+  if (!Number.isFinite(normalized) || normalized < 0) {
+    throw new Error('Valor de reembolso invalido.');
+  }
+
+  return normalized;
+};
+
+const mapRegistrationForClient = (registration: Record<string, unknown>) => ({
+  id: registration.id,
+  eventId: registration.event_id,
+  divisionId: registration.division_id,
+  userId: registration.user_id || undefined,
+  athleteId: registration.athlete_id || undefined,
+  athleteName: registration.athlete_name,
+  athleteEmail: registration.athlete_email,
+  athletePhone: registration.athlete_phone,
+  box: registration.box,
+  gender: registration.gender,
+  ticketType: registration.ticket_type,
+  ticketPrice: Number(registration.ticket_price),
+  quantity: Number(registration.quantity),
+  totalPaid: Number(registration.total_paid),
+  createdAt: registration.created_at,
+  couponCode: registration.coupon_code || undefined,
+  paymentStatus: registration.payment_status || undefined,
+  paymentMethod: registration.payment_method || undefined,
+  paymentId: registration.payment_id || undefined,
+  paymentStatusDetail: registration.payment_status_detail || undefined,
+  paymentErrorMessage: registration.payment_error_message || undefined,
+  cancellationReason: registration.cancellation_reason || undefined,
+  cancelledAt: registration.cancelled_at || undefined,
+  cancelledBy: registration.cancelled_by || undefined,
+  refundStatus: registration.refund_status || 'not_requested',
+  refundAmount: registration.refund_amount !== null && registration.refund_amount !== undefined ? Number(registration.refund_amount) : undefined,
+  refundMethod: registration.refund_method || undefined,
+  refundNote: registration.refund_note || undefined,
+  refundProcessedAt: registration.refund_processed_at || undefined,
+  refundProcessedBy: registration.refund_processed_by || undefined,
+  updatedAt: registration.updated_at || undefined
+});
+
 export async function POST(request: Request) {
   try {
     const auth = requireSession(request, ['manager', 'owner']);
@@ -214,6 +273,133 @@ export async function POST(request: Request) {
         return NextResponse.json({ success: true });
       }
 
+      case 'cancelRegistration': {
+        const { registrationId, eventId, data } = payload as {
+          registrationId: string;
+          eventId: string;
+          data: Record<string, unknown>;
+        };
+
+        await ensureEventOwner(supabaseAdmin, actor, eventId);
+
+        const reason = asTrimmed(data?.reason);
+        if (!reason) {
+          return NextResponse.json({ error: 'Informe o motivo do cancelamento.' }, { status: 400 });
+        }
+
+        let refundAmount: number | null = null;
+        try {
+          refundAmount = parseRefundAmount(data?.refundAmount);
+        } catch (error) {
+          return NextResponse.json({ error: error instanceof Error ? error.message : 'Valor de reembolso invalido.' }, { status: 400 });
+        }
+
+        const { data: existingRegistration, error: existingError } = await supabaseAdmin
+          .from('registrations')
+          .select('id, event_id, payment_status, cancelled_at')
+          .eq('id', registrationId)
+          .eq('event_id', eventId)
+          .maybeSingle();
+
+        if (existingError || !existingRegistration) {
+          return NextResponse.json({ error: 'Inscrição não encontrada para este evento.' }, { status: 404 });
+        }
+
+        const now = new Date().toISOString();
+        const { data: updatedRegistration, error: updateError } = await supabaseAdmin
+          .from('registrations')
+          .update({
+            payment_status: 'payment_cancelled',
+            payment_status_detail: 'manager_cancelled',
+            cancellation_reason: reason,
+            cancelled_at: existingRegistration.cancelled_at || now,
+            cancelled_by: actor.id,
+            refund_status: 'manual_pending',
+            refund_amount: refundAmount,
+            refund_method: optionalText(data?.refundMethod),
+            refund_note: optionalText(data?.refundNote),
+            updated_at: now
+          })
+          .eq('id', registrationId)
+          .eq('event_id', eventId)
+          .select('*')
+          .maybeSingle();
+
+        if (updateError || !updatedRegistration) {
+          console.error('[Admin Persistence API] Erro ao cancelar inscrição:', updateError);
+          return NextResponse.json({ error: 'Erro ao cancelar a inscrição.' }, { status: 500 });
+        }
+
+        return NextResponse.json({
+          success: true,
+          registration: mapRegistrationForClient(updatedRegistration)
+        });
+      }
+
+      case 'markRegistrationRefunded': {
+        const { registrationId, eventId, data } = payload as {
+          registrationId: string;
+          eventId: string;
+          data: Record<string, unknown>;
+        };
+
+        await ensureEventOwner(supabaseAdmin, actor, eventId);
+
+        const method = asTrimmed(data?.refundMethod);
+        if (!method) {
+          return NextResponse.json({ error: 'Informe o método usado no reembolso manual.' }, { status: 400 });
+        }
+
+        let refundAmount: number;
+        try {
+          refundAmount = parseRefundAmount(data?.refundAmount, true) as number;
+        } catch (error) {
+          return NextResponse.json({ error: error instanceof Error ? error.message : 'Valor de reembolso invalido.' }, { status: 400 });
+        }
+
+        const { data: existingRegistration, error: existingError } = await supabaseAdmin
+          .from('registrations')
+          .select('id, event_id, payment_status')
+          .eq('id', registrationId)
+          .eq('event_id', eventId)
+          .maybeSingle();
+
+        if (existingError || !existingRegistration) {
+          return NextResponse.json({ error: 'Inscrição não encontrada para este evento.' }, { status: 404 });
+        }
+
+        if (existingRegistration.payment_status !== 'payment_cancelled') {
+          return NextResponse.json({ error: 'Cancele a inscrição antes de marcar o reembolso manual.' }, { status: 400 });
+        }
+
+        const now = new Date().toISOString();
+        const { data: updatedRegistration, error: updateError } = await supabaseAdmin
+          .from('registrations')
+          .update({
+            refund_status: 'manual_refunded',
+            refund_amount: refundAmount,
+            refund_method: method,
+            refund_note: optionalText(data?.refundNote),
+            refund_processed_at: now,
+            refund_processed_by: actor.id,
+            updated_at: now
+          })
+          .eq('id', registrationId)
+          .eq('event_id', eventId)
+          .select('*')
+          .maybeSingle();
+
+        if (updateError || !updatedRegistration) {
+          console.error('[Admin Persistence API] Erro ao registrar reembolso manual:', updateError);
+          return NextResponse.json({ error: 'Erro ao registrar o reembolso manual.' }, { status: 500 });
+        }
+
+        return NextResponse.json({
+          success: true,
+          registration: mapRegistrationForClient(updatedRegistration)
+        });
+      }
+
       case 'updateRegistration': {
         const { registrationId, eventId, data } = payload as {
           registrationId: string;
@@ -234,8 +420,6 @@ export async function POST(request: Request) {
           return NextResponse.json({ error: 'Inscrição não encontrada para este evento.' }, { status: 404 });
         }
 
-        const asTrimmed = (value: unknown, fallback = '') =>
-          typeof value === 'string' && value.trim() ? value.trim() : fallback;
         const cleanInstagram = (value: unknown) => asTrimmed(value).replace(/^@+/, '');
         const normalizeMembers = (value: unknown) => (Array.isArray(value) ? value : [])
           .map((member) => {
@@ -356,6 +540,15 @@ export async function POST(request: Request) {
             paymentId: updatedRegistration.payment_id || undefined,
             paymentStatusDetail: updatedRegistration.payment_status_detail || undefined,
             paymentErrorMessage: updatedRegistration.payment_error_message || undefined,
+            cancellationReason: updatedRegistration.cancellation_reason || undefined,
+            cancelledAt: updatedRegistration.cancelled_at || undefined,
+            cancelledBy: updatedRegistration.cancelled_by || undefined,
+            refundStatus: updatedRegistration.refund_status || 'not_requested',
+            refundAmount: updatedRegistration.refund_amount !== null && updatedRegistration.refund_amount !== undefined ? Number(updatedRegistration.refund_amount) : undefined,
+            refundMethod: updatedRegistration.refund_method || undefined,
+            refundNote: updatedRegistration.refund_note || undefined,
+            refundProcessedAt: updatedRegistration.refund_processed_at || undefined,
+            refundProcessedBy: updatedRegistration.refund_processed_by || undefined,
             updatedAt: updatedRegistration.updated_at || undefined
           },
           athlete: updatedAthlete ? {
