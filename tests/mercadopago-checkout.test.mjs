@@ -15,6 +15,7 @@ const oauthCallback = read('../src/app/api/mercadopago/oauth/callback/route.ts')
 const adminMercadoPagoRoute = read('../src/app/api/admin/mercadopago/route.ts');
 const adminPage = read('../src/app/admin/page.tsx');
 const oauthStatesMigration = read('../supabase/migrations/20260624140000_create_mercadopago_oauth_states.sql');
+const oauthVerificationMigration = read('../supabase/migrations/20260730143000_verify_mercadopago_oauth_provenance.sql');
 const registerModal = read('../src/components/RegisterModal.tsx');
 const appContext = read('../src/context/AppContext.tsx');
 const eventPage = read('../src/app/event/[id]/page.tsx');
@@ -23,7 +24,8 @@ test('Mercado Pago checkout resolves OAuth credentials from organizer secrets', 
   assert.match(helper, /from\('events'\)[\s\S]*select\('organizer_id'\)/);
   assert.match(helper, /mercadopago_secrets/);
   assert.match(helper, /assertOAuthSellerIdentity/);
-  assert.match(helper, /mercadopago_user_id, public_key/);
+  assert.match(helper, /mercadopago_user_id, oauth_client_id, oauth_verified_at, public_key/);
+  assert.match(helper, /oauthClientId !== currentClientId/);
   assert.match(helper, /source: 'organizer_oauth'/);
   assert.match(helper, /secret\.refresh_token === 'manual'/);
   assert.match(helper, /grant_type: 'refresh_token'/);
@@ -57,7 +59,7 @@ test('checkout surfaces backend payment errors instead of generic alerts', () =>
 });
 
 test('transparent checkout sends payer CPF and applies the service split', () => {
-  assert.match(helper, /A conexão Mercado Pago deste evento não possui autorização OAuth completa para split/);
+  assert.match(helper, /A conexão Mercado Pago deste evento não possui uma autorização OAuth verificada para split/);
   assert.match(pixRoute, /application_fee: serviceFee\.serviceFeeAmount/);
   assert.match(cardRoute, /application_fee: serviceFee\.serviceFeeAmount/);
   assert.match(pixRoute, /transaction_amount: serviceFee\.amountCollected/);
@@ -137,6 +139,10 @@ test('Mercado Pago OAuth callback persists secrets with Supabase service role', 
   assert.match(oauthCallback, /canActOnUser\(auth\.user, userId\)/);
   assert.match(oauthCallback, /createSupabaseAdmin\(\)/);
   assert.match(oauthCallback, /from\('mercadopago_secrets'\)/);
+  assert.match(oauthCallback, /oauth_client_id: clientId/);
+  assert.match(oauthCallback, /oauth_verified_at: connectedAt/);
+  assert.match(oauthVerificationMigration, /ADD COLUMN IF NOT EXISTS oauth_verified_at TIMESTAMPTZ/);
+  assert.match(oauthVerificationMigration, /ADD COLUMN IF NOT EXISTS oauth_client_id TEXT/);
 });
 
 test('Mercado Pago OAuth uses an authenticated, atomic single-use state and same-origin callback completion', () => {
@@ -178,7 +184,14 @@ test('Mercado Pago callbacks sanitize production URLs and fall back to secure AP
 
 test('manual Mercado Pago credentials are retired in favor of OAuth', () => {
   assert.match(adminMercadoPagoRoute, /Credenciais manuais não são aceitas/);
+  assert.match(adminMercadoPagoRoute, /oauth_unverified/);
+  assert.match(adminMercadoPagoRoute, /requiresOAuthReconnect/);
+  assert.match(adminMercadoPagoRoute, /data\?\.status === 'connected'/);
+  assert.match(adminMercadoPagoRoute, /secret\?\.refresh_token\?\.trim\(\)/);
+  assert.match(adminMercadoPagoRoute, /oauth_client_id: null/);
+  assert.match(adminMercadoPagoRoute, /oauth_verified_at: null/);
   assert.match(adminMercadoPagoRoute, /status: 410/);
   assert.match(adminPage, /Reconexão obrigatória/);
+  assert.match(adminPage, /autorização OAuth verificada para split/);
   assert.doesNotMatch(adminPage, /Integração Financeira Manual \(Chaves API v2\)/);
 });

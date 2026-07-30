@@ -68,7 +68,7 @@ export async function GET(request: Request) {
 
     const { data, error } = await supabaseAdmin
       .from('mercadopago_accounts')
-      .select('id, mercadopago_user_id, status, public_key')
+      .select('id, mercadopago_user_id, status, public_key, oauth_client_id, oauth_verified_at')
       .eq('user_id', userId)
       .maybeSingle();
 
@@ -88,10 +88,31 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Erro ao buscar conta Mercado Pago.' }, { status: 500 });
     }
 
+    const currentClientId = process.env.MERCADOPAGO_CLIENT_ID?.trim();
+    const hasActiveOAuthCredential = Boolean(
+      secret?.refresh_token?.trim()
+      && secret.refresh_token !== 'manual'
+    );
+    const oauthVerified = Boolean(
+      data?.status === 'connected'
+      && hasActiveOAuthCredential
+      && data?.oauth_verified_at
+      && data.oauth_client_id
+      && currentClientId
+      && data.oauth_client_id === currentClientId
+    );
+    const connectionType = secret?.refresh_token === 'manual'
+      ? 'manual'
+      : oauthVerified
+        ? 'oauth'
+        : 'oauth_unverified';
+
     return NextResponse.json({
       account: data ? {
         ...data,
-        connectionType: secret?.refresh_token === 'manual' ? 'manual' : 'oauth'
+        connectionType,
+        oauthVerified,
+        requiresOAuthReconnect: connectionType === 'oauth_unverified'
       } : null
     });
   } catch (err) {
@@ -144,6 +165,8 @@ export async function DELETE(request: Request) {
       .from('mercadopago_accounts')
       .update({
         public_key: '',
+        oauth_client_id: null,
+        oauth_verified_at: null,
         status: 'disconnected',
         updated_at: new Date().toISOString()
       })

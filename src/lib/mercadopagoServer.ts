@@ -8,6 +8,8 @@ type MercadoPagoEventRow = {
 type MercadoPagoAccountRow = {
   expires_at: string | null;
   mercadopago_user_id: string | null;
+  oauth_client_id: string | null;
+  oauth_verified_at: string | null;
   public_key: string | null;
   status: string | null;
 };
@@ -70,10 +72,25 @@ const assertOAuthSellerIdentity = (
   const publicKey = account.public_key?.trim();
   const mercadopagoUserId = account.mercadopago_user_id?.trim();
   const refreshToken = secret.refresh_token?.trim();
+  const oauthClientId = account.oauth_client_id?.trim();
+  const oauthVerifiedAt = account.oauth_verified_at?.trim();
+  const currentClientId = process.env.MERCADOPAGO_CLIENT_ID?.trim();
 
-  if (!publicKey || !mercadopagoUserId || !refreshToken || refreshToken === 'manual') {
+  if (!currentClientId) {
+    throw new MercadoPagoConfigError('A integração OAuth do Mercado Pago não está configurada no servidor.', 500);
+  }
+
+  if (
+    !publicKey
+    || !mercadopagoUserId
+    || !refreshToken
+    || refreshToken === 'manual'
+    || !oauthVerifiedAt
+    || !oauthClientId
+    || oauthClientId !== currentClientId
+  ) {
     throw new MercadoPagoConfigError(
-      'A conexão Mercado Pago deste evento não possui autorização OAuth completa para split. Reconecte a conta via OAuth antes de receber inscrições com taxa de serviço.',
+      'A conexão Mercado Pago deste evento não possui uma autorização OAuth verificada para split. Reconecte a conta via OAuth antes de receber inscrições com taxa de serviço.',
       403
     );
   }
@@ -200,7 +217,7 @@ export const resolveMercadoPagoCheckoutConfig = async (
   const [{ data: account, error: accountError }, { data: secret, error: secretError }, serviceFee] = await Promise.all([
     supabaseAdmin
       .from('mercadopago_accounts')
-      .select('expires_at, mercadopago_user_id, public_key, status')
+      .select('expires_at, mercadopago_user_id, oauth_client_id, oauth_verified_at, public_key, status')
       .eq('user_id', dbEvent.organizer_id)
       .maybeSingle<MercadoPagoAccountRow>(),
     supabaseAdmin
@@ -269,7 +286,7 @@ export const resolveMercadoPagoPublicConfig = async (eventId: string): Promise<M
   const [{ data: account, error: accountError }, { data: secret, error: secretError }, serviceFee] = await Promise.all([
     supabaseAdmin
       .from('mercadopago_accounts')
-      .select('expires_at, mercadopago_user_id, public_key, status')
+      .select('expires_at, mercadopago_user_id, oauth_client_id, oauth_verified_at, public_key, status')
       .eq('user_id', dbEvent.organizer_id)
       .maybeSingle<MercadoPagoAccountRow>(),
     supabaseAdmin

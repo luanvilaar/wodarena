@@ -200,6 +200,7 @@ export async function POST(request: Request) {
 
     const tokenData = await mpResponse.json();
     const expiresIn = Number(tokenData.expires_in || 15552000); // Default de 180 dias
+    const connectedAt = new Date().toISOString();
     const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
 
     console.log('[OAuth Callback] Token obtido; persistindo conexão.', JSON.stringify({
@@ -216,8 +217,10 @@ export async function POST(request: Request) {
         mercadopago_user_id: String(tokenData.user_id),
         public_key: tokenData.public_key,
         expires_at: expiresAt,
+        oauth_client_id: clientId,
+        oauth_verified_at: connectedAt,
         status: 'connected',
-        updated_at: new Date().toISOString()
+        updated_at: connectedAt
       }, { onConflict: 'user_id' });
 
     if (dbPublicError) {
