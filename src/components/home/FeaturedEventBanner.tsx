@@ -5,7 +5,7 @@ import { useApp } from '@/context/AppContext';
 import { RegisterModal } from '@/components/RegisterModal';
 import { MapPin, ArrowRight, Lock } from 'lucide-react';
 import Link from 'next/link';
-import { getEventStatus, getRegistrationAvailability, parseEventDate } from '@/lib/eventStatus';
+import { compareEventsByDateAsc, getEventStatus, getRegistrationAvailability, parseEventDate } from '@/lib/eventStatus';
 
 type CountdownState = {
   days: number;
@@ -19,10 +19,11 @@ export function FeaturedEventBanner({ openLeadModal }: { openLeadModal: () => vo
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
   const [countdown, setCountdown] = useState<CountdownState>({ days: 0, hours: 0, minutes: 0, seconds: 0 });
 
+  // Sem destaque definido pelo owner, o fallback é o próximo evento a acontecer.
   const eligibleEvents = events.filter((event) => (
     (event.status === 'live' || event.status === 'upcoming')
     && getEventStatus(event) !== 'finished'
-  ));
+  )).sort(compareEventsByDateAsc);
   const featuredEvent = eligibleEvents.find((event) => event.isFeatured) ?? eligibleEvents[0];
 
   useEffect(() => {

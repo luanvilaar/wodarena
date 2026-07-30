@@ -79,6 +79,35 @@ export function hasEventDatePassed(dateText?: string, now = new Date()): boolean
   return now >= endOfEventDay;
 }
 
+type EventOrderInput = Pick<Event, 'name' | 'date'>;
+
+const EVENT_NAME_COLLATOR = new Intl.Collator('pt-BR', { sensitivity: 'base' });
+
+const compareEventsByDate = (a: EventOrderInput, b: EventOrderInput, direction: 1 | -1): number => {
+  const dateA = parseEventDate(a.date);
+  const dateB = parseEventDate(b.date);
+
+  // Eventos sem data legível ficam sempre no fim, independente da direção.
+  if (!dateA && !dateB) return EVENT_NAME_COLLATOR.compare(a.name ?? '', b.name ?? '');
+  if (!dateA) return 1;
+  if (!dateB) return -1;
+
+  const diff = dateA.getTime() - dateB.getTime();
+  if (diff !== 0) return diff * direction;
+
+  return EVENT_NAME_COLLATOR.compare(a.name ?? '', b.name ?? '');
+};
+
+/** Ordem cronológica crescente: o evento que acontece primeiro vem primeiro. */
+export function compareEventsByDateAsc(a: EventOrderInput, b: EventOrderInput): number {
+  return compareEventsByDate(a, b, 1);
+}
+
+/** Ordem cronológica decrescente: o evento encerrado mais recente vem primeiro. */
+export function compareEventsByDateDesc(a: EventOrderInput, b: EventOrderInput): number {
+  return compareEventsByDate(a, b, -1);
+}
+
 export function getEventStatus(event: Pick<Event, 'status' | 'date' | 'registrationDeadline'>): EventLifecycle {
   if (event.status === 'finished') return 'finished';
 

@@ -44,6 +44,7 @@ const RegDetail = ({ label, value, accent = false }: { label: string; value: str
   </div>
 );
 import { WorkoutType, CategoryType, EventStatus, Event, Athlete, Division, CourseStage, EventScheduleItemKind, EventScheduleMode, Score, EventScheduleItem, Registration, Contestation } from '@/types';
+import { getEventStatus as getEventLifecycle, compareEventsByDateAsc, compareEventsByDateDesc } from '@/lib/eventStatus';
 import { CONTESTATION_CREDITS_LIMIT, getContestationStatusLabel } from '@/lib/contestations';
 import { FITNESS_RACING_AGE_GROUPS, FITNESS_RACING_STATION_LIBRARY, buildFitnessRacingCourse, getAgeGroupFromDate } from '@/lib/fitnessRacing';
 import { getTeamDisplayName } from '@/lib/teamDisplay';
@@ -789,10 +790,13 @@ export default function AdminPage() {
     return {};
   }, [scoreFilterCatId, scoreFilterWodId, scores, athletes, approvedAthleteIds]);
 
-  // Filtrar eventos do gestor ativo
+  // Filtrar eventos do gestor ativo, em ordem cronológica: próximos primeiro, encerrados por último (mais recente primeiro)
   const managerEvents = useMemo(() => {
     if (!currentUser) return [];
-    return events.filter(e => e.organizerId === currentUser.id);
+    const ownEvents = events.filter(e => e.organizerId === currentUser.id);
+    const upcoming = ownEvents.filter(e => getEventLifecycle(e) !== 'finished').sort(compareEventsByDateAsc);
+    const past = ownEvents.filter(e => getEventLifecycle(e) === 'finished').sort(compareEventsByDateDesc);
+    return [...upcoming, ...past];
   }, [events, currentUser]);
 
   useEffect(() => {

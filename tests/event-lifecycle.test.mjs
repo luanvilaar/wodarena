@@ -61,6 +61,58 @@ test('event date parsing accepts supported formats without treating invalid date
   assert.match(eventStatus, /eventDate\.getDate\(\) \+ 1/);
 });
 
+test('event ordering keeps the next event first and undated events last', () => {
+  const events = [
+    { name: 'Sem data', date: 'a definir' },
+    { name: 'Terceiro', date: '20/03/2026' },
+    { name: 'Primeiro', date: '2026-03-05' },
+    { name: 'Segundo', date: '10 de Março de 2026' },
+  ];
+
+  const ascending = [...events].sort(eventStatusModule.compareEventsByDateAsc);
+  assert.deepEqual(
+    ascending.map((event) => event.name),
+    ['Primeiro', 'Segundo', 'Terceiro', 'Sem data'],
+  );
+
+  const descending = [...events].sort(eventStatusModule.compareEventsByDateDesc);
+  assert.deepEqual(
+    descending.map((event) => event.name),
+    ['Terceiro', 'Segundo', 'Primeiro', 'Sem data'],
+  );
+});
+
+test('event ordering breaks same-day ties by name in both directions', () => {
+  const sameDay = [
+    { name: 'Zulu Games', date: '2026-04-10' },
+    { name: 'Alpha Games', date: '10/04/2026' },
+  ];
+
+  assert.deepEqual(
+    [...sameDay].sort(eventStatusModule.compareEventsByDateAsc).map((event) => event.name),
+    ['Alpha Games', 'Zulu Games'],
+  );
+  assert.deepEqual(
+    [...sameDay].sort(eventStatusModule.compareEventsByDateDesc).map((event) => event.name),
+    ['Alpha Games', 'Zulu Games'],
+  );
+});
+
+test('home splits events into chronological upcoming list and past events section', () => {
+  assert.match(homePage, /compareEventsByDateAsc, compareEventsByDateDesc, getEventStatus/);
+  assert.match(homePage, /const \{ upcomingEvents, pastEvents \} = useMemo/);
+  assert.match(homePage, /if \(lifecycle === 'finished'\) \{\s*past\.push\(event\);/);
+  assert.match(homePage, /upcomingEvents: upcoming\.sort\(compareEventsByDateAsc\)/);
+  assert.match(homePage, /pastEvents: past\.sort\(compareEventsByDateDesc\)/);
+  assert.match(homePage, /id="eventos-passados"/);
+  assert.match(homePage, /Eventos passados/);
+  assert.match(homePage, /\{pastEvents\.length > 0 && \(/);
+});
+
+test('home banner fallback follows the chronological order of eligible events', () => {
+  assert.match(featuredBanner, /\)\)\.sort\(compareEventsByDateAsc\);/);
+});
+
 test('public surfaces consistently hide registration for derived finished events', () => {
   assert.match(eventCard, /const registrationAvailability = getRegistrationAvailability\(event\)/);
   assert.match(eventCard, /!registrationAvailability\.isAvailable/);

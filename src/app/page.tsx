@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useApp } from '@/context/AppContext';
 import { EventCard } from '@/components/EventCard';
 import { SectionOperations } from '@/components/home/SectionOperations';
@@ -13,8 +13,8 @@ import {
   Search,
   ShieldCheck
 } from 'lucide-react';
-import { EventStatus } from '@/types';
-import { getEventStatus } from '@/lib/eventStatus';
+import { Event, EventStatus } from '@/types';
+import { compareEventsByDateAsc, compareEventsByDateDesc, getEventStatus } from '@/lib/eventStatus';
 
 type LeadFormState = {
   managerName: string;
@@ -50,16 +50,35 @@ export default function Home() {
   const [leadErrorMessage, setLeadErrorMessage] = useState('');
   const [leadSuccessMessage, setLeadSuccessMessage] = useState('');
 
-  const filteredEvents = events.filter((event) => {
-    const matchesSearch = event.name.toLowerCase().includes(searchQuery.toLowerCase())
-      || event.location.toLowerCase().includes(searchQuery.toLowerCase());
-    const lifecycle = getEventStatus(event);
-    const matchesStatus = statusFilter === 'all'
-      || (statusFilter === 'finished' && lifecycle === 'finished')
-      || (statusFilter === 'upcoming' && event.status === 'upcoming' && lifecycle !== 'finished')
-      || (statusFilter === 'live' && event.status === 'live' && lifecycle !== 'finished');
-    return matchesSearch && matchesStatus;
-  });
+  // Eventos abertos ficam em ordem cronológica crescente (o próximo a acontecer primeiro)
+  // e os já encerrados vão para a seção de histórico, do mais recente para o mais antigo.
+  const { upcomingEvents, pastEvents } = useMemo(() => {
+    const upcoming: Event[] = [];
+    const past: Event[] = [];
+
+    events.forEach((event) => {
+      const matchesSearch = event.name.toLowerCase().includes(searchQuery.toLowerCase())
+        || event.location.toLowerCase().includes(searchQuery.toLowerCase());
+      const lifecycle = getEventStatus(event);
+      const matchesStatus = statusFilter === 'all'
+        || (statusFilter === 'finished' && lifecycle === 'finished')
+        || (statusFilter === 'upcoming' && event.status === 'upcoming' && lifecycle !== 'finished')
+        || (statusFilter === 'live' && event.status === 'live' && lifecycle !== 'finished');
+
+      if (!matchesSearch || !matchesStatus) return;
+
+      if (lifecycle === 'finished') {
+        past.push(event);
+      } else {
+        upcoming.push(event);
+      }
+    });
+
+    return {
+      upcomingEvents: upcoming.sort(compareEventsByDateAsc),
+      pastEvents: past.sort(compareEventsByDateDesc)
+    };
+  }, [events, searchQuery, statusFilter]);
 
   const handleLeadFieldChange = (field: keyof LeadFormState, value: string | boolean) => {
     setLeadForm((current) => ({
@@ -160,11 +179,15 @@ export default function Home() {
           </div>
         </div>
 
-        {filteredEvents.length > 0 ? (
+        {upcomingEvents.length > 0 ? (
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredEvents.map((event, index) => (
+            {upcomingEvents.map((event, index) => (
               <EventCard key={event.id} event={event} priority={index === 0} />
             ))}
+          </div>
+        ) : pastEvents.length > 0 ? (
+          <div className="rounded-xl border border-dashed border-card-border bg-card py-10 text-center">
+            <p className="text-sm text-muted">Nenhum evento em aberto para estes filtros. Veja os eventos passados abaixo.</p>
           </div>
         ) : (
           <div className="space-y-4 rounded-xl border border-dashed border-card-border bg-card py-20 text-center">
@@ -176,6 +199,24 @@ export default function Home() {
           </div>
         )}
       </section>
+
+      {pastEvents.length > 0 && (
+        <section id="eventos-passados" className="mx-auto w-full max-w-7xl space-y-8 border-t border-card-border px-4 py-12 sm:px-6 lg:px-8">
+          <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted">Histórico</p>
+              <h2 className="mt-2 text-3xl font-bold tracking-tight text-white">Eventos passados</h2>
+            </div>
+            <p className="max-w-md text-sm leading-6 text-muted">Edições já encerradas, da mais recente para a mais antiga. Consulte os resultados finais.</p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {pastEvents.map((event) => (
+              <EventCard key={event.id} event={event} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Modal de Conversão Comercial */}
       {leadFormOpen && (

@@ -5,9 +5,9 @@ import Image from 'next/image';
 import { useApp } from '@/context/AppContext';
 import { Leaderboard } from '@/components/Leaderboard';
 import { BrandLogo } from '@/components/BrandLogo';
-import { getEventStatus } from '@/lib/eventStatus';
+import { compareEventsByDateAsc, compareEventsByDateDesc, getEventStatus } from '@/lib/eventStatus';
 import { getManagerAccessStatus, getManagerAccessStatusLabel } from '@/lib/managerAccess';
-import { CommercialLead } from '@/types';
+import { CommercialLead, Event } from '@/types';
 import { getCommercialLeadEmailStatusLabel, getCommercialLeadStatusLabel } from '@/lib/commercialLeads';
 import {
   Shield, LayoutDashboard, Users, Trophy, DollarSign,
@@ -167,8 +167,22 @@ export default function OwnerPage() {
     events.filter(event => (
       (event.status === 'live' || event.status === 'upcoming')
       && getEventStatus(event) !== 'finished'
-    ))
+    )).sort(compareEventsByDateAsc)
   ), [events]);
+
+  // Eventos em ordem cronológica: próximos primeiro, encerrados por último (mais recente primeiro)
+  const chronologicallyOrderedEvents = useMemo(() => {
+    const upcoming: Event[] = [];
+    const past: Event[] = [];
+    events.forEach(event => {
+      if (getEventStatus(event) === 'finished') {
+        past.push(event);
+      } else {
+        upcoming.push(event);
+      }
+    });
+    return [...upcoming.sort(compareEventsByDateAsc), ...past.sort(compareEventsByDateDesc)];
+  }, [events]);
 
   const selectableFeaturedHomeEventId = useMemo(() => {
     const currentFeaturedId = featuredHomeEvent?.id || '';
@@ -178,7 +192,7 @@ export default function OwnerPage() {
   const selectedFeaturedHomeDraftId = featuredHomeDraftId ?? selectableFeaturedHomeEventId;
 
   // Seletor de Evento para Leaderboard
-  const [selectedEventIdLead, setSelectedEventIdLead] = useState(events[0]?.id || '');
+  const [selectedEventIdLead, setSelectedEventIdLead] = useState(chronologicallyOrderedEvents[0]?.id || '');
   const selectedEventForLead = useMemo(() => {
     return events.find(e => e.id === selectedEventIdLead);
   }, [events, selectedEventIdLead]);
@@ -1022,7 +1036,7 @@ export default function OwnerPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {events.map(event => {
+                      {chronologicallyOrderedEvents.map(event => {
                         const eventRegs = registrations.filter(r => r.eventId === event.id);
                         const eventRevenue = eventRegs.reduce((sum, r) => sum + r.totalPaid, 0);
 
@@ -1080,7 +1094,7 @@ export default function OwnerPage() {
                     onChange={(e) => setSelectedEventIdLead(e.target.value)}
                     className="w-full px-4 py-2.5 bg-dark-gray border border-card-border rounded-lg text-white focus:outline-none focus:border-primary/50 text-xs font-semibold uppercase tracking-wider"
                   >
-                    {events.map(event => (
+                    {chronologicallyOrderedEvents.map(event => (
                       <option key={event.id} value={event.id}>{event.name}</option>
                     ))}
                   </select>
