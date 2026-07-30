@@ -139,7 +139,7 @@ test('Mercado Pago OAuth callback persists secrets with Supabase service role', 
   assert.match(oauthCallback, /from\('mercadopago_secrets'\)/);
 });
 
-test('Mercado Pago OAuth uses single-use state and same-origin callback completion', () => {
+test('Mercado Pago OAuth uses an authenticated, atomic single-use state and same-origin callback completion', () => {
   assert.match(adminMercadoPagoRoute, /randomUUID\(\)/);
   assert.match(adminMercadoPagoRoute, /from\('mercadopago_oauth_states'\)/);
   // Resolucao do redirect_uri centralizada no helper e compartilhada entre autorizacao e troca de token.
@@ -154,7 +154,14 @@ test('Mercado Pago OAuth uses single-use state and same-origin callback completi
   assert.match(oauthStatesMigration, /expires_at TIMESTAMPTZ NOT NULL DEFAULT \(NOW\(\) \+ INTERVAL '10 minutes'\)/);
   assert.match(oauthCallback, /export async function POST/);
   assert.match(oauthCallback, /from\('mercadopago_oauth_states'\)/);
-  assert.match(oauthCallback, /delete\(\)\.eq\('state', state\)/);
+  assert.match(oauthCallback, /const auth = requireSession\(request, \['manager', 'owner'\]\)/);
+  assert.match(oauthCallback, /await assertManagerOperationalAccess\(supabaseAdmin, auth\.user\)/);
+  assert.match(oauthCallback, /reason: 'state_not_found'/);
+  assert.match(oauthCallback, /reason: 'state_storage_error'/);
+  assert.match(oauthCallback, /reason: 'state_already_consumed'/);
+  assert.match(oauthCallback, /\.delete\(\)[\s\S]*\.eq\('state', state\)[\s\S]*\.eq\('user_id', userId\)[\s\S]*\.gt\('expires_at', now\.toISOString\(\)\)[\s\S]*\.select\('user_id, code_verifier'\)/);
+  assert.match(oauthCallback, /const callbackId = randomUUID\(\)/);
+  assert.doesNotMatch(oauthCallback, /State inválido ou não encontrado no banco:', state/);
   assert.match(adminPage, /const code = params\.get\('code'\)/);
   assert.match(adminPage, /window\.history\.replaceState\(\{\}, '', newUrl\)/);
   assert.match(adminPage, /fetch\('\/api\/mercadopago\/oauth\/callback', \{[\s\S]*method: 'POST'/);
