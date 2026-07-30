@@ -147,8 +147,8 @@ export function EventCard({ event, priority = false }: EventCardProps) {
           .filter(Boolean)
           .join(' ')}
       >
-        {/* Phase 2: aspect-video em vez de h-48 fixo */}
-        <div className="relative aspect-video w-full overflow-hidden bg-dark-gray">
+        {/* Proporção 5:2 — mesmo formato exigido no upload do admin (1600 × 640), então a arte aparece sem corte */}
+        <div className="relative aspect-[5/2] w-full overflow-hidden bg-dark-gray">
           {event.bannerUrl ? (
             <Image
               src={event.bannerUrl}
@@ -163,15 +163,15 @@ export function EventCard({ event, priority = false }: EventCardProps) {
             <div className="h-full w-full bg-gradient-to-br from-dark-gray to-card opacity-75" />
           )}
 
-          <div className="absolute top-4 left-4">{getStatusBadge()}</div>
+          <div className="absolute top-3 left-3">{getStatusBadge()}</div>
 
           {lifecycleBadge && (
-            <div className="absolute top-4 right-4">{lifecycleBadge}</div>
+            <div className="absolute top-3 right-3">{lifecycleBadge}</div>
           )}
 
           {/* Phase 3: logo maior com sombra */}
-          <div className="absolute bottom-4 left-4">
-            <div className="h-14 w-14 overflow-hidden rounded-lg border-2 border-card-border bg-background p-1 shadow-lg shadow-black/40">
+          <div className="absolute bottom-3 left-3">
+            <div className="h-12 w-12 overflow-hidden rounded-lg border-2 border-card-border bg-background p-1 shadow-lg shadow-black/40 sm:h-14 sm:w-14">
               {event.logoUrl ? (
                 <Image
                   src={event.logoUrl}
@@ -191,7 +191,7 @@ export function EventCard({ event, priority = false }: EventCardProps) {
           </div>
         </div>
 
-        <div className="flex flex-grow flex-col justify-between space-y-4 p-5">
+        <div className="flex flex-grow flex-col justify-between space-y-3 p-4 sm:space-y-4 sm:p-5">
           <div className="space-y-2">
             <h3 className="line-clamp-1 text-lg font-extrabold tracking-wide text-white transition-colors group-hover:text-primary">
               {event.name}

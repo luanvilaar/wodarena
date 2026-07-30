@@ -72,7 +72,12 @@ test('home banner prioritizes active highlighted events and keeps finished event
 });
 
 test('home banner mobile layout keeps event content readable and action hierarchy clear', () => {
-  assert.match(mobileFeaturedBanner, /linear-gradient\(90deg/);
+  // A arte fica em faixa própria na proporção de upload (5:2) e o texto em painel sólido,
+  // então a legibilidade não depende mais de máscara sobre a imagem.
+  assert.match(mobileFeaturedBanner, /aspect-\[5\/2\]/);
+  assert.match(mobileFeaturedBanner, /priority/);
+  assert.match(mobileFeaturedBanner, /linear-gradient\(180deg/);
+  assert.doesNotMatch(mobileFeaturedBanner, /bg-cover/);
   assert.doesNotMatch(mobileFeaturedBanner, /radial-gradient\(circle at 76% 14%/);
   assert.match(mobileFeaturedBanner, /rounded-md border border-card-border bg-card px-3 py-2/);
   assert.match(mobileFeaturedBanner, /rounded-md border border-card-border bg-dark-gray px-3 py-2/);

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import { RegisterModal } from '@/components/RegisterModal';
 import { MapPin, ArrowRight, Lock } from 'lucide-react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { compareEventsByDateAsc, getEventStatus, getRegistrationAvailability, parseEventDate } from '@/lib/eventStatus';
 
@@ -129,30 +130,33 @@ export function FeaturedEventBanner({ openLeadModal }: { openLeadModal: () => vo
   return (
     <>
       {/* Banner Versão Mobile */}
-      <section 
-        className="md:hidden relative overflow-hidden min-h-[520px] border-b border-card-border bg-cover bg-center flex flex-col justify-end"
-        style={{
-          backgroundImage: `url(${featuredEvent.bannerUrl || '/banner_compor.png'})`
-        }}
-      >
-        {/* Máscara de gradientes reforçada para Mobile */}
-        <div className="absolute inset-0 z-0 pointer-events-none"
-          style={{
-            background: `
-              linear-gradient(90deg,
-                rgba(11, 14, 17, 0.72) 0%,
-                rgba(11, 14, 17, 0.28) 100%
-              ),
-              linear-gradient(180deg,
-                rgba(11, 14, 17, 0.12) 0%,
-                rgba(11, 14, 17, 0.48) 48%,
-                rgba(11, 14, 17, 0.96) 100%
-              )
-            `
-          }}
-        />
+      <section className="md:hidden border-b border-card-border bg-background">
+        {/* Arte do evento na proporção original (5:2 — 1600 × 640), sem corte lateral */}
+        <div className="relative aspect-[5/2] w-full overflow-hidden bg-dark-gray">
+          <Image
+            src={featuredEvent.bannerUrl || '/banner_compor.png'}
+            alt={`${featuredEvent.name} banner`}
+            fill
+            unoptimized
+            priority
+            sizes="100vw"
+            className="object-cover"
+          />
+          {/* Costura entre a arte e o painel de conteúdo */}
+          <div className="absolute inset-x-0 bottom-0 h-16 pointer-events-none"
+            style={{
+              background: `
+                linear-gradient(180deg,
+                  rgba(11, 14, 17, 0.0) 0%,
+                  rgba(11, 14, 17, 0.75) 62%,
+                  rgba(11, 14, 17, 1.0) 100%
+                )
+              `
+            }}
+          />
+        </div>
 
-        <div className="relative z-10 w-full px-4 pb-8 pt-20 flex min-h-[520px] flex-col justify-end">
+        <div className="w-full px-4 pb-8 pt-4">
           <div className="space-y-3.5">
             
             {/* Status e badges */}

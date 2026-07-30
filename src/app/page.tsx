@@ -130,14 +130,13 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-background">
-      <SectionOperations />
       <FeaturedEventBanner openLeadModal={() => setLeadFormOpen(true)} />
 
-      <section id="eventos" className="mx-auto w-full max-w-7xl space-y-8 px-4 py-12 sm:px-6 lg:px-8">
+      <section id="eventos" className="mx-auto w-full max-w-7xl space-y-6 px-4 pb-12 pt-8 sm:space-y-8 sm:px-6 sm:pt-12 lg:px-8">
         <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Calendário oficial</p>
-            <h2 className="mt-2 text-3xl font-bold tracking-tight text-white">Eventos em destaque</h2>
+            <h2 className="mt-2 text-2xl font-bold tracking-tight text-white sm:text-3xl">Eventos em destaque</h2>
           </div>
           <p className="max-w-md text-sm leading-6 text-muted">Encontre sua próxima competição, acompanhe resultados ou garanta sua inscrição.</p>
         </div>
@@ -200,8 +199,10 @@ export default function Home() {
         )}
       </section>
 
+      <SectionOperations />
+
       {pastEvents.length > 0 && (
-        <section id="eventos-passados" className="mx-auto w-full max-w-7xl space-y-8 border-t border-card-border px-4 py-12 sm:px-6 lg:px-8">
+        <section id="eventos-passados" className="mx-auto w-full max-w-7xl space-y-8 px-4 py-12 sm:px-6 lg:px-8">
           <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted">Histórico</p>
