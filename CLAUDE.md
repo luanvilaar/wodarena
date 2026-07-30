@@ -89,7 +89,7 @@ Os testes (`tests/*.test.mjs`, `node:test`) são majoritariamente **regressão e
 
 - Import alias: `@/*` → `src/*`.
 - Banco é snake_case; tipos do app são camelCase. Faça a tradução nos mappers do AppContext / payload helpers, não espalhe snake_case pela UI.
-- Variáveis de ambiente do app (distintas das chaves do AIOX em `.env.example`): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `WODA_SESSION_SECRET`, `MERCADOPAGO_CLIENT_ID/CLIENT_SECRET/REDIRECT_URI/WEBHOOK_SECRET`, `RESEND_API_KEY`/`RESEND_FROM_EMAIL`, `WODARENA_OWNER_EMAIL`, `COMMERCIAL_LEADS_OWNER_EMAIL`, `APP_URL`/`NEXT_PUBLIC_APP_URL`.
+- Variáveis de ambiente do app (distintas das chaves do AIOX em `.env.example`): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `WODA_SESSION_SECRET`, `MERCADOPAGO_CLIENT_ID/CLIENT_SECRET/REDIRECT_URI/WEBHOOK_SECRET`, `MERCADOPAGO_PLATFORM_USER_ID` (id da conta Mercado Pago dona da aplicação marketplace — o MP recusa `application_fee` quando o vendedor é essa própria conta, então ela é bloqueada como conta de gestor), `RESEND_API_KEY`/`RESEND_FROM_EMAIL`, `WODARENA_OWNER_EMAIL`, `COMMERCIAL_LEADS_OWNER_EMAIL`, `APP_URL`/`NEXT_PUBLIC_APP_URL`.
 - Segurança HTTP (CSP, HSTS, etc.) é definida em [next.config.ts](next.config.ts); a allowlist de CSP precisa acompanhar qualquer novo domínio externo (Supabase/Mercado Pago já liberados). Ver [SECURITY-HEADERS.md](SECURITY-HEADERS.md).
 - Migrations em `supabase/migrations/` (snapshot ordenado por timestamp). Mudança de schema acompanha migration nova; não edite migrations já aplicadas.
 

@@ -169,7 +169,7 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>(resolveInitialAdminTab);
 
   // Estados para integração do Mercado Pago Marketplace
-  const [mpAccount, setMpAccount] = useState<{ id: string; mercadopago_user_id: string; status: string; public_key?: string; connectionType?: 'oauth' | 'manual' | 'oauth_unverified'; requiresOAuthReconnect?: boolean } | null>(null);
+  const [mpAccount, setMpAccount] = useState<{ id: string; mercadopago_user_id: string; status: string; public_key?: string; connectionType?: 'oauth' | 'manual' | 'oauth_unverified' | 'platform_account'; requiresOAuthReconnect?: boolean } | null>(null);
   const [loadingMp, setLoadingMp] = useState(false);
   const oauthCallbackProcessed = useRef(false);
 
@@ -9089,14 +9089,16 @@ export default function AdminPage() {
                       </div>
                     )}
 
-                    {mpAccount && (mpAccount.connectionType === 'manual' || mpAccount.connectionType === 'oauth_unverified') && (
+                    {mpAccount && (mpAccount.connectionType === 'manual' || mpAccount.connectionType === 'oauth_unverified' || mpAccount.connectionType === 'platform_account') && (
                       <div className="rounded-lg border border-amber-400/30 bg-amber-400/10 p-6 space-y-4">
                         <div>
                           <h4 className="text-sm font-bold text-amber-200 uppercase tracking-wider font-sans">Reconexão obrigatória</h4>
                           <p className="mt-2 text-xs leading-5 text-amber-100/80">
                             {mpAccount.connectionType === 'manual'
                               ? 'Sua conexão atual usa credenciais manuais.'
-                              : 'Sua conexão atual não possui uma autorização OAuth verificada para split.'}{' '}
+                              : mpAccount.connectionType === 'platform_account'
+                                ? 'A conta conectada é a própria conta Mercado Pago da plataforma WODArena, que não pode receber inscrições com taxa de serviço. Conecte uma conta Mercado Pago diferente.'
+                                : 'Sua conexão atual não possui uma autorização OAuth verificada para split.'}{' '}
                             Para aplicar a taxa de serviço WODArena, reconecte sua conta pelo Mercado Pago via OAuth. As inscrições online permanecem bloqueadas até a reconexão.
                           </p>
                         </div>

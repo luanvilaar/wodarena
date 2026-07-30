@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import {
   MercadoPagoConfigError,
+  extractApplicationFeeCharged,
   resolveMercadoPagoCheckoutConfig
 } from '@/lib/mercadopagoServer';
 import {
@@ -174,7 +175,7 @@ export async function GET(request: Request) {
 
     const wasAlreadyApproved = currentReg?.payment_status === 'payment_approved';
     const amountCollected = Number(paymentData.transaction_amount || 0);
-    const applicationFeeCharged = Number(paymentData.application_fee || 0);
+    const applicationFeeCharged = extractApplicationFeeCharged(paymentData);
 
     await supabaseAdmin
       .from('registrations')

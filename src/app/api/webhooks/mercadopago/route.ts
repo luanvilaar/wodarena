@@ -8,6 +8,7 @@ import {
 import { createSupabaseAdmin } from '@/lib/serverSecurity';
 import {
   MercadoPagoConfigError,
+  extractApplicationFeeCharged,
   resolveMercadoPagoCheckoutConfig
 } from '@/lib/mercadopagoServer';
 
@@ -124,7 +125,7 @@ export async function POST(request: Request) {
     const nextPaymentStatus = toRegistrationPaymentStatus(status);
     const wasApproved = existingRegistration.payment_status === 'payment_approved';
     const amountCollected = Number(paymentData.transaction_amount || 0);
-    const applicationFeeCharged = Number(paymentData.application_fee || 0);
+    const applicationFeeCharged = extractApplicationFeeCharged(paymentData);
 
     const { data: updatedRegistration, error: updateError } = await supabaseAdmin
       .from('registrations')

@@ -65,6 +65,64 @@ const isExpired = (expiresAt: string | null | undefined) => {
   return !Number.isFinite(expiresAtMs) || expiresAtMs <= Date.now() + 60_000;
 };
 
+export const PLATFORM_SELLER_ERROR_MESSAGE = 'Esta conta Mercado Pago é a própria conta da plataforma WODArena e não pode receber inscrições com taxa de serviço. Conecte uma conta Mercado Pago diferente para este gestor.';
+
+/**
+ * O Mercado Pago recusa `application_fee`/`marketplace_fee` quando o vendedor
+ * (collector) é a mesma conta dona da aplicação marketplace — a aplicação não
+ * pode cobrar comissão de si mesma. A tentativa retorna
+ * "You cannot use application_fee with this payment" já na criação do pagamento,
+ * então bloqueamos antes, tanto na conexão OAuth quanto no checkout.
+ *
+ * Sem `MERCADOPAGO_PLATFORM_USER_ID` configurada não há o que comparar e o
+ * comportamento permanece inalterado.
+ */
+export const isPlatformOwnedSeller = (mercadopagoUserId: string | null | undefined) => {
+  const platformUserId = process.env.MERCADOPAGO_PLATFORM_USER_ID?.trim();
+  const sellerUserId = mercadopagoUserId ? String(mercadopagoUserId).trim() : '';
+  return Boolean(platformUserId && sellerUserId && platformUserId === sellerUserId);
+};
+
+/**
+ * Monta a chave de idempotência do checkout. Uma chave presa apenas ao id da inscrição
+ * protege contra duplo clique, mas também prende a inscrição à primeira tentativa: se o
+ * payload mudar (valor recalculado, comissão que passou a ser aplicada), o Mercado Pago
+ * pode devolver a resposta antiga ou recusar a nova. Incluir o valor cobrado e a
+ * comissão em centavos mantém as duas propriedades.
+ */
+export const buildCheckoutIdempotencyKey = (
+  method: 'card' | 'pix',
+  registrationId: string,
+  amountCollected: number,
+  serviceFeeAmount: number
+) => {
+  const cents = (value: number) => Math.max(0, Math.round((Number(value) + Number.EPSILON) * 100));
+  return `${method}-${registrationId}-${cents(amountCollected)}-${cents(serviceFeeAmount)}`;
+};
+
+/**
+ * Extrai a comissão efetivamente retida pela plataforma na resposta do Mercado Pago.
+ * Nem o POST nem o GET de `/v1/payments` devolvem `application_fee` na raiz: o valor
+ * aplicado aparece apenas em `fee_details`. Ler só a raiz gravava zero mesmo quando a
+ * comissão havia sido cobrada.
+ */
+export const extractApplicationFeeCharged = (paymentData: unknown): number => {
+  const payment = (paymentData || {}) as {
+    application_fee?: unknown;
+    fee_details?: Array<{ type?: unknown; amount?: unknown }> | null;
+  };
+
+  const detail = Array.isArray(payment.fee_details)
+    ? payment.fee_details.find(item => item?.type === 'application_fee')
+    : undefined;
+
+  const fromDetails = Number(detail?.amount);
+  if (Number.isFinite(fromDetails) && fromDetails > 0) return fromDetails;
+
+  const fromRoot = Number(payment.application_fee);
+  return Number.isFinite(fromRoot) && fromRoot > 0 ? fromRoot : 0;
+};
+
 const assertOAuthSellerIdentity = (
   account: MercadoPagoAccountRow,
   secret: MercadoPagoSecretRow,
@@ -93,6 +151,10 @@ const assertOAuthSellerIdentity = (
       'A conexão Mercado Pago deste evento não possui uma autorização OAuth verificada para split. Reconecte a conta via OAuth antes de receber inscrições com taxa de serviço.',
       403
     );
+  }
+
+  if (isPlatformOwnedSeller(mercadopagoUserId)) {
+    throw new MercadoPagoConfigError(PLATFORM_SELLER_ERROR_MESSAGE, 403);
   }
 
   return { publicKey, mercadopagoUserId, refreshToken };

@@ -19,6 +19,8 @@ const oauthVerificationMigration = read('../supabase/migrations/20260730143000_v
 const registerModal = read('../src/components/RegisterModal.tsx');
 const appContext = read('../src/context/AppContext.tsx');
 const eventPage = read('../src/app/event/[id]/page.tsx');
+const provenanceCli = read('../bin/mercadopago-provenance.mjs');
+const packageJson = read('../package.json');
 
 test('Mercado Pago checkout resolves OAuth credentials from organizer secrets', () => {
   assert.match(helper, /from\('events'\)[\s\S]*select\('organizer_id'\)/);
@@ -194,4 +196,64 @@ test('manual Mercado Pago credentials are retired in favor of OAuth', () => {
   assert.match(adminPage, /Reconexão obrigatória/);
   assert.match(adminPage, /autorização OAuth verificada para split/);
   assert.doesNotMatch(adminPage, /Integração Financeira Manual \(Chaves API v2\)/);
+});
+
+// O Mercado Pago recusa `application_fee` quando o vendedor e a propria conta dona da
+// aplicacao marketplace ("You cannot use application_fee with this payment"). O bloqueio
+// precisa acontecer antes da chamada, para o gestor ver a causa e o atleta nao ver o erro cru.
+test('the platform-owned Mercado Pago account is rejected as a seller before checkout fails', () => {
+  assert.match(helper, /export const isPlatformOwnedSeller/);
+  assert.match(helper, /process\.env\.MERCADOPAGO_PLATFORM_USER_ID/);
+  assert.match(helper, /PLATFORM_SELLER_ERROR_MESSAGE/);
+  assert.match(helper, /é a própria conta da plataforma WODArena/);
+  assert.match(helper, /if \(isPlatformOwnedSeller\(mercadopagoUserId\)\) \{[\s\S]*PLATFORM_SELLER_ERROR_MESSAGE, 403/);
+  // Barrado ja na conexao OAuth, antes de gravar a conta do gestor.
+  assert.match(oauthCallback, /isPlatformOwnedSeller\(tokenData\.user_id\)/);
+  assert.match(oauthCallback, /platform_owned_seller_rejected/);
+  assert.match(oauthCallback, /status: 403/);
+  assert.match(adminMercadoPagoRoute, /isPlatformOwnedSeller\(data\?\.mercadopago_user_id\)/);
+  assert.match(adminMercadoPagoRoute, /'platform_account'/);
+  assert.match(adminPage, /platform_account/);
+  assert.match(adminPage, /própria conta Mercado Pago da plataforma WODArena/);
+});
+
+// Nem o POST nem o GET de /v1/payments devolvem `application_fee` na raiz: a comissao
+// aplicada aparece apenas em `fee_details`. Ler so a raiz gravava zero em pagamentos
+// cuja comissao havia sido efetivamente retida.
+test('the charged application fee is read from fee_details, not from the payment root', () => {
+  assert.match(helper, /export const extractApplicationFeeCharged/);
+  assert.match(helper, /fee_details[\s\S]*item\?\.type === 'application_fee'/);
+  for (const route of [pixRoute, cardRoute, statusRoute, webhookRoute]) {
+    assert.match(route, /extractApplicationFeeCharged\(paymentData\)/);
+    assert.doesNotMatch(route, /Number\(paymentData\.application_fee \|\| 0\)/);
+  }
+});
+
+// Uma chave presa so ao id da inscricao prende a inscricao a primeira tentativa: se o
+// valor cobrado mudar, o Mercado Pago pode devolver a resposta antiga ou recusar a nova.
+test('checkout idempotency key changes when the charged amount changes', () => {
+  assert.match(helper, /export const buildCheckoutIdempotencyKey/);
+  assert.match(helper, /\$\{method\}-\$\{registrationId\}-\$\{cents\(amountCollected\)\}-\$\{cents\(serviceFeeAmount\)\}/);
+  for (const [route, method] of [[cardRoute, 'card'], [pixRoute, 'pix']]) {
+    assert.match(route, new RegExp(`buildCheckoutIdempotencyKey\\(\\s*'${method}',\\s*checkoutSnapshot\\.registrationId,\\s*serviceFee\\.amountCollected,\\s*serviceFee\\.serviceFeeAmount`));
+    assert.doesNotMatch(route, new RegExp(`'X-Idempotency-Key': \`${method}-\\$\\{checkoutSnapshot\\.registrationId\\}\``));
+  }
+});
+
+// Contas conectadas antes das colunas de procedencia existirem ficam bloqueadas mesmo
+// sendo legitimas. So o Mercado Pago pode confirmar a origem: se o refresh com o nosso
+// client_id/secret funcionar, a conexao nasceu desta aplicacao.
+test('provenance backfill CLI proves OAuth origin through a real token refresh', () => {
+  assert.match(packageJson, /"mercadopago:provenance": "node bin\/mercadopago-provenance\.mjs"/);
+  assert.match(provenanceCli, /grant_type: 'refresh_token'/);
+  assert.match(provenanceCli, /getRequiredEnv\('MERCADOPAGO_CLIENT_SECRET'\)/);
+  assert.match(provenanceCli, /getRequiredEnv\('SUPABASE_SERVICE_ROLE_KEY'\)/);
+  assert.match(provenanceCli, /oauth_client_id: clientId/);
+  assert.match(provenanceCli, /oauth_verified_at: now/);
+  // Escrita so com --apply; refresh recusado e conta da plataforma nunca sao verificados.
+  assert.match(provenanceCli, /const apply = args\.apply === 'true'/);
+  assert.match(provenanceCli, /if \(!apply\) \{[\s\S]*would_verify/);
+  assert.match(provenanceCli, /refresh_recusado_pelo_mercado_pago/);
+  assert.match(provenanceCli, /conta_da_propria_plataforma_nao_pode_vender_com_split/);
+  assert.match(provenanceCli, /if \(refreshToken === 'manual'\) return 'manual_legacy'/);
 });

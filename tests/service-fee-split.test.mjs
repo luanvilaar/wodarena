@@ -76,6 +76,9 @@ test('payment reconciliation stores charged amounts and matches the amount colle
   assert.match(statusRoute, /application_fee_charged: applicationFeeCharged/);
   assert.match(webhookRoute, /amount_collected: amountCollected/);
   assert.match(webhookRoute, /application_fee_charged: applicationFeeCharged/);
+  // A comissao retida so aparece em `fee_details` na resposta do Mercado Pago.
+  assert.match(statusRoute, /const applicationFeeCharged = extractApplicationFeeCharged\(paymentData\)/);
+  assert.match(webhookRoute, /const applicationFeeCharged = extractApplicationFeeCharged\(paymentData\)/);
 });
 
 test('owner controls the global switch and checkout shows the fee breakdown', () => {

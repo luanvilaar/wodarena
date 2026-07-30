@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import {
   MercadoPagoConfigError,
+  buildCheckoutIdempotencyKey,
+  extractApplicationFeeCharged,
   resolveMercadoPagoCheckoutConfig
 } from '@/lib/mercadopagoServer';
 import { ManagerAccessError, assertManagerSalesAccessForEvent, managerAccessErrorResponse } from '@/lib/serverManagerAccess';
@@ -156,7 +158,12 @@ export async function POST(request: Request) {
       headers: {
         'Authorization': `Bearer ${checkoutConfig.accessToken}`,
         'Content-Type': 'application/json',
-        'X-Idempotency-Key': `card-${checkoutSnapshot.registrationId}`,
+        'X-Idempotency-Key': buildCheckoutIdempotencyKey(
+          'card',
+          checkoutSnapshot.registrationId,
+          serviceFee.amountCollected,
+          serviceFee.serviceFeeAmount
+        ),
         ...(deviceId ? { 'X-Meli-Session-Id': deviceId } : {})
       },
       body: JSON.stringify(paymentPayload)
@@ -192,7 +199,7 @@ export async function POST(request: Request) {
       serviceFeePercent: serviceFee.serviceFeePercent,
       serviceFeeAmount: serviceFee.serviceFeeAmount,
       amountCollected: serviceFee.amountCollected,
-      applicationFeeCharged: Number(paymentData.application_fee || 0)
+      applicationFeeCharged: extractApplicationFeeCharged(paymentData)
     });
 
     if (paymentStatus === 'payment_approved') {

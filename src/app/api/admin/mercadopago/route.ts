@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createHash, randomBytes, randomUUID } from 'crypto';
-import { MercadoPagoConfigError, resolveMercadoPagoRedirectUri } from '@/lib/mercadopagoServer';
+import { MercadoPagoConfigError, isPlatformOwnedSeller, resolveMercadoPagoRedirectUri } from '@/lib/mercadopagoServer';
 import { ManagerAccessError, assertManagerOperationalAccess, managerAccessErrorResponse } from '@/lib/serverManagerAccess';
 import {
   canActOnUser,
@@ -93,6 +93,10 @@ export async function GET(request: Request) {
       secret?.refresh_token?.trim()
       && secret.refresh_token !== 'manual'
     );
+    // A conta dona da aplicação marketplace não pode vender com split: o Mercado Pago
+    // recusa a comissão. Sinalizamos no painel em vez de deixar o gestor descobrir
+    // no primeiro pagamento.
+    const isPlatformAccount = isPlatformOwnedSeller(data?.mercadopago_user_id);
     const oauthVerified = Boolean(
       data?.status === 'connected'
       && hasActiveOAuthCredential
@@ -100,19 +104,22 @@ export async function GET(request: Request) {
       && data.oauth_client_id
       && currentClientId
       && data.oauth_client_id === currentClientId
+      && !isPlatformAccount
     );
-    const connectionType = secret?.refresh_token === 'manual'
-      ? 'manual'
-      : oauthVerified
-        ? 'oauth'
-        : 'oauth_unverified';
+    const connectionType = isPlatformAccount
+      ? 'platform_account'
+      : secret?.refresh_token === 'manual'
+        ? 'manual'
+        : oauthVerified
+          ? 'oauth'
+          : 'oauth_unverified';
 
     return NextResponse.json({
       account: data ? {
         ...data,
         connectionType,
         oauthVerified,
-        requiresOAuthReconnect: connectionType === 'oauth_unverified'
+        requiresOAuthReconnect: connectionType === 'oauth_unverified' || connectionType === 'platform_account'
       } : null
     });
   } catch (err) {

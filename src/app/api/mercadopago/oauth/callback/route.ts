@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
-import { MercadoPagoConfigError, resolveMercadoPagoRedirectUri } from '@/lib/mercadopagoServer';
+import {
+  MercadoPagoConfigError,
+  PLATFORM_SELLER_ERROR_MESSAGE,
+  isPlatformOwnedSeller,
+  resolveMercadoPagoRedirectUri
+} from '@/lib/mercadopagoServer';
 import { ManagerAccessError, assertManagerOperationalAccess } from '@/lib/serverManagerAccess';
 import {
   canActOnUser,
@@ -199,6 +204,19 @@ export async function POST(request: Request) {
     }
 
     const tokenData = await mpResponse.json();
+
+    // A conta dona da aplicação marketplace não pode ser vendedora: o Mercado Pago
+    // recusa o split nesse caso. Barramos aqui para o gestor saber na conexão, e não
+    // no primeiro pagamento do atleta.
+    if (isPlatformOwnedSeller(tokenData.user_id)) {
+      console.warn('[OAuth Callback] Tentativa de conectar a conta da própria plataforma.', JSON.stringify({
+        event: 'platform_owned_seller_rejected',
+        callbackId,
+        stateOwnerId: userId
+      }));
+      return NextResponse.json({ error: PLATFORM_SELLER_ERROR_MESSAGE, callbackId }, { status: 403 });
+    }
+
     const expiresIn = Number(tokenData.expires_in || 15552000); // Default de 180 dias
     const connectedAt = new Date().toISOString();
     const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();

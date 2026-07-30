@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import {
   MercadoPagoConfigError,
+  buildCheckoutIdempotencyKey,
+  extractApplicationFeeCharged,
   resolveMercadoPagoCheckoutConfig
 } from '@/lib/mercadopagoServer';
 import { ManagerAccessError, assertManagerSalesAccessForEvent, managerAccessErrorResponse } from '@/lib/serverManagerAccess';
@@ -92,7 +94,12 @@ export async function POST(request: Request) {
       headers: {
         'Authorization': `Bearer ${checkoutConfig.accessToken}`,
         'Content-Type': 'application/json',
-        'X-Idempotency-Key': `pix-${checkoutSnapshot.registrationId}`
+        'X-Idempotency-Key': buildCheckoutIdempotencyKey(
+          'pix',
+          checkoutSnapshot.registrationId,
+          serviceFee.amountCollected,
+          serviceFee.serviceFeeAmount
+        )
       },
       body: JSON.stringify(paymentPayload)
     });
@@ -124,7 +131,7 @@ export async function POST(request: Request) {
         service_fee_percent: serviceFee.serviceFeePercent,
         service_fee_amount: serviceFee.serviceFeeAmount,
         amount_collected: serviceFee.amountCollected,
-        application_fee_charged: Number(paymentData.application_fee || 0),
+        application_fee_charged: extractApplicationFeeCharged(paymentData),
         updated_at: new Date().toISOString()
       })
       .eq('id', checkoutSnapshot.registrationId);
