@@ -197,6 +197,45 @@ export async function POST(request: Request) {
         return NextResponse.json({ success: true });
       }
 
+      case 'reorderDivisions': {
+        await ensureEventOwner(supabaseAdmin, actor, payload.eventId);
+
+        const orderedIds: unknown = payload.orderedIds;
+        if (!Array.isArray(orderedIds) || orderedIds.some((id) => typeof id !== 'string' || !id)) {
+          return NextResponse.json({ error: 'Lista de categorias invalida.' }, { status: 400 });
+        }
+
+        const { data: eventDivisions, error: divisionsError } = await supabaseAdmin
+          .from('divisions')
+          .select('id')
+          .eq('event_id', payload.eventId);
+        if (divisionsError) throw divisionsError;
+
+        const currentIds = new Set((eventDivisions || []).map((division) => division.id));
+        const receivedIds = new Set(orderedIds as string[]);
+        const coversAllDivisions = receivedIds.size === orderedIds.length
+          && receivedIds.size === currentIds.size
+          && (orderedIds as string[]).every((id) => currentIds.has(id));
+
+        if (!coversAllDivisions) {
+          return NextResponse.json(
+            { error: 'A ordem enviada nao corresponde as categorias deste evento.' },
+            { status: 400 }
+          );
+        }
+
+        for (const [index, divisionId] of (orderedIds as string[]).entries()) {
+          const { error } = await supabaseAdmin
+            .from('divisions')
+            .update({ order_index: index + 1 })
+            .eq('id', divisionId)
+            .eq('event_id', payload.eventId);
+          if (error) throw error;
+        }
+
+        return NextResponse.json({ success: true });
+      }
+
       case 'deleteDivision': {
         await ensureDivisionOwner(supabaseAdmin, actor, payload.divisionId, payload.eventId);
         const { error } = await supabaseAdmin.from('divisions').delete().eq('id', payload.divisionId);

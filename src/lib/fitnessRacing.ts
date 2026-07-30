@@ -81,7 +81,7 @@ const defaultCategoryRows: {
 ];
 
 export const buildFitnessRacingDefaults = (eventId: string, price: number, slotsLimit = 100) => {
-  const divisions: Division[] = defaultCategoryRows.map((categoryRow) => {
+  const divisions: Division[] = defaultCategoryRows.map((categoryRow, index) => {
     const divisionId = `div-${eventId}-${categoryRow.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
     return {
       id: divisionId,
@@ -91,6 +91,7 @@ export const buildFitnessRacingDefaults = (eventId: string, price: number, slots
       slotsLimit,
       price,
       isActive: true,
+      orderIndex: index + 1,
       useAgeGroups: false,
       ageGroups: [...FITNESS_RACING_AGE_GROUPS],
       courseLayout: buildFitnessRacingCourse(categoryRow.name)

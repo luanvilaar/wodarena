@@ -5,6 +5,7 @@ import { WorkoutType, Event, Athlete, Division, Score, CourseStage, Coupon, Regi
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { buildFitnessRacingCourse, buildFitnessRacingDefaults, normalizeInstagram } from '@/lib/fitnessRacing';
 import { mapContestationFromDb } from '@/lib/contestations';
+import { getNextDivisionOrderIndex, sortDivisions } from '@/lib/divisionOrder';
 import { getManagerAccessStatus, normalizeServiceValidUntil } from '@/lib/managerAccess';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -88,6 +89,7 @@ interface AppContextType {
   addEvent: (event: Omit<Event, 'id' | 'organizerId' | 'sponsors' | 'format' | 'ticketPrice' | 'ticketSlots' | 'isTicketingActive'> & { format?: 'individual' | 'duo' | 'trio'; ticketPrice?: number; ticketSlots?: number; isTicketingActive?: boolean; eventType?: 'functional_fitness' | 'fitness_racing'; }) => Promise<Event>;
   addDivision: (eventId: string, division: Omit<Division, 'id'>) => Promise<{ division: Division; autoWorkout: Workout | null }>;
   updateDivision: (eventId: string, divisionId: string, updatedData: Partial<Division>) => Promise<void>;
+  reorderDivisions: (eventId: string, orderedIds: string[]) => Promise<void>;
   addWorkout: (eventId: string, workout: Omit<Workout, 'id'>) => Promise<Workout>;
   deleteEvent: (eventId: string) => Promise<void>;
   deleteDivision: (eventId: string, divisionId: string) => Promise<void>;
@@ -632,7 +634,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
         if (dbEvents && dbEvents.length > 0 && dbDivisions && dbWorkouts) {
           const combinedEvents = dbEvents.map((evt): Event => {
-            const evDivs: Division[] = dbDivisions
+            const evDivs: Division[] = sortDivisions(dbDivisions
               .filter(d => d.event_id === evt.id)
               .map(d => ({
                 id: d.id,
@@ -642,11 +644,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 slotsLimit: d.slots_limit !== undefined && d.slots_limit !== null ? Number(d.slots_limit) : 100,
                 price: d.price !== undefined && d.price !== null ? Number(d.price) : 150.00,
                 isActive: d.is_active !== undefined && d.is_active !== null ? Boolean(d.is_active) : true,
+                orderIndex: d.order_index !== undefined && d.order_index !== null ? Number(d.order_index) : undefined,
                 useAgeGroups: d.use_age_groups || false,
                 ageGroups: d.age_groups ? (typeof d.age_groups === 'string' ? JSON.parse(d.age_groups) : d.age_groups) : [],
                 courseLayout: d.course_layout ? (typeof d.course_layout === 'string' ? JSON.parse(d.course_layout) : d.course_layout) : [],
                 isCoursePublished: d.is_course_published || false
-              }));
+              })));
 
             const evWods: Workout[] = dbWorkouts
               .filter(w => w.event_id === evt.id)
@@ -1096,6 +1099,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         slots_limit: division.slotsLimit,
         price: division.price,
         is_active: division.isActive,
+        order_index: division.orderIndex,
         use_age_groups: division.useAgeGroups || false,
         age_groups: division.ageGroups || [],
         course_layout: division.courseLayout || []
@@ -1137,6 +1141,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const newDivision: Division = {
       ...divisionData,
       id: divId,
+      // Categoria nova (ou duplicada) sempre entra no fim da ordem do evento
+      orderIndex: getNextDivisionOrderIndex(event.divisions),
       courseLayout: event?.eventType === 'fitness_racing'
         ? (divisionData.courseLayout && divisionData.courseLayout.length > 0 ? divisionData.courseLayout : buildFitnessRacingCourse(divisionData.name))
         : []
@@ -1167,6 +1173,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       slots_limit: newDivision.slotsLimit,
       price: newDivision.price,
       is_active: newDivision.isActive,
+      order_index: newDivision.orderIndex,
       use_age_groups: newDivision.useAgeGroups || false,
       age_groups: newDivision.ageGroups || [],
       course_layout: newDivision.courseLayout || []
@@ -1224,6 +1231,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (updatedData.slotsLimit !== undefined) dbPayload.slots_limit = updatedData.slotsLimit;
     if (updatedData.price !== undefined) dbPayload.price = updatedData.price;
     if (updatedData.isActive !== undefined) dbPayload.is_active = updatedData.isActive;
+    if (updatedData.orderIndex !== undefined) dbPayload.order_index = updatedData.orderIndex;
     if (updatedData.useAgeGroups !== undefined) dbPayload.use_age_groups = updatedData.useAgeGroups;
     if (updatedData.ageGroups !== undefined) dbPayload.age_groups = updatedData.ageGroups;
     if (updatedData.courseLayout !== undefined) dbPayload.course_layout = updatedData.courseLayout;
@@ -1234,6 +1242,42 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       setEvents(previousEvents);
       console.error("Erro ao atualizar categoria no Supabase:", error);
+      throw error;
+    }
+  };
+
+  // Reordenar categorias do evento (arrastar e soltar / botões de mover no painel)
+  const reorderDivisions = async (eventId: string, orderedIds: string[]) => {
+    const event = events.find(e => e.id === eventId);
+    if (!event || event.organizerId !== currentUser?.id) {
+      throw new Error('Evento não encontrado para este gestor.');
+    }
+
+    const currentIds = event.divisions.map(d => d.id);
+    const isSameSet = orderedIds.length === currentIds.length
+      && new Set(orderedIds).size === orderedIds.length
+      && orderedIds.every(id => currentIds.includes(id));
+    if (!isSameSet) {
+      throw new Error('Ordem de categorias inválida para este evento.');
+    }
+
+    const previousEvents = events;
+    setEvents(prev => prev.map(e => {
+      if (e.id !== eventId) return e;
+      return {
+        ...e,
+        divisions: orderedIds.map((divisionId, index) => {
+          const division = e.divisions.find(d => d.id === divisionId)!;
+          return { ...division, orderIndex: index + 1 };
+        })
+      };
+    }));
+
+    try {
+      await adminPersist('reorderDivisions', { eventId, orderedIds });
+    } catch (error) {
+      setEvents(previousEvents);
+      console.error("Erro ao reordenar categorias no Supabase:", error);
       throw error;
     }
   };
@@ -2204,6 +2248,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         addEvent,
         addDivision,
         updateDivision,
+        reorderDivisions,
         addWorkout,
         deleteEvent,
         deleteDivision,

@@ -47,6 +47,7 @@ import { WorkoutType, CategoryType, EventStatus, Event, Athlete, Division, Cours
 import { getEventStatus as getEventLifecycle, compareEventsByDateAsc, compareEventsByDateDesc } from '@/lib/eventStatus';
 import { CONTESTATION_CREDITS_LIMIT, getContestationStatusLabel } from '@/lib/contestations';
 import { FITNESS_RACING_AGE_GROUPS, FITNESS_RACING_STATION_LIBRARY, buildFitnessRacingCourse, getAgeGroupFromDate } from '@/lib/fitnessRacing';
+import { buildDivisionOrderMap, getDivisionOrderPosition, moveDivisionId, shiftDivisionId } from '@/lib/divisionOrder';
 import { getTeamDisplayName } from '@/lib/teamDisplay';
 
 const currencyFormatter = new Intl.NumberFormat('pt-BR', {
@@ -96,7 +97,7 @@ const formatLongDate = (dateStr: string): string => {
 export default function AdminPage() {
   const {
     events, athletes, scores, registrations, contestations, coupons, currentUser,
-    login, logout, addEvent, addDivision, updateDivision,
+    login, logout, addEvent, addDivision, updateDivision, reorderDivisions,
     addWorkout, deleteEvent, deleteDivision, deleteWorkout, submitScore, submitScoresBulk, updateEvent, getLeaderboard, registerTicket, saveCourseLayout, updateWorkout,
     refreshRegistrations, updateRegistrationDetails, cancelRegistration, markRegistrationRefunded, addCoupon, updateCoupon, toggleCouponActive, incrementCouponUsage, changePassword, updateAthleteProfile
   } = useApp();
@@ -553,6 +554,9 @@ export default function AdminPage() {
   const [stageFemaleWeight, setStageFemaleWeight] = useState('');
   const [editingStageId, setEditingStageId] = useState('');
   const [draggedStageId, setDraggedStageId] = useState('');
+  // Reordenação das categorias cadastradas (arrastar e soltar / botões de mover)
+  const [draggedDivisionId, setDraggedDivisionId] = useState('');
+  const [isReorderingDivisions, setIsReorderingDivisions] = useState(false);
 
   // Estados para Publicação e Replicação do Percurso de Fitness Racing
   const [isReplicateModalOpen, setIsReplicateModalOpen] = useState(false);
@@ -1678,6 +1682,51 @@ export default function AdminPage() {
       console.error(err);
       setAdminNotice({ text: 'Não foi possível duplicar a categoria.', tone: 'error' });
     }
+  };
+
+  // Aplica uma nova ordem de categorias (usada pelo arrasto e pelos botões ↑/↓)
+  const applyDivisionOrder = async (orderedIds: string[]) => {
+    if (!selectedEventToManage || isReorderingDivisions) return;
+
+    const currentIds = selectedEventToManage.divisions.map(d => d.id);
+    const isSameOrder = orderedIds.length === currentIds.length
+      && orderedIds.every((id, index) => id === currentIds[index]);
+    if (isSameOrder) return;
+
+    setIsReorderingDivisions(true);
+    try {
+      // reorderDivisions aplica a nova ordem de forma otimista no contexto e
+      // restaura a anterior se a persistência falhar; o painel acompanha o
+      // estado do contexto via managerEvents.
+      await reorderDivisions(selectedEventToManage.id, orderedIds);
+      setAdminNotice({ text: 'Ordem das categorias atualizada.', tone: 'success' });
+    } catch (err) {
+      console.error(err);
+      setAdminNotice({ text: 'Não foi possível salvar a nova ordem das categorias.', tone: 'error' });
+    } finally {
+      setIsReorderingDivisions(false);
+    }
+  };
+
+  const handleDropDivision = async (targetDivisionId: string) => {
+    if (!selectedEventToManage || !draggedDivisionId) return;
+    const orderedIds = moveDivisionId(
+      selectedEventToManage.divisions.map(d => d.id),
+      draggedDivisionId,
+      targetDivisionId
+    );
+    setDraggedDivisionId('');
+    await applyDivisionOrder(orderedIds);
+  };
+
+  const handleMoveDivision = async (divisionId: string, direction: 'up' | 'down') => {
+    if (!selectedEventToManage) return;
+    const orderedIds = shiftDivisionId(
+      selectedEventToManage.divisions.map(d => d.id),
+      divisionId,
+      direction === 'up' ? -1 : 1
+    );
+    await applyDivisionOrder(orderedIds);
   };
 
   // Cadastrar Prova (Workout) dentro de um evento
@@ -3862,7 +3911,9 @@ export default function AdminPage() {
           <div className="border-b border-card-border pb-3 flex items-center justify-between">
             <div>
               <h3 className="text-base font-bold text-white uppercase tracking-wider">Categorias Cadastradas</h3>
-              <p className="text-xs text-muted font-medium font-sans">Todas as categorias criadas para esta competição.</p>
+              <p className="text-xs text-muted font-medium font-sans">
+                Arraste pelo ícone (ou use as setas) para definir a ordem exibida no leaderboard, nas inscrições e na página do evento.
+              </p>
             </div>
             {selectedEventToManage?.eventType === 'fitness_racing' && (
               <button
@@ -3892,6 +3943,7 @@ export default function AdminPage() {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-card-border/50 text-[10px] font-bold text-muted uppercase tracking-wider">
+                    <th className="py-3 px-2 w-[92px]">Ordem</th>
                     <th className="py-3 px-2">Nome</th>
                     <th className="py-3 px-2">Formato</th>
                     <th className="py-3 px-2">Status</th>
@@ -3901,10 +3953,55 @@ export default function AdminPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-card-border/30 text-xs font-normal">
-                  {divisions.map((div) => {
+                  {divisions.map((div, divIndex) => {
                     const participantTotal = athletes.filter(a => a.divisionId === div.id && approvedAthleteIds.has(a.id)).length;
                     return (
-                      <tr key={div.id} className="hover:bg-dark-gray/30 transition-colors">
+                      <tr
+                        key={div.id}
+                        draggable={!isReorderingDivisions}
+                        onDragStart={() => setDraggedDivisionId(div.id)}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={() => handleDropDivision(div.id)}
+                        onDragEnd={() => setDraggedDivisionId('')}
+                        className={`transition-colors ${
+                          draggedDivisionId === div.id
+                            ? 'bg-dark-gray/60 opacity-70'
+                            : 'hover:bg-dark-gray/30'
+                        }`}
+                      >
+                        <td className="py-3 px-2">
+                          <div className="flex items-center gap-1">
+                            <span
+                              className="inline-flex h-8 w-5 cursor-grab items-center justify-center text-muted transition-colors hover:text-white active:cursor-grabbing"
+                              title="Arrastar para reordenar"
+                            >
+                              <GripVertical className="h-4 w-4" aria-hidden="true" />
+                            </span>
+                            <span className="font-number text-[10px] font-bold text-muted-soft w-4 text-center">{divIndex + 1}</span>
+                            <div className="flex flex-col">
+                              <button
+                                type="button"
+                                onClick={() => handleMoveDivision(div.id, 'up')}
+                                disabled={divIndex === 0 || isReorderingDivisions}
+                                className="inline-flex h-4 w-6 items-center justify-center rounded-sm border border-card-border bg-dark-gray/50 text-muted transition-colors hover:border-primary hover:text-primary disabled:opacity-30 disabled:hover:border-card-border disabled:hover:text-muted"
+                                aria-label={`Mover categoria ${div.name} para cima`}
+                                title="Mover para cima"
+                              >
+                                <ArrowUp className="h-3 w-3" aria-hidden="true" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleMoveDivision(div.id, 'down')}
+                                disabled={divIndex === divisions.length - 1 || isReorderingDivisions}
+                                className="mt-0.5 inline-flex h-4 w-6 items-center justify-center rounded-sm border border-card-border bg-dark-gray/50 text-muted transition-colors hover:border-primary hover:text-primary disabled:opacity-30 disabled:hover:border-card-border disabled:hover:text-muted"
+                                aria-label={`Mover categoria ${div.name} para baixo`}
+                                title="Mover para baixo"
+                              >
+                                <ArrowDown className="h-3 w-3" aria-hidden="true" />
+                              </button>
+                            </div>
+                          </div>
+                        </td>
                         <td className="py-3 px-2">
                           <div className="font-bold text-white uppercase">{div.name}</div>
                           <div className="mt-0.5 text-[10px] font-semibold uppercase text-muted-soft">
@@ -6411,14 +6508,23 @@ export default function AdminPage() {
     const divisions = selectedEventToManage?.divisions || [];
     const eventRegs = registrations.filter(r => r.eventId === selectedEventToManage?.id && r.paymentStatus !== 'payment_failed');
 
-    // Filtrar
-    const filteredRegs = eventRegs.filter(reg => {
-      if (regFilterCatId && reg.divisionId !== regFilterCatId) return false;
-      if (regFilterStatus && (reg.paymentStatus || 'payment_approved') !== regFilterStatus) return false;
-      if (regFilterName && !reg.athleteName.toLowerCase().includes(regFilterName.toLowerCase())) return false;
-      if (regFilterBox && !reg.box.toLowerCase().includes(regFilterBox.toLowerCase())) return false;
-      return true;
-    });
+    // Filtrar e ordenar seguindo a ordem das categorias definida pelo gestor
+    // (dentro de cada categoria, por ordem de chegada das inscrições)
+    const divisionOrderMap = buildDivisionOrderMap(divisions);
+    const filteredRegs = eventRegs
+      .filter(reg => {
+        if (regFilterCatId && reg.divisionId !== regFilterCatId) return false;
+        if (regFilterStatus && (reg.paymentStatus || 'payment_approved') !== regFilterStatus) return false;
+        if (regFilterName && !reg.athleteName.toLowerCase().includes(regFilterName.toLowerCase())) return false;
+        if (regFilterBox && !reg.box.toLowerCase().includes(regFilterBox.toLowerCase())) return false;
+        return true;
+      })
+      .sort((a, b) => {
+        const orderDiff = getDivisionOrderPosition(divisionOrderMap, a.divisionId)
+          - getDivisionOrderPosition(divisionOrderMap, b.divisionId);
+        if (orderDiff !== 0) return orderDiff;
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      });
 
     const escapeExcelCell = (value: unknown) => String(value ?? '')
       .replace(/&/g, '&amp;')

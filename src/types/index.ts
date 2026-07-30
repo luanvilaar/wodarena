@@ -47,6 +47,7 @@ export interface Division {
   slotsLimit: number;
   price: number;
   isActive: boolean;
+  orderIndex?: number; // Ordem de exibição definida pelo gestor (arrastar e soltar)
   useAgeGroups?: boolean;
   ageGroups?: string[];
   courseLayout?: CourseStage[];
