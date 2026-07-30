@@ -22,6 +22,8 @@ const eventPage = read('../src/app/event/[id]/page.tsx');
 test('Mercado Pago checkout resolves OAuth credentials from organizer secrets', () => {
   assert.match(helper, /from\('events'\)[\s\S]*select\('organizer_id'\)/);
   assert.match(helper, /mercadopago_secrets/);
+  assert.match(helper, /assertOAuthSellerIdentity/);
+  assert.match(helper, /mercadopago_user_id, public_key/);
   assert.match(helper, /source: 'organizer_oauth'/);
   assert.match(helper, /secret\.refresh_token === 'manual'/);
   assert.match(helper, /grant_type: 'refresh_token'/);
@@ -35,9 +37,12 @@ test('event payment routes use the centralized Mercado Pago credential resolver'
   }
 });
 
-test('card checkout resolves the platform public key for marketplace split', () => {
+test('card checkout resolves the seller OAuth public key for marketplace split', () => {
   assert.match(helper, /resolveMercadoPagoPublicConfig/);
-  assert.match(helper, /process\.env\.MERCADOPAGO_PUBLIC_KEY/);
+  assert.match(helper, /publicKey: string/);
+  assert.match(helper, /source: 'organizer_oauth'/);
+  assert.match(helper, /assertOAuthSellerIdentity\(account, secret\)/);
+  assert.doesNotMatch(helper, /MERCADOPAGO_PUBLIC_KEY/);
   assert.match(configRoute, /resolveMercadoPagoPublicConfig/);
   assert.match(registerModal, /resolveCheckoutPublicKey\(event\.id\)/);
   assert.doesNotMatch(registerModal, /NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY/);
@@ -52,6 +57,7 @@ test('checkout surfaces backend payment errors instead of generic alerts', () =>
 });
 
 test('transparent checkout sends payer CPF and applies the service split', () => {
+  assert.match(helper, /A conexão Mercado Pago deste evento não possui autorização OAuth completa para split/);
   assert.match(pixRoute, /application_fee: serviceFee\.serviceFeeAmount/);
   assert.match(cardRoute, /application_fee: serviceFee\.serviceFeeAmount/);
   assert.match(pixRoute, /transaction_amount: serviceFee\.amountCollected/);

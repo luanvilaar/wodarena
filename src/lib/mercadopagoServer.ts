@@ -7,6 +7,8 @@ type MercadoPagoEventRow = {
 
 type MercadoPagoAccountRow = {
   expires_at: string | null;
+  mercadopago_user_id: string | null;
+  public_key: string | null;
   status: string | null;
 };
 
@@ -33,7 +35,8 @@ export type MercadoPagoCheckoutConfig = ServiceFeeConfig & {
 
 export type MercadoPagoPublicConfig = ServiceFeeConfig & {
   publicKey: string;
-  source: 'platform_integrator';
+  organizerId: string;
+  source: 'organizer_oauth';
 };
 
 export class MercadoPagoConfigError extends Error {
@@ -58,6 +61,24 @@ const refreshInFlight = new Map<string, Promise<string>>();
 const isExpired = (expiresAt: string | null | undefined) => {
   const expiresAtMs = expiresAt ? new Date(expiresAt).getTime() : Number.NaN;
   return !Number.isFinite(expiresAtMs) || expiresAtMs <= Date.now() + 60_000;
+};
+
+const assertOAuthSellerIdentity = (
+  account: MercadoPagoAccountRow,
+  secret: MercadoPagoSecretRow,
+) => {
+  const publicKey = account.public_key?.trim();
+  const mercadopagoUserId = account.mercadopago_user_id?.trim();
+  const refreshToken = secret.refresh_token?.trim();
+
+  if (!publicKey || !mercadopagoUserId || !refreshToken || refreshToken === 'manual') {
+    throw new MercadoPagoConfigError(
+      'A conexão Mercado Pago deste evento não possui autorização OAuth completa para split. Reconecte a conta via OAuth antes de receber inscrições com taxa de serviço.',
+      403
+    );
+  }
+
+  return { publicKey, mercadopagoUserId, refreshToken };
 };
 
 export const resolvePlatformServiceFeeConfig = async (): Promise<ServiceFeeConfig> => {
@@ -179,7 +200,7 @@ export const resolveMercadoPagoCheckoutConfig = async (
   const [{ data: account, error: accountError }, { data: secret, error: secretError }, serviceFee] = await Promise.all([
     supabaseAdmin
       .from('mercadopago_accounts')
-      .select('expires_at, status')
+      .select('expires_at, mercadopago_user_id, public_key, status')
       .eq('user_id', dbEvent.organizer_id)
       .maybeSingle<MercadoPagoAccountRow>(),
     supabaseAdmin
@@ -214,8 +235,10 @@ export const resolveMercadoPagoCheckoutConfig = async (
     };
   }
 
+  const { refreshToken } = assertOAuthSellerIdentity(account, secret);
+
   const accessToken = isExpired(account.expires_at)
-    ? await refreshOAuthAccessToken(dbEvent.organizer_id, secret.refresh_token)
+    ? await refreshOAuthAccessToken(dbEvent.organizer_id, refreshToken)
     : secret.access_token;
 
   return {
@@ -231,13 +254,49 @@ export const resolveMercadoPagoPublicConfig = async (eventId: string): Promise<M
     throw new MercadoPagoConfigError('Evento obrigatório para carregar credenciais públicas de pagamento.', 400);
   }
 
-  const publicKey = process.env.MERCADOPAGO_PUBLIC_KEY?.trim();
-  if (!publicKey) {
-    throw new MercadoPagoConfigError('A Public Key da aplicação WODArena não está configurada no servidor.', 500);
+  const supabaseAdmin = getSupabaseAdmin();
+  const { data: dbEvent, error: eventError } = await supabaseAdmin
+    .from('events')
+    .select('organizer_id')
+    .eq('id', eventId)
+    .single<MercadoPagoEventRow>();
+
+  if (eventError || !dbEvent) {
+    console.error('[MercadoPago Config] Evento não encontrado para public key:', eventError);
+    throw new MercadoPagoConfigError('Evento não encontrado para carregar credenciais públicas de pagamento.', 404);
   }
 
-  const serviceFee = await resolvePlatformServiceFeeConfig();
-  return { publicKey, source: 'platform_integrator', ...serviceFee };
+  const [{ data: account, error: accountError }, { data: secret, error: secretError }, serviceFee] = await Promise.all([
+    supabaseAdmin
+      .from('mercadopago_accounts')
+      .select('expires_at, mercadopago_user_id, public_key, status')
+      .eq('user_id', dbEvent.organizer_id)
+      .maybeSingle<MercadoPagoAccountRow>(),
+    supabaseAdmin
+      .from('mercadopago_secrets')
+      .select('access_token, refresh_token')
+      .eq('user_id', dbEvent.organizer_id)
+      .maybeSingle<MercadoPagoSecretRow>(),
+    resolvePlatformServiceFeeConfig()
+  ]);
+
+  if (accountError || secretError) {
+    console.error('[MercadoPago Config] Erro ao carregar public key OAuth:', accountError || secretError);
+    throw new MercadoPagoConfigError('Não foi possível carregar a conexão Mercado Pago do gestor.', 500);
+  }
+
+  if (!account || account.status !== 'connected' || !secret?.access_token || !secret.refresh_token) {
+    throw new MercadoPagoConfigError('Este evento não possui uma conta Mercado Pago conectada via OAuth.', 403);
+  }
+
+  const { publicKey } = assertOAuthSellerIdentity(account, secret);
+
+  return {
+    publicKey,
+    organizerId: dbEvent.organizer_id,
+    source: 'organizer_oauth',
+    ...serviceFee
+  };
 };
 
 /**
