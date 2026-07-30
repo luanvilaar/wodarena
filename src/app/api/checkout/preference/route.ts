@@ -58,7 +58,7 @@ export async function POST(request: Request) {
         },
         ...(serviceFee.serviceFeeAmount > 0 ? [{
           id: 'wodarena-service-fee',
-          title: `Taxa de serviço WODArena (${serviceFee.serviceFeePercent}%)`,
+          title: `Taxa de serviço (${serviceFee.serviceFeePercent}%)`,
           description: 'Taxa de serviço da plataforma WODArena',
           quantity: 1,
           currency_id: 'BRL',

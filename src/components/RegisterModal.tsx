@@ -8,6 +8,7 @@ import { Event, Division, Registration, Athlete } from '@/types';
 import { useApp } from '@/context/AppContext';
 import { normalizeInstagram } from '@/lib/fitnessRacing';
 import { getRegistrationAvailability } from '@/lib/eventStatus';
+import { calculateServiceFee } from '@/lib/serviceFee';
 
 interface RegisterModalProps {
   event: Event;
@@ -286,10 +287,10 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
   const ticketPrice = getPrice(selectedDivision);
   const baseTotalPaid = Math.max(0, ticketPrice - discountApplied);
   const totalPaid = baseTotalPaid > 0 && baseTotalPaid < 1.00 ? 1.00 : baseTotalPaid;
-  const serviceFeePreview = serviceFeeConfig.enabled && totalPaid > 0
-    ? Math.round((totalPaid * serviceFeeConfig.percent) * 100) / 100
-    : 0;
-  const amountCollectedPreview = totalPaid + serviceFeePreview;
+  const {
+    serviceFeeAmount: serviceFeePreview,
+    amountCollected: amountCollectedPreview
+  } = calculateServiceFee(totalPaid, serviceFeeConfig.percent, serviceFeeConfig.enabled);
   const isTeamCategory = participantCount > 1;
   const primaryParticipant = visibleParticipants[0] || createEmptyParticipant();
   const isFitnessRacing = event.eventType === 'fitness_racing';
@@ -1265,7 +1266,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                 )}
                 {serviceFeePreview > 0 && (
                   <div className="flex justify-between items-center text-sm text-muted-soft">
-                    <span className="font-semibold">Taxa de serviço WODArena ({serviceFeeConfig.percent}%)</span>
+                    <span className="font-semibold">Taxa de serviço ({serviceFeeConfig.percent}%)</span>
                     <span className="font-number font-bold">R$ {serviceFeePreview.toFixed(2)}</span>
                   </div>
                 )}

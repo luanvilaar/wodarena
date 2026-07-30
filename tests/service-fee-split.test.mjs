@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { calculateServiceFee } from '../src/lib/serviceFee.ts';
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
@@ -21,6 +22,31 @@ test('service fee uses integer cents and applies 10% only to paid registrations'
   assert.match(fee, /Math\.round\(\(amount \+ Number\.EPSILON\) \* 100\)/);
   assert.match(fee, /baseCents \* percent/);
   assert.match(fee, /enabled && baseCents > 0/);
+
+  assert.deepEqual(calculateServiceFee(80, 10, true), {
+    baseAmount: 80,
+    serviceFeePercent: 10,
+    serviceFeeAmount: 8,
+    amountCollected: 88
+  });
+  assert.deepEqual(calculateServiceFee(199.9, 10, true), {
+    baseAmount: 199.9,
+    serviceFeePercent: 10,
+    serviceFeeAmount: 19.99,
+    amountCollected: 219.89
+  });
+  assert.deepEqual(calculateServiceFee(80, 10, false), {
+    baseAmount: 80,
+    serviceFeePercent: 0,
+    serviceFeeAmount: 0,
+    amountCollected: 80
+  });
+  assert.deepEqual(calculateServiceFee(0, 10, true), {
+    baseAmount: 0,
+    serviceFeePercent: 10,
+    serviceFeeAmount: 0,
+    amountCollected: 0
+  });
 });
 
 test('migration persists a global switch and financial audit fields without altering historic totals', () => {
@@ -40,7 +66,7 @@ test('registration start computes the split server-side before persisting a paid
 });
 
 test('Checkout Pro includes a transparent service fee item and marketplace fee', () => {
-  assert.match(preferenceRoute, /Taxa de serviço WODArena/);
+  assert.match(preferenceRoute, /Taxa de serviço \(\$\{serviceFee\.serviceFeePercent\}%\)/);
   assert.match(preferenceRoute, /marketplace_fee: serviceFee\.serviceFeeAmount/);
   assert.match(preferenceRoute, /amount_collected: serviceFee\.amountCollected/);
 });
@@ -57,7 +83,8 @@ test('owner controls the global switch and checkout shows the fee breakdown', ()
   assert.match(ownerRoute, /service_fee_enabled: enabled/);
   assert.match(ownerPage, /Taxa de serviço WODArena/);
   assert.match(ownerPage, /Receita Real de Taxas/);
-  assert.match(registerModal, /Taxa de serviço WODArena/);
+  assert.match(registerModal, /Taxa de serviço \(\{serviceFeeConfig\.percent\}%\)/);
+  assert.match(registerModal, /calculateServiceFee\(totalPaid, serviceFeeConfig\.percent, serviceFeeConfig\.enabled\)/);
   assert.match(registerModal, /amountCollectedPreview/);
 });
 

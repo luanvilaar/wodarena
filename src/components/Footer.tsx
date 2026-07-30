@@ -2,8 +2,8 @@
 
 import React from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { ArrowUpRight } from 'lucide-react';
-import { BrandLogo } from '@/components/BrandLogo';
 
 export function Footer() {
   const currentYear = new Date().getFullYear();
@@ -13,7 +13,13 @@ export function Footer() {
       <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
         <div className="grid gap-10 border-b border-hairline-light pb-12 lg:grid-cols-[1.5fr_1fr_1fr_1fr]">
           <div className="space-y-4">
-            <BrandLogo variant="full" className="h-32 w-32 rounded-sm" />
+            <Image
+              src="/logo-preta.png"
+              alt="WODArena"
+              width={160}
+              height={112}
+              className="h-32 w-32 rounded-sm object-contain"
+            />
             <p className="max-w-sm text-sm leading-6 text-muted-soft">
               A infraestrutura de inscrições, rankings e operação para competições de Functional Fitness.
             </p>
