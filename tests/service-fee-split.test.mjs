@@ -81,7 +81,7 @@ test('payment reconciliation stores charged amounts and matches the amount colle
 test('owner controls the global switch and checkout shows the fee breakdown', () => {
   assert.match(ownerRoute, /requireSession\(request, \['owner'\]\)/);
   assert.match(ownerRoute, /service_fee_enabled: enabled/);
-  assert.match(ownerPage, /Taxa de serviço WODArena/);
+  assert.match(ownerPage, />Taxa de serviço<\/p>/);
   assert.match(ownerPage, /Receita Real de Taxas/);
   assert.match(registerModal, /Taxa de serviço \(\{serviceFeeConfig\.percent\}%\)/);
   assert.match(registerModal, /calculateServiceFee\(totalPaid, serviceFeeConfig\.percent, serviceFeeConfig\.enabled\)/);

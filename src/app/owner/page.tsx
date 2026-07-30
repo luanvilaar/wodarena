@@ -441,20 +441,20 @@ export default function OwnerPage() {
     <div className="min-h-screen bg-background">
       {/* Header Admin Proprietário */}
       <section className="bg-card border-b border-card-border py-6">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
+        <div className="max-w-7xl mx-auto flex flex-col items-stretch justify-between gap-4 px-4 sm:flex-row sm:items-center sm:px-6 lg:px-8">
+          <div className="flex min-w-0 items-start gap-3 sm:items-center">
             <BrandLogo className="h-12 w-12 rounded-sm border border-card-border" priority />
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-xl font-bold text-white uppercase tracking-wider">Painel do Proprietário</h2>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-lg font-bold uppercase tracking-wider text-white sm:text-xl">Painel do Proprietário</h2>
                 <span className="px-2 py-0.5 bg-primary/10 text-primary border border-primary/20 rounded text-[9px] uppercase font-bold tracking-wider">Root Access</span>
               </div>
-              <p className="text-xs text-muted font-medium">Controle de faturamento, comissões de SaaS e cadastro de organizadores.</p>
+              <p className="text-xs font-medium text-muted">Controle de faturamento, comissões de SaaS e cadastro de organizadores.</p>
             </div>
           </div>
           <button
             onClick={logout}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-md bg-dark-gray border border-card-border text-xs font-bold text-muted hover:text-white hover:border-red-500/40 hover:bg-red-950/10 transition-colors"
+            className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-md border border-card-border bg-dark-gray px-4 py-2 text-xs font-bold text-muted transition-colors hover:border-red-500/40 hover:bg-red-950/10 hover:text-white sm:w-auto"
           >
             <span>Desconectar Root</span>
             <LogOut className="h-3.5 w-3.5" />
@@ -467,31 +467,34 @@ export default function OwnerPage() {
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
 
           {/* Menu Lateral de Admin */}
-          <aside className="flex flex-row overflow-x-auto gap-2 pb-2 scrollbar-none lg:flex-col lg:overflow-x-visible lg:pb-0 lg:col-span-1 lg:space-y-2 w-full">
-            {[
-              { id: 'dashboard', label: 'Visão Geral', icon: LayoutDashboard },
-              { id: 'managers', label: 'Gestores & Vendas', icon: Users },
-              { id: 'leads', label: 'Leads Comerciais', icon: UserPlus },
-              { id: 'events', label: 'Eventos Globais', icon: Calendar },
-              { id: 'leaderboards', label: 'Leaderboards', icon: Medal }
-            ].map(tab => {
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id as typeof activeTab)}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-md text-xs uppercase font-bold tracking-wider transition-colors border whitespace-nowrap shrink-0 lg:w-full lg:py-3 lg:text-left ${
-                    activeTab === tab.id
-                      ? 'bg-primary/10 border-primary text-primary font-bold shadow-md'
-                      : 'bg-card border-transparent text-muted hover:text-white hover:border-card-border'
-                  }`}
-                >
-                  <Icon className="h-4 w-4 shrink-0" />
-                  <span>{tab.label}</span>
-                </button>
-              );
-            })}
-          </aside>
+          <div className="w-full lg:col-span-1">
+            <aside aria-label="Navegação do painel do proprietário" className="flex snap-x snap-mandatory flex-row gap-2 overflow-x-auto pb-2 scrollbar-none lg:flex-col lg:overflow-x-visible lg:pb-0 lg:space-y-2">
+              {[
+                { id: 'dashboard', label: 'Visão Geral', icon: LayoutDashboard },
+                { id: 'managers', label: 'Gestores & Vendas', icon: Users },
+                { id: 'leads', label: 'Leads Comerciais', icon: UserPlus },
+                { id: 'events', label: 'Eventos Globais', icon: Calendar },
+                { id: 'leaderboards', label: 'Leaderboards', icon: Medal }
+              ].map(tab => {
+                const Icon = tab.icon;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id as typeof activeTab)}
+                    className={`flex min-h-11 shrink-0 snap-start items-center gap-2 rounded-md border px-4 py-2.5 text-xs font-bold uppercase tracking-wider transition-colors lg:w-full lg:py-3 lg:text-left ${
+                      activeTab === tab.id
+                        ? 'bg-primary/10 border-primary text-primary font-bold shadow-md'
+                        : 'bg-card border-transparent text-muted hover:text-white hover:border-card-border'
+                    }`}
+                  >
+                    <Icon className="h-4 w-4 shrink-0" />
+                    <span>{tab.label}</span>
+                  </button>
+                );
+              })}
+            </aside>
+            <p className="mt-1 text-[11px] text-muted lg:hidden">Deslize para acessar todas as seções.</p>
+          </div>
 
           {/* Área de Ação Admin */}
           <div className="lg:col-span-3 space-y-6">
@@ -504,57 +507,57 @@ export default function OwnerPage() {
                 </h3>
 
                 {/* Grid de Métricas Consolidadas */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
 
                   {/* Faturamento de Taxas do Site */}
-                  <div className="bg-card border border-primary/20 rounded-xl p-5 flex items-center justify-between">
-                    <div className="space-y-1">
+                  <div className="flex min-h-[116px] items-center justify-between gap-3 rounded-xl border border-primary/20 bg-card p-4 sm:p-5">
+                    <div className="min-w-0 space-y-1">
                       <p className="text-[10px] uppercase font-bold text-primary tracking-wider">Receita Real de Taxas</p>
                       <h4 className="text-2xl font-bold font-number text-primary">R$ {stats.platformRevenue.toFixed(2)}</h4>
                     </div>
-                    <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg text-primary">
+                    <div className="shrink-0 rounded-lg border border-primary/20 bg-primary/10 p-3 text-primary">
                       <DollarSign className="h-5 w-5" />
                     </div>
                   </div>
 
                   {/* Volume Bruto Processado */}
-                  <div className="bg-card border border-card-border rounded-xl p-5 flex items-center justify-between">
-                    <div className="space-y-1">
+                  <div className="flex min-h-[116px] items-center justify-between gap-3 rounded-xl border border-card-border bg-card p-4 sm:p-5">
+                    <div className="min-w-0 space-y-1">
                       <p className="text-[10px] uppercase font-bold text-muted tracking-wider">Volume Total Pago</p>
                       <h4 className="text-2xl font-bold font-number text-white">R$ {stats.totalVolume.toFixed(2)}</h4>
                     </div>
-                    <div className="p-3 bg-dark-gray border border-card-border rounded-lg text-white">
+                    <div className="shrink-0 rounded-lg border border-card-border bg-dark-gray p-3 text-white">
                       <DollarSign className="h-5 w-5" />
                     </div>
                   </div>
 
                   {/* Total de Gestores */}
-                  <div className="bg-card border border-card-border rounded-xl p-5 flex items-center justify-between">
-                    <div className="space-y-1">
+                  <div className="flex min-h-[116px] items-center justify-between gap-3 rounded-xl border border-card-border bg-card p-4 sm:p-5">
+                    <div className="min-w-0 space-y-1">
                       <p className="text-[10px] uppercase font-bold text-muted tracking-wider">Gestores de Eventos</p>
                       <h4 className="text-2xl font-bold font-number text-white">{stats.managersCount}</h4>
                     </div>
-                    <div className="p-3 bg-dark-gray border border-card-border rounded-lg text-white">
+                    <div className="shrink-0 rounded-lg border border-card-border bg-dark-gray p-3 text-white">
                       <Users className="h-5 w-5" />
                     </div>
                   </div>
 
                   {/* Total de Eventos */}
-                  <div className="bg-card border border-card-border rounded-xl p-5 flex items-center justify-between">
-                    <div className="space-y-1">
+                  <div className="flex min-h-[116px] items-center justify-between gap-3 rounded-xl border border-card-border bg-card p-4 sm:p-5">
+                    <div className="min-w-0 space-y-1">
                       <p className="text-[10px] uppercase font-bold text-muted tracking-wider">Eventos Criados</p>
                       <h4 className="text-2xl font-bold font-number text-white">{stats.eventsCount}</h4>
                     </div>
-                    <div className="p-3 bg-dark-gray border border-card-border rounded-lg text-white">
+                    <div className="shrink-0 rounded-lg border border-card-border bg-dark-gray p-3 text-white">
                       <Trophy className="h-5 w-5" />
                     </div>
                   </div>
 
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-primary/20 bg-card p-5">
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-white">Taxa de serviço WODArena</p>
+                <div className="flex flex-col items-stretch gap-4 rounded-xl border border-primary/20 bg-card p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold uppercase tracking-wider text-white">Taxa de serviço</p>
                     <p className="mt-1 text-xs text-muted">{serviceFeeConfig.percent}% sobre o valor final da inscrição. Contas manuais precisam reconectar via OAuth.</p>
                     {serviceFeeNotice && <p className="mt-2 text-xs text-primary">{serviceFeeNotice}</p>}
                   </div>
@@ -562,20 +565,50 @@ export default function OwnerPage() {
                     type="button"
                     onClick={handleServiceFeeToggle}
                     disabled={savingServiceFee}
-                    className={`rounded-md border px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-60 ${serviceFeeConfig.enabled ? 'border-primary bg-primary text-black' : 'border-card-border bg-dark-gray text-muted'}`}
+                    className={`min-h-11 w-full rounded-md border px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-60 sm:w-auto ${serviceFeeConfig.enabled ? 'border-primary bg-primary text-black' : 'border-card-border bg-dark-gray text-muted'}`}
                   >
                     {savingServiceFee ? 'Salvando...' : serviceFeeConfig.enabled ? 'Taxa ativa' : 'Taxa inativa'}
                   </button>
                 </div>
 
                 {/* Detalhamento por Evento */}
-                <div className="bg-card border border-card-border rounded-xl p-6 space-y-4">
+                <div className="space-y-4 rounded-xl border border-card-border bg-card p-4 sm:p-6">
                   <div className="border-b border-card-border pb-3">
                     <h4 className="text-sm font-bold text-white uppercase tracking-wider">Detalhamento Financeiro por Evento</h4>
                     <p className="text-[10px] text-muted uppercase tracking-wider font-semibold mt-1">Valores confirmados nas inscrições aprovadas</p>
                   </div>
 
-                  <div className="overflow-x-auto">
+                  <div className="space-y-3 lg:hidden">
+                    {eventsFinanceList.map(({ event, managerName, paidCount, unpaidCount, grossRevenue, totalFeeToCollect }) => (
+                      <article key={event.id} className="rounded-xl border border-card-border bg-dark-gray/30 p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded border border-card-border bg-dark-gray p-0.5">
+                              {event.logoUrl ? (
+                                <Image src={event.logoUrl} alt={`Logo do evento ${event.name}`} width={36} height={36} unoptimized className="h-full w-full rounded object-cover" />
+                              ) : (
+                                <span className="text-[10px] font-black uppercase text-primary">{event.name.substring(0, 2)}</span>
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="truncate text-xs font-bold uppercase text-white">{event.name}</p>
+                              <p className="mt-1 truncate text-[11px] text-muted">{managerName}</p>
+                            </div>
+                          </div>
+                          <span className={`shrink-0 rounded px-2 py-1 text-[10px] font-bold uppercase ${event.status === 'live' || event.status === 'upcoming' ? 'bg-primary/10 text-primary' : 'bg-dark-gray text-muted'}`}>
+                            {event.status === 'live' ? 'Live' : event.status === 'upcoming' ? 'Em breve' : 'Encerrado'}
+                          </span>
+                        </div>
+                        <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-card-border pt-3 text-xs">
+                          <div><dt className="text-[10px] uppercase tracking-wider text-muted">Pagos / pendentes</dt><dd className="mt-1 font-number font-bold text-white"><span className="text-primary">{paidCount}</span> / <span className="text-red-400">{unpaidCount}</span></dd></div>
+                          <div><dt className="text-[10px] uppercase tracking-wider text-muted">Faturamento</dt><dd className="mt-1 font-number font-bold text-white">R$ {grossRevenue.toFixed(2)}</dd></div>
+                          <div className="col-span-2"><dt className="text-[10px] uppercase tracking-wider text-muted">Taxa de serviço</dt><dd className="mt-1 font-number font-bold text-primary">R$ {totalFeeToCollect.toFixed(2)}</dd></div>
+                        </dl>
+                      </article>
+                    ))}
+                  </div>
+
+                  <div className="hidden overflow-x-auto lg:block">
                     <table className="w-full text-left border-collapse min-w-[700px]">
                       <thead>
                         <tr className="border-b border-card-border text-[9px] uppercase tracking-widest text-muted">
@@ -629,34 +662,34 @@ export default function OwnerPage() {
             {/* ABA: Gestores e Vendas */}
             {activeTab === 'managers' && (
               <div className="space-y-6">
-                <div className="bg-card border border-card-border rounded-xl p-6 space-y-6">
+                <div className="space-y-6 rounded-xl border border-card-border bg-card p-4 sm:p-6">
                   <div className="border-b border-card-border pb-3">
                     <h3 className="text-lg font-bold text-white uppercase tracking-wider">Gestores e Vendas</h3>
                     <p className="mt-1 text-xs text-muted">Cadastre gestores, acompanhe o prazo de uso da plataforma e renove o acesso quando necessario.</p>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-                    <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                    <div className="min-h-[112px] rounded-xl border border-primary/20 bg-primary/5 p-4">
                       <p className="text-[10px] uppercase tracking-widest text-primary font-bold">Ativos</p>
                       <p className="mt-2 font-number text-2xl font-bold text-primary">{managerAccessOverview.active}</p>
                     </div>
-                    <div className="rounded-xl border border-amber-400/20 bg-amber-400/10 p-4">
+                    <div className="min-h-[112px] rounded-xl border border-amber-400/20 bg-amber-400/10 p-4">
                       <p className="text-[10px] uppercase tracking-widest text-amber-300 font-bold">Vencendo</p>
                       <p className="mt-2 font-number text-2xl font-bold text-amber-300">{managerAccessOverview.expiringSoon}</p>
                     </div>
-                    <div className="rounded-xl border border-red-500/20 bg-red-950/10 p-4">
+                    <div className="min-h-[112px] rounded-xl border border-red-500/20 bg-red-950/10 p-4">
                       <p className="text-[10px] uppercase tracking-widest text-red-300 font-bold">Expirados</p>
                       <p className="mt-2 font-number text-2xl font-bold text-red-300">{managerAccessOverview.expired}</p>
                     </div>
-                    <div className="rounded-xl border border-card-border bg-dark-gray/40 p-4">
+                    <div className="min-h-[112px] rounded-xl border border-card-border bg-dark-gray/40 p-4">
                       <p className="text-[10px] uppercase tracking-widest text-muted font-bold">Sem Prazo</p>
                       <p className="mt-2 font-number text-2xl font-bold text-white">{managerAccessOverview.unconfigured}</p>
                     </div>
                   </div>
                 </div>
 
-                <form onSubmit={handleCreateManager} className="bg-card border border-card-border rounded-xl p-6 space-y-4">
-                  <div className="border-b border-card-border pb-3 flex justify-between items-center">
+                <form onSubmit={handleCreateManager} className="space-y-4 rounded-xl border border-card-border bg-card p-4 sm:p-6">
+                  <div className="flex flex-col gap-3 border-b border-card-border pb-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <h3 className="text-base font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
                         <UserPlus className="h-5 w-5 text-primary" /> Credenciais e Prazo de Uso
@@ -757,8 +790,8 @@ export default function OwnerPage() {
                   </button>
                 </form>
 
-                <div className="bg-card border border-card-border rounded-xl p-6 space-y-4">
-                  <div className="border-b border-card-border pb-3 flex items-start justify-between gap-4">
+                <div className="space-y-4 rounded-xl border border-card-border bg-card p-4 sm:p-6">
+                  <div className="flex flex-col gap-3 border-b border-card-border pb-3 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                       <h3 className="text-base font-bold text-white uppercase tracking-wider">Carteira de Gestores</h3>
                       <p className="mt-1 text-[11px] text-muted">Edite o prazo de uso do gestor para renovar ou bloquear a operacao da plataforma.</p>
@@ -770,7 +803,50 @@ export default function OwnerPage() {
                     )}
                   </div>
 
-                  <div className="overflow-x-auto">
+                  <div className="space-y-3 lg:hidden">
+                    {managersList.map(item => (
+                      <article key={item.manager.id} className="rounded-xl border border-card-border bg-dark-gray/30 p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-bold text-white">{item.manager.name}</p>
+                            <p className="mt-1 truncate text-[11px] text-muted">{item.manager.email}</p>
+                            <p className="mt-1 truncate text-[11px] text-muted">{item.manager.organization || 'Organização não informada'}</p>
+                          </div>
+                          <span className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-wider ${getManagerStatusClasses(item.accessStatus)}`}>
+                            {getManagerAccessStatusLabel(item.accessStatus)}
+                          </span>
+                        </div>
+                        <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-card-border pt-3 text-xs">
+                          <div><dt className="text-[10px] uppercase tracking-wider text-muted">Validade</dt><dd className="mt-1 font-medium text-white">{item.serviceValidUntil || 'Não definido'}</dd></div>
+                          <div><dt className="text-[10px] uppercase tracking-wider text-muted">Eventos</dt><dd className="mt-1 font-number font-bold text-white">{item.eventsCount}</dd></div>
+                          <div><dt className="text-[10px] uppercase tracking-wider text-muted">Inscritos</dt><dd className="mt-1 font-number font-bold text-white"><span className="text-primary">{item.paidCount}</span> / <span className="text-red-400">{item.unpaidCount}</span></dd></div>
+                          <div><dt className="text-[10px] uppercase tracking-wider text-muted">Volume pago</dt><dd className="mt-1 font-number font-bold text-white">R$ {item.grossRevenue.toFixed(2)}</dd></div>
+                          <div><dt className="text-[10px] uppercase tracking-wider text-muted">Taxa devida</dt><dd className="mt-1 font-number font-bold text-primary">R$ {item.platformFee.toFixed(2)}</dd></div>
+                          <div><dt className="text-[10px] uppercase tracking-wider text-muted">Saldo gestor</dt><dd className="mt-1 font-number font-bold text-primary">R$ {item.netRevenue.toFixed(2)}</dd></div>
+                        </dl>
+                        <div className="mt-4 flex flex-col gap-2 border-t border-card-border pt-3 sm:flex-row">
+                          <label className="sr-only" htmlFor={`manager-validity-${item.manager.id}`}>Validade de uso de {item.manager.name}</label>
+                          <input
+                            id={`manager-validity-${item.manager.id}`}
+                            type="date"
+                            value={managerValidityDrafts[item.manager.id] ?? item.serviceValidUntil ?? ''}
+                            onChange={(e) => setManagerValidityDrafts(prev => ({ ...prev, [item.manager.id]: e.target.value }))}
+                            className="min-h-11 w-full rounded-lg border border-card-border bg-dark-gray px-3 py-2 text-xs text-white focus:border-primary/50 focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleSaveManagerValidity(item.manager.id)}
+                            disabled={savingManagerId === item.manager.id}
+                            className="min-h-11 w-full rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-xs font-bold uppercase tracking-wider text-primary transition-colors hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                          >
+                            {savingManagerId === item.manager.id ? 'Salvando' : 'Salvar'}
+                          </button>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+
+                  <div className="hidden overflow-x-auto lg:block">
                     <table className="w-full text-left border-collapse min-w-[1060px]">
                       <thead>
                         <tr className="border-b border-card-border text-[9px] uppercase tracking-widest text-muted">
@@ -850,7 +926,7 @@ export default function OwnerPage() {
             {/* ABA: Leads Comerciais */}
             {activeTab === 'leads' && (
               <div className="space-y-6">
-                <div className="bg-card border border-card-border rounded-xl p-6 space-y-6">
+                <div className="space-y-6 rounded-xl border border-card-border bg-card p-4 sm:p-6">
                   <div className="border-b border-card-border pb-3">
                     <h3 className="text-lg font-bold text-white uppercase tracking-wider">
                       Leads Comerciais da Homepage
@@ -860,20 +936,20 @@ export default function OwnerPage() {
                     </p>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-                    <div className="rounded-xl border border-card-border bg-dark-gray/40 p-4">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                    <div className="min-h-[112px] rounded-xl border border-card-border bg-dark-gray/40 p-4">
                       <p className="text-[10px] uppercase tracking-widest text-muted font-bold">Total de Leads</p>
                       <p className="mt-2 font-number text-2xl font-bold text-white">{leadStats.total}</p>
                     </div>
-                    <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+                    <div className="min-h-[112px] rounded-xl border border-primary/20 bg-primary/5 p-4">
                       <p className="text-[10px] uppercase tracking-widest text-primary font-bold">Novos</p>
                       <p className="mt-2 font-number text-2xl font-bold text-primary">{leadStats.newCount}</p>
                     </div>
-                    <div className="rounded-xl border border-card-border bg-dark-gray/40 p-4">
+                    <div className="min-h-[112px] rounded-xl border border-card-border bg-dark-gray/40 p-4">
                       <p className="text-[10px] uppercase tracking-widest text-muted font-bold">E-mail Enviado</p>
                       <p className="mt-2 font-number text-2xl font-bold text-white">{leadStats.sentCount}</p>
                     </div>
-                    <div className="rounded-xl border border-red-500/20 bg-red-950/10 p-4">
+                    <div className="min-h-[112px] rounded-xl border border-red-500/20 bg-red-950/10 p-4">
                       <p className="text-[10px] uppercase tracking-widest text-red-300 font-bold">Falhas de E-mail</p>
                       <p className="mt-2 font-number text-2xl font-bold text-red-300">{leadStats.failedCount}</p>
                     </div>
@@ -895,7 +971,31 @@ export default function OwnerPage() {
                       <p className="mt-2 text-xs text-muted">Os interessados enviados pela homepage aparecerao aqui automaticamente.</p>
                     </div>
                   ) : (
-                    <div className="overflow-x-auto">
+                    <>
+                    <div className="space-y-3 lg:hidden">
+                      {commercialLeads.map((lead) => (
+                        <article key={lead.id} className="rounded-xl border border-card-border bg-dark-gray/30 p-4">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-bold text-white">{lead.managerName}</p>
+                              <p className="mt-1 text-[11px] text-muted">{lead.phone}</p>
+                            </div>
+                            <span className="shrink-0 rounded-full border border-primary/20 bg-primary/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-primary">
+                              {getCommercialLeadStatusLabel(lead.leadStatus)}
+                            </span>
+                          </div>
+                          <dl className="mt-4 space-y-3 border-t border-card-border pt-3 text-xs">
+                            <div><dt className="text-[10px] uppercase tracking-wider text-muted">Evento</dt><dd className="mt-1 font-medium text-white">{lead.eventName}</dd></div>
+                            <div className="grid grid-cols-2 gap-3"><div><dt className="text-[10px] uppercase tracking-wider text-muted">Local</dt><dd className="mt-1 text-white">{lead.city} / {lead.state}</dd></div><div><dt className="text-[10px] uppercase tracking-wider text-muted">Origem</dt><dd className="mt-1 text-white">{lead.source}</dd></div></div>
+                            <div><dt className="text-[10px] uppercase tracking-wider text-muted">Notificação</dt><dd className="mt-1"><span className={`inline-flex rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-wider ${lead.ownerEmailNotificationStatus === 'sent' ? 'border-primary/20 bg-primary/10 text-primary' : lead.ownerEmailNotificationStatus === 'failed' ? 'border-red-500/30 bg-red-950/20 text-red-300' : 'border-card-border bg-dark-gray text-muted'}`}>{getCommercialLeadEmailStatusLabel(lead.ownerEmailNotificationStatus)}</span></dd></div>
+                            <div className="grid grid-cols-2 gap-3"><div><dt className="text-[10px] uppercase tracking-wider text-muted">Cadastro</dt><dd className="mt-1 text-white">{formatDateTime(lead.submittedAt)}</dd></div><div><dt className="text-[10px] uppercase tracking-wider text-muted">Aceite</dt><dd className="mt-1 text-white">{formatDateTime(lead.acceptedAt)}</dd></div></div>
+                            {lead.ownerEmailError && lead.ownerEmailNotificationStatus === 'failed' && <div><dt className="text-[10px] uppercase tracking-wider text-muted">Erro de notificação</dt><dd className="mt-1 text-red-300">{lead.ownerEmailError}</dd></div>}
+                          </dl>
+                        </article>
+                      ))}
+                    </div>
+
+                    <div className="hidden overflow-x-auto lg:block">
                       <table className="w-full min-w-[980px] border-collapse text-left">
                         <thead>
                           <tr className="border-b border-card-border text-[9px] uppercase tracking-widest text-muted">
@@ -961,6 +1061,7 @@ export default function OwnerPage() {
                         </tbody>
                       </table>
                     </div>
+                    </>
                   )}
                 </div>
               </div>
@@ -968,7 +1069,7 @@ export default function OwnerPage() {
 
             {/* ABA: Eventos Globais */}
             {activeTab === 'events' && (
-              <div className="bg-card border border-card-border rounded-xl p-6 space-y-4">
+              <div className="space-y-4 rounded-xl border border-card-border bg-card p-4 sm:p-6">
                 <h3 className="text-lg font-bold text-white uppercase tracking-wider border-b border-card-border pb-3">
                   Eventos Ativos na Plataforma
                 </h3>
@@ -1023,7 +1124,34 @@ export default function OwnerPage() {
                   )}
                 </div>
 
-                <div className="overflow-x-auto">
+                <div className="space-y-3 lg:hidden">
+                  {chronologicallyOrderedEvents.map(event => {
+                    const eventRegs = registrations.filter(r => r.eventId === event.id);
+                    const eventRevenue = eventRegs.reduce((sum, r) => sum + r.totalPaid, 0);
+                    const marketplaceFee = event.marketplace_fee !== undefined && event.marketplace_fee !== null ? event.marketplace_fee : 10;
+
+                    return (
+                      <article key={event.id} className="rounded-xl border border-card-border bg-dark-gray/30 p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded border border-card-border bg-dark-gray p-0.5">
+                              {event.logoUrl ? <Image src={event.logoUrl} alt={`Logo do evento ${event.name}`} width={36} height={36} unoptimized className="h-full w-full rounded object-cover" /> : <span className="text-[10px] font-black uppercase text-primary">{event.name.substring(0, 2)}</span>}
+                            </div>
+                            <div className="min-w-0"><p className="truncate text-sm font-bold uppercase text-white">{event.name}</p><p className="mt-1 truncate font-mono text-[10px] text-muted">{event.organizerId}</p></div>
+                          </div>
+                          <span className={`shrink-0 rounded px-2 py-1 text-[10px] font-bold uppercase ${event.status === 'live' || event.status === 'upcoming' ? 'bg-primary/10 text-primary' : 'bg-dark-gray text-muted'}`}>{event.status === 'live' ? 'Live' : event.status === 'upcoming' ? 'Em breve' : 'Encerrado'}</span>
+                        </div>
+                        <dl className="mt-4 grid grid-cols-2 gap-3 border-t border-card-border pt-3 text-xs">
+                          <div><dt className="text-[10px] uppercase tracking-wider text-muted">Data</dt><dd className="mt-1 text-white">{event.date}</dd></div>
+                          <div><dt className="text-[10px] uppercase tracking-wider text-muted">Taxa split</dt><dd className="mt-1 font-number font-bold text-primary">R$ {marketplaceFee.toFixed(2)}</dd></div>
+                          <div className="col-span-2"><dt className="text-[10px] uppercase tracking-wider text-muted">Inscrições</dt><dd className="mt-1 font-number font-bold text-white">R$ {eventRevenue.toFixed(2)}</dd></div>
+                        </dl>
+                      </article>
+                    );
+                  })}
+                </div>
+
+                <div className="hidden overflow-x-auto lg:block">
                   <table className="w-full text-left border-collapse min-w-[600px]">
                     <thead>
                       <tr className="border-b border-card-border text-[9px] uppercase tracking-widest text-muted">
