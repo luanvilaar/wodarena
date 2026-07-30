@@ -1,32 +1,39 @@
 import { createSupabaseAdmin } from '@/lib/serverSecurity';
+import { DEFAULT_SERVICE_FEE_PERCENT, normalizeServiceFeePercent } from '@/lib/serviceFee';
+
 type MercadoPagoEventRow = {
   organizer_id: string;
 };
 
-type MercadoPagoPublicEventRow = {
-  organizer_id: string;
-  mp_public_key: string | null;
-};
-
 type MercadoPagoAccountRow = {
-  public_key: string | null;
+  expires_at: string | null;
+  status: string | null;
 };
 
 type MercadoPagoSecretRow = {
   access_token: string | null;
+  refresh_token: string | null;
 };
 
-export type MercadoPagoCheckoutConfig = {
+type PlatformSettingsRow = {
+  service_fee_enabled: boolean | null;
+  service_fee_percent: number | string | null;
+};
+
+export type ServiceFeeConfig = {
+  serviceFeeEnabled: boolean;
+  serviceFeePercent: number;
+};
+
+export type MercadoPagoCheckoutConfig = ServiceFeeConfig & {
   accessToken: string;
-  marketplaceFee: number;
   organizerId: string;
-  source: 'organizer_secret';
+  source: 'organizer_oauth' | 'organizer_manual_legacy';
 };
 
-export type MercadoPagoPublicConfig = {
+export type MercadoPagoPublicConfig = ServiceFeeConfig & {
   publicKey: string;
-  organizerId: string;
-  source: 'organizer_account' | 'event_legacy';
+  source: 'platform_integrator';
 };
 
 export class MercadoPagoConfigError extends Error {
@@ -34,7 +41,6 @@ export class MercadoPagoConfigError extends Error {
 
   constructor(message: string, status = 500) {
     super(message);
-    this.name = 'MercadoPagoConfigError';
     this.status = status;
   }
 }
@@ -47,13 +53,118 @@ const getSupabaseAdmin = () => {
   }
 };
 
-export const resolveMercadoPagoCheckoutConfig = async (eventId: string): Promise<MercadoPagoCheckoutConfig> => {
+const refreshInFlight = new Map<string, Promise<string>>();
+
+const isExpired = (expiresAt: string | null | undefined) => {
+  const expiresAtMs = expiresAt ? new Date(expiresAt).getTime() : Number.NaN;
+  return !Number.isFinite(expiresAtMs) || expiresAtMs <= Date.now() + 60_000;
+};
+
+export const resolvePlatformServiceFeeConfig = async (): Promise<ServiceFeeConfig> => {
+  const supabaseAdmin = getSupabaseAdmin();
+  const { data, error } = await supabaseAdmin
+    .from('platform_settings')
+    .select('service_fee_enabled, service_fee_percent')
+    .eq('id', true)
+    .maybeSingle<PlatformSettingsRow>();
+
+  if (error) {
+    console.error('[MercadoPago Config] Erro ao carregar taxa de serviço:', error);
+    throw new MercadoPagoConfigError('Não foi possível carregar a configuração da taxa de serviço.', 500);
+  }
+
+  return {
+    serviceFeeEnabled: data?.service_fee_enabled !== false,
+    serviceFeePercent: normalizeServiceFeePercent(data?.service_fee_percent, DEFAULT_SERVICE_FEE_PERCENT)
+  };
+};
+
+const refreshOAuthAccessToken = async (
+  organizerId: string,
+  refreshToken: string
+): Promise<string> => {
+  const existing = refreshInFlight.get(organizerId);
+  if (existing) return existing;
+
+  const refreshPromise = (async () => {
+    const clientId = process.env.MERCADOPAGO_CLIENT_ID;
+    const clientSecret = process.env.MERCADOPAGO_CLIENT_SECRET;
+    if (!clientId || !clientSecret) {
+      throw new MercadoPagoConfigError('A renovação OAuth do Mercado Pago não está configurada no servidor.', 500);
+    }
+
+    const response = await fetch('https://api.mercadopago.com/oauth/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        accept: 'application/json'
+      },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken
+      }).toString()
+    });
+
+    if (!response.ok) {
+      console.error('[MercadoPago OAuth] Falha ao renovar token do gestor:', organizerId, response.status);
+      throw new MercadoPagoConfigError('A conexão Mercado Pago expirou. Peça ao gestor para reconectar a conta via OAuth.', 403);
+    }
+
+    const tokenData = await response.json();
+    const nextAccessToken = typeof tokenData.access_token === 'string' ? tokenData.access_token : '';
+    if (!nextAccessToken) {
+      throw new MercadoPagoConfigError('O Mercado Pago não retornou um token OAuth válido.', 502);
+    }
+
+    const expiresIn = Number(tokenData.expires_in || 15_552_000);
+    const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
+    const supabaseAdmin = getSupabaseAdmin();
+    const { error: secretError } = await supabaseAdmin
+      .from('mercadopago_secrets')
+      .update({
+        access_token: nextAccessToken,
+        refresh_token: typeof tokenData.refresh_token === 'string' ? tokenData.refresh_token : refreshToken,
+        updated_at: new Date().toISOString()
+      })
+      .eq('user_id', organizerId);
+
+    if (secretError) {
+      console.error('[MercadoPago OAuth] Falha ao persistir token renovado:', secretError);
+      throw new MercadoPagoConfigError('Não foi possível salvar a renovação OAuth do Mercado Pago.', 500);
+    }
+
+    const { error: accountError } = await supabaseAdmin
+      .from('mercadopago_accounts')
+      .update({ expires_at: expiresAt, status: 'connected', updated_at: new Date().toISOString() })
+      .eq('user_id', organizerId);
+
+    if (accountError) {
+      console.error('[MercadoPago OAuth] Falha ao atualizar expiração OAuth:', accountError);
+      throw new MercadoPagoConfigError('Não foi possível atualizar a conexão Mercado Pago.', 500);
+    }
+
+    return nextAccessToken;
+  })();
+
+  refreshInFlight.set(organizerId, refreshPromise);
+  try {
+    return await refreshPromise;
+  } finally {
+    refreshInFlight.delete(organizerId);
+  }
+};
+
+export const resolveMercadoPagoCheckoutConfig = async (
+  eventId: string,
+  options: { allowManualLegacy?: boolean } = {},
+): Promise<MercadoPagoCheckoutConfig> => {
   if (!eventId) {
     throw new MercadoPagoConfigError('Evento obrigatório para processar pagamento.', 400);
   }
 
   const supabaseAdmin = getSupabaseAdmin();
-
   const { data: dbEvent, error: eventError } = await supabaseAdmin
     .from('events')
     .select('organizer_id')
@@ -61,33 +172,58 @@ export const resolveMercadoPagoCheckoutConfig = async (eventId: string): Promise
     .single<MercadoPagoEventRow>();
 
   if (eventError || !dbEvent) {
-    console.error('[MercadoPago Config] Evento não encontrado ou erro ao buscar credenciais:', eventError);
+    console.error('[MercadoPago Config] Evento não encontrado:', eventError);
     throw new MercadoPagoConfigError('Evento não encontrado para processar pagamento.', 404);
   }
 
-  const { data: mpSecret, error: secretError } = await supabaseAdmin
-    .from('mercadopago_secrets')
-    .select('access_token')
-    .eq('user_id', dbEvent.organizer_id)
-    .maybeSingle<MercadoPagoSecretRow>();
+  const [{ data: account, error: accountError }, { data: secret, error: secretError }, serviceFee] = await Promise.all([
+    supabaseAdmin
+      .from('mercadopago_accounts')
+      .select('expires_at, status')
+      .eq('user_id', dbEvent.organizer_id)
+      .maybeSingle<MercadoPagoAccountRow>(),
+    supabaseAdmin
+      .from('mercadopago_secrets')
+      .select('access_token, refresh_token')
+      .eq('user_id', dbEvent.organizer_id)
+      .maybeSingle<MercadoPagoSecretRow>(),
+    resolvePlatformServiceFeeConfig()
+  ]);
 
-  if (secretError) {
-    console.error('[MercadoPago Config] Erro ao buscar credenciais privadas do organizador:', secretError);
+  if (accountError || secretError) {
+    console.error('[MercadoPago Config] Erro ao carregar conexão OAuth:', accountError || secretError);
+    throw new MercadoPagoConfigError('Não foi possível carregar a conexão Mercado Pago do gestor.', 500);
   }
 
-  if (mpSecret?.access_token) {
+  if (!account || account.status !== 'connected' || !secret?.access_token || !secret.refresh_token) {
+    throw new MercadoPagoConfigError('Este evento não possui uma conta Mercado Pago conectada via OAuth.', 403);
+  }
+
+  const isManualLegacy = secret.refresh_token === 'manual';
+
+  if (isManualLegacy && !options.allowManualLegacy) {
+    throw new MercadoPagoConfigError('Esta conta Mercado Pago usa credenciais manuais. Reconecte via OAuth para continuar recebendo inscrições com a taxa de serviço WODArena.', 403);
+  }
+
+  if (isManualLegacy) {
     return {
-      accessToken: mpSecret.access_token,
-      marketplaceFee: 0,
+      accessToken: secret.access_token,
       organizerId: dbEvent.organizer_id,
-      source: 'organizer_secret'
+      source: 'organizer_manual_legacy',
+      ...serviceFee,
     };
   }
 
-  throw new MercadoPagoConfigError(
-    'Este evento não aceita pagamentos online no momento. Conecte as credenciais do Mercado Pago na conta do gestor responsável.',
-    403
-  );
+  const accessToken = isExpired(account.expires_at)
+    ? await refreshOAuthAccessToken(dbEvent.organizer_id, secret.refresh_token)
+    : secret.access_token;
+
+  return {
+    accessToken,
+    organizerId: dbEvent.organizer_id,
+    source: 'organizer_oauth',
+    ...serviceFee
+  };
 };
 
 export const resolveMercadoPagoPublicConfig = async (eventId: string): Promise<MercadoPagoPublicConfig> => {
@@ -95,67 +231,18 @@ export const resolveMercadoPagoPublicConfig = async (eventId: string): Promise<M
     throw new MercadoPagoConfigError('Evento obrigatório para carregar credenciais públicas de pagamento.', 400);
   }
 
-  const supabaseAdmin = getSupabaseAdmin();
-
-  const { data: dbEvent, error: eventError } = await supabaseAdmin
-    .from('events')
-    .select('organizer_id, mp_public_key')
-    .eq('id', eventId)
-    .single<MercadoPagoPublicEventRow>();
-
-  if (eventError || !dbEvent) {
-    console.error('[MercadoPago Public Config] Evento não encontrado ou erro ao buscar public key:', eventError);
-    throw new MercadoPagoConfigError('Evento não encontrado para carregar checkout.', 404);
+  const publicKey = process.env.MERCADOPAGO_PUBLIC_KEY?.trim();
+  if (!publicKey) {
+    throw new MercadoPagoConfigError('A Public Key da aplicação WODArena não está configurada no servidor.', 500);
   }
 
-  const { data: mpAccount, error: accountError } = await supabaseAdmin
-    .from('mercadopago_accounts')
-    .select('public_key')
-    .eq('user_id', dbEvent.organizer_id)
-    .eq('status', 'connected')
-    .maybeSingle<MercadoPagoAccountRow>();
-
-  if (accountError) {
-    console.error('[MercadoPago Public Config] Erro ao buscar conta pública do organizador:', accountError);
-  }
-
-  if (mpAccount?.public_key) {
-    return {
-      publicKey: mpAccount.public_key,
-      organizerId: dbEvent.organizer_id,
-      source: 'organizer_account'
-    };
-  }
-
-  if (dbEvent.mp_public_key) {
-    return {
-      publicKey: dbEvent.mp_public_key,
-      organizerId: dbEvent.organizer_id,
-      source: 'event_legacy'
-    };
-  }
-
-  throw new MercadoPagoConfigError(
-    'Este evento não possui Public Key do Mercado Pago conectada. Cadastre as credenciais do Mercado Pago nas configurações do evento.',
-    403
-  );
-};
-
-export const getMercadoPagoApplicationFee = (totalPaid: number, marketplaceFee: number) => {
-  if (!Number.isFinite(totalPaid) || !Number.isFinite(marketplaceFee)) return undefined;
-  if (totalPaid <= 0 || marketplaceFee <= 0) return undefined;
-  return Math.min(totalPaid, marketplaceFee);
+  const serviceFee = await resolvePlatformServiceFeeConfig();
+  return { publicKey, source: 'platform_integrator', ...serviceFee };
 };
 
 /**
  * Resolve a URL de retorno do OAuth do Mercado Pago a partir de `MERCADOPAGO_REDIRECT_URI`
  * (com fallback para `${origin}/admin`, o fluxo same-origin da Story 1.19).
- *
- * A mesma URL precisa ser usada na geracao da URL de autorizacao e na troca do
- * `authorization_code` por Access Token, e precisa casar exatamente com a URL
- * cadastrada no painel da aplicacao Mercado Pago. Esta funcao falha cedo com uma
- * mensagem acionavel quando a configuracao nao pode funcionar em producao
- * (ex.: aponta para localhost) e normaliza `http` -> `https` fora de localhost.
  */
 export const resolveMercadoPagoRedirectUri = (origin: string): string => {
   const configured = process.env.MERCADOPAGO_REDIRECT_URI?.trim();
@@ -176,28 +263,16 @@ export const resolveMercadoPagoRedirectUri = (origin: string): string => {
   const isProduction = process.env.NODE_ENV === 'production';
 
   if (isProduction && isLocalhost) {
-    console.error(
-      `[MercadoPago OAuth] MERCADOPAGO_REDIRECT_URI aponta para localhost em producao (${candidate}). ` +
-        'Configure a URL publica HTTPS registrada no painel do Mercado Pago (ex.: https://wodarena.com.br/admin).'
-    );
+    console.error(`[MercadoPago OAuth] MERCADOPAGO_REDIRECT_URI aponta para localhost em producao (${candidate}).`);
     throw new MercadoPagoConfigError(
       'A conexao automatica do Mercado Pago esta indisponivel por um erro de configuracao do servidor. Contate o suporte da plataforma.',
       500
     );
   }
 
-  // O fluxo same-origin da Story 1.19 espera o retorno na pagina /admin.
   if (!parsed.pathname.startsWith('/admin')) {
-    console.warn(
-      `[MercadoPago OAuth] MERCADOPAGO_REDIRECT_URI nao aponta para /admin (${parsed.pathname}); ` +
-        'o fluxo same-origin espera o retorno em /admin.'
-    );
+    console.warn(`[MercadoPago OAuth] MERCADOPAGO_REDIRECT_URI nao aponta para /admin (${parsed.pathname}).`);
   }
 
-  // Fora de localhost, forca HTTPS (mesma politica de normalizacao do checkout).
-  if (!isLocalhost && parsed.protocol === 'http:') {
-    return candidate.replace(/^http:/, 'https:');
-  }
-
-  return candidate;
+  return !isLocalhost && parsed.protocol === 'http:' ? candidate.replace(/^http:/, 'https:') : candidate;
 };

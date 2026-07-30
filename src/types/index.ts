@@ -170,6 +170,10 @@ export interface Registration {
   ticketPrice: number;
   quantity: number;
   totalPaid: number;
+  serviceFeePercent?: number;
+  serviceFeeAmount?: number;
+  amountCollected?: number;
+  applicationFeeCharged?: number;
   createdAt: string;
   accessToken?: string;
   couponCode?: string;

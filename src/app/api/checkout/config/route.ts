@@ -14,10 +14,12 @@ export async function GET(request: Request) {
     }
 
     const checkoutConfig = await resolveMercadoPagoPublicConfig(eventId);
-    console.log(`[MercadoPago Config API] Public Key ${checkoutConfig.source} carregada para o organizador ${checkoutConfig.organizerId} no evento ${eventId}`);
+    console.log(`[MercadoPago Config API] Public Key ${checkoutConfig.source} carregada para o evento ${eventId}`);
 
     return NextResponse.json({
-      publicKey: checkoutConfig.publicKey
+      publicKey: checkoutConfig.publicKey,
+      serviceFeeEnabled: checkoutConfig.serviceFeeEnabled,
+      serviceFeePercent: checkoutConfig.serviceFeePercent
     });
   } catch (err) {
     if (err instanceof MercadoPagoConfigError) {

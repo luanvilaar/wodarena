@@ -14,16 +14,17 @@ const webhookRoute = read('../src/app/api/webhooks/mercadopago/route.ts');
 const oauthCallback = read('../src/app/api/mercadopago/oauth/callback/route.ts');
 const adminMercadoPagoRoute = read('../src/app/api/admin/mercadopago/route.ts');
 const adminPage = read('../src/app/admin/page.tsx');
-const relaxMercadoPagoUserMigration = read('../supabase/migrations/20260607230131_relax_mercadopago_user_unique.sql');
 const oauthStatesMigration = read('../supabase/migrations/20260624140000_create_mercadopago_oauth_states.sql');
 const registerModal = read('../src/components/RegisterModal.tsx');
 const appContext = read('../src/context/AppContext.tsx');
 const eventPage = read('../src/app/event/[id]/page.tsx');
 
-test('Mercado Pago checkout resolves credentials from organizer secrets', () => {
+test('Mercado Pago checkout resolves OAuth credentials from organizer secrets', () => {
   assert.match(helper, /from\('events'\)[\s\S]*select\('organizer_id'\)/);
   assert.match(helper, /mercadopago_secrets/);
-  assert.match(helper, /source: 'organizer_secret'/);
+  assert.match(helper, /source: 'organizer_oauth'/);
+  assert.match(helper, /secret\.refresh_token === 'manual'/);
+  assert.match(helper, /grant_type: 'refresh_token'/);
   assert.doesNotMatch(helper, /mp_access_token/);
 });
 
@@ -34,10 +35,11 @@ test('event payment routes use the centralized Mercado Pago credential resolver'
   }
 });
 
-test('card checkout resolves public key from the event owner instead of global fallback', () => {
+test('card checkout resolves the platform public key for marketplace split', () => {
   assert.match(helper, /resolveMercadoPagoPublicConfig/);
+  assert.match(helper, /process\.env\.MERCADOPAGO_PUBLIC_KEY/);
   assert.match(configRoute, /resolveMercadoPagoPublicConfig/);
-  assert.match(registerModal, /resolveCheckoutPublicKey\(event\.id, event\.mpPublicKey\)/);
+  assert.match(registerModal, /resolveCheckoutPublicKey\(event\.id\)/);
   assert.doesNotMatch(registerModal, /NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY/);
   assert.doesNotMatch(registerModal, /APP_USR-0d64556d/);
 });
@@ -49,9 +51,11 @@ test('checkout surfaces backend payment errors instead of generic alerts', () =>
   assert.match(registerModal, /paymentAttemptStarted \? `\$\{baseMessage\}\\n\\n\$\{paymentFailureGuidance\}` : baseMessage/);
 });
 
-test('transparent checkout sends payer CPF and does not send application fee', () => {
-  assert.doesNotMatch(pixRoute, /application_fee:/);
-  assert.doesNotMatch(cardRoute, /application_fee:/);
+test('transparent checkout sends payer CPF and applies the service split', () => {
+  assert.match(pixRoute, /application_fee: serviceFee\.serviceFeeAmount/);
+  assert.match(cardRoute, /application_fee: serviceFee\.serviceFeeAmount/);
+  assert.match(pixRoute, /transaction_amount: serviceFee\.amountCollected/);
+  assert.match(cardRoute, /transaction_amount: serviceFee\.amountCollected/);
   assert.match(cardRoute, /identification:[\s\S]*type: 'CPF'[\s\S]*number: cleanCpf/);
   assert.match(cardRoute, /metadata:[\s\S]*registration_id: checkoutSnapshot\.registrationId/);
   assert.match(pixRoute, /metadata:[\s\S]*registration_id: checkoutSnapshot\.registrationId/);
@@ -159,16 +163,9 @@ test('Mercado Pago callbacks sanitize production URLs and fall back to secure AP
   assert.match(webhookRoute, /Assinatura Mercado Pago invalida e transacao nao pode ser confirmada\./);
 });
 
-test('manual Mercado Pago credentials are validated and store the real collector id', () => {
-  assert.match(adminMercadoPagoRoute, /https:\/\/api\.mercadopago\.com\/users\/me/);
-  assert.match(adminMercadoPagoRoute, /Access Token Mercado Pago inválido/);
-  assert.match(adminMercadoPagoRoute, /const mercadopagoUserId = mpUserData\?\.id \? String\(mpUserData\.id\)/);
-  assert.match(adminMercadoPagoRoute, /mercadopago_user_id: mercadopagoUserId/);
-});
-
-test('manual Mercado Pago credentials do not require a globally unique collector id', () => {
-  assert.match(relaxMercadoPagoUserMigration, /DROP CONSTRAINT IF EXISTS mercadopago_accounts_mercadopago_user_id_key/);
-  assert.match(relaxMercadoPagoUserMigration, /idx_mercadopago_accounts_mercadopago_user_id/);
-  assert.match(adminMercadoPagoRoute, /isMercadoPagoUserIdUniqueError/);
-  assert.match(adminMercadoPagoRoute, /Aplique a migration mais recente do Supabase/);
+test('manual Mercado Pago credentials are retired in favor of OAuth', () => {
+  assert.match(adminMercadoPagoRoute, /Credenciais manuais não são aceitas/);
+  assert.match(adminMercadoPagoRoute, /status: 410/);
+  assert.match(adminPage, /Reconexão obrigatória/);
+  assert.doesNotMatch(adminPage, /Integração Financeira Manual \(Chaves API v2\)/);
 });

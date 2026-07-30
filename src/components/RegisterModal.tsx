@@ -46,6 +46,8 @@ type RegistrationStartResponse = {
 
 type CheckoutConfigResponse = {
   publicKey?: string;
+  serviceFeeEnabled?: boolean;
+  serviceFeePercent?: number;
   error?: string;
 };
 
@@ -77,7 +79,7 @@ const generateUniqueId = (prefix: string) => {
   return `${prefix}-${Date.now()}`;
 };
 
-const resolveCheckoutPublicKey = async (eventId: string, eventPublicKey?: string) => {
+const resolveCheckoutPublicKey = async (eventId: string) => {
   try {
     const response = await fetch(`/api/checkout/config?event_id=${eventId}`);
     const data: CheckoutConfigResponse = await response.json();
@@ -90,7 +92,6 @@ const resolveCheckoutPublicKey = async (eventId: string, eventPublicKey?: string
     console.error("[resolveCheckoutPublicKey] Erro ao buscar do servidor:", err);
   }
 
-  if (eventPublicKey) return eventPublicKey;
   throw new Error('O pagamento por cartão de crédito está temporariamente indisponível para este evento. Por favor, tente realizar o pagamento via Pix ou entre em contato com os organizadores.');
 };
 
@@ -134,6 +135,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [athletePassword, setAthletePassword] = useState('');
   const [athletePasswordConfirmation, setAthletePasswordConfirmation] = useState('');
+  const [serviceFeeConfig, setServiceFeeConfig] = useState({ enabled: true, percent: 10 });
 
   const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
   if (isOpen !== prevIsOpen) {
@@ -232,6 +234,25 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
     };
   }, [pixData, event.id, registerTicket, onSuccess, onClose, cpf]);
 
+  useEffect(() => {
+    let active = true;
+    void fetch(`/api/checkout/config?event_id=${event.id}`)
+      .then(async response => {
+        const data: CheckoutConfigResponse = await response.json();
+        if (response.ok && active) {
+          setServiceFeeConfig({
+            enabled: data.serviceFeeEnabled !== false,
+            percent: Number(data.serviceFeePercent || 10)
+          });
+        }
+      })
+      .catch(() => undefined);
+
+    return () => {
+      active = false;
+    };
+  }, [event.id]);
+
   const isValidCPF = (val: string) => {
     const clean = val.replace(/\D/g, '');
     if (clean.length !== 11) return false;
@@ -265,6 +286,10 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
   const ticketPrice = getPrice(selectedDivision);
   const baseTotalPaid = Math.max(0, ticketPrice - discountApplied);
   const totalPaid = baseTotalPaid > 0 && baseTotalPaid < 1.00 ? 1.00 : baseTotalPaid;
+  const serviceFeePreview = serviceFeeConfig.enabled && totalPaid > 0
+    ? Math.round((totalPaid * serviceFeeConfig.percent) * 100) / 100
+    : 0;
+  const amountCollectedPreview = totalPaid + serviceFeePreview;
   const isTeamCategory = participantCount > 1;
   const primaryParticipant = visibleParticipants[0] || createEmptyParticipant();
   const isFitnessRacing = event.eventType === 'fitness_racing';
@@ -737,7 +762,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                     <div className="text-right">
                       <span className="text-[9px] font-bold uppercase tracking-widest text-muted-soft">Valor Pago</span>
                       <p className="text-base font-black text-primary font-number">
-                        R$ {totalPaid.toFixed(2)}
+                        R$ {amountCollectedPreview.toFixed(2)}
                       </p>
                     </div>
                   </div>
@@ -1238,9 +1263,15 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                     <span className="font-number font-bold">- R$ {discountApplied.toFixed(2)}</span>
                   </div>
                 )}
+                {serviceFeePreview > 0 && (
+                  <div className="flex justify-between items-center text-sm text-muted-soft">
+                    <span className="font-semibold">Taxa de serviço WODArena ({serviceFeeConfig.percent}%)</span>
+                    <span className="font-number font-bold">R$ {serviceFeePreview.toFixed(2)}</span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between border-t border-hairline-light pt-2 text-base">
                   <span className="font-extrabold uppercase tracking-wider text-ink">Total</span>
-                  <span className="font-number font-black text-ink">R$ {totalPaid.toFixed(2)}</span>
+                  <span className="font-number font-black text-ink">R$ {amountCollectedPreview.toFixed(2)}</span>
                 </div>
                 <div className="flex items-start gap-2 border-t border-hairline-light pt-3 text-[10px] text-muted-soft leading-normal">
                   <ShieldCheck className="h-4 w-4 text-[#9a7200] shrink-0 mt-0.5" aria-hidden="true" />
@@ -1307,7 +1338,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const _legacyTestMock = async (event: { id: string; mpPublicKey?: string }) => {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const mockPublicKey = await resolveCheckoutPublicKey(event.id, event.mpPublicKey);
+  const mockPublicKey = await resolveCheckoutPublicKey(event.id);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const mockParams = { installments: 1, cpf: '' };
   // eslint-disable-next-line @typescript-eslint/no-unused-vars

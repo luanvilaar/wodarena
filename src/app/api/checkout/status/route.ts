@@ -65,7 +65,7 @@ export async function GET(request: Request) {
       })
       : null;
 
-    const checkoutConfig = await resolveMercadoPagoCheckoutConfig(eventId);
+    const checkoutConfig = await resolveMercadoPagoCheckoutConfig(eventId, { allowManualLegacy: true });
     console.log(`[MercadoPago Status API] Usando credenciais ${checkoutConfig.source} do organizador ${checkoutConfig.organizerId} para o evento ${eventId}`);
 
     let paymentData: any = null;
@@ -134,7 +134,8 @@ export async function GET(request: Request) {
           const emailToMatch = registration.athlete_email?.trim().toLowerCase();
           foundPayment = results.find((p: any) => {
             const payerEmail = p.payer?.email?.trim().toLowerCase();
-            const amountMatches = Math.abs((p.transaction_amount || 0) - (registration.total_paid || 0)) < 0.1;
+            const expectedAmount = registration.amount_collected ?? registration.total_paid ?? 0;
+            const amountMatches = Math.abs((p.transaction_amount || 0) - expectedAmount) < 0.1;
             const emailMatches = payerEmail === emailToMatch;
             return emailMatches && amountMatches && p.status === 'approved';
           });
@@ -172,6 +173,8 @@ export async function GET(request: Request) {
       .maybeSingle();
 
     const wasAlreadyApproved = currentReg?.payment_status === 'payment_approved';
+    const amountCollected = Number(paymentData.transaction_amount || 0);
+    const applicationFeeCharged = Number(paymentData.application_fee || 0);
 
     await supabaseAdmin
       .from('registrations')
@@ -181,6 +184,8 @@ export async function GET(request: Request) {
         payment_id: String(paymentData.id),
         payment_status_detail: paymentData.status_detail || null,
         payment_error_message: paymentData.status === 'rejected' ? 'Pagamento não processado.' : null,
+        ...(amountCollected > 0 ? { amount_collected: amountCollected } : {}),
+        ...(applicationFeeCharged > 0 ? { application_fee_charged: applicationFeeCharged } : {}),
         updated_at: new Date().toISOString()
       })
       .eq('id', registrationId)

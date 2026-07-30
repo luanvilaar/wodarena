@@ -378,6 +378,10 @@ export const loadRegistrationCheckoutSnapshot = async (
     ticketPrice: Number(registration.ticket_price),
     quantity: Number(registration.quantity),
     totalPaid: Number(registration.total_paid),
+    serviceFeePercent: registration.service_fee_percent !== null && registration.service_fee_percent !== undefined ? Number(registration.service_fee_percent) : undefined,
+    serviceFeeAmount: registration.service_fee_amount !== null && registration.service_fee_amount !== undefined ? Number(registration.service_fee_amount) : undefined,
+    amountCollected: registration.amount_collected !== null && registration.amount_collected !== undefined ? Number(registration.amount_collected) : undefined,
+    applicationFeeCharged: registration.application_fee_charged !== null && registration.application_fee_charged !== undefined ? Number(registration.application_fee_charged) : undefined,
     createdAt: registration.created_at,
     couponCode: registration.coupon_code || undefined
   };

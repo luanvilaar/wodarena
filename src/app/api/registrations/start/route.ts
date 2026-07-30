@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
+import { MercadoPagoConfigError, resolveMercadoPagoCheckoutConfig } from '@/lib/mercadopagoServer';
 import { applyCouponUsageForApprovedRegistration, calculateSecureRegistrationSnapshot, RegistrationAccessError } from '@/lib/serverCheckout';
 import { ManagerAccessError, managerAccessErrorResponse } from '@/lib/serverManagerAccess';
 import { createRegistrationAccessToken, createSupabaseAdmin, hashPassword, verifyPassword } from '@/lib/serverSecurity';
+import { calculateServiceFee } from '@/lib/serviceFee';
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
 
@@ -26,6 +28,14 @@ export async function POST(request: Request) {
     const secureSnapshot = await calculateSecureRegistrationSnapshot(supabaseAdmin, registrationData, athleteProfile);
     const safeRegistrationData = secureSnapshot.registrationData;
     const safeAthleteProfile = secureSnapshot.athleteProfile;
+    const checkoutConfig = secureSnapshot.transactionAmount === 0
+      ? null
+      : await resolveMercadoPagoCheckoutConfig(secureSnapshot.eventId);
+    const serviceFee = calculateServiceFee(
+      secureSnapshot.transactionAmount,
+      checkoutConfig?.serviceFeePercent,
+      checkoutConfig?.serviceFeeEnabled
+    );
 
     const email = normalizeEmail(String(safeRegistrationData.athleteEmail || safeAthleteProfile.email || ''));
     if (!email || !email.includes('@') || email.includes('nao-informado@wodarena.com')) {
@@ -232,6 +242,10 @@ export async function POST(request: Request) {
       ticket_price: Number(safeRegistrationData.ticketPrice),
       quantity: Number(safeRegistrationData.quantity || 1),
       total_paid: Number(safeRegistrationData.totalPaid),
+      service_fee_percent: serviceFee.serviceFeePercent,
+      service_fee_amount: serviceFee.serviceFeeAmount,
+      amount_collected: serviceFee.amountCollected,
+      application_fee_charged: 0,
       created_at: safeRegistrationData.createdAt || now,
       coupon_code: safeRegistrationData.couponCode || null,
       payment_status: paymentStatus,
@@ -281,6 +295,10 @@ export async function POST(request: Request) {
         paymentStatus,
         paymentMethod: paymentMethod || undefined,
         updatedAt: dbRegistration.updated_at,
+        serviceFeePercent: serviceFee.serviceFeePercent,
+        serviceFeeAmount: serviceFee.serviceFeeAmount,
+        amountCollected: serviceFee.amountCollected,
+        applicationFeeCharged: 0,
         accessToken: registrationAccessToken
       },
       athleteProfile: {
@@ -294,6 +312,9 @@ export async function POST(request: Request) {
       return managerAccessErrorResponse(err);
     }
     if (err instanceof RegistrationAccessError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
+    if (err instanceof MercadoPagoConfigError) {
       return NextResponse.json({ error: err.message }, { status: err.status });
     }
     console.error('[Registration Start] Erro crítico:', err);

@@ -87,7 +87,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Evento obrigatorio para processar webhook.' }, { status: 400 });
     }
 
-    const checkoutConfig = await resolveMercadoPagoCheckoutConfig(eventId);
+    const checkoutConfig = await resolveMercadoPagoCheckoutConfig(eventId, { allowManualLegacy: true });
     const mpResponse = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
       headers: {
         'Authorization': `Bearer ${checkoutConfig.accessToken}`
@@ -123,6 +123,8 @@ export async function POST(request: Request) {
 
     const nextPaymentStatus = toRegistrationPaymentStatus(status);
     const wasApproved = existingRegistration.payment_status === 'payment_approved';
+    const amountCollected = Number(paymentData.transaction_amount || 0);
+    const applicationFeeCharged = Number(paymentData.application_fee || 0);
 
     const { data: updatedRegistration, error: updateError } = await supabaseAdmin
       .from('registrations')
@@ -132,6 +134,8 @@ export async function POST(request: Request) {
         payment_id: String(paymentData.id),
         payment_status_detail: paymentData.status_detail || null,
         payment_error_message: status === 'rejected' ? 'Pagamento nao processado.' : null,
+        ...(amountCollected > 0 ? { amount_collected: amountCollected } : {}),
+        ...(applicationFeeCharged > 0 ? { application_fee_charged: applicationFeeCharged } : {}),
         updated_at: new Date().toISOString()
       })
       .eq('id', metadataRegistrationId)

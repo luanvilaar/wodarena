@@ -6,6 +6,7 @@ import {
 import { ManagerAccessError, assertManagerSalesAccessForEvent, managerAccessErrorResponse } from '@/lib/serverManagerAccess';
 import { assertEventRegistrationAvailable, assertRegistrationAccess, loadRegistrationCheckoutSnapshot, RegistrationAccessError } from '@/lib/serverCheckout';
 import { createSupabaseAdmin } from '@/lib/serverSecurity';
+import { calculateServiceFee } from '@/lib/serviceFee';
 
 const supabaseAdmin = createSupabaseAdmin();
 
@@ -29,6 +30,11 @@ export async function POST(request: Request) {
     await assertEventRegistrationAvailable(supabaseAdmin, checkoutSnapshot.eventId);
     await assertManagerSalesAccessForEvent(supabaseAdmin, checkoutSnapshot.eventId);
     const checkoutConfig = await resolveMercadoPagoCheckoutConfig(checkoutSnapshot.eventId);
+    const serviceFee = calculateServiceFee(
+      transactionAmount,
+      checkoutConfig.serviceFeePercent,
+      checkoutConfig.serviceFeeEnabled
+    );
     console.log(`[MercadoPago Preference API] Usando credenciais ${checkoutConfig.source} do organizador ${checkoutConfig.organizerId} para o evento ${checkoutSnapshot.eventId}`);
 
     const metadataPayload = {
@@ -49,8 +55,17 @@ export async function POST(request: Request) {
           quantity: 1,
           currency_id: 'BRL',
           unit_price: transactionAmount
-        }
+        },
+        ...(serviceFee.serviceFeeAmount > 0 ? [{
+          id: 'wodarena-service-fee',
+          title: `Taxa de serviço WODArena (${serviceFee.serviceFeePercent}%)`,
+          description: 'Taxa de serviço da plataforma WODArena',
+          quantity: 1,
+          currency_id: 'BRL',
+          unit_price: serviceFee.serviceFeeAmount
+        }] : [])
       ],
+      ...(serviceFee.serviceFeeAmount > 0 ? { marketplace_fee: serviceFee.serviceFeeAmount } : {}),
       payer: {
         name: athleteProfile.name || safeRegistrationData.athleteName,
         email: athleteProfile.email || safeRegistrationData.athleteEmail || 'atleta@wodarena.com',
@@ -96,6 +111,10 @@ export async function POST(request: Request) {
         payment_status_detail: null,
         payment_error_message: null,
         total_paid: transactionAmount,
+        service_fee_percent: serviceFee.serviceFeePercent,
+        service_fee_amount: serviceFee.serviceFeeAmount,
+        amount_collected: serviceFee.amountCollected,
+        application_fee_charged: 0,
         updated_at: new Date().toISOString()
       })
       .eq('id', checkoutSnapshot.registrationId);

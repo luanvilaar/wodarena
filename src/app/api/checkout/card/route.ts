@@ -13,6 +13,7 @@ import {
   triggerRegistrationApprovedEmail
 } from '@/lib/serverCheckout';
 import { checkRateLimit, createSupabaseAdmin, getClientIp } from '@/lib/serverSecurity';
+import { calculateServiceFee } from '@/lib/serviceFee';
 
 const supabaseAdmin = createSupabaseAdmin();
 
@@ -31,6 +32,10 @@ const updateRegistrationPayment = async (
     statusDetail?: string;
     errorMessage?: string;
     totalPaid?: number;
+    serviceFeePercent?: number;
+    serviceFeeAmount?: number;
+    amountCollected?: number;
+    applicationFeeCharged?: number;
   }
 ) => {
   if (!registrationId) return;
@@ -43,6 +48,10 @@ const updateRegistrationPayment = async (
     payment_error_message: string | null;
     updated_at: string;
     total_paid?: number;
+    service_fee_percent?: number;
+    service_fee_amount?: number;
+    amount_collected?: number;
+    application_fee_charged?: number;
   } = {
     payment_status: payload.paymentStatus,
     payment_method: 'credit_card',
@@ -55,6 +64,10 @@ const updateRegistrationPayment = async (
   if (payload.totalPaid !== undefined) {
     updateFields.total_paid = payload.totalPaid;
   }
+  if (payload.serviceFeePercent !== undefined) updateFields.service_fee_percent = payload.serviceFeePercent;
+  if (payload.serviceFeeAmount !== undefined) updateFields.service_fee_amount = payload.serviceFeeAmount;
+  if (payload.amountCollected !== undefined) updateFields.amount_collected = payload.amountCollected;
+  if (payload.applicationFeeCharged !== undefined) updateFields.application_fee_charged = payload.applicationFeeCharged;
 
   const { error } = await supabaseAdmin
     .from('registrations')
@@ -98,6 +111,11 @@ export async function POST(request: Request) {
     await assertEventRegistrationAvailable(supabaseAdmin, checkoutSnapshot.eventId);
     await assertManagerSalesAccessForEvent(supabaseAdmin, checkoutSnapshot.eventId);
     const checkoutConfig = await resolveMercadoPagoCheckoutConfig(checkoutSnapshot.eventId);
+    const serviceFee = calculateServiceFee(
+      transactionAmount,
+      checkoutConfig.serviceFeePercent,
+      checkoutConfig.serviceFeeEnabled
+    );
     console.log(`[MercadoPago Card API] Usando credenciais ${checkoutConfig.source} do organizador ${checkoutConfig.organizerId} para o evento ${checkoutSnapshot.eventId}`);
 
     const fullName = String(athleteProfile.name || safeRegistrationData.athleteName || 'Atleta WODArena');
@@ -111,7 +129,8 @@ export async function POST(request: Request) {
     const paymentPayload = {
       token: token,
       installments: Number(installments || 1),
-      transaction_amount: transactionAmount,
+      transaction_amount: serviceFee.amountCollected,
+      ...(serviceFee.serviceFeeAmount > 0 ? { application_fee: serviceFee.serviceFeeAmount } : {}),
       payment_method_id: payment_method_id,
       description: `Inscrição: ${safeRegistrationData.ticketType} - WODArena`,
       statement_descriptor: 'WODARENA',
@@ -151,7 +170,10 @@ export async function POST(request: Request) {
         paymentStatus: 'payment_failed',
         statusDetail,
         errorMessage: 'Erro ao processar cobrança do cartão.',
-        totalPaid: transactionAmount
+        totalPaid: transactionAmount,
+        serviceFeePercent: serviceFee.serviceFeePercent,
+        serviceFeeAmount: serviceFee.serviceFeeAmount,
+        amountCollected: serviceFee.amountCollected
       });
       return NextResponse.json({
         error: 'Erro ao processar cobrança do cartão.',
@@ -166,7 +188,11 @@ export async function POST(request: Request) {
       paymentId: paymentData.id,
       statusDetail: paymentData.status_detail,
       errorMessage: paymentStatus === 'payment_failed' ? 'Pagamento não processado pelo cartão.' : undefined,
-      totalPaid: transactionAmount
+      totalPaid: transactionAmount,
+      serviceFeePercent: serviceFee.serviceFeePercent,
+      serviceFeeAmount: serviceFee.serviceFeeAmount,
+      amountCollected: serviceFee.amountCollected,
+      applicationFeeCharged: Number(paymentData.application_fee || 0)
     });
 
     if (paymentStatus === 'payment_approved') {

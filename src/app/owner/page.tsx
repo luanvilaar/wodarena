@@ -56,6 +56,9 @@ export default function OwnerPage() {
   const [featuredHomeDraftId, setFeaturedHomeDraftId] = useState<string | null>(null);
   const [featuredHomeNotice, setFeaturedHomeNotice] = useState({ text: '', isError: false });
   const [savingFeaturedHomeEvent, setSavingFeaturedHomeEvent] = useState(false);
+  const [serviceFeeConfig, setServiceFeeConfig] = useState({ enabled: true, percent: 10 });
+  const [savingServiceFee, setSavingServiceFee] = useState(false);
+  const [serviceFeeNotice, setServiceFeeNotice] = useState('');
 
   // 1. Validar se o usuário atual é o proprietário (role: 'owner')
   const isOwner = currentUser?.role === 'owner';
@@ -63,15 +66,11 @@ export default function OwnerPage() {
   // 2. Estatísticas Consolidadas (Taxa Dinâmica por Evento - Apenas Inscrições Pagas)
   const stats = useMemo(() => {
     const approvedRegistrations = registrations.filter(r => r.paymentStatus === 'payment_approved');
-    const totalVolume = approvedRegistrations.reduce((sum, r) => sum + r.totalPaid, 0);
+    const totalVolume = approvedRegistrations.reduce((sum, r) => sum + (r.amountCollected ?? r.totalPaid), 0);
 
-    // Calcula a comissão total acumulada por fora para inscrições pagas
     const platformRevenue = approvedRegistrations.reduce((sum, r) => {
-      const event = events.find(e => e.id === r.eventId);
-      const fee = event && event.marketplace_fee !== undefined && event.marketplace_fee !== null
-        ? Number(event.marketplace_fee)
-        : 10;
-      return sum + fee;
+      const confirmedFee = Number(r.applicationFeeCharged || 0);
+      return sum + (confirmedFee > 0 ? confirmedFee : Number(r.serviceFeeAmount || 0));
     }, 0);
 
     const managersCount = users.filter(u => u.role === 'manager').length;
@@ -102,17 +101,12 @@ export default function OwnerPage() {
       // Faturamento Bruto (Aprovado)
       const grossRevenue = approvedRegs.reduce((sum, r) => sum + r.totalPaid, 0);
 
-      // Comissão da Plataforma calculada dinamicamente por evento para inscrições pagas
-      const platformFee = approvedRegs.reduce((sum, r) => {
-        const event = events.find(e => e.id === r.eventId);
-        const fee = event && event.marketplace_fee !== undefined && event.marketplace_fee !== null
-          ? Number(event.marketplace_fee)
-          : 10;
-        return sum + fee;
+    const platformFee = approvedRegs.reduce((sum, r) => {
+        const confirmedFee = Number(r.applicationFeeCharged || 0);
+        return sum + (confirmedFee > 0 ? confirmedFee : Number(r.serviceFeeAmount || 0));
       }, 0);
 
-      // Repasse Líquido Estimado para o Gestor (Faturamento Bruto - Comissão)
-      const netRevenue = Math.max(0, grossRevenue - platformFee);
+      const netRevenue = grossRevenue;
       const accessStatus = m.managerAccessStatus || getManagerAccessStatus(m.serviceValidUntil);
 
       return {
@@ -136,7 +130,7 @@ export default function OwnerPage() {
     unconfigured: managersList.filter(item => item.accessStatus === 'unconfigured').length
   }), [managersList]);
 
-  // 4. Detalhamento financeiro por evento para cobrança manual
+  // 4. Detalhamento financeiro por evento com taxa real da plataforma.
   const eventsFinanceList = useMemo(() => {
     return events.map(event => {
       // Filtra inscrições deste evento
@@ -146,11 +140,10 @@ export default function OwnerPage() {
 
       const grossRevenue = approvedRegs.reduce((sum, r) => sum + r.totalPaid, 0);
 
-      const fee = event.marketplace_fee !== undefined && event.marketplace_fee !== null
-        ? Number(event.marketplace_fee)
-        : 10;
-
-      const totalFeeToCollect = approvedRegs.length * fee;
+      const totalFeeToCollect = approvedRegs.reduce((sum, registration) => {
+        const confirmedFee = Number(registration.applicationFeeCharged || 0);
+        return sum + (confirmedFee > 0 ? confirmedFee : Number(registration.serviceFeeAmount || 0));
+      }, 0);
 
       // Encontra o gestor do evento
       const manager = users.find(u => u.id === event.organizerId);
@@ -161,7 +154,6 @@ export default function OwnerPage() {
         paidCount: approvedRegs.length,
         unpaidCount: unpaidRegs.length,
         grossRevenue,
-        feeUnit: fee,
         totalFeeToCollect
       };
     });
@@ -234,6 +226,46 @@ export default function OwnerPage() {
       isMounted = false;
     };
   }, [isOwner]);
+
+  useEffect(() => {
+    if (!isOwner) return;
+
+    let active = true;
+    void fetch('/api/owner/service-fee')
+      .then(async response => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Erro ao carregar taxa de serviço.');
+        if (active) setServiceFeeConfig({ enabled: data.enabled !== false, percent: Number(data.percent || 10) });
+      })
+      .catch(error => {
+        if (active) setServiceFeeNotice(error instanceof Error ? error.message : 'Erro ao carregar taxa de serviço.');
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isOwner]);
+
+  const handleServiceFeeToggle = async () => {
+    const enabled = !serviceFeeConfig.enabled;
+    setSavingServiceFee(true);
+    setServiceFeeNotice('');
+    try {
+      const response = await fetch('/api/owner/service-fee', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Erro ao atualizar taxa de serviço.');
+      setServiceFeeConfig({ enabled: data.enabled, percent: Number(data.percent || 10) });
+      setServiceFeeNotice(enabled ? 'Taxa de serviço ativada.' : 'Taxa de serviço desativada.');
+    } catch (error) {
+      setServiceFeeNotice(error instanceof Error ? error.message : 'Erro ao atualizar taxa de serviço.');
+    } finally {
+      setSavingServiceFee(false);
+    }
+  };
 
   // Ação de Login
   const handleLogin = async (e: React.FormEvent) => {
@@ -463,7 +495,7 @@ export default function OwnerPage() {
                   {/* Faturamento de Taxas do Site */}
                   <div className="bg-card border border-primary/20 rounded-xl p-5 flex items-center justify-between">
                     <div className="space-y-1">
-                      <p className="text-[10px] uppercase font-bold text-primary tracking-wider">Taxa a Cobrar (Por Fora)</p>
+                      <p className="text-[10px] uppercase font-bold text-primary tracking-wider">Receita Real de Taxas</p>
                       <h4 className="text-2xl font-bold font-number text-primary">R$ {stats.platformRevenue.toFixed(2)}</h4>
                     </div>
                     <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg text-primary">
@@ -506,11 +538,27 @@ export default function OwnerPage() {
 
                 </div>
 
+                <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-primary/20 bg-card p-5">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-white">Taxa de serviço WODArena</p>
+                    <p className="mt-1 text-xs text-muted">{serviceFeeConfig.percent}% sobre o valor final da inscrição. Contas manuais precisam reconectar via OAuth.</p>
+                    {serviceFeeNotice && <p className="mt-2 text-xs text-primary">{serviceFeeNotice}</p>}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleServiceFeeToggle}
+                    disabled={savingServiceFee}
+                    className={`rounded-md border px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-60 ${serviceFeeConfig.enabled ? 'border-primary bg-primary text-black' : 'border-card-border bg-dark-gray text-muted'}`}
+                  >
+                    {savingServiceFee ? 'Salvando...' : serviceFeeConfig.enabled ? 'Taxa ativa' : 'Taxa inativa'}
+                  </button>
+                </div>
+
                 {/* Detalhamento por Evento */}
                 <div className="bg-card border border-card-border rounded-xl p-6 space-y-4">
                   <div className="border-b border-card-border pb-3">
                     <h4 className="text-sm font-bold text-white uppercase tracking-wider">Detalhamento Financeiro por Evento</h4>
-                    <p className="text-[10px] text-muted uppercase tracking-wider font-semibold mt-1">Valores informativos para cobrança manual de comissões por fora</p>
+                    <p className="text-[10px] text-muted uppercase tracking-wider font-semibold mt-1">Valores confirmados nas inscrições aprovadas</p>
                   </div>
 
                   <div className="overflow-x-auto">
@@ -523,12 +571,11 @@ export default function OwnerPage() {
                           <th className="py-3 px-3 text-center">Inscritos Pagos</th>
                           <th className="py-3 px-3 text-center">Não Pagos</th>
                           <th className="py-3 px-3 text-right">Faturamento Evento</th>
-                          <th className="py-3 px-3 text-right">Taxa Unitária</th>
-                          <th className="py-3 px-3 text-right text-primary">Comissão a Cobrar</th>
+                          <th className="py-3 px-3 text-right text-primary">Taxa WODArena</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {eventsFinanceList.map(({ event, managerName, paidCount, unpaidCount, grossRevenue, feeUnit, totalFeeToCollect }) => (
+                        {eventsFinanceList.map(({ event, managerName, paidCount, unpaidCount, grossRevenue, totalFeeToCollect }) => (
                           <tr key={event.id} className="border-b border-card-border/50 text-xs hover:bg-dark-gray/10">
                             <td className="py-3 px-3 flex items-center gap-3">
                               <div className="w-8 h-8 rounded bg-dark-gray border border-card-border p-0.5 overflow-hidden flex items-center justify-center shrink-0">
@@ -555,7 +602,6 @@ export default function OwnerPage() {
                             <td className="py-3 px-3 text-center font-bold text-white font-number">{paidCount}</td>
                             <td className="py-3 px-3 text-center font-semibold text-red-400 font-number">{unpaidCount}</td>
                             <td className="py-3 px-3 text-right font-bold text-white font-number">R$ {grossRevenue.toFixed(2)}</td>
-                            <td className="py-3 px-3 text-right font-semibold text-muted font-number">R$ {feeUnit.toFixed(2)}</td>
                             <td className="py-3 px-3 text-right font-bold text-primary font-number">R$ {totalFeeToCollect.toFixed(2)}</td>
                           </tr>
                         ))}

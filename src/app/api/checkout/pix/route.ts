@@ -12,6 +12,7 @@ import {
   RegistrationAccessError
 } from '@/lib/serverCheckout';
 import { checkRateLimit, createSupabaseAdmin, getClientIp } from '@/lib/serverSecurity';
+import { calculateServiceFee } from '@/lib/serviceFee';
 
 const supabaseAdmin = createSupabaseAdmin();
 
@@ -42,6 +43,11 @@ export async function POST(request: Request) {
     await assertEventRegistrationAvailable(supabaseAdmin, checkoutSnapshot.eventId);
     await assertManagerSalesAccessForEvent(supabaseAdmin, checkoutSnapshot.eventId);
     const checkoutConfig = await resolveMercadoPagoCheckoutConfig(checkoutSnapshot.eventId);
+    const serviceFee = calculateServiceFee(
+      transactionAmount,
+      checkoutConfig.serviceFeePercent,
+      checkoutConfig.serviceFeeEnabled
+    );
     console.log(`[MercadoPago Pix API] Usando credenciais ${checkoutConfig.source} do organizador ${checkoutConfig.organizerId} para o evento ${checkoutSnapshot.eventId}`);
 
     // Limpa o CPF para ter apenas números
@@ -60,7 +66,8 @@ export async function POST(request: Request) {
     const isLocalhost = origin.includes('localhost') || origin.includes('127.0.0.1');
 
     const paymentPayload = {
-      transaction_amount: transactionAmount,
+      transaction_amount: serviceFee.amountCollected,
+      ...(serviceFee.serviceFeeAmount > 0 ? { application_fee: serviceFee.serviceFeeAmount } : {}),
       description: `Inscrição: ${safeRegistrationData.ticketType} - WODArena`,
       payment_method_id: 'pix',
       payer: {
@@ -114,6 +121,10 @@ export async function POST(request: Request) {
         payment_status_detail: paymentData.status_detail || null,
         payment_error_message: null,
         total_paid: transactionAmount,
+        service_fee_percent: serviceFee.serviceFeePercent,
+        service_fee_amount: serviceFee.serviceFeeAmount,
+        amount_collected: serviceFee.amountCollected,
+        application_fee_charged: Number(paymentData.application_fee || 0),
         updated_at: new Date().toISOString()
       })
       .eq('id', checkoutSnapshot.registrationId);

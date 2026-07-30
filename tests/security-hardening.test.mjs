@@ -58,7 +58,7 @@ test('auth routes hash passwords and issue HttpOnly signed sessions', () => {
 test('Mercado Pago admin credentials are scoped to the authenticated session', () => {
   assert.match(adminMercadoPagoRoute, /requireSession\(request, \['manager', 'owner'\]\)/);
   assert.match(adminMercadoPagoRoute, /export async function GET\(request: Request\)/);
-  assert.match(adminMercadoPagoRoute, /const userId = actor\.id/);
+  assert.match(adminMercadoPagoRoute, /const userId = requestedUserId \|\| actor\.id/);
   assert.match(adminMercadoPagoRoute, /canActOnUser\(actor, userId\)/);
   assert.doesNotMatch(adminMercadoPagoRoute, /const \{ userId, publicKey, accessToken \} = body/);
   assert.match(adminPage, /fetch\('\/api\/admin\/mercadopago'\)/);
