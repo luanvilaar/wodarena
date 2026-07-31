@@ -6,6 +6,7 @@ import Link from 'next/link';
 import Script from 'next/script';
 import { useApp } from '@/context/AppContext';
 import { getManagerAccessStatus, getManagerAccessStatusLabel } from '@/lib/managerAccess';
+import { EventMediaUploadError, uploadEventMedia } from '@/lib/eventMediaUpload';
 
 import { BrandLogo } from '@/components/BrandLogo';
 import { RegistrationVoucher } from '@/components/RegistrationVoucher';
@@ -14,7 +15,7 @@ import {
   LayoutDashboard, Calendar, Trophy,
   ClipboardCheck, LogIn, LogOut, DollarSign, Users, Ticket, Settings,
   Upload, X, Trash2, Plus, ShieldAlert, Pencil, Copy, GripVertical, ArrowDown, ArrowUp, Library, ReceiptText, Mail, CreditCard,
-  Lock, QrCode, FileSpreadsheet, ChevronDown
+  Lock, QrCode, FileSpreadsheet, ChevronDown, Loader2
 } from 'lucide-react';
 
 const InstagramIcon = ({ className = 'h-3.5 w-3.5' }: { className?: string }) => (
@@ -500,6 +501,8 @@ export default function AdminPage() {
   const [eventStatus, setEventStatus] = useState<EventStatus>('upcoming');
   const [eventLogo, setEventLogo] = useState('');
   const [eventBanner, setEventBanner] = useState('');
+  const [isUploadingEventLogo, setIsUploadingEventLogo] = useState(false);
+  const [isUploadingEventBanner, setIsUploadingEventBanner] = useState(false);
   const [eventTime, setEventTime] = useState('');
   const [eventCity, setEventCity] = useState('');
   const [eventState, setEventState] = useState('');
@@ -518,6 +521,8 @@ export default function AdminPage() {
   const [editEventStatus, setEditEventStatus] = useState<EventStatus>('upcoming');
   const [editEventLogo, setEditEventLogo] = useState('');
   const [editEventBanner, setEditEventBanner] = useState('');
+  const [isUploadingEditLogo, setIsUploadingEditLogo] = useState(false);
+  const [isUploadingEditBanner, setIsUploadingEditBanner] = useState(false);
   const [editEventTime, setEditEventTime] = useState('');
   const [editEventCity, setEditEventCity] = useState('');
   const [editEventState, setEditEventState] = useState('');
@@ -1039,32 +1044,27 @@ export default function AdminPage() {
     }
   };
 
-  // Tratar upload e conversão de imagem para Base64
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'banner') => {
+  // Comprime a imagem no navegador e envia para o Storage, guardando apenas a URL pública.
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'banner') => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
 
-    if (file.type !== 'image/png' && file.type !== 'image/jpeg') {
-      setAdminNotice({ text: 'Apenas arquivos PNG ou JPEG são permitidos.', tone: 'error' });
-      return;
-    }
+    const setUploading = type === 'logo' ? setIsUploadingEventLogo : setIsUploadingEventBanner;
+    const setUrl = type === 'logo' ? setEventLogo : setEventBanner;
 
-    if (file.size > 1.5 * 1024 * 1024) {
-      setAdminNotice({ text: 'A imagem é muito grande. Escolha uma imagem de até 1.5 MB.', tone: 'error' });
-      return;
+    setUploading(true);
+    try {
+      const url = await uploadEventMedia(file, type);
+      setUrl(url);
+    } catch (err) {
+      setAdminNotice({
+        text: err instanceof EventMediaUploadError ? err.message : 'Não foi possível enviar a imagem. Tente novamente.',
+        tone: 'error'
+      });
+    } finally {
+      setUploading(false);
     }
-
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      if (typeof reader.result === 'string') {
-        if (type === 'logo') {
-          setEventLogo(reader.result);
-        } else {
-          setEventBanner(reader.result);
-        }
-      }
-    };
-    reader.readAsDataURL(file);
   };
 
   // Resetar formulário de bilheteria
@@ -3492,7 +3492,12 @@ export default function AdminPage() {
             <div className="rounded-lg focus-within:outline-info focus-within:outline focus-within:outline-2">
               <p className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Logo do Evento</p>
               <p className="mb-2 text-[11px] text-muted-soft">Proporção ideal: 1:1 — resolução recomendada 512 × 512 px.</p>
-              {editEventLogo ? (
+              {isUploadingEditLogo ? (
+                <div className="flex h-[140px] w-full flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-card-border bg-dark-gray">
+                  <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                  <p className="text-[11px] text-muted">Enviando logo...</p>
+                </div>
+              ) : editEventLogo ? (
                 <div className="relative flex h-[140px] w-full items-center justify-center overflow-hidden rounded-lg border border-card-border bg-dark-gray">
                   <Image
                     src={editEventLogo}
@@ -3516,20 +3521,27 @@ export default function AdminPage() {
                   <div className="flex flex-col items-center justify-center pt-4 pb-5">
                     <Upload className="mb-1.5 h-6 w-6 text-muted group-hover:text-primary transition-colors" />
                     <p className="text-xs font-semibold text-white group-hover:text-primary">Carregar Logo</p>
-                    <p className="mt-0.5 text-[10px] text-muted">PNG ou JPEG</p>
+                    <p className="mt-0.5 text-[10px] text-muted">PNG, JPEG ou WebP</p>
                   </div>
                   <input
                     type="file"
-                    accept="image/png, image/jpeg"
+                    accept="image/png, image/jpeg, image/webp"
                     className="sr-only"
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const file = e.target.files?.[0];
+                      e.target.value = '';
                       if (!file) return;
-                      const reader = new FileReader();
-                      reader.onloadend = () => {
-                        if (typeof reader.result === 'string') setEditEventLogo(reader.result);
-                      };
-                      reader.readAsDataURL(file);
+                      setIsUploadingEditLogo(true);
+                      try {
+                        setEditEventLogo(await uploadEventMedia(file, 'logo'));
+                      } catch (err) {
+                        setAdminNotice({
+                          text: err instanceof EventMediaUploadError ? err.message : 'Não foi possível enviar a imagem. Tente novamente.',
+                          tone: 'error'
+                        });
+                      } finally {
+                        setIsUploadingEditLogo(false);
+                      }
                     }}
                   />
                 </label>
@@ -3538,7 +3550,12 @@ export default function AdminPage() {
             <div className="rounded-lg focus-within:outline-info focus-within:outline focus-within:outline-2">
               <p className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Banner do Evento</p>
               <p className="mb-2 text-[11px] text-muted-soft">Proporção ideal: 5:2 — resolução recomendada 1600 × 640 px.</p>
-              {editEventBanner ? (
+              {isUploadingEditBanner ? (
+                <div className="flex h-[140px] w-full flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-card-border bg-dark-gray">
+                  <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                  <p className="text-[11px] text-muted">Enviando banner...</p>
+                </div>
+              ) : editEventBanner ? (
                 <div className="relative h-[140px] w-full overflow-hidden rounded-lg border border-card-border bg-dark-gray">
                   <Image
                     src={editEventBanner}
@@ -3562,20 +3579,27 @@ export default function AdminPage() {
                   <div className="flex flex-col items-center justify-center pt-4 pb-5">
                     <Upload className="mb-1.5 h-6 w-6 text-muted group-hover:text-primary transition-colors" />
                     <p className="text-xs font-semibold text-white group-hover:text-primary">Carregar Banner</p>
-                    <p className="mt-0.5 text-[10px] text-muted">PNG ou JPEG</p>
+                    <p className="mt-0.5 text-[10px] text-muted">PNG, JPEG ou WebP</p>
                   </div>
                   <input
                     type="file"
-                    accept="image/png, image/jpeg"
+                    accept="image/png, image/jpeg, image/webp"
                     className="sr-only"
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const file = e.target.files?.[0];
+                      e.target.value = '';
                       if (!file) return;
-                      const reader = new FileReader();
-                      reader.onloadend = () => {
-                        if (typeof reader.result === 'string') setEditEventBanner(reader.result);
-                      };
-                      reader.readAsDataURL(file);
+                      setIsUploadingEditBanner(true);
+                      try {
+                        setEditEventBanner(await uploadEventMedia(file, 'banner'));
+                      } catch (err) {
+                        setAdminNotice({
+                          text: err instanceof EventMediaUploadError ? err.message : 'Não foi possível enviar a imagem. Tente novamente.',
+                          tone: 'error'
+                        });
+                      } finally {
+                        setIsUploadingEditBanner(false);
+                      }
                     }}
                   />
                 </label>
@@ -8964,7 +8988,12 @@ export default function AdminPage() {
                     <div className="rounded-lg focus-within:outline-info focus-within:outline focus-within:outline-2">
                       <p className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans">Logo do Evento</p>
                       <p className="mb-2 text-[11px] text-muted-soft font-sans">Proporção ideal: 1:1 — resolução recomendada 512 × 512 px.</p>
-                      {eventLogo ? (
+                      {isUploadingEventLogo ? (
+                        <div className="flex h-[150px] w-full flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-card-border bg-dark-gray">
+                          <Loader2 className="h-6 w-6 animate-spin text-primary" aria-hidden="true" />
+                          <p className="text-xs text-muted font-sans">Enviando logo...</p>
+                        </div>
+                      ) : eventLogo ? (
                         <div className="relative flex h-[150px] w-full items-center justify-center overflow-hidden rounded-lg border border-card-border bg-dark-gray">
                           <Image
                             src={eventLogo}
@@ -8988,13 +9017,13 @@ export default function AdminPage() {
                           <div className="flex flex-col items-center justify-center pt-5 pb-6">
                             <Upload className="mb-2 h-8 w-8 text-muted transition-colors group-hover:text-primary font-sans" aria-hidden="true" />
                             <p className="text-sm font-semibold text-white group-hover:text-primary font-sans">Carregar Logo</p>
-                            <p className="mt-1 text-xs text-muted font-sans">PNG ou JPEG (máx. 1.5 MB)</p>
+                            <p className="mt-1 text-xs text-muted font-sans">PNG, JPEG ou WebP (máx. 8 MB)</p>
                           </div>
                           <input
                             id="event-logo-upload"
                             name="event-logo-upload"
                             type="file"
-                            accept="image/png, image/jpeg"
+                            accept="image/png, image/jpeg, image/webp"
                             className="sr-only"
                             onChange={(e) => handleFileChange(e, 'logo')}
                           />
@@ -9004,7 +9033,12 @@ export default function AdminPage() {
                     <div className="rounded-lg focus-within:outline-info focus-within:outline focus-within:outline-2">
                       <p className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans">Banner do Evento</p>
                       <p className="mb-2 text-[11px] text-muted-soft font-sans">Proporção ideal: 5:2 — resolução recomendada 1600 × 640 px.</p>
-                      {eventBanner ? (
+                      {isUploadingEventBanner ? (
+                        <div className="flex h-[150px] w-full flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-card-border bg-dark-gray">
+                          <Loader2 className="h-6 w-6 animate-spin text-primary" aria-hidden="true" />
+                          <p className="text-xs text-muted font-sans">Enviando banner...</p>
+                        </div>
+                      ) : eventBanner ? (
                         <div className="relative h-[150px] w-full overflow-hidden rounded-lg border border-card-border bg-dark-gray">
                           <Image
                             src={eventBanner}
@@ -9028,13 +9062,13 @@ export default function AdminPage() {
                           <div className="flex flex-col items-center justify-center pt-5 pb-6">
                             <Upload className="mb-2 h-8 w-8 text-muted transition-colors group-hover:text-primary font-sans" aria-hidden="true" />
                             <p className="text-sm font-semibold text-white group-hover:text-primary font-sans">Carregar Banner</p>
-                            <p className="mt-1 text-xs text-muted font-sans">PNG ou JPEG (máx. 1.5 MB)</p>
+                            <p className="mt-1 text-xs text-muted font-sans">PNG, JPEG ou WebP (máx. 8 MB)</p>
                           </div>
                           <input
                             id="event-banner-upload"
                             name="event-banner-upload"
                             type="file"
-                            accept="image/png, image/jpeg"
+                            accept="image/png, image/jpeg, image/webp"
                             className="sr-only"
                             onChange={(e) => handleFileChange(e, 'banner')}
                           />
