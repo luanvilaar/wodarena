@@ -272,6 +272,14 @@ export const checkRateLimit = ({ key, limit, windowMs }: RateLimitOptions) => {
   return null;
 };
 
+// Erros de domínio lançados deliberadamente (`throw new Error('mensagem segura')`)
+// são seguros para o cliente. Erros crus do Postgres/Supabase (PostgrestError)
+// sempre carregam um campo `code` e não devem vazar `.message` (schema, SQL,
+// constraint) para a resposta — vira log e uma mensagem genérica.
+export const safeErrorMessage = (err: unknown, fallback: string) => (
+  err instanceof Error && !('code' in err) ? err.message : fallback
+);
+
 export const getClientIp = (request: Request) => (
   request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
   || request.headers.get('x-real-ip')

@@ -78,9 +78,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ received: true });
     }
 
+    // Quando o segredo está configurado, assinatura inválida bloqueia a
+    // requisição imediatamente — não pode ser só um log, senão o gate de
+    // autenticidade vira decorativo (spec §22).
+    const webhookSecretConfigured = Boolean(process.env.MERCADOPAGO_WEBHOOK_SECRET);
     const isSignatureValid = isValidMercadoPagoSignature(request, paymentId, bodyPaymentId);
-    if (!isSignatureValid) {
-      console.warn(`[MercadoPago Webhook] Assinatura HMAC invalida para o pagamento ${paymentId}. Continuando validacao por canal seguro.`);
+    if (webhookSecretConfigured && !isSignatureValid) {
+      console.warn(`[MercadoPago Webhook] Assinatura HMAC invalida para o pagamento ${paymentId}. Requisicao rejeitada.`);
+      return NextResponse.json({ error: 'Assinatura Mercado Pago invalida.' }, { status: 401 });
     }
 
     const eventId = searchParams.get('event_id');
@@ -97,9 +102,6 @@ export async function POST(request: Request) {
 
     if (!mpResponse.ok) {
       console.error(`[MercadoPago Webhook] Erro ao carregar transacao ${paymentId} do Mercado Pago.`);
-      if (!isSignatureValid) {
-        return NextResponse.json({ error: 'Assinatura Mercado Pago invalida e transacao nao pode ser confirmada.' }, { status: 401 });
-      }
       return NextResponse.json({ error: 'Erro ao buscar pagamento.' }, { status: 500 });
     }
 

@@ -28,6 +28,26 @@ export const ensureEventMediaBucket = async (supabaseAdmin: SupabaseClient) => {
   }
 };
 
+// Confere magic bytes reais do arquivo contra o Content-Type declarado pelo
+// cliente — o header de um multipart/form-data é controlável em uma requisição
+// crua, então validar só o `file.type` não impede um payload arbitrário
+// disfarçado de imagem.
+export const matchesDeclaredImageType = (bytes: Uint8Array, contentType: string): boolean => {
+  if (contentType === 'image/png') {
+    const png = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+    return png.every((byte, index) => bytes[index] === byte);
+  }
+  if (contentType === 'image/jpeg') {
+    return bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  }
+  if (contentType === 'image/webp') {
+    const isRiff = bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46;
+    const isWebp = bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50;
+    return isRiff && isWebp;
+  }
+  return false;
+};
+
 export type UploadEventMediaInput = {
   bytes: Uint8Array;
   contentType: string;

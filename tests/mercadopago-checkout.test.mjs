@@ -179,9 +179,13 @@ test('Mercado Pago callbacks sanitize production URLs and fall back to secure AP
   assert.match(preferenceRoute, /const sanitizedOrigin = isLocalhost \? origin : origin\.replace\(/);
   assert.match(preferenceRoute, /success: `\$\{sanitizedOrigin\}\/event\/\$\{checkoutSnapshot\.eventId\}\?payment=success`/);
   assert.match(preferenceRoute, /notification_url: `\$\{sanitizedOrigin\}\/api\/webhooks\/mercadopago\?event_id=\$\{checkoutSnapshot\.eventId\}`/);
+  // Assinatura invalida com segredo configurado bloqueia o webhook de imediato
+  // (401) em vez de apenas logar e seguir processando por canal alternativo —
+  // gate de autenticidade deixa de ser decorativo (spec SECURITY-PENTEST.md §22).
   assert.match(webhookRoute, /Assinatura HMAC invalida/);
-  assert.match(webhookRoute, /Continuando validacao por canal seguro/);
-  assert.match(webhookRoute, /Assinatura Mercado Pago invalida e transacao nao pode ser confirmada\./);
+  assert.match(webhookRoute, /const webhookSecretConfigured = Boolean\(process\.env\.MERCADOPAGO_WEBHOOK_SECRET\)/);
+  assert.match(webhookRoute, /if \(webhookSecretConfigured && !isSignatureValid\) \{[\s\S]*status: 401/);
+  assert.match(webhookRoute, /Assinatura Mercado Pago invalida\./);
 });
 
 test('manual Mercado Pago credentials are retired in favor of OAuth', () => {

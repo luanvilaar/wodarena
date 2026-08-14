@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { ManagerAccessError, assertManagerOperationalAccess, managerAccessErrorResponse } from '@/lib/serverManagerAccess';
-import { EVENT_MEDIA_ACCEPTED_TYPES, EVENT_MEDIA_MAX_BYTES, uploadEventMediaObject } from '@/lib/mediaStorage';
+import { EVENT_MEDIA_ACCEPTED_TYPES, EVENT_MEDIA_MAX_BYTES, matchesDeclaredImageType, uploadEventMediaObject } from '@/lib/mediaStorage';
 import { checkRateLimit, createSupabaseAdmin, requireSession } from '@/lib/serverSecurity';
 
 export async function POST(request: Request) {
@@ -37,6 +37,10 @@ export async function POST(request: Request) {
     }
 
     const bytes = new Uint8Array(await file.arrayBuffer());
+    if (!matchesDeclaredImageType(bytes, file.type)) {
+      return NextResponse.json({ error: 'O conteúdo do arquivo não corresponde ao formato declarado.' }, { status: 400 });
+    }
+
     const { publicUrl } = await uploadEventMediaObject(supabaseAdmin, {
       bytes,
       contentType: file.type,

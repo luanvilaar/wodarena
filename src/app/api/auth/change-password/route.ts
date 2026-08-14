@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import {
   canActOnUser,
+  checkRateLimit,
   createSupabaseAdmin,
+  getClientIp,
   hashPassword,
   requireSession,
   verifyPassword
@@ -12,6 +14,13 @@ export async function POST(request: Request) {
     const auth = requireSession(request);
     if (auth.response) return auth.response;
     const actor = auth.user;
+
+    const rateLimited = checkRateLimit({
+      key: `change-password:${getClientIp(request)}:${actor.id}`,
+      limit: 8,
+      windowMs: 15 * 60 * 1000
+    });
+    if (rateLimited) return rateLimited;
 
     const body = await request.json();
     const { userId, currentPassword, newPassword } = body;

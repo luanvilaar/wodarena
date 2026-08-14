@@ -7,7 +7,7 @@ import {
   parseScheduleItems
 } from '@/lib/contestations';
 import { ManagerAccessError, assertManagerOperationalAccess, managerAccessErrorResponse } from '@/lib/serverManagerAccess';
-import { createSupabaseAdmin, requireSession } from '@/lib/serverSecurity';
+import { createSupabaseAdmin, requireSession, safeErrorMessage } from '@/lib/serverSecurity';
 
 const createContestationId = () => `contest-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -76,7 +76,7 @@ export async function GET(request: Request) {
       return managerAccessErrorResponse(err);
     }
     console.error('[Contestations API] Erro ao listar contestacoes:', err);
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Erro ao listar contestacoes.' }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(err, 'Erro ao listar contestacoes.') }, { status: 500 });
   }
 }
 
@@ -209,6 +209,6 @@ export async function POST(request: Request) {
       return managerAccessErrorResponse(err);
     }
     console.error('[Contestations API] Erro ao criar contestacao:', err);
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Erro ao criar contestacao.' }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(err, 'Erro ao criar contestacao.') }, { status: 500 });
   }
 }

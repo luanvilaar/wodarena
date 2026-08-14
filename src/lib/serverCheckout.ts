@@ -309,6 +309,36 @@ export const calculateSecureRegistrationSnapshot = async (
     throw new Error('Esta categoria nao esta aceitando inscricoes.');
   }
 
+  // Capacidade: cada inscrição não cancelada ocupa 1 vaga, na categoria e no
+  // evento (mesmo critério usado no painel do gestor para exibir "X/Y vagas").
+  // Sem isso, nada impedia overselling sob concorrência.
+  const [{ count: divisionRegistrationCount, error: divisionCountError }, { count: eventRegistrationCount, error: eventCountError }] = await Promise.all([
+    supabaseAdmin
+      .from('registrations')
+      .select('id', { count: 'exact', head: true })
+      .eq('division_id', divisionId)
+      .not('payment_status', 'eq', 'payment_cancelled'),
+    supabaseAdmin
+      .from('registrations')
+      .select('id', { count: 'exact', head: true })
+      .eq('event_id', eventId)
+      .not('payment_status', 'eq', 'payment_cancelled')
+  ]);
+
+  if (divisionCountError || eventCountError) {
+    throw new Error('Erro ao verificar vagas disponiveis.');
+  }
+
+  const divisionSlotsLimit = asNumber(division.slots_limit, 0);
+  if (divisionSlotsLimit > 0 && (divisionRegistrationCount || 0) >= divisionSlotsLimit) {
+    throw new RegistrationAccessError('Esta categoria atingiu o limite de vagas.', 409);
+  }
+
+  const eventTicketSlots = asNumber(event.ticket_slots, 0);
+  if (eventTicketSlots > 0 && (eventRegistrationCount || 0) >= eventTicketSlots) {
+    throw new RegistrationAccessError('Este evento atingiu o limite de vagas.', 409);
+  }
+
   const quantity = Math.max(1, Math.min(4, Math.trunc(asNumber(registrationData.quantity, 1))));
   const ticketPrice = asNumber(division.price, asNumber(event.ticket_price, 0));
   const couponCode = normalizeCoupon(registrationData.couponCode);

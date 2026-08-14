@@ -2,13 +2,20 @@ import { NextResponse } from 'next/server';
 import { MercadoPagoConfigError, resolveMercadoPagoCheckoutConfig } from '@/lib/mercadopagoServer';
 import { applyCouponUsageForApprovedRegistration, calculateSecureRegistrationSnapshot, RegistrationAccessError } from '@/lib/serverCheckout';
 import { ManagerAccessError, managerAccessErrorResponse } from '@/lib/serverManagerAccess';
-import { createRegistrationAccessToken, createSupabaseAdmin, hashPassword, verifyPassword } from '@/lib/serverSecurity';
+import { checkRateLimit, createRegistrationAccessToken, createSupabaseAdmin, getClientIp, hashPassword, verifyPassword } from '@/lib/serverSecurity';
 import { calculateServiceFee } from '@/lib/serviceFee';
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
 
 export async function POST(request: Request) {
   try {
+    const rateLimited = checkRateLimit({
+      key: `registrations-start:${getClientIp(request)}`,
+      limit: 10,
+      windowMs: 15 * 60 * 1000
+    });
+    if (rateLimited) return rateLimited;
+
     const supabaseAdmin = createSupabaseAdmin();
 
     const body = await request.json();
@@ -17,8 +24,7 @@ export async function POST(request: Request) {
       athleteProfile,
       password,
       passwordConfirmation,
-      paymentMethod,
-      initialPaymentStatus
+      paymentMethod
     } = body;
 
     if (!registrationData || !athleteProfile) {
@@ -116,9 +122,7 @@ export async function POST(request: Request) {
         return NextResponse.json({
           error: isRoleConstraintError
             ? 'Banco de dados ainda não aceita o papel de atleta. Aplique a migration da Área do Atleta no Supabase antes de testar o pagamento.'
-            : 'Erro ao criar painel do atleta.',
-          statusDetail: userError.message,
-          code: userError.code
+            : 'Erro ao criar painel do atleta.'
         }, { status: 500 });
       }
 
@@ -225,7 +229,9 @@ export async function POST(request: Request) {
       }
     }
 
-    const paymentStatus = initialPaymentStatus || 'payment_pending';
+    // payment_status nunca é aceito do cliente: só nasce aprovado quando o
+    // valor calculado no servidor (cupom 100% incluso) é zero.
+    const paymentStatus = secureSnapshot.transactionAmount === 0 ? 'payment_approved' : 'payment_pending';
     const now = new Date().toISOString();
     const registrationPayload = {
       id: regId,
@@ -261,6 +267,13 @@ export async function POST(request: Request) {
 
     if (regError || !dbRegistration) {
       console.error('[Registration Start] Erro ao criar inscrição:', regError);
+      // Violação do índice único (event_id, athlete_email) — duas requisições
+      // concorrentes tentaram inscrever o mesmo e-mail no mesmo evento.
+      if (regError?.code === '23505') {
+        return NextResponse.json({
+          error: 'Este e-mail já possui uma inscrição ativa para este evento.'
+        }, { status: 409 });
+      }
       return NextResponse.json({ error: 'Erro ao registrar inscrição.' }, { status: 500 });
     }
 

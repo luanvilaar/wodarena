@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { ManagerAccessError, assertManagerOperationalAccess, managerAccessErrorResponse } from '@/lib/serverManagerAccess';
-import { createSupabaseAdmin, requireSession, SessionUser } from '@/lib/serverSecurity';
+import { checkRateLimit, createSupabaseAdmin, requireSession, safeErrorMessage, SessionUser } from '@/lib/serverSecurity';
 
 type DbClient = ReturnType<typeof createSupabaseAdmin>;
 
@@ -44,8 +44,43 @@ const ensureWorkoutOwner = async (supabaseAdmin: DbClient, actor: SessionUser, w
   return workout;
 };
 
+// Allowlists dos campos editáveis via updateX — nunca aplicar payload.data cru
+// num .update(), senão o cliente pode injetar colunas como event_id/organizer_id
+// (mass assignment) e mudar o dono/tenant de um recurso já validado.
+const EVENT_UPDATABLE_FIELDS = [
+  'name', 'logo_url', 'banner_url', 'status', 'location', 'date', 'description',
+  'format', 'ticket_price', 'ticket_slots', 'is_ticketing_active', 'time', 'city',
+  'state', 'rules', 'instagram', 'website', 'event_type', 'event_schedule', 'mp_public_key'
+] as const;
+
+const DIVISION_UPDATABLE_FIELDS = [
+  'name', 'category', 'type', 'slots_limit', 'price', 'is_active', 'order_index',
+  'use_age_groups', 'age_groups', 'course_layout', 'is_course_published'
+] as const;
+
+const WORKOUT_UPDATABLE_FIELDS = [
+  'name', 'description', 'type', 'time_cap', 'code', 'order_index', 'division_id', 'tie_breaker'
+] as const;
+
+const COUPON_UPDATABLE_FIELDS = [
+  'code', 'discount_type', 'discount_value', 'usage_limit', 'is_active'
+] as const;
+
+const pickAllowedFields = (input: unknown, allowedKeys: readonly string[]) => {
+  const source = input && typeof input === 'object' ? input as Record<string, unknown> : {};
+  const result: Record<string, unknown> = {};
+  for (const key of allowedKeys) {
+    if (key in source) result[key] = source[key];
+  }
+  return result;
+};
+
 const asTrimmed = (value: unknown, fallback = '') =>
   typeof value === 'string' && value.trim() ? value.trim() : fallback;
+
+// Escapa metacaracteres de LIKE/ILIKE (% _ \) antes de usar em .ilike(), senão
+// um "code" de cupom com esses caracteres vira wildcard em vez de literal.
+const escapeLikePattern = (value: string) => value.replace(/[\\%_]/g, (match) => `\\${match}`);
 
 const optionalText = (value: unknown) => {
   const trimmed = asTrimmed(value);
@@ -108,6 +143,14 @@ export async function POST(request: Request) {
     const auth = requireSession(request, ['manager', 'owner']);
     if (auth.response) return auth.response;
     const actor = auth.user;
+
+    const rateLimited = checkRateLimit({
+      key: `admin-persistence:${actor.id}`,
+      limit: 120,
+      windowMs: 60 * 1000
+    });
+    if (rateLimited) return rateLimited;
+
     const supabaseAdmin = createSupabaseAdmin();
     await assertManagerOperationalAccess(supabaseAdmin, actor);
     const { action, payload } = await request.json();
@@ -123,16 +166,28 @@ export async function POST(request: Request) {
         const { error: eventError } = await supabaseAdmin.from('events').insert(event);
         if (eventError) throw eventError;
 
-        if (divisions.length > 0) {
-          const { error } = await supabaseAdmin.from('divisions').insert(divisions);
+        // event_id de cada divisão/prova é sempre sobrescrito com o evento
+        // recém-validado — nunca confiar no que o payload trouxer, senão o
+        // gestor pode "plantar" conteúdo dentro do evento de outro organizador.
+        const scopedDivisions = (divisions as Record<string, unknown>[]).map((division) => ({
+          ...division,
+          event_id: event.id
+        }));
+        const scopedWorkouts = (workouts as Record<string, unknown>[]).map((workout) => ({
+          ...workout,
+          event_id: event.id
+        }));
+
+        if (scopedDivisions.length > 0) {
+          const { error } = await supabaseAdmin.from('divisions').insert(scopedDivisions);
           if (error) {
             await supabaseAdmin.from('events').delete().eq('id', event.id);
             throw error;
           }
         }
 
-        if (workouts.length > 0) {
-          const { error } = await supabaseAdmin.from('workouts').insert(workouts);
+        if (scopedWorkouts.length > 0) {
+          const { error } = await supabaseAdmin.from('workouts').insert(scopedWorkouts);
           if (error) {
             await supabaseAdmin.from('events').delete().eq('id', event.id);
             throw error;
@@ -155,7 +210,8 @@ export async function POST(request: Request) {
           return NextResponse.json({ error: 'Use a acao setFeaturedHomeEvent para alterar o destaque da home.' }, { status: 400 });
         }
 
-        const { error } = await supabaseAdmin.from('events').update(payload.data).eq('id', payload.eventId);
+        const allowedData = pickAllowedFields(payload.data, EVENT_UPDATABLE_FIELDS);
+        const { error } = await supabaseAdmin.from('events').update(allowedData).eq('id', payload.eventId);
         if (error) throw error;
         return NextResponse.json({ success: true });
       }
@@ -177,7 +233,10 @@ export async function POST(request: Request) {
         if (error) throw error;
 
         if (payload.autoWorkout) {
-          const { error: workoutError } = await supabaseAdmin.from('workouts').insert(payload.autoWorkout);
+          // event_id da prova automática é sempre o da divisão já validada,
+          // nunca o que vier em payload.autoWorkout.
+          const scopedAutoWorkout = { ...payload.autoWorkout, event_id: payload.division.event_id };
+          const { error: workoutError } = await supabaseAdmin.from('workouts').insert(scopedAutoWorkout);
           if (workoutError) {
             await supabaseAdmin.from('divisions').delete().eq('id', payload.division.id);
             throw workoutError;
@@ -189,9 +248,10 @@ export async function POST(request: Request) {
 
       case 'updateDivision': {
         await ensureDivisionOwner(supabaseAdmin, actor, payload.divisionId, payload.eventId);
+        const allowedData = pickAllowedFields(payload.data, DIVISION_UPDATABLE_FIELDS);
         const { error } = await supabaseAdmin
           .from('divisions')
-          .update(payload.data)
+          .update(allowedData)
           .eq('id', payload.divisionId);
         if (error) throw error;
         return NextResponse.json({ success: true });
@@ -251,10 +311,24 @@ export async function POST(request: Request) {
       }
 
       case 'updateWorkout': {
-        await ensureWorkoutOwner(supabaseAdmin, actor, payload.workoutId, payload.eventId);
+        const workout = await ensureWorkoutOwner(supabaseAdmin, actor, payload.workoutId, payload.eventId);
+        const allowedData = pickAllowedFields(payload.data, WORKOUT_UPDATABLE_FIELDS);
+
+        if (typeof allowedData.division_id === 'string' && allowedData.division_id) {
+          const { data: targetDivision, error: divisionError } = await supabaseAdmin
+            .from('divisions')
+            .select('id')
+            .eq('id', allowedData.division_id)
+            .eq('event_id', workout.event_id)
+            .maybeSingle();
+          if (divisionError || !targetDivision) {
+            return NextResponse.json({ error: 'Categoria de destino nao pertence a este evento.' }, { status: 400 });
+          }
+        }
+
         const { error } = await supabaseAdmin
           .from('workouts')
-          .update(payload.data)
+          .update(allowedData)
           .eq('id', payload.workoutId);
         if (error) throw error;
         return NextResponse.json({ success: true });
@@ -280,7 +354,7 @@ export async function POST(request: Request) {
           .from('coupons')
           .select('id, usage_count')
           .eq('event_id', payload.eventId)
-          .ilike('code', payload.code)
+          .ilike('code', escapeLikePattern(asTrimmed(payload.code)))
           .maybeSingle();
         if (couponError) throw couponError;
         if (coupon) {
@@ -304,9 +378,10 @@ export async function POST(request: Request) {
         if (findError || !existingCoupon) {
           return NextResponse.json({ error: 'Cupom nao encontrado para este evento.' }, { status: 404 });
         }
+        const allowedData = pickAllowedFields(payload.data, COUPON_UPDATABLE_FIELDS);
         const { error } = await supabaseAdmin
           .from('coupons')
-          .update(payload.data)
+          .update(allowedData)
           .eq('id', payload.couponId);
         if (error) throw error;
         return NextResponse.json({ success: true });
@@ -613,13 +688,38 @@ export async function POST(request: Request) {
       }
 
       case 'upsertScores': {
-        const eventIds = Array.isArray(payload.eventIds) ? payload.eventIds : [];
+        const scores = Array.isArray(payload.scores) ? payload.scores : [];
+        const workoutIds = [...new Set(
+          scores.map((score: { workout_id?: string }) => score.workout_id).filter(Boolean)
+        )] as string[];
+
+        if (workoutIds.length === 0) {
+          return NextResponse.json({ error: 'Nenhum resultado informado.' }, { status: 400 });
+        }
+
+        // A autorização é derivada dos workout_id efetivamente gravados em
+        // payload.scores — nunca de um array de eventIds separado enviado pelo
+        // cliente, que poderia não corresponder aos dados realmente mutados.
+        const { data: scoreWorkouts, error: workoutsError } = await supabaseAdmin
+          .from('workouts')
+          .select('id, event_id')
+          .in('id', workoutIds);
+        if (workoutsError) throw workoutsError;
+
+        const foundWorkoutIds = new Set((scoreWorkouts || []).map((workout) => workout.id));
+        const missingWorkoutId = workoutIds.find((id) => !foundWorkoutIds.has(id));
+        if (missingWorkoutId) {
+          return NextResponse.json({ error: 'Prova nao encontrada para um dos resultados.' }, { status: 404 });
+        }
+
+        const eventIds = [...new Set((scoreWorkouts || []).map((workout) => workout.event_id))];
         for (const eventId of eventIds) {
           await ensureEventOwner(supabaseAdmin, actor, eventId);
         }
+
         const { error } = await supabaseAdmin
           .from('scores')
-          .upsert(payload.scores, { onConflict: 'athlete_id,workout_id' });
+          .upsert(scores, { onConflict: 'athlete_id,workout_id' });
         if (error) throw error;
         return NextResponse.json({ success: true });
       }
@@ -643,7 +743,7 @@ export async function POST(request: Request) {
     }
     console.error('[Admin Persistence API] Erro ao persistir dados:', err);
     return NextResponse.json({
-      error: err instanceof Error ? err.message : 'Erro ao persistir dados.'
+      error: safeErrorMessage(err, 'Erro ao persistir dados.')
     }, { status: 500 });
   }
 }
