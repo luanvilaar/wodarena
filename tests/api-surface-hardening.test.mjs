@@ -54,7 +54,7 @@ test('story 1.16 tracks the audit remediation scope and quality gates', () => {
 });
 
 test('bootstrap is split between a public endpoint and an authenticated endpoint', () => {
-  assert.match(bootstrapPrivateRoute, /requireSession\(request, \['owner', 'manager', 'athlete'\]\)/);
+  assert.match(bootstrapPrivateRoute, /requireSession\(request, \['owner', 'manager', 'athlete', 'judge'\]\)/);
   assert.match(bootstrapPublicRoute, /buildPublicBootstrapPayload/);
   assert.match(bootstrapPayloadHelper, /PUBLIC_DIVISION_SELECT/);
   assert.match(bootstrapPayloadHelper, /PUBLIC_WORKOUT_SELECT/);

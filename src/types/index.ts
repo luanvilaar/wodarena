@@ -1,4 +1,5 @@
 export type EventStatus = 'upcoming' | 'live' | 'finished';
+export type EventType = 'functional_fitness' | 'fitness_racing' | 'functional_fitness_qualifier';
 export type WorkoutType = 'fortime' | 'amrap' | 'maxweight' | 'reps' | 'points' | 'distance';
 export type CategoryType = 'male' | 'female' | 'team';
 export type ShirtSize = 'PP' | 'P' | 'M' | 'G' | 'GG' | 'XG' | 'XXG';
@@ -9,8 +10,9 @@ export interface User {
   name: string;
   email: string;
   password?: string; // Opcional no client-side por segurança conceitual
-  role: 'owner' | 'manager' | 'athlete';
+  role: 'owner' | 'manager' | 'athlete' | 'judge';
   organization?: string;
+  parentManagerId?: string;
   serviceValidUntil?: string;
   managerAccessStatus?: ManagerAccessStatus;
 }
@@ -64,9 +66,11 @@ export interface Workout {
   orderIndex: number;
   divisionId?: string; // Categoria vinculada
   tieBreaker?: string; // Critério de desempate
+  submissionOpensAt?: string;
+  submissionClosesAt?: string;
 }
 
-export type EventScheduleItemKind = 'briefing' | 'kit_delivery' | 'event' | 'heat';
+export type EventScheduleItemKind = 'briefing' | 'kit_delivery' | 'event' | 'heat' | 'deadline';
 export type EventScheduleMode = 'online' | 'presential';
 
 export interface EventScheduleItem {
@@ -116,6 +120,7 @@ export interface Score {
   rank?: number;       // Colocação na prova
   points?: number;     // Pontos ganhos na prova (ex: 100, 95, 90...)
   splits?: Record<string, string>;
+  resultStatus?: 'validated' | 'penalized' | 'rejected' | 'manual' | 'absent';
 }
 
 export interface AthleteOverall {
@@ -148,7 +153,7 @@ export interface Event {
   rules?: string;
   instagram?: string;
   website?: string;
-  eventType?: 'functional_fitness' | 'fitness_racing';
+  eventType?: EventType;
   scheduleItems?: EventScheduleItem[];
   mpPublicKey?: string;
   marketplace_fee?: number;
@@ -204,7 +209,8 @@ export interface Contestation {
   workoutId: string;
   heatId?: string;
   heatNumber?: number;
-  lane: string;
+  lane?: string;
+  submissionId?: string;
   description: string;
   status: ContestationStatus;
   creditConsumed: boolean;
@@ -213,6 +219,52 @@ export interface Contestation {
   createdAt: string;
   updatedAt?: string;
   resolvedAt?: string;
+}
+
+export type ScoreSubmissionStatus = 'pending_review' | 'validated' | 'penalized' | 'rejected';
+export type ScoreSubmissionDecision = 'validated' | 'penalized' | 'rejected' | 'manual_adjustment' | 'reopened';
+
+export interface ScoreSubmission {
+  id: string;
+  eventId: string;
+  workoutId: string;
+  divisionId: string;
+  registrationId: string;
+  userId: string;
+  athleteId?: string;
+  submittedResult: string;
+  submittedValue: number;
+  videoUrl: string;
+  videoId: string;
+  athleteNote?: string;
+  status: ScoreSubmissionStatus;
+  finalResult?: string;
+  finalValue?: number;
+  penaltyPercent?: number;
+  submittedAt: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+  currentVersion: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ScoreSubmissionReview {
+  id: string;
+  submissionId: string;
+  submissionVersion: number;
+  eventId: string;
+  judgeUserId?: string;
+  judgeName: string;
+  judgeRole: 'judge' | 'manager' | 'owner';
+  decision: ScoreSubmissionDecision;
+  penaltyPercent?: number;
+  previousResult?: string;
+  previousValue?: number;
+  appliedResult?: string;
+  appliedValue?: number;
+  justification?: string;
+  reviewedAt: string;
 }
 
 export interface Coupon {

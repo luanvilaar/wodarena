@@ -1,0 +1,1 @@
+- [Repo público — regras de disclosure](project_public_repo_disclosure.md) — wodarena é PUBLIC no GitHub; varrer secrets e disclosure de vulns em todo pré-push

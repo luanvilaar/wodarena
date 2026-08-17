@@ -45,6 +45,7 @@ export async function PATCH(
       status?: string;
       creditRefunded?: boolean;
       managerNote?: string;
+      reopenSubmission?: boolean;
     };
 
     const status = String(body.status || '').trim();
@@ -56,6 +57,9 @@ export async function PATCH(
 
     if (body.creditRefunded === true && status !== 'approved') {
       return NextResponse.json({ error: 'A devolução de crédito só pode ocorrer em contestação deferida.' }, { status: 400 });
+    }
+    if (managerNote && managerNote.length > 2000) {
+      return NextResponse.json({ error: 'A nota da organização deve ter no máximo 2.000 caracteres.' }, { status: 400 });
     }
 
     const { data: existingRow, error: existingError } = await supabaseAdmin
@@ -78,6 +82,11 @@ export async function PATCH(
       : false;
 
     const resolvedAt = status === 'under_review' ? null : new Date().toISOString();
+    const isQualifierContestation = Boolean(existing.submissionId);
+    if (body.reopenSubmission === true && (status !== 'approved' || !isQualifierContestation)) {
+      return NextResponse.json({ error: 'A reabertura é exclusiva de contestação deferida vinculada a uma submissão Qualifier.' }, { status: 400 });
+    }
+
     const payload = {
       status,
       credit_refunded: creditRefunded,
@@ -85,15 +94,33 @@ export async function PATCH(
       resolved_at: resolvedAt
     };
 
-    const { data: updatedRow, error: updateError } = await supabaseAdmin
-      .from('contestations')
-      .update(payload)
-      .eq('id', id)
-      .select('*')
-      .maybeSingle();
+    let updatedRow: Record<string, unknown> | null = null;
+    if (body.reopenSubmission === true) {
+      const reopenNote = managerNote || `Contestação ${id} deferida; submissão reaberta para nova revisão.`;
+      const { data, error: reopenError } = await supabaseAdmin.rpc('qualifier_resolve_contestation_and_reopen', {
+        p_contestation_id: id,
+        p_actor_id: actor.id,
+        p_manager_note: reopenNote,
+        p_credit_refunded: creditRefunded
+      });
+      if (reopenError || !data) {
+        console.error('[Contestation Status API] Erro ao reabrir submissão:', reopenError);
+        return NextResponse.json({ error: 'Não foi possível deferir a contestação e reabrir a submissão.' }, { status: 409 });
+      }
+      updatedRow = data as Record<string, unknown>;
+    } else {
+      const { data, error: updateError } = await supabaseAdmin
+        .from('contestations')
+        .update(payload)
+        .eq('id', id)
+        .select('*')
+        .maybeSingle();
 
-    if (updateError || !updatedRow) throw updateError || new Error('Falha ao atualizar contestação.');
+      if (updateError || !data) throw updateError || new Error('Falha ao atualizar contestação.');
+      updatedRow = data;
+    }
 
+    if (!updatedRow) throw new Error('Falha ao atualizar contestação.');
     const contestation = mapContestationFromDb(updatedRow);
 
     const [{ data: registration }, { data: event }, { data: workout }] = await Promise.all([
@@ -122,8 +149,8 @@ export async function PATCH(
         athleteName: registration.athlete_name || 'Atleta',
         eventName: event?.name || 'Evento WODArena',
         workoutName: workout?.name || 'Prova',
-        heatLabel: contestation.heatNumber ? `Bateria ${contestation.heatNumber}` : 'Bateria informada pelo atleta',
-        lane: contestation.lane,
+        heatLabel: contestation.submissionId ? 'Submissão online' : contestation.heatNumber ? `Bateria ${contestation.heatNumber}` : 'Bateria informada pelo atleta',
+        lane: contestation.lane || 'Não se aplica',
         status: contestation.status,
         creditRefunded: contestation.creditRefunded,
         managerNote: contestation.managerNote

@@ -130,6 +130,8 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-background">
+      <SectionOperations />
+
       <FeaturedEventBanner openLeadModal={() => setLeadFormOpen(true)} />
 
       <section id="eventos" className="mx-auto w-full max-w-7xl space-y-6 px-4 pb-12 pt-8 sm:space-y-8 sm:px-6 sm:pt-12 lg:px-8">
@@ -198,8 +200,6 @@ export default function Home() {
           </div>
         )}
       </section>
-
-      <SectionOperations />
 
       {pastEvents.length > 0 && (
         <section id="eventos-passados" className="mx-auto w-full max-w-7xl space-y-8 px-4 py-12 sm:px-6 lg:px-8">

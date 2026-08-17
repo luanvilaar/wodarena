@@ -37,7 +37,7 @@ const cspDirectives: string[] = [
   // Supabase (REST/auth/storage + realtime via wss) e APIs do Mercado Pago (tokenização de cartão).
   `connect-src 'self' ${supabaseHttp} ${supabaseWss} https://api.mercadopago.com https://*.mercadopago.com https://*.mlstatic.com`,
   // Iframes do SDK Mercado Pago (Secure Fields / Bricks).
-  "frame-src 'self' https://*.mercadopago.com https://*.mlstatic.com",
+  "frame-src 'self' https://*.mercadopago.com https://*.mlstatic.com https://www.youtube-nocookie.com",
   // Anti-clickjacking (substituto moderno do X-Frame-Options).
   "frame-ancestors 'self'",
   // Permite o redirect de checkout (init_point) para o Mercado Pago.

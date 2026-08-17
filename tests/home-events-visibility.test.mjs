@@ -11,24 +11,24 @@ const featuredBanner = read('../src/components/home/FeaturedEventBanner.tsx');
 const sectionOperations = read('../src/components/home/SectionOperations.tsx');
 const mobileFeaturedBanner = featuredBanner.match(/\{\/\* Banner Versão Mobile \*\/\}[\s\S]*?\{\/\* Banner Versão Desktop \*\/\}/)?.[0] ?? '';
 
-test('home puts event listings ahead of the institutional pitch', () => {
+test('home opens with the hero video, then the featured event, then event listings', () => {
+  const institutionalIndex = homePage.indexOf('<SectionOperations');
   const featuredBannerIndex = homePage.indexOf('<FeaturedEventBanner');
   const openEventsIndex = homePage.indexOf('id="eventos"');
-  const institutionalIndex = homePage.indexOf('<SectionOperations');
   const pastEventsIndex = homePage.indexOf('id="eventos-passados"');
 
   for (const [label, index] of Object.entries({
+    institutionalIndex,
     featuredBannerIndex,
     openEventsIndex,
-    institutionalIndex,
     pastEventsIndex,
   })) {
     assert.notEqual(index, -1, `missing home section: ${label}`);
   }
 
-  assert.ok(featuredBannerIndex < openEventsIndex, 'featured banner must open the home');
-  assert.ok(openEventsIndex < institutionalIndex, 'open events must render before SectionOperations');
-  assert.ok(institutionalIndex < pastEventsIndex, 'past events must stay after SectionOperations');
+  assert.ok(institutionalIndex < featuredBannerIndex, 'hero video must open the home');
+  assert.ok(featuredBannerIndex < openEventsIndex, 'featured banner must render before open events');
+  assert.ok(openEventsIndex < pastEventsIndex, 'past events must stay last');
 });
 
 test('event card renders artwork in the same 5:2 ratio required on upload', () => {
@@ -46,6 +46,12 @@ test('mobile featured banner shows the full artwork through next/image instead o
   assert.doesNotMatch(mobileFeaturedBanner, /min-h-\[520px\]/);
 });
 
-test('institutional background video no longer competes with the banner for bandwidth', () => {
-  assert.match(sectionOperations, /preload="none"/);
+test('hero video opens the home eagerly with a poster to avoid a blank first paint', () => {
+  assert.match(sectionOperations, /preload="auto"/);
+  assert.match(sectionOperations, /poster="\/hero-vertical-poster\.jpg"/);
+});
+
+test('featured banner image is no longer marked priority now that it does not open the home', () => {
+  assert.doesNotMatch(mobileFeaturedBanner, /\bpriority\b/);
+  assert.match(mobileFeaturedBanner, /loading="lazy"/);
 });

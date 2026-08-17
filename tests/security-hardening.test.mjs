@@ -100,7 +100,7 @@ test('Supabase hardcoded fallbacks are removed and RLS baseline is present', () 
 });
 
 test('bootstrap API does not expose full athlete PII to anonymous clients', () => {
-  assert.match(bootstrapRoute, /requireSession\(request, \['owner', 'manager', 'athlete'\]\)/);
+  assert.match(bootstrapRoute, /requireSession\(request, \['owner', 'manager', 'athlete', 'judge'\]\)/);
   assert.match(bootstrapPublicRoute, /buildPublicBootstrapPayload/);
   assert.match(bootstrapPublicRoute, /createSupabaseAdmin/);
   assert.match(serverSecurity, /getRequestSession/);

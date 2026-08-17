@@ -11,7 +11,7 @@ import {
   Sparkles, Footprints, Lock
 } from 'lucide-react';
 import Link from 'next/link';
-import { Registration, Athlete } from '@/types';
+import { Registration, Athlete, EventScheduleItem } from '@/types';
 import { getEventStatus, getRegistrationAvailability } from '@/lib/eventStatus';
 import { getHeatSlotLabel, resolveHeatParticipantSlots } from '@/lib/scheduleParticipants';
 
@@ -174,8 +174,25 @@ export default function EventPage({ params }: PageProps) {
 
   const scheduleItems = React.useMemo(() => {
     const seenHeatKeys = new Set<string>();
+    const qualifierDeadlines: EventScheduleItem[] = event?.eventType === 'functional_fitness_qualifier'
+      ? (event.workouts || []).flatMap<EventScheduleItem>(workout => {
+        if (!workout.submissionClosesAt) return [];
+        const closesAt = new Date(workout.submissionClosesAt);
+        if (Number.isNaN(closesAt.getTime())) return [];
+        return [{
+          id: `workout-deadline-${workout.id}`,
+          kind: 'deadline' as const,
+          mode: 'online' as const,
+          date: new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Fortaleza' }).format(closesAt),
+          time: new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Fortaleza', hour: '2-digit', minute: '2-digit', hour12: false }).format(closesAt),
+          title: `Encerramento: ${workout.code} · ${workout.name}`,
+          description: 'Prazo final para envio do score e vídeo de comprovação (horário de Fortaleza).'
+        }];
+      })
+      : [];
 
-    return [...(event?.scheduleItems || [])]
+    return [...(event?.scheduleItems || []), ...qualifierDeadlines]
+      .filter(item => event?.eventType !== 'functional_fitness_qualifier' || item.kind !== 'heat')
       .filter(item => item.kind !== 'heat' || item.isPublished)
       .filter(item => {
         if (item.kind !== 'heat') return true;
@@ -197,7 +214,7 @@ export default function EventPage({ params }: PageProps) {
         return true;
       })
       .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
-  }, [event?.scheduleItems]);
+  }, [event]);
 
   const eventDivisionIds = React.useMemo(
     () => new Set((event?.divisions || []).map(division => division.id)),
@@ -237,6 +254,7 @@ export default function EventPage({ params }: PageProps) {
   const getScheduleKindLabel = (kind: string) => {
     if (kind === 'briefing') return 'Briefing';
     if (kind === 'kit_delivery') return 'Entrega de kits';
+    if (kind === 'deadline') return 'Prazo importante';
     return 'Cronograma do evento';
   };
 
@@ -491,8 +509,12 @@ export default function EventPage({ params }: PageProps) {
                     <p className="text-sm text-white font-semibold mt-1">{event.date}</p>
                   </div>
                   <div>
-                    <h4 className="text-xs font-bold text-primary uppercase tracking-wider">Local das Baterias</h4>
-                    <p className="text-sm text-white font-semibold mt-1">{event.location}</p>
+                    <h4 className="text-xs font-bold text-primary uppercase tracking-wider">
+                      {event.eventType === 'functional_fitness_qualifier' ? 'Modalidade' : 'Local das Baterias'}
+                    </h4>
+                    <p className="text-sm text-white font-semibold mt-1">
+                      {event.eventType === 'functional_fitness_qualifier' ? 'Qualifier online' : event.location}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -706,7 +728,7 @@ export default function EventPage({ params }: PageProps) {
             {activeTab === 'workouts' && (
               <div className="space-y-4">
                 <h3 className="text-lg font-black text-white uppercase tracking-wider border-b border-card-border pb-3 mb-2">
-                  {event.eventType === 'fitness_racing' ? 'Percurso Oficial' : 'Provas Anunciadas'}
+                  {event.eventType === 'fitness_racing' ? 'Percurso Oficial' : event.eventType === 'functional_fitness_qualifier' ? 'Provas e prazos de envio' : 'Provas Anunciadas'}
                 </h3>
                 
                 {event.eventType === 'fitness_racing' ? (

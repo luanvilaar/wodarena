@@ -24,18 +24,19 @@ export function SectionOperations() {
   ];
 
   return (
-    <section className="relative overflow-hidden border-t border-b border-card-border bg-background py-16 lg:py-20">
+    <section className="relative overflow-hidden border-b border-card-border bg-background py-16 lg:py-20">
       {/* Vídeo cinemático de fundo */}
       <div className="absolute inset-0 z-0 pointer-events-none">
-        {/* preload="none": a seção deixou de abrir a página, então o vídeo não deve disputar banda com o banner do evento (LCP) */}
+        {/* Seção abre a home agora: preload="auto" prioriza o vídeo e o poster (frame extraído do próprio arquivo) evita tela preta antes do primeiro frame decodificar */}
         <video
           className="h-full w-full object-cover grayscale-[35%] contrast-[112%] brightness-[42%]"
           src="/hero-vertical.mp4"
+          poster="/hero-vertical-poster.jpg"
           autoPlay
           loop
           muted
           playsInline
-          preload="none"
+          preload="auto"
         />
         {/* Gradiente de overlay */}
         <div 

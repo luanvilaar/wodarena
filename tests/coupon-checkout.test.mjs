@@ -22,7 +22,7 @@ test('checkout coupon application validates against the server instead of client
 });
 
 test('anonymous bootstrap does not expose coupon lists while coupon API returns only applied summary', () => {
-  assert.match(bootstrapRoute, /requireSession\(request, \['owner', 'manager', 'athlete'\]\)/);
+  assert.match(bootstrapRoute, /requireSession\(request, \['owner', 'manager', 'athlete', 'judge'\]\)/);
   assert.match(bootstrapPublicRoute, /buildPublicBootstrapPayload/);
   assert.match(bootstrapPayloadHelper, /coupons: \[\]/);
   assert.match(couponRoute, /return NextResponse\.json\(result\)/);

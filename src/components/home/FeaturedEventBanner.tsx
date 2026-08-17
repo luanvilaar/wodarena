@@ -138,7 +138,7 @@ export function FeaturedEventBanner({ openLeadModal }: { openLeadModal: () => vo
             alt={`${featuredEvent.name} banner`}
             fill
             unoptimized
-            priority
+            loading="lazy"
             sizes="100vw"
             className="object-cover"
           />
@@ -168,7 +168,7 @@ export function FeaturedEventBanner({ openLeadModal }: { openLeadModal: () => vo
                 {registrationsAvailable ? 'Inscrições abertas' : 'Vendas encerradas'}
               </span>
               <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-dark-gray/85 px-2.5 py-1 text-[9px] font-bold uppercase tracking-normal text-primary">
-                {featuredEvent.eventType === 'fitness_racing' ? 'Fitness Racing' : 'Functional Fitness'}
+                {featuredEvent.eventType === 'fitness_racing' ? 'Fitness Racing' : featuredEvent.eventType === 'functional_fitness_qualifier' ? 'Functional Fitness Qualifier' : 'Functional Fitness'}
               </span>
             </div>
 
@@ -265,7 +265,7 @@ export function FeaturedEventBanner({ openLeadModal }: { openLeadModal: () => vo
                   {registrationsAvailable ? 'Inscrições abertas' : 'Vendas encerradas'}
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/12 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-primary backdrop-blur-md">
-                  {featuredEvent.eventType === 'fitness_racing' ? 'Fitness Racing' : 'Functional Fitness'}
+                  {featuredEvent.eventType === 'fitness_racing' ? 'Fitness Racing' : featuredEvent.eventType === 'functional_fitness_qualifier' ? 'Functional Fitness Qualifier' : 'Functional Fitness'}
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-card-border bg-dark-gray/70 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-muted backdrop-blur-md">
                   <MapPin className="h-3 w-3" />

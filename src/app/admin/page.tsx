@@ -11,6 +11,9 @@ import { EventMediaUploadError, uploadEventMedia } from '@/lib/eventMediaUpload'
 import { BrandLogo } from '@/components/BrandLogo';
 import { RegistrationVoucher } from '@/components/RegistrationVoucher';
 import PixPaymentModal from '@/components/PixPaymentModal';
+import { QualifierAthleteSubmissions } from '@/components/QualifierAthleteSubmissions';
+import { QualifierAthleteContestation } from '@/components/QualifierAthleteContestation';
+import { QualifierManagerPanel } from '@/components/QualifierManagerPanel';
 import {
   LayoutDashboard, Calendar, Trophy,
   ClipboardCheck, LogIn, LogOut, DollarSign, Users, Ticket, Settings,
@@ -44,12 +47,13 @@ const RegDetail = ({ label, value, accent = false }: { label: string; value: str
     </p>
   </div>
 );
-import { WorkoutType, CategoryType, EventStatus, Event, Athlete, Division, CourseStage, EventScheduleItemKind, EventScheduleMode, Score, EventScheduleItem, Registration, Contestation } from '@/types';
+import { WorkoutType, CategoryType, EventStatus, Event, Athlete, Division, CourseStage, EventScheduleItemKind, EventScheduleMode, Score, EventScheduleItem, Registration, Contestation, Workout } from '@/types';
 import { getEventStatus as getEventLifecycle, compareEventsByDateAsc, compareEventsByDateDesc } from '@/lib/eventStatus';
 import { CONTESTATION_CREDITS_LIMIT, getContestationStatusLabel } from '@/lib/contestations';
 import { FITNESS_RACING_AGE_GROUPS, FITNESS_RACING_STATION_LIBRARY, buildFitnessRacingCourse, getAgeGroupFromDate } from '@/lib/fitnessRacing';
 import { buildDivisionOrderMap, getDivisionOrderPosition, moveDivisionId, shiftDivisionId } from '@/lib/divisionOrder';
 import { getTeamDisplayName } from '@/lib/teamDisplay';
+import { fortalezaDateTimeLocalToUtc, normalizeQualifierSubmissionWindow, utcToFortalezaDateTimeLocal } from '@/lib/submissionWindow';
 
 const currencyFormatter = new Intl.NumberFormat('pt-BR', {
   style: 'currency',
@@ -106,7 +110,8 @@ export default function AdminPage() {
   // 1. Estados de Login (vinculado ao currentUser do contexto)
   const isAthleteLoggedIn = currentUser?.role === 'athlete';
   const isManagerLoggedIn = currentUser?.role === 'manager';
-  const isLoggedIn = Boolean(currentUser && (currentUser.role === 'manager' || currentUser.role === 'athlete'));
+  const isJudgeLoggedIn = currentUser?.role === 'judge';
+  const isLoggedIn = Boolean(currentUser && (currentUser.role === 'manager' || currentUser.role === 'athlete' || currentUser.role === 'judge'));
   const managerAccessStatus = isManagerLoggedIn
     ? (currentUser.managerAccessStatus || getManagerAccessStatus(currentUser.serviceValidUntil))
     : null;
@@ -116,6 +121,10 @@ export default function AdminPage() {
   const [loginError, setLoginError] = useState('');
   const [selectedLoginProfile, setSelectedLoginProfile] = useState<'athlete' | 'organizer'>('athlete');
   const [rememberLogin, setRememberLogin] = useState(false);
+
+  useEffect(() => {
+    if (currentUser?.role === 'judge') window.location.replace('/judge');
+  }, [currentUser?.role]);
   const [adminNotice, setAdminNotice] = useState<{ text: string; tone: 'success' | 'error' } | null>(() => {
     if (typeof window === 'undefined') return null;
 
@@ -467,10 +476,10 @@ export default function AdminPage() {
 
   // Estado do evento sendo gerenciado internamente
   const [selectedEventToManage, setSelectedEventToManage] = useState<Event | null>(null);
-  const [activeEventTab, setActiveEventTab] = useState<'info' | 'categories' | 'wods' | 'schedule' | 'registrations' | 'scores' | 'leaderboard' | 'contestations'>('info');
+  const [activeEventTab, setActiveEventTab] = useState<'info' | 'categories' | 'wods' | 'schedule' | 'registrations' | 'scores' | 'leaderboard' | 'contestations' | 'submissions'>('info');
 
   // Área do Atleta: navegação lateral entre seções
-  const [activeAthleteSection, setActiveAthleteSection] = useState<'profile' | 'events' | 'contestations'>('profile');
+  const [activeAthleteSection, setActiveAthleteSection] = useState<'profile' | 'events' | 'submissions' | 'contestations'>('profile');
 
   // Formulário de perfil do atleta — null significa "ainda não editado", usa-se o valor padrão derivado
   const [athleteProfileNameInput, setAthleteProfileNameInput] = useState<string | null>(null);
@@ -489,6 +498,7 @@ export default function AdminPage() {
   const [reviewContestationId, setReviewContestationId] = useState<string | null>(null);
   const [reviewStatus, setReviewStatus] = useState<'under_review' | 'approved' | 'rejected'>('under_review');
   const [reviewCreditRefunded, setReviewCreditRefunded] = useState(false);
+  const [reviewReopenSubmission, setReviewReopenSubmission] = useState(false);
   const [reviewManagerNote, setReviewManagerNote] = useState('');
   const [savingReviewDecision, setSavingReviewDecision] = useState(false);
 
@@ -536,8 +546,8 @@ export default function AdminPage() {
 
 
   // Estados Fitness Racing
-  const [eventType, setEventType] = useState<'functional_fitness' | 'fitness_racing'>('functional_fitness');
-  const [editEventType, setEditEventType] = useState<'functional_fitness' | 'fitness_racing'>('functional_fitness');
+  const [eventType, setEventType] = useState<'functional_fitness' | 'fitness_racing' | 'functional_fitness_qualifier'>('functional_fitness');
+  const [editEventType, setEditEventType] = useState<'functional_fitness' | 'fitness_racing' | 'functional_fitness_qualifier'>('functional_fitness');
   const [catUseAgeGroups, setCatUseAgeGroups] = useState(false);
   const [catAgeGroups, setCatAgeGroups] = useState<string[]>([...FITNESS_RACING_AGE_GROUPS]);
   const [newAgeGroupInput, setNewAgeGroupInput] = useState('');
@@ -673,6 +683,9 @@ export default function AdminPage() {
   const [wodDescription, setWodDescription] = useState('');
   const [wodDivisionId, setWodDivisionId] = useState('');
   const [wodTieBreaker, setWodTieBreaker] = useState('');
+  const [wodSubmissionOpensAt, setWodSubmissionOpensAt] = useState('');
+  const [wodSubmissionClosesAt, setWodSubmissionClosesAt] = useState('');
+  const [editingWorkoutId, setEditingWorkoutId] = useState('');
 
   // Estados para Cronograma
   const [scheduleKind, setScheduleKind] = useState<EventScheduleItemKind>('briefing');
@@ -836,7 +849,7 @@ export default function AdminPage() {
     setAdminNotice(null);
 
     try {
-      await deleteEvent(eventPendingDeletion.id);
+      await deleteEvent(eventPendingDeletion.id, deleteEventConfirmation.trim());
       setSelectedEventToManage(null);
       setActiveTab('my-events');
       setAdminNotice({ text: `Evento "${eventPendingDeletion.name}" excluído com sucesso.`, tone: 'success' });
@@ -845,7 +858,10 @@ export default function AdminPage() {
       setDeleteEventConfirmation('');
     } catch (err) {
       console.error('Erro ao excluir evento:', err);
-      setAdminNotice({ text: 'Não foi possível excluir o evento. Tente novamente.', tone: 'error' });
+      setAdminNotice({
+        text: err instanceof Error ? err.message : 'Não foi possível excluir o evento. Tente novamente.',
+        tone: 'error'
+      });
     } finally {
       setIsDeletingEvent(false);
     }
@@ -1729,16 +1745,53 @@ export default function AdminPage() {
     await applyDivisionOrder(orderedIds);
   };
 
-  // Cadastrar Prova (Workout) dentro de um evento
+  const resetWorkoutForm = () => {
+    setWodName('');
+    setWodCode('');
+    setWodOrder(Math.max(0, ...(selectedEventToManage?.workouts || []).map(workout => workout.orderIndex)) + 1);
+    setWodType('fortime');
+    setWodDescription('');
+    setWodTimeCap('');
+    setWodDivisionId('');
+    setWodTieBreaker('');
+    setWodSubmissionOpensAt('');
+    setWodSubmissionClosesAt('');
+    setEditingWorkoutId('');
+  };
+
+  const handleEditWorkout = (workout: Workout) => {
+    setWodName(workout.name);
+    setWodCode(workout.code);
+    setWodOrder(workout.orderIndex);
+    setWodType(workout.type);
+    setWodDescription(workout.description);
+    setWodTimeCap(workout.timeCap || '');
+    setWodDivisionId(workout.divisionId || '');
+    setWodTieBreaker(workout.tieBreaker || '');
+    setWodSubmissionOpensAt(utcToFortalezaDateTimeLocal(workout.submissionOpensAt));
+    setWodSubmissionClosesAt(utcToFortalezaDateTimeLocal(workout.submissionClosesAt));
+    setEditingWorkoutId(workout.id);
+  };
+
+  // Cadastrar ou editar Prova (Workout) dentro de um evento
   const handleCreateWorkout = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedEventToManage || !wodName || !wodCode) {
       setAdminNotice({ text: 'Preencha o nome e o código da prova.', tone: 'error' });
       return;
     }
+    let submissionWindow: { opensAt?: string; closesAt?: string } | undefined;
+    if (selectedEventToManage.eventType === 'functional_fitness_qualifier') {
+      try {
+        submissionWindow = normalizeQualifierSubmissionWindow(wodSubmissionOpensAt, wodSubmissionClosesAt);
+      } catch (error) {
+        setAdminNotice({ text: error instanceof Error ? error.message : 'A janela de submissão é inválida.', tone: 'error' });
+        return;
+      }
+    }
 
     try {
-      const newWod = await addWorkout(selectedEventToManage.id, {
+      const workoutData: Omit<Workout, 'id'> = {
         name: wodName,
         description: wodDescription || 'Sem descrição cadastrada.',
         type: wodType,
@@ -1746,17 +1799,26 @@ export default function AdminPage() {
         code: wodCode,
         orderIndex: Number(wodOrder),
         divisionId: wodDivisionId || undefined,
-        tieBreaker: wodTieBreaker
-      });
+        tieBreaker: wodTieBreaker,
+        submissionOpensAt: submissionWindow?.opensAt || fortalezaDateTimeLocalToUtc(wodSubmissionOpensAt),
+        submissionClosesAt: submissionWindow?.closesAt || fortalezaDateTimeLocalToUtc(wodSubmissionClosesAt)
+      };
+
+      if (editingWorkoutId) {
+        await updateWorkout(selectedEventToManage.id, editingWorkoutId, workoutData);
+        setSelectedEventToManage(prev => prev ? {
+          ...prev,
+          workouts: prev.workouts.map(workout => workout.id === editingWorkoutId ? { ...workout, ...workoutData } : workout)
+        } : null);
+        setAdminNotice({ text: 'Prova atualizada com sucesso.', tone: 'success' });
+        resetWorkoutForm();
+        return;
+      }
+
+      const newWod = await addWorkout(selectedEventToManage.id, workoutData);
 
       setAdminNotice({ text: 'Prova cadastrada com sucesso.', tone: 'success' });
-      setWodName('');
-      setWodCode('');
-      setWodOrder(prev => prev + 1);
-      setWodDescription('');
-      setWodTimeCap('');
-      setWodDivisionId('');
-      setWodTieBreaker('');
+      resetWorkoutForm();
 
       setSelectedEventToManage(prev => prev ? {
         ...prev,
@@ -1764,7 +1826,7 @@ export default function AdminPage() {
       } : null);
     } catch (err) {
       console.error(err);
-      setAdminNotice({ text: 'Não foi possível cadastrar a prova. Tente novamente.', tone: 'error' });
+      setAdminNotice({ text: err instanceof Error ? err.message : 'Não foi possível salvar a prova. Tente novamente.', tone: 'error' });
     }
   };
 
@@ -1809,6 +1871,7 @@ export default function AdminPage() {
       });
       if (scoreFilterWodId === workoutId) setScoreFilterWodId('');
       if (leaderboardFilterWodId === workoutId) setLeaderboardFilterWodId('overall');
+      if (editingWorkoutId === workoutId) resetWorkoutForm();
       setAdminNotice({ text: `Prova "${workoutName}" excluída com sucesso.`, tone: 'success' });
     } catch (err) {
       console.error(err);
@@ -1826,7 +1889,7 @@ export default function AdminPage() {
     const newScheduleItem = {
       id: `schedule-${selectedEventToManage.id}-${Date.now()}`,
       kind: scheduleKind,
-      mode: scheduleKind === 'event' ? undefined : scheduleMode,
+      mode: scheduleKind === 'event' ? undefined : selectedEventToManage.eventType === 'functional_fitness_qualifier' ? 'online' : scheduleMode,
       date: scheduleDate,
       time: scheduleTime,
       title: scheduleTitle,
@@ -2416,6 +2479,14 @@ export default function AdminPage() {
     });
   };
 
+  if (isJudgeLoggedIn) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center bg-background px-4 text-center text-sm text-muted">
+        Redirecionando para o dashboard de arbitragem…
+      </div>
+    );
+  }
+
   if (!isLoggedIn) {
     const loginBenefits = [
       'Inscrições Online',
@@ -2758,7 +2829,7 @@ export default function AdminPage() {
       .filter(contestation => contestation.userId === currentUser.id)
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-    // Inscrições elegíveis para contestação (Functional Fitness com pagamento aprovado)
+    // Inscrições elegíveis para contestação presencial (Functional Fitness com pagamento aprovado)
     const contestableRegistrations = athleteRegistrations.filter(reg => {
       const event = getRegistrationEvent(reg);
       return reg.paymentStatus === 'payment_approved' && (event?.eventType || 'functional_fitness') === 'functional_fitness';
@@ -2838,9 +2909,10 @@ export default function AdminPage() {
       }
     };
 
-    const athleteSections: { id: 'profile' | 'events' | 'contestations'; label: string; icon: typeof Settings }[] = [
+    const athleteSections: { id: 'profile' | 'events' | 'submissions' | 'contestations'; label: string; icon: typeof Settings }[] = [
       { id: 'profile', label: 'Dados do Perfil', icon: Settings },
       { id: 'events', label: 'Historico de Eventos', icon: Calendar },
+      { id: 'submissions', label: 'Enviar Resultados', icon: ClipboardCheck },
       { id: 'contestations', label: 'Contestacoes de Prova', icon: ShieldAlert }
     ];
 
@@ -3124,6 +3196,12 @@ export default function AdminPage() {
                 </section>
               )}
 
+              {activeAthleteSection === 'submissions' && (
+                <section id="activeAthleteSection-submissions" className="rounded-xl border border-card-border bg-card p-5 sm:p-6">
+                  <QualifierAthleteSubmissions events={events} registrations={athleteRegistrations} />
+                </section>
+              )}
+
               {/* Seção: Contestacoes de Prova */}
               {activeAthleteSection === 'contestations' && (
                 <section id="activeAthleteSection-contestations" className="space-y-6">
@@ -3131,8 +3209,10 @@ export default function AdminPage() {
                     <div className="border-b border-card-border pb-4">
                       <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary font-sans">Contestacao de Provas</p>
                       <h3 className="mt-1 text-2xl font-bold tracking-tight text-white uppercase">Contestar Prova</h3>
-                      <p className="mt-1 text-xs text-muted font-medium">Disponivel apenas para eventos de Functional Fitness com pagamento aprovado. Cada inscricao possui ate {CONTESTATION_CREDITS_LIMIT} creditos de contestacao.</p>
+                      <p className="mt-1 text-xs text-muted font-medium">Disponível para Functional Fitness e Qualifier com pagamento aprovado. Cada inscrição possui até {CONTESTATION_CREDITS_LIMIT} créditos de contestação.</p>
                     </div>
+
+                    <QualifierAthleteContestation events={events} registrations={athleteRegistrations} />
 
                     {contestableRegistrations.length === 0 ? (
                       <p className="py-8 text-center text-sm text-muted">Nenhuma inscricao elegivel para contestacao no momento.</p>
@@ -3262,7 +3342,7 @@ export default function AdminPage() {
                                   {getContestationStatusLabel(contestation.status)}
                                 </span>
                               </div>
-                              <p className="text-xs text-muted">Raia {contestation.lane}{contestation.heatNumber ? ` · Bateria ${contestation.heatNumber}` : ''}</p>
+                              <p className="text-xs text-muted">{contestation.submissionId ? 'Submissão online' : `Raia ${contestation.lane}${contestation.heatNumber ? ` · Bateria ${contestation.heatNumber}` : ''}`}</p>
                               <p className="text-xs text-white leading-5">{contestation.description}</p>
                               {contestation.managerNote && (
                                 <p className="rounded-md border border-card-border bg-card px-3 py-2 text-xs leading-5 text-muted"><span className="font-bold text-white">Resposta da organizacao:</span> {contestation.managerNote}</p>
@@ -3707,10 +3787,11 @@ export default function AdminPage() {
             <select
               id="edit-event-type"
               value={editEventType}
-              onChange={(e) => setEditEventType(e.target.value as 'functional_fitness' | 'fitness_racing')}
+              onChange={(e) => setEditEventType(e.target.value as 'functional_fitness' | 'fitness_racing' | 'functional_fitness_qualifier')}
               className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"
             >
               <option value="functional_fitness">Functional Fitness (CrossFit)</option>
+              <option value="functional_fitness_qualifier">Functional Fitness Qualifier (online)</option>
               <option value="fitness_racing">Fitness Racing (HYROX)</option>
             </select>
           </div>
@@ -3773,7 +3854,7 @@ export default function AdminPage() {
                   <option value="individual">Individual</option>
                   <option value="duo">Dupla</option>
                   <option value="trio">Trio</option>
-                  {(!selectedEventToManage || selectedEventToManage.eventType === 'functional_fitness') ? (
+                  {(!selectedEventToManage || selectedEventToManage.eventType !== 'fitness_racing') ? (
                     <>
                       <option value="team4">Equipe de 4</option>
                       <option value="team6">Equipe de 6</option>
@@ -5027,6 +5108,26 @@ export default function AdminPage() {
     const workouts = selectedEventToManage?.workouts || [];
     const hasWorkouts = workouts.length > 0;
     const isFitnessRacingEvent = selectedEventToManage?.eventType === 'fitness_racing';
+    const isQualifierEvent = selectedEventToManage?.eventType === 'functional_fitness_qualifier';
+
+    if (isQualifierEvent) {
+      const qualifierSchedule = [...(selectedEventToManage?.scheduleItems || [])]
+        .filter(item => item.kind !== 'heat')
+        .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
+      return (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[22rem_1fr]">
+          <form onSubmit={handleCreateScheduleItem} className="space-y-4 rounded-xl border border-card-border bg-card p-5 text-white">
+            <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Qualifier online</p><h3 className="mt-1 text-lg font-bold uppercase">Datas e prazos</h3><p className="mt-2 text-xs text-muted">Baterias não são usadas neste tipo de evento. Cadastre somente comunicados e prazos importantes.</p></div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-muted">Tipo<select value={scheduleKind === 'heat' ? 'deadline' : scheduleKind} onChange={(e) => setScheduleKind(e.target.value as EventScheduleItemKind)} className="mt-1 w-full rounded-md border border-card-border bg-dark-gray px-3 py-2 text-sm text-white"><option value="deadline">Prazo importante</option><option value="briefing">Briefing online</option><option value="kit_delivery">Comunicado</option><option value="event">Data do evento</option></select></label>
+            <div className="grid grid-cols-2 gap-3"><label className="text-xs font-bold uppercase tracking-wider text-muted">Data<input required type="date" value={scheduleDate} onChange={e => setScheduleDate(e.target.value)} className="mt-1 w-full rounded-md border border-card-border bg-dark-gray px-3 py-2 text-sm text-white" /></label><label className="text-xs font-bold uppercase tracking-wider text-muted">Hora<input required type="time" value={scheduleTime} onChange={e => setScheduleTime(e.target.value)} className="mt-1 w-full rounded-md border border-card-border bg-dark-gray px-3 py-2 text-sm text-white" /></label></div>
+            <input required value={scheduleTitle} onChange={e => setScheduleTitle(e.target.value)} placeholder="Título" className="w-full rounded-md border border-card-border bg-dark-gray px-3 py-2 text-sm text-white" />
+            <textarea value={scheduleDescription} onChange={e => setScheduleDescription(e.target.value)} rows={3} placeholder="Descrição" className="w-full rounded-md border border-card-border bg-dark-gray px-3 py-2 text-sm text-white" />
+            <button type="submit" onClick={() => setScheduleMode('online')} className="w-full rounded-md bg-primary px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-ink">Adicionar data</button>
+          </form>
+          <section className="space-y-3 rounded-xl border border-card-border bg-card p-5 text-white"><h3 className="text-lg font-bold uppercase">Cronograma publicado</h3>{qualifierSchedule.length === 0 ? <p className="text-sm text-muted">Nenhuma data importante cadastrada.</p> : qualifierSchedule.map(item => <article key={item.id} className="flex items-start justify-between gap-3 rounded-lg border border-card-border bg-dark-gray/30 p-4"><div><p className="text-xs font-bold uppercase tracking-wider text-primary">{item.kind === 'deadline' ? 'Prazo importante' : item.kind}</p><h4 className="mt-1 font-bold">{item.title}</h4><p className="mt-1 text-sm text-muted">{item.date} às {item.time} · {item.description}</p></div><button type="button" onClick={() => void handleDeleteScheduleItem(item.id)} className="text-xs font-bold uppercase text-red-300">Remover</button></article>)}</section>
+        </div>
+      );
+    }
     const hasHeatScheduler = isFitnessRacingEvent || hasWorkouts;
 
     const selectedWorkout = workouts.find(w => w.id === heatWorkoutId);
@@ -6335,8 +6436,12 @@ export default function AdminPage() {
         {/* Formulário lateral */}
         <form onSubmit={handleCreateWorkout} className="lg:col-span-1 space-y-6 rounded-xl border border-card-border p-6 bg-card text-white">
           <div className="border-b border-card-border pb-3">
-            <h3 className="text-base font-bold text-white uppercase tracking-wider">Nova Prova (WOD)</h3>
-            <p className="text-xs text-muted font-medium">Cadastre baterias e treinos do evento.</p>
+            <h3 className="text-base font-bold text-white uppercase tracking-wider">{editingWorkoutId ? 'Editar Prova (WOD)' : 'Nova Prova (WOD)'}</h3>
+            <p className="text-xs text-muted font-medium">
+              {selectedEventToManage?.eventType === 'functional_fitness_qualifier'
+                ? 'Configure a prova e a janela de envio dos resultados.'
+                : 'Cadastre as provas e treinos do evento.'}
+            </p>
           </div>
 
           <div className="space-y-4">
@@ -6437,6 +6542,34 @@ export default function AdminPage() {
               />
             </div>
 
+            {selectedEventToManage?.eventType === 'functional_fitness_qualifier' && (
+              <fieldset className="space-y-3 rounded-md border border-primary/30 bg-primary/5 p-3">
+                <legend className="px-1 text-[10px] font-bold uppercase tracking-wider text-primary">Janela de submissão</legend>
+                <div>
+                  <label htmlFor="wod-submission-opens-at" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Abertura do envio</label>
+                  <input
+                    id="wod-submission-opens-at"
+                    type="datetime-local"
+                    value={wodSubmissionOpensAt}
+                    onChange={(e) => setWodSubmissionOpensAt(e.target.value)}
+                    className="w-full rounded-md border border-card-border bg-dark-gray px-3 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="wod-submission-closes-at" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Prazo final de envio *</label>
+                  <input
+                    id="wod-submission-closes-at"
+                    type="datetime-local"
+                    required
+                    value={wodSubmissionClosesAt}
+                    onChange={(e) => setWodSubmissionClosesAt(e.target.value)}
+                    className="w-full rounded-md border border-card-border bg-dark-gray px-3 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"
+                  />
+                  <p className="mt-1 text-[10px] text-muted">Datas e horários configurados no fuso de Fortaleza.</p>
+                </div>
+              </fieldset>
+            )}
+
             <div>
               <label htmlFor="wod-desc-input" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Descrição / Movimentos *</label>
               <textarea
@@ -6451,12 +6584,23 @@ export default function AdminPage() {
             </div>
           </div>
 
-          <button
-            type="submit"
-            className="w-full flex min-h-11 items-center justify-center rounded-md bg-primary hover:bg-primary-hover text-ink px-6 py-2.5 text-xs font-bold uppercase tracking-wider transition-colors"
-          >
-            Criar Prova WOD
-          </button>
+          <div className="flex gap-3">
+            <button
+              type="submit"
+              className="flex min-h-11 flex-1 items-center justify-center rounded-md bg-primary px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-ink transition-colors hover:bg-primary-hover"
+            >
+              {editingWorkoutId ? 'Salvar Alterações' : 'Criar Prova WOD'}
+            </button>
+            {editingWorkoutId && (
+              <button
+                type="button"
+                onClick={resetWorkoutForm}
+                className="min-h-11 rounded-md border border-card-border px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-muted transition-colors hover:border-white/40 hover:text-white"
+              >
+                Cancelar
+              </button>
+            )}
+          </div>
         </form>
 
         {/* Lista/Tabela */}
@@ -6508,15 +6652,29 @@ export default function AdminPage() {
                       {wod.tieBreaker && (
                         <p className="text-[9px] text-muted-soft">Desempate: {wod.tieBreaker}</p>
                       )}
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteWorkout(wod.id, wod.name)}
-                        className="inline-flex min-h-8 items-center gap-1.5 rounded-md border border-card-border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-red-500 transition-colors hover:border-red-500 hover:text-red-400"
-                        aria-label={`Excluir prova ${wod.name}`}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                        Excluir
-                      </button>
+                      {selectedEventToManage?.eventType === 'functional_fitness_qualifier' && (
+                        <p className="text-[9px] text-primary">Prazo de submissão: {wod.submissionClosesAt ? new Date(wod.submissionClosesAt).toLocaleString('pt-BR', { timeZone: 'America/Fortaleza' }) : 'não configurado'}</p>
+                      )}
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleEditWorkout(wod)}
+                          className="inline-flex min-h-8 items-center gap-1.5 rounded-md border border-card-border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted transition-colors hover:border-primary/60 hover:text-primary"
+                          aria-label={`Editar prova ${wod.name}`}
+                        >
+                          <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                          Editar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteWorkout(wod.id, wod.name)}
+                          className="inline-flex min-h-8 items-center gap-1.5 rounded-md border border-card-border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-red-500 transition-colors hover:border-red-500 hover:text-red-400"
+                          aria-label={`Excluir prova ${wod.name}`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                          Excluir
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
@@ -7787,6 +7945,7 @@ export default function AdminPage() {
       setReviewContestationId(contestation.id);
       setReviewStatus(contestation.status);
       setReviewCreditRefunded(contestation.creditRefunded);
+      setReviewReopenSubmission(false);
       setReviewManagerNote(contestation.managerNote || '');
     };
 
@@ -7800,7 +7959,8 @@ export default function AdminPage() {
           body: JSON.stringify({
             status: reviewStatus,
             creditRefunded: reviewStatus === 'approved' ? reviewCreditRefunded : false,
-            managerNote: reviewManagerNote.trim()
+            managerNote: reviewManagerNote.trim(),
+            reopenSubmission: reviewStatus === 'approved' && reviewReopenSubmission
           })
         });
         const payload = await response.json().catch(() => ({}));
@@ -7846,7 +8006,7 @@ export default function AdminPage() {
                           <span className="rounded border border-trading-up/40 bg-trading-up/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-trading-up">Crédito devolvido</span>
                         )}
                       </div>
-                      <p className="text-xs text-muted">Raia {contestation.lane}{contestation.heatNumber ? ` · Bateria ${contestation.heatNumber}` : ''} · {new Date(contestation.createdAt).toLocaleDateString('pt-BR')}</p>
+                      <p className="text-xs text-muted">{contestation.submissionId ? 'Submissão online' : `Raia ${contestation.lane}${contestation.heatNumber ? ` · Bateria ${contestation.heatNumber}` : ''}`} · {new Date(contestation.createdAt).toLocaleDateString('pt-BR')}</p>
                     </div>
                     {!isReviewing && (
                       <button
@@ -7878,6 +8038,7 @@ export default function AdminPage() {
                               const next = e.target.value as 'under_review' | 'approved' | 'rejected';
                               setReviewStatus(next);
                               if (next !== 'approved') setReviewCreditRefunded(false);
+                              if (next !== 'approved') setReviewReopenSubmission(false);
                             }}
                             className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"
                           >
@@ -7903,6 +8064,22 @@ export default function AdminPage() {
                           </label>
                         </div>
                       </div>
+                      {contestation.submissionId && (
+                        <label className={`flex min-h-11 items-center gap-2 rounded-md border px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors ${
+                          reviewStatus === 'approved'
+                            ? 'border-card-border bg-dark-gray text-white cursor-pointer'
+                            : 'border-card-border bg-background text-muted cursor-not-allowed'
+                        }`}>
+                          <input
+                            type="checkbox"
+                            checked={reviewReopenSubmission}
+                            disabled={reviewStatus !== 'approved'}
+                            onChange={(event) => setReviewReopenSubmission(event.target.checked)}
+                            className="h-4 w-4 accent-primary"
+                          />
+                          <span>Reabrir submissão para nova análise</span>
+                        </label>
+                      )}
                       <div>
                         <label htmlFor={`review-note-${contestation.id}`} className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Manager Note</label>
                         <textarea
@@ -8754,7 +8931,7 @@ export default function AdminPage() {
                         value={activeEventTab}
                         onChange={(e) => {
                           const tabId = e.target.value;
-                          setActiveEventTab(tabId as 'info' | 'categories' | 'wods' | 'schedule' | 'registrations' | 'scores' | 'leaderboard' | 'contestations');
+                          setActiveEventTab(tabId as 'info' | 'categories' | 'wods' | 'schedule' | 'registrations' | 'scores' | 'leaderboard' | 'contestations' | 'submissions');
                           if (tabId === 'info') {
                             initEventEditForm(selectedEventToManage);
                           }
@@ -8769,7 +8946,10 @@ export default function AdminPage() {
                           { id: 'registrations', label: 'Inscrições' },
                           { id: 'scores', label: selectedEventToManage.eventType === 'fitness_racing' ? 'Lançar Resultados' : 'Lançamento de Scores' },
                           { id: 'leaderboard', label: 'Leaderboard' },
-                          ...((selectedEventToManage.eventType || 'functional_fitness') === 'functional_fitness'
+                          ...(selectedEventToManage.eventType === 'functional_fitness_qualifier'
+                            ? [{ id: 'submissions', label: 'Submissões e Judges' }]
+                            : []),
+                          ...((selectedEventToManage.eventType || 'functional_fitness') !== 'fitness_racing'
                             ? [{ id: 'contestations', label: 'Contestações' }]
                             : [])
                         ].map(tab => (
@@ -8788,16 +8968,19 @@ export default function AdminPage() {
                         { id: 'wods', label: selectedEventToManage.eventType === 'fitness_racing' ? 'Configuração do Percurso' : 'Provas (WODs)' },
                         { id: 'schedule', label: 'Cronograma' },
                         { id: 'registrations', label: 'Inscrições' },
-                        { id: 'scores', label: selectedEventToManage.eventType === 'fitness_racing' ? 'Lançar Resultados' : 'Lançamento de Scores' },
-                        { id: 'leaderboard', label: 'Leaderboard' },
-                        ...((selectedEventToManage.eventType || 'functional_fitness') === 'functional_fitness'
+                          { id: 'scores', label: selectedEventToManage.eventType === 'fitness_racing' ? 'Lançar Resultados' : 'Lançamento de Scores' },
+                          { id: 'leaderboard', label: 'Leaderboard' },
+                          ...(selectedEventToManage.eventType === 'functional_fitness_qualifier'
+                            ? [{ id: 'submissions', label: 'Submissões e Judges' }]
+                            : []),
+                        ...((selectedEventToManage.eventType || 'functional_fitness') !== 'fitness_racing'
                           ? [{ id: 'contestations', label: 'Contestações' }]
                           : [])
                       ].map(tab => (
                         <button
                           key={tab.id}
                           onClick={() => {
-                            setActiveEventTab(tab.id as 'info' | 'categories' | 'wods' | 'schedule' | 'registrations' | 'scores' | 'leaderboard' | 'contestations');
+                            setActiveEventTab(tab.id as 'info' | 'categories' | 'wods' | 'schedule' | 'registrations' | 'scores' | 'leaderboard' | 'contestations' | 'submissions');
                             if (tab.id === 'info') {
                               initEventEditForm(selectedEventToManage);
                             }
@@ -8827,9 +9010,12 @@ export default function AdminPage() {
                       {activeEventTab === 'scores' && (
                         selectedEventToManage.eventType === 'fitness_racing'
                           ? renderAbaFitnessRaceScores()
-                          : renderAbaScores()
+                          : selectedEventToManage.eventType === 'functional_fitness_qualifier'
+                            ? <div className="rounded-xl border border-primary/20 bg-primary/5 p-5 text-sm text-muted">Os scores deste Qualifier são definidos somente pela revisão das submissões. Use a aba “Submissões e Judges”.</div>
+                            : renderAbaScores()
                       )}
                       {activeEventTab === 'leaderboard' && renderAbaLeaderboard()}
+                      {activeEventTab === 'submissions' && selectedEventToManage.eventType === 'functional_fitness_qualifier' && <QualifierManagerPanel event={selectedEventToManage} />}
                       {activeEventTab === 'contestations' && renderAbaContestations()}
                     </div>
                   </div>
@@ -8859,10 +9045,11 @@ export default function AdminPage() {
                       <select
                         id="event-type"
                         value={eventType}
-                        onChange={(e) => setEventType(e.target.value as 'functional_fitness' | 'fitness_racing')}
+                        onChange={(e) => setEventType(e.target.value as 'functional_fitness' | 'fitness_racing' | 'functional_fitness_qualifier')}
                         className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2.5 text-sm text-white focus:border-primary/50 focus:outline-none"
                       >
                         <option value="functional_fitness">Functional Fitness (CrossFit)</option>
+                        <option value="functional_fitness_qualifier">Functional Fitness Qualifier (online)</option>
                         <option value="fitness_racing">Fitness Racing / HYROX / HYROX Inspired</option>
                       </select>
                     </div>
@@ -9380,7 +9567,9 @@ export default function AdminPage() {
                     Excluir evento
                   </h3>
                   <p className="mt-1 text-xs text-muted">
-                    Esta ação remove o evento e todos os dados vinculados a ele.
+                    {eventPendingDeletion.eventType === 'functional_fitness_qualifier'
+                      ? 'Esta ação remove o evento, as submissões e todo o histórico de revisão de forma permanente.'
+                      : 'Esta ação remove o evento e todos os dados vinculados a ele.'}
                   </p>
                 </div>
               </div>
@@ -9411,7 +9600,9 @@ export default function AdminPage() {
                   className="mt-0.5 h-4 w-4 accent-primary"
                 />
                 <span>
-                  Confirmo que entendo que categorias, provas, inscrições, atletas e pontuações deste evento serão removidos.
+                  {eventPendingDeletion.eventType === 'functional_fitness_qualifier'
+                    ? 'Confirmo que entendo que categorias, provas, inscrições, atletas, pontuações, submissões, versões, revisões, contestações e vínculos de Judge deste evento serão removidos permanentemente.'
+                    : 'Confirmo que entendo que categorias, provas, inscrições, atletas e pontuações deste evento serão removidos.'}
                 </span>
               </label>
 

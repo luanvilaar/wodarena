@@ -11,11 +11,12 @@ import {
   sanitizeLeaderboardEntry
 } from '@/lib/bootstrapPayload';
 import { getManagerAccessStatus, normalizeServiceValidUntil } from '@/lib/managerAccess';
+import { getQualifierEventIdsForActor, JudgeAccessError } from '@/lib/serverJudgeAccess';
 import { createSupabaseAdmin, requireSession, type SessionUser } from '@/lib/serverSecurity';
 
 const PRIVATE_ATHLETE_SELECT = 'id, name, box, country, division_id, birth_date, gender, city, state, instagram, photo_url, email, phone, is_team, team_members, shirt_size';
 const PRIVATE_REGISTRATION_SELECT = 'id, event_id, division_id, user_id, athlete_id, athlete_name, athlete_email, athlete_phone, box, gender, ticket_type, ticket_price, quantity, total_paid, service_fee_percent, service_fee_amount, amount_collected, application_fee_charged, created_at, coupon_code, payment_status, payment_method, payment_id, payment_status_detail, payment_error_message, cancellation_reason, cancelled_at, cancelled_by, refund_status, refund_amount, refund_method, refund_note, refund_processed_at, refund_processed_by, updated_at';
-const PRIVATE_CONTESTATION_SELECT = 'id, event_id, registration_id, user_id, athlete_id, workout_id, heat_id, heat_number, lane, description, status, credit_consumed, credit_refunded, manager_note, created_at, updated_at, resolved_at';
+const PRIVATE_CONTESTATION_SELECT = 'id, event_id, registration_id, user_id, athlete_id, workout_id, heat_id, heat_number, lane, submission_id, description, status, credit_consumed, credit_refunded, manager_note, created_at, updated_at, resolved_at';
 const PRIVATE_COUPON_SELECT = 'id, event_id, code, discount_type, discount_value, usage_limit, usage_count, created_at, is_active';
 
 const emptyRows = <T>(): Promise<T[]> => Promise.resolve([]);
@@ -34,6 +35,7 @@ const mapUserForClient = (user: Record<string, unknown>) => {
     email: String(user.email || ''),
     role: user.role,
     organization: user.organization || undefined,
+    parentManagerId: user.parent_manager_id || user.parentManagerId || undefined,
     serviceValidUntil,
     managerAccessStatus: user.role === 'manager' ? getManagerAccessStatus(serviceValidUntil) : undefined
   };
@@ -43,10 +45,10 @@ const readUsers = (supabaseAdmin: ReturnType<typeof createSupabaseAdmin>, sessio
   session?.role === 'owner'
     ? readBootstrapQuery('usuários', supabaseAdmin
       .from('users')
-      .select('id, name, email, role, organization, service_valid_until'))
+      .select('id, name, email, role, organization, parent_manager_id, service_valid_until'))
     : readBootstrapQuery('usuário da sessão', supabaseAdmin
       .from('users')
-      .select('id, name, email, role, organization, service_valid_until')
+      .select('id, name, email, role, organization, parent_manager_id, service_valid_until')
       .eq('id', session.id))
 );
 
@@ -54,18 +56,26 @@ export async function GET(request: Request) {
   const startedAt = Date.now();
 
   try {
-    const auth = requireSession(request, ['owner', 'manager', 'athlete']);
+    const auth = requireSession(request, ['owner', 'manager', 'athlete', 'judge']);
     if (auth.response) return auth.response;
 
     const supabaseAdmin = createSupabaseAdmin();
     const session = auth.user;
     const usersPromise = readUsers(supabaseAdmin, session);
+    const judgeEventIds = session.role === 'judge'
+      ? await getQualifierEventIdsForActor(supabaseAdmin, session)
+      : [];
     const eventsPromise = session.role === 'manager'
       ? readEventsWithFeaturedFallback(
         'eventos do gestor',
         () => supabaseAdmin.from('events').select(PUBLIC_EVENT_SELECT).eq('organizer_id', session.id),
         () => supabaseAdmin.from('events').select(PUBLIC_EVENT_SELECT_LEGACY).eq('organizer_id', session.id)
       )
+      : session.role === 'judge'
+        ? scopedRows(judgeEventIds, () => supabaseAdmin
+          .from('events')
+          .select(PUBLIC_EVENT_SELECT)
+          .in('id', judgeEventIds), 'eventos atribuídos ao judge')
       : readEventsWithFeaturedFallback(
         'eventos autenticados',
         () => supabaseAdmin.from('events').select(PUBLIC_EVENT_SELECT),
@@ -74,10 +84,10 @@ export async function GET(request: Request) {
 
     const [users, events] = await Promise.all([usersPromise, eventsPromise]);
     const eventIds = events.map(event => String(event.id));
-    const eventIdFilter = session.role === 'manager' ? eventIds : [];
+    const eventIdFilter = session.role === 'manager' || session.role === 'judge' ? eventIds : [];
 
     const [divisions, workouts] = await Promise.all([
-      session.role === 'manager'
+      session.role === 'manager' || session.role === 'judge'
         ? scopedRows(eventIdFilter, () => supabaseAdmin
           .from('divisions')
           .select(PUBLIC_DIVISION_SELECT)
@@ -85,7 +95,7 @@ export async function GET(request: Request) {
         : readBootstrapQuery('divisões autenticadas', supabaseAdmin
           .from('divisions')
           .select(PUBLIC_DIVISION_SELECT)),
-      session.role === 'manager'
+      session.role === 'manager' || session.role === 'judge'
         ? scopedRows(eventIdFilter, () => supabaseAdmin
           .from('workouts')
           .select(PUBLIC_WORKOUT_SELECT)
@@ -151,7 +161,7 @@ export async function GET(request: Request) {
           .eq('status', 'connected')
           .eq('user_id', session.id))
       ]);
-    } else {
+    } else if (session.role === 'athlete') {
       const [ownRegistrations, ownContestations] = await Promise.all([
         readBootstrapQuery('inscrições do atleta', supabaseAdmin
           .from('registrations')
@@ -218,6 +228,9 @@ export async function GET(request: Request) {
       leaderboardEntries: sanitizedLeaderboardEntries
     });
   } catch (err) {
+    if (err instanceof JudgeAccessError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
     console.error('[Bootstrap API] Erro ao carregar dados iniciais:', JSON.stringify({
       durationMs: Date.now() - startedAt,
       message: err instanceof Error ? err.message : 'erro desconhecido'

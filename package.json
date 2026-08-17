@@ -14,7 +14,8 @@
     "athlete-profile:cli": "node bin/athlete-profile.mjs",
     "manager-service:cli": "node bin/manager-service.mjs",
     "registrations:cli": "node bin/registrations.mjs",
-    "mercadopago:provenance": "node bin/mercadopago-provenance.mjs"
+    "mercadopago:provenance": "node bin/mercadopago-provenance.mjs",
+    "qualifier:cli": "node bin/qualifier.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.107.0",

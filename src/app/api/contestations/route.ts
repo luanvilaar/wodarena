@@ -93,6 +93,7 @@ export async function POST(request: Request) {
       workoutId?: string;
       heatId?: string;
       lane?: string;
+      submissionId?: string;
       description?: string;
     };
 
@@ -101,10 +102,14 @@ export async function POST(request: Request) {
     const workoutId = String(body.workoutId || '').trim();
     const heatId = String(body.heatId || '').trim();
     const lane = String(body.lane || '').trim();
+    const submissionId = String(body.submissionId || '').trim();
     const description = String(body.description || '').trim();
 
-    if (!eventId || !registrationId || !workoutId || !heatId || !lane || !description) {
-      return NextResponse.json({ error: 'Evento, inscrição, prova, bateria, raia e descrição são obrigatórios.' }, { status: 400 });
+    if (!eventId || !registrationId || !workoutId || !description) {
+      return NextResponse.json({ error: 'Evento, inscrição, prova e descrição são obrigatórios.' }, { status: 400 });
+    }
+    if (description.length > 2000) {
+      return NextResponse.json({ error: 'A descrição da contestação deve ter no máximo 2.000 caracteres.' }, { status: 400 });
     }
 
     const { data: registration, error: registrationError } = await supabaseAdmin
@@ -132,7 +137,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Evento não encontrado.' }, { status: 404 });
     }
 
-    if ((event.event_type || 'functional_fitness') !== 'functional_fitness') {
+    const eventType = event.event_type || 'functional_fitness';
+    if (eventType !== 'functional_fitness' && eventType !== 'functional_fitness_qualifier') {
       return NextResponse.json({ error: 'Contestação disponível apenas para eventos de Functional Fitness.' }, { status: 403 });
     }
 
@@ -147,11 +153,33 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Prova não encontrada para este evento.' }, { status: 404 });
     }
 
-    const scheduleItems = parseScheduleItems(event.event_schedule);
-    const heat = findWorkoutHeat(scheduleItems, workoutId, heatId);
-
-    if (!heat) {
-      return NextResponse.json({ error: 'Bateria não encontrada para a prova selecionada.' }, { status: 400 });
+    let heat: ReturnType<typeof findWorkoutHeat> | null = null;
+    if (eventType === 'functional_fitness') {
+      if (!heatId || !lane) {
+        return NextResponse.json({ error: 'Bateria e raia são obrigatórias para eventos presenciais.' }, { status: 400 });
+      }
+      const scheduleItems = parseScheduleItems(event.event_schedule);
+      heat = findWorkoutHeat(scheduleItems, workoutId, heatId);
+      if (!heat) {
+        return NextResponse.json({ error: 'Bateria não encontrada para a prova selecionada.' }, { status: 400 });
+      }
+    } else {
+      if (!submissionId) {
+        return NextResponse.json({ error: 'Selecione a submissão de resultado que deseja contestar.' }, { status: 400 });
+      }
+      const { data: submission, error: submissionError } = await supabaseAdmin
+        .from('score_submissions')
+        .select('id, event_id, registration_id, workout_id, user_id, status')
+        .eq('id', submissionId)
+        .maybeSingle();
+      if (submissionError || !submission
+        || submission.event_id !== eventId
+        || submission.registration_id !== registrationId
+        || submission.workout_id !== workoutId
+        || submission.user_id !== actor.id
+        || submission.status === 'pending_review') {
+        return NextResponse.json({ error: 'Submissão finalizada não encontrada para contestação.' }, { status: 404 });
+      }
     }
 
     const { data: existingRows, error: existingError } = await supabaseAdmin
@@ -163,6 +191,11 @@ export async function POST(request: Request) {
     if (existingError) throw existingError;
 
     const existingContestations = (existingRows || []).map(mapContestationFromDb);
+    if (eventType === 'functional_fitness_qualifier' && existingContestations.some(contestation => (
+      contestation.submissionId === submissionId && contestation.status === 'under_review'
+    ))) {
+      return NextResponse.json({ error: 'Já existe uma contestação em análise para esta submissão.' }, { status: 409 });
+    }
     const credits = calculateContestationCredits(existingContestations);
 
     if (credits.available <= 0) {
@@ -176,9 +209,10 @@ export async function POST(request: Request) {
       user_id: actor.id,
       athlete_id: registration.athlete_id || null,
       workout_id: workoutId,
-      heat_id: heat.id,
-      heat_number: heat.heatNumber || null,
-      lane,
+      heat_id: heat?.id || null,
+      heat_number: heat?.heatNumber || null,
+      lane: eventType === 'functional_fitness' ? lane : null,
+      submission_id: eventType === 'functional_fitness_qualifier' ? submissionId : null,
       description,
       status: 'under_review',
       credit_consumed: true,

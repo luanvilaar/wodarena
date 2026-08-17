@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
 import { ManagerAccessError, assertManagerOperationalAccess, managerAccessErrorResponse } from '@/lib/serverManagerAccess';
-import { checkRateLimit, createSupabaseAdmin, requireSession, safeErrorMessage, SessionUser } from '@/lib/serverSecurity';
+import { checkRateLimit, createSupabaseAdmin, hashPassword, requireSession, safeErrorMessage, SessionUser } from '@/lib/serverSecurity';
 
 type DbClient = ReturnType<typeof createSupabaseAdmin>;
 
 const ensureEventOwner = async (supabaseAdmin: DbClient, actor: SessionUser, eventId: string) => {
   const { data: event, error } = await supabaseAdmin
     .from('events')
-    .select('id, organizer_id')
+    .select('id, name, organizer_id, event_type, event_schedule')
     .eq('id', eventId)
     .maybeSingle();
 
@@ -59,7 +59,8 @@ const DIVISION_UPDATABLE_FIELDS = [
 ] as const;
 
 const WORKOUT_UPDATABLE_FIELDS = [
-  'name', 'description', 'type', 'time_cap', 'code', 'order_index', 'division_id', 'tie_breaker'
+  'name', 'description', 'type', 'time_cap', 'code', 'order_index', 'division_id', 'tie_breaker',
+  'submission_opens_at', 'submission_closes_at'
 ] as const;
 
 const COUPON_UPDATABLE_FIELDS = [
@@ -85,6 +86,86 @@ const escapeLikePattern = (value: string) => value.replace(/[\\%_]/g, (match) =>
 const optionalText = (value: unknown) => {
   const trimmed = asTrimmed(value);
   return trimmed || null;
+};
+
+const qualifierEventType = 'functional_fitness_qualifier';
+
+const isQualifierEvent = (eventType: unknown) => eventType === qualifierEventType;
+
+const assertQualifierSchedule = (eventType: unknown, schedule: unknown) => {
+  if (!isQualifierEvent(eventType) || !Array.isArray(schedule)) return;
+  if (schedule.some((item) => item && typeof item === 'object' && (item as Record<string, unknown>).kind === 'heat')) {
+    throw new Error('Eventos Functional Fitness Qualifier não aceitam baterias no cronograma.');
+  }
+};
+
+const validateQualifierWorkoutWindow = (eventType: unknown, workout: Record<string, unknown>) => {
+  if (!isQualifierEvent(eventType)) return;
+  const closesAt = asTrimmed(workout.submission_closes_at);
+  const opensAt = asTrimmed(workout.submission_opens_at);
+  if (!closesAt || Number.isNaN(new Date(closesAt).getTime())) {
+    throw new Error('Eventos Qualifier exigem data e horário limite de submissão em cada prova.');
+  }
+  if (opensAt && Number.isNaN(new Date(opensAt).getTime())) {
+    throw new Error('A abertura da janela de submissão é inválida.');
+  }
+  if (opensAt && new Date(opensAt).getTime() >= new Date(closesAt).getTime()) {
+    throw new Error('A abertura da submissão deve ser anterior ao encerramento.');
+  }
+};
+
+const createJudgeId = () => `judge-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+
+const judgeCreationErrorResponse = (error: unknown) => {
+  const details = error && typeof error === 'object' ? error as { code?: unknown; message?: unknown } : null;
+  const code = typeof details?.code === 'string' ? details.code : '';
+  const message = typeof details?.message === 'string' ? details.message : '';
+
+  if (message === 'qualifier_judge_email_exists') {
+    return NextResponse.json({
+      error: 'Este e-mail já está cadastrado. Use um e-mail que não pertença a atleta, gestor, owner ou outro judge.'
+    }, { status: 409 });
+  }
+  if (message === 'qualifier_manager_access_expired') {
+    return NextResponse.json({ error: 'O acesso deste gestor está expirado. Renove o acesso para cadastrar judges.' }, { status: 403 });
+  }
+  if (message === 'qualifier_judge_creation_not_allowed' || message === 'qualifier_judge_parent_not_allowed') {
+    return NextResponse.json({ error: 'Você não tem permissão para cadastrar judge neste evento.' }, { status: 403 });
+  }
+  if (message === 'qualifier_invalid_judge_payload') {
+    return NextResponse.json({ error: 'Informe nome, e-mail válido e senha com ao menos 8 caracteres para o judge.' }, { status: 400 });
+  }
+  if (code === 'PGRST202') {
+    return NextResponse.json({
+      error: 'O recurso de Judge ainda não está disponível neste ambiente. Aplique as migrations pendentes antes de tentar novamente.'
+    }, { status: 503 });
+  }
+  return null;
+};
+
+const qualifierDeleteErrorResponse = (error: unknown) => {
+  const details = error && typeof error === 'object' ? error as { code?: unknown; message?: unknown } : null;
+  const code = typeof details?.code === 'string' ? details.code : '';
+  const message = typeof details?.message === 'string' ? details.message : '';
+
+  if (message === 'qualifier_event_delete_confirmation_invalid') {
+    return NextResponse.json({ error: 'Digite o nome exato do evento para confirmar a exclusão.' }, { status: 400 });
+  }
+  if (message === 'qualifier_event_delete_not_allowed') {
+    return NextResponse.json({ error: 'Você não tem permissão para excluir este evento.' }, { status: 403 });
+  }
+  if (message === 'qualifier_manager_access_expired') {
+    return NextResponse.json({ error: 'O acesso deste gestor está expirado. Renove o acesso antes de excluir o evento.' }, { status: 403 });
+  }
+  if (message === 'qualifier_event_not_found') {
+    return NextResponse.json({ error: 'Evento não encontrado.' }, { status: 404 });
+  }
+  if (code === 'PGRST202') {
+    return NextResponse.json({
+      error: 'A exclusão de Qualifier ainda não está disponível neste ambiente. Aplique as migrations pendentes antes de tentar novamente.'
+    }, { status: 503 });
+  }
+  return null;
 };
 
 const parseRefundAmount = (value: unknown, required = false) => {
@@ -162,6 +243,13 @@ export async function POST(request: Request) {
           return NextResponse.json({ error: 'Acesso negado para criar evento em outro gestor.' }, { status: 403 });
         }
 
+        assertQualifierSchedule(event.event_type, event.event_schedule);
+        if (isQualifierEvent(event.event_type)) {
+          for (const workout of workouts as Record<string, unknown>[]) {
+            validateQualifierWorkoutWindow(event.event_type, workout);
+          }
+        }
+
         delete event.is_featured;
         const { error: eventError } = await supabaseAdmin.from('events').insert(event);
         if (eventError) throw eventError;
@@ -198,19 +286,51 @@ export async function POST(request: Request) {
       }
 
       case 'deleteEvent': {
-        await ensureEventOwner(supabaseAdmin, actor, payload.eventId);
+        const event = await ensureEventOwner(supabaseAdmin, actor, payload.eventId);
+        const confirmation = asTrimmed(payload.confirmation);
+        if (!confirmation || confirmation !== event.name) {
+          return NextResponse.json({ error: 'Digite o nome exato do evento para confirmar a exclusão.' }, { status: 400 });
+        }
+
+        if (isQualifierEvent(event.event_type)) {
+          const { error } = await supabaseAdmin.rpc('qualifier_purge_event', {
+            p_actor_id: actor.id,
+            p_event_id: event.id,
+            p_event_name_confirmation: confirmation
+          });
+          if (error) {
+            const response = qualifierDeleteErrorResponse(error);
+            if (response) return response;
+            throw error;
+          }
+          return NextResponse.json({ success: true });
+        }
+
         const { error } = await supabaseAdmin.from('events').delete().eq('id', payload.eventId);
         if (error) throw error;
         return NextResponse.json({ success: true });
       }
 
       case 'updateEvent': {
-        await ensureEventOwner(supabaseAdmin, actor, payload.eventId);
+        const currentEvent = await ensureEventOwner(supabaseAdmin, actor, payload.eventId);
         if (payload.data && typeof payload.data === 'object' && 'is_featured' in payload.data) {
           return NextResponse.json({ error: 'Use a acao setFeaturedHomeEvent para alterar o destaque da home.' }, { status: 400 });
         }
 
         const allowedData = pickAllowedFields(payload.data, EVENT_UPDATABLE_FIELDS);
+        const nextEventType = allowedData.event_type || currentEvent.event_type || 'functional_fitness';
+        const nextSchedule = allowedData.event_schedule === undefined ? currentEvent.event_schedule : allowedData.event_schedule;
+        assertQualifierSchedule(nextEventType, nextSchedule);
+        if (isQualifierEvent(nextEventType) && !isQualifierEvent(currentEvent.event_type)) {
+          const { data: existingWorkouts, error: workoutsError } = await supabaseAdmin
+            .from('workouts')
+            .select('id, submission_closes_at')
+            .eq('event_id', payload.eventId);
+          if (workoutsError) throw workoutsError;
+          if ((existingWorkouts || []).some(workout => !workout.submission_closes_at)) {
+            return NextResponse.json({ error: 'Defina o prazo de submissão em todas as provas antes de converter o evento em Qualifier.' }, { status: 409 });
+          }
+        }
         const { error } = await supabaseAdmin.from('events').update(allowedData).eq('id', payload.eventId);
         if (error) throw error;
         return NextResponse.json({ success: true });
@@ -304,7 +424,8 @@ export async function POST(request: Request) {
       }
 
       case 'createWorkout': {
-        await ensureEventOwner(supabaseAdmin, actor, payload.workout.event_id);
+        const event = await ensureEventOwner(supabaseAdmin, actor, payload.workout.event_id);
+        validateQualifierWorkoutWindow(event.event_type, payload.workout);
         const { error } = await supabaseAdmin.from('workouts').insert(payload.workout);
         if (error) throw error;
         return NextResponse.json({ success: true });
@@ -313,6 +434,21 @@ export async function POST(request: Request) {
       case 'updateWorkout': {
         const workout = await ensureWorkoutOwner(supabaseAdmin, actor, payload.workoutId, payload.eventId);
         const allowedData = pickAllowedFields(payload.data, WORKOUT_UPDATABLE_FIELDS);
+        const event = await ensureEventOwner(supabaseAdmin, actor, workout.event_id);
+        if (isQualifierEvent(event.event_type) && (
+          'submission_opens_at' in allowedData || 'submission_closes_at' in allowedData
+        )) {
+          const { data: currentWorkout, error: currentWorkoutError } = await supabaseAdmin
+            .from('workouts')
+            .select('submission_opens_at, submission_closes_at')
+            .eq('id', payload.workoutId)
+            .maybeSingle();
+          if (currentWorkoutError || !currentWorkout) return NextResponse.json({ error: 'Prova não encontrada.' }, { status: 404 });
+          validateQualifierWorkoutWindow(event.event_type, {
+            submission_opens_at: allowedData.submission_opens_at ?? currentWorkout.submission_opens_at,
+            submission_closes_at: allowedData.submission_closes_at ?? currentWorkout.submission_closes_at
+          });
+        }
 
         if (typeof allowedData.division_id === 'string' && allowedData.division_id) {
           const { data: targetDivision, error: divisionError } = await supabaseAdmin
@@ -337,6 +473,86 @@ export async function POST(request: Request) {
       case 'deleteWorkout': {
         await ensureWorkoutOwner(supabaseAdmin, actor, payload.workoutId, payload.eventId);
         const { error } = await supabaseAdmin.from('workouts').delete().eq('id', payload.workoutId);
+        if (error) throw error;
+        return NextResponse.json({ success: true });
+      }
+
+      case 'listJudges': {
+        const event = await ensureEventOwner(supabaseAdmin, actor, payload.eventId);
+        if (!isQualifierEvent(event.event_type)) {
+          return NextResponse.json({ error: 'Judges são exclusivos de eventos Functional Fitness Qualifier.' }, { status: 400 });
+        }
+        const { data: assignments, error: assignmentsError } = await supabaseAdmin
+          .from('event_judges')
+          .select('judge_user_id, created_at')
+          .eq('event_id', payload.eventId)
+          .order('created_at', { ascending: true });
+        if (assignmentsError) throw assignmentsError;
+        const judgeIds = (assignments || []).map(assignment => String(assignment.judge_user_id));
+        const { data: judges, error: judgesError } = judgeIds.length > 0
+          ? await supabaseAdmin
+            .from('users')
+            .select('id, name, email, role, parent_manager_id')
+            .in('id', judgeIds)
+            .eq('role', 'judge')
+          : { data: [], error: null };
+        if (judgesError) throw judgesError;
+        return NextResponse.json({ judges: judges || [] });
+      }
+
+      case 'createJudge': {
+        const event = await ensureEventOwner(supabaseAdmin, actor, payload.eventId);
+        if (!isQualifierEvent(event.event_type)) {
+          return NextResponse.json({ error: 'Judges são exclusivos de eventos Functional Fitness Qualifier.' }, { status: 400 });
+        }
+        const name = asTrimmed(payload.name);
+        const email = asTrimmed(payload.email).toLowerCase();
+        const password = asTrimmed(payload.password);
+        if (name.length < 3 || !/^\S+@\S+\.\S+$/.test(email) || password.length < 8) {
+          return NextResponse.json({ error: 'Informe nome, e-mail válido e senha com ao menos 8 caracteres para o judge.' }, { status: 400 });
+        }
+        const judgeId = createJudgeId();
+        const { data: judge, error: judgeError } = await supabaseAdmin.rpc('qualifier_create_and_assign_judge', {
+          p_actor_id: actor.id,
+          p_parent_manager_id: event.organizer_id,
+          p_event_id: payload.eventId,
+          p_judge_id: judgeId,
+          p_name: name,
+          p_email: email,
+          p_password_hash: hashPassword(password)
+        });
+        if (judgeError) {
+          const response = judgeCreationErrorResponse(judgeError);
+          if (response) return response;
+          throw judgeError;
+        }
+        return NextResponse.json({ success: true, judge });
+      }
+
+      case 'assignJudgeToEvent': {
+        const event = await ensureEventOwner(supabaseAdmin, actor, payload.eventId);
+        if (!isQualifierEvent(event.event_type)) {
+          return NextResponse.json({ error: 'Judges são exclusivos de eventos Functional Fitness Qualifier.' }, { status: 400 });
+        }
+        const { error } = await supabaseAdmin.rpc('qualifier_assign_judge', {
+          p_actor_id: actor.id,
+          p_event_id: payload.eventId,
+          p_judge_id: asTrimmed(payload.judgeId)
+        });
+        if (error) throw error;
+        return NextResponse.json({ success: true });
+      }
+
+      case 'removeJudgeFromEvent': {
+        const event = await ensureEventOwner(supabaseAdmin, actor, payload.eventId);
+        if (!isQualifierEvent(event.event_type)) {
+          return NextResponse.json({ error: 'Judges são exclusivos de eventos Functional Fitness Qualifier.' }, { status: 400 });
+        }
+        const { error } = await supabaseAdmin.rpc('qualifier_remove_judge', {
+          p_actor_id: actor.id,
+          p_event_id: payload.eventId,
+          p_judge_id: asTrimmed(payload.judgeId)
+        });
         if (error) throw error;
         return NextResponse.json({ success: true });
       }
@@ -715,6 +931,15 @@ export async function POST(request: Request) {
         const eventIds = [...new Set((scoreWorkouts || []).map((workout) => workout.event_id))];
         for (const eventId of eventIds) {
           await ensureEventOwner(supabaseAdmin, actor, eventId);
+        }
+
+        const { data: scoreEvents, error: scoreEventsError } = await supabaseAdmin
+          .from('events')
+          .select('id, event_type')
+          .in('id', eventIds);
+        if (scoreEventsError) throw scoreEventsError;
+        if ((scoreEvents || []).some(event => isQualifierEvent(event.event_type))) {
+          return NextResponse.json({ error: 'Scores de Qualifier devem ser definidos exclusivamente pela revisão de submissões.' }, { status: 409 });
         }
 
         const { error } = await supabaseAdmin

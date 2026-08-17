@@ -75,7 +75,10 @@ test('home banner mobile layout keeps event content readable and action hierarch
   // A arte fica em faixa própria na proporção de upload (5:2) e o texto em painel sólido,
   // então a legibilidade não depende mais de máscara sobre a imagem.
   assert.match(mobileFeaturedBanner, /aspect-\[5\/2\]/);
-  assert.match(mobileFeaturedBanner, /priority/);
+  // A seção deixou de abrir a home (o hero video agora vem primeiro), então a arte do banner
+  // não é mais o candidato a LCP e carrega lazy em vez de priority.
+  assert.doesNotMatch(mobileFeaturedBanner, /\bpriority\b/);
+  assert.match(mobileFeaturedBanner, /loading="lazy"/);
   assert.match(mobileFeaturedBanner, /linear-gradient\(180deg/);
   assert.doesNotMatch(mobileFeaturedBanner, /bg-cover/);
   assert.doesNotMatch(mobileFeaturedBanner, /radial-gradient\(circle at 76% 14%/);

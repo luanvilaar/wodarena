@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { WorkoutType, Event, Athlete, Division, Score, CourseStage, Coupon, Registration, User, Workout, AthleteOverall, EventScheduleItem, Contestation } from '../types';
+import { WorkoutType, Event, Athlete, Division, Score, CourseStage, Coupon, Registration, User, Workout, AthleteOverall, EventScheduleItem, Contestation, EventType } from '../types';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { buildFitnessRacingCourse, buildFitnessRacingDefaults, normalizeInstagram } from '@/lib/fitnessRacing';
 import { mapContestationFromDb } from '@/lib/contestations';
@@ -86,12 +86,12 @@ interface AppContextType {
   createManagerAccount: (name: string, email: string, password: string, organization: string, serviceValidUntil?: string) => Promise<boolean>;
   updateManagerServiceValidity: (userId: string, serviceValidUntil?: string | null) => Promise<User | null>;
   setFeaturedHomeEvent: (eventId: string | null) => Promise<void>;
-  addEvent: (event: Omit<Event, 'id' | 'organizerId' | 'sponsors' | 'format' | 'ticketPrice' | 'ticketSlots' | 'isTicketingActive'> & { format?: 'individual' | 'duo' | 'trio'; ticketPrice?: number; ticketSlots?: number; isTicketingActive?: boolean; eventType?: 'functional_fitness' | 'fitness_racing'; }) => Promise<Event>;
+  addEvent: (event: Omit<Event, 'id' | 'organizerId' | 'sponsors' | 'format' | 'ticketPrice' | 'ticketSlots' | 'isTicketingActive'> & { format?: 'individual' | 'duo' | 'trio'; ticketPrice?: number; ticketSlots?: number; isTicketingActive?: boolean; eventType?: EventType; }) => Promise<Event>;
   addDivision: (eventId: string, division: Omit<Division, 'id'>) => Promise<{ division: Division; autoWorkout: Workout | null }>;
   updateDivision: (eventId: string, divisionId: string, updatedData: Partial<Division>) => Promise<void>;
   reorderDivisions: (eventId: string, orderedIds: string[]) => Promise<void>;
   addWorkout: (eventId: string, workout: Omit<Workout, 'id'>) => Promise<Workout>;
-  deleteEvent: (eventId: string) => Promise<void>;
+  deleteEvent: (eventId: string, confirmation: string) => Promise<void>;
   deleteDivision: (eventId: string, divisionId: string) => Promise<void>;
   deleteWorkout: (eventId: string, workoutId: string) => Promise<void>;
   registerTicket: (registration: RegistrationDraft, athleteProfile?: AthleteProfileDraft) => Registration;
@@ -119,11 +119,13 @@ type WorkoutDbUpdate = Partial<{
   name: string;
   description: string;
   type: WorkoutType;
-  time_cap: string;
+  time_cap: string | null;
   code: string;
   order_index: number;
-  division_id: string;
-  tie_breaker: string;
+  division_id: string | null;
+  tie_breaker: string | null;
+  submission_opens_at: string | null;
+  submission_closes_at: string | null;
 }>;
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -261,6 +263,7 @@ const mapUserFromDb = (user: Record<string, unknown>): User => {
     email: String(user.email || ''),
     role,
     organization: optionalString(user.organization),
+    parentManagerId: optionalString(user.parent_manager_id || user.parentManagerId),
     serviceValidUntil,
     managerAccessStatus: role === 'manager' ? getManagerAccessStatus(serviceValidUntil) : undefined
   };
@@ -458,7 +461,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               value: Number(score.value),
               rank: score.rank || undefined,
               points: score.points || undefined,
-              splits: parsedSplits || {}
+              splits: parsedSplits || {},
+              resultStatus: optionalString(score.result_status) as Score['resultStatus']
             } as Score;
           });
           mappedLeaderboardEntries = payload.leaderboardEntries || [];
@@ -574,7 +578,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               value: Number(s.value),
               rank: s.rank || undefined,
               points: s.points || undefined,
-              splits: parsedSplits || {}
+              splits: parsedSplits || {},
+              resultStatus: optionalString(s.result_status) as Score['resultStatus']
             };
           });
           setScores(mappedScores);
@@ -662,7 +667,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 code: w.code || '',
                 orderIndex: w.order_index !== undefined && w.order_index !== null ? Number(w.order_index) : 1,
                 divisionId: w.division_id || undefined,
-                tieBreaker: w.tie_breaker || ''
+                tieBreaker: w.tie_breaker || '',
+                submissionOpensAt: w.submission_opens_at || undefined,
+                submissionClosesAt: w.submission_closes_at || undefined
               }));
 
             const organizerMp = dbMpAccounts?.find(acc => acc.user_id === evt.organizer_id);
@@ -1030,7 +1037,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     rules?: string;
     instagram?: string;
     website?: string;
-    eventType?: 'functional_fitness' | 'fitness_racing';
+    eventType?: EventType;
   }): Promise<Event> => {
     if (!currentUser?.id) {
       throw new Error('Sessão inválida ou expirada. Por favor, faça login novamente para criar o evento.');
@@ -1322,7 +1329,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Excluir Evento e limpar dados vinculados no estado local
-  const deleteEvent = async (eventId: string) => {
+  const deleteEvent = async (eventId: string, confirmation: string) => {
     const eventToDelete = events.find(e => e.id === eventId);
     if (!eventToDelete) return;
     if (eventToDelete.organizerId !== currentUser?.id) {
@@ -1346,7 +1353,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setScores(prev => prev.filter(s => !athleteIds.includes(s.athleteId) && !workoutIds.includes(s.workoutId)));
 
     try {
-      await adminPersist('deleteEvent', { eventId });
+      await adminPersist('deleteEvent', { eventId, confirmation });
     } catch (error) {
       setEvents(previousEvents);
       setAthletes(previousAthletes);
@@ -1411,7 +1418,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       code: newWorkout.code,
       order_index: newWorkout.orderIndex,
       division_id: newWorkout.divisionId || null,
-      tie_breaker: newWorkout.tieBreaker || ''
+      tie_breaker: newWorkout.tieBreaker || '',
+      submission_opens_at: newWorkout.submissionOpensAt || null,
+      submission_closes_at: newWorkout.submissionClosesAt || null
       }
     });
 
@@ -1753,6 +1762,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const submitScoresBulk = async (newScores: Score[]) => {
     if (newScores.length === 0) return;
 
+    const qualifierScore = newScores.find((score) => events.some((event) => (
+      event.eventType === 'functional_fitness_qualifier'
+      && event.workouts.some((workout) => workout.id === score.workoutId)
+    )));
+    if (qualifierScore) {
+      throw new Error('Scores de Qualifier são definidos somente após a revisão da submissão pelo judge.');
+    }
+
     // 1. Atualizar o estado local de forma síncrona/pura primeiro para evitar race conditions na UI
     let tempScores = [...scores];
     newScores.forEach(newScore => {
@@ -1962,6 +1979,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const divisionWorkouts = event.workouts.filter(w => !w.divisionId || w.divisionId === divisionId);
     const workoutIds = divisionWorkouts.map(w => w.id);
 
+    const isQualifier = event.eventType === 'functional_fitness_qualifier';
+    const nowMs = Date.now();
+    const qualifierAbsencePoints = divisionAthletes.length + 1;
+
     // 3. Compilar scores para cada atleta da divisão somando apenas as provas já lançadas.
     //    Provas ainda sem resultado NÃO geram penalidade automática nem score falso: o evento
     //    segue em andamento. Em caso de ausência real, o organizador lança manualmente a
@@ -1976,15 +1997,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           athleteScores[wId] = score;
           totalPoints += score.points || 0;
         } else {
-          // Prova ainda não lançada/pendente: placeholder visual ('-'), sem somar ao total
+          const workout = divisionWorkouts.find(item => item.id === wId);
+          const closed = Boolean(workout?.submissionClosesAt)
+            && new Date(workout?.submissionClosesAt as string).getTime() < nowMs;
+          const absencePoints = isQualifier && closed ? qualifierAbsencePoints : 0;
+          // Para qualifier encerrado, ausência recebe a mesma penalidade de última
+          // colocação da rejeição. Antes do encerramento, pendências não pontuam.
           athleteScores[wId] = {
             athleteId: athlete.id,
             workoutId: wId,
             result: '-',
             value: 0,
             rank: 0,
-            points: 0
+            points: absencePoints,
+            resultStatus: absencePoints ? 'absent' : undefined
           };
+          totalPoints += absencePoints;
         }
       });
 
@@ -2206,11 +2234,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (updatedData.name !== undefined) dbData.name = updatedData.name;
     if (updatedData.description !== undefined) dbData.description = updatedData.description;
     if (updatedData.type !== undefined) dbData.type = updatedData.type;
-    if (updatedData.timeCap !== undefined) dbData.time_cap = updatedData.timeCap;
+    if (Object.hasOwn(updatedData, 'timeCap')) dbData.time_cap = updatedData.timeCap || null;
     if (updatedData.code !== undefined) dbData.code = updatedData.code;
     if (updatedData.orderIndex !== undefined) dbData.order_index = updatedData.orderIndex;
-    if (updatedData.divisionId !== undefined) dbData.division_id = updatedData.divisionId;
-    if (updatedData.tieBreaker !== undefined) dbData.tie_breaker = updatedData.tieBreaker;
+    if (Object.hasOwn(updatedData, 'divisionId')) dbData.division_id = updatedData.divisionId || null;
+    if (Object.hasOwn(updatedData, 'tieBreaker')) dbData.tie_breaker = updatedData.tieBreaker || null;
+    if (Object.hasOwn(updatedData, 'submissionOpensAt')) dbData.submission_opens_at = updatedData.submissionOpensAt || null;
+    if (Object.hasOwn(updatedData, 'submissionClosesAt')) dbData.submission_closes_at = updatedData.submissionClosesAt || null;
 
     try {
       await adminPersist('updateWorkout', { eventId, workoutId, data: dbData });
