@@ -8,16 +8,111 @@ import { RegistrationVoucher } from '@/components/RegistrationVoucher';
 import { 
   Calendar, MapPin, Trophy, Share2, Ticket, Clock, 
   Dumbbell, AlignLeft, ShieldCheck, ChevronRight, UserCheck, Medal,
-  Sparkles, Footprints, Lock
+  Sparkles, Footprints, Lock, ChevronDown
 } from 'lucide-react';
 import Link from 'next/link';
-import { Registration, Athlete, EventScheduleItem } from '@/types';
+import { Registration, Athlete, EventScheduleItem, Workout } from '@/types';
 import { getEventStatus, getRegistrationAvailability } from '@/lib/eventStatus';
 import { getHeatSlotLabel, resolveHeatParticipantSlots } from '@/lib/scheduleParticipants';
 
 interface PageProps {
   params: Promise<{ id: string }>;
 }
+
+interface ScheduleHeatGroup {
+  id: string;
+  title: string;
+  dateLabel: string;
+  startTime: string;
+  endTime: string;
+  heatCount: number;
+  participantCount: number;
+  items: EventScheduleItem[];
+}
+
+type ScheduleBlock =
+  | { id: string; type: 'general'; item: EventScheduleItem }
+  | { id: string; type: 'heatGroup'; group: ScheduleHeatGroup };
+
+const parseScheduleTimestamp = (item: EventScheduleItem) => {
+  const date = item.date?.includes('/')
+    ? item.date.split('/').reverse().join('-')
+    : item.date;
+  const timestamp = Date.parse(`${date || '1970-01-01'}T${item.time || '00:00'}:00`);
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+};
+
+const formatScheduleDate = (value?: string) => {
+  if (!value) return 'Data a confirmar';
+
+  if (value.includes('/')) return value;
+
+  const [year, month, day] = value.split('-').map(Number);
+  if (!year || !month || !day) return value;
+
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: 'short',
+    weekday: 'short'
+  }).format(new Date(year, month - 1, day));
+};
+
+const getHeatGroupFallbackTitle = (item: EventScheduleItem) => {
+  const match = item.title.match(/-\s*(.+)$/);
+  return match?.[1]?.trim() || 'Baterias do evento';
+};
+
+const getWorkoutScheduleTitle = (workouts: Workout[], item: EventScheduleItem) => {
+  const workout = workouts.find(candidate => candidate.id === item.workoutId);
+  if (!workout) return getHeatGroupFallbackTitle(item);
+
+  return workout.code
+    ? `${workout.code} · ${workout.name}`
+    : workout.name;
+};
+
+const buildScheduleHeatGroups = (
+  items: EventScheduleItem[],
+  workouts: Workout[]
+): ScheduleHeatGroup[] => {
+  const groupMap = new Map<string, ScheduleHeatGroup>();
+
+  items
+    .filter(item => item.kind === 'heat')
+    .forEach((item) => {
+      const id = item.workoutId || getHeatGroupFallbackTitle(item);
+      const existing = groupMap.get(id);
+      const participantCount = (item.athleteIds || []).filter(Boolean).length;
+
+      if (existing) {
+        existing.items.push(item);
+        existing.heatCount += 1;
+        existing.participantCount += participantCount;
+        return;
+      }
+
+      groupMap.set(id, {
+        id,
+        title: getWorkoutScheduleTitle(workouts, item),
+        dateLabel: formatScheduleDate(item.date),
+        startTime: item.time || 'A confirmar',
+        endTime: item.endTime || item.time || 'A confirmar',
+        heatCount: 1,
+        participantCount,
+        items: [item]
+      });
+    });
+
+  return Array.from(groupMap.values()).map(group => {
+    const sortedItems = [...group.items].sort((a, b) => parseScheduleTimestamp(a) - parseScheduleTimestamp(b));
+    return {
+      ...group,
+      startTime: sortedItems[0]?.time || group.startTime,
+      endTime: sortedItems[sortedItems.length - 1]?.endTime || sortedItems[sortedItems.length - 1]?.time || group.endTime,
+      items: sortedItems
+    };
+  });
+};
 
 export default function EventPage({ params }: PageProps) {
   const resolvedParams = use(params);
@@ -30,7 +125,9 @@ export default function EventPage({ params }: PageProps) {
     publicEventDataStatus,
     loadPublicEventData,
     registerTicket,
-    refreshRegistrations
+    refreshRegistrations,
+    isLoading,
+    bootstrapStatus
   } = useApp();
   const [activeTab, setActiveTab] = useState<'details' | 'divisions' | 'schedule' | 'workouts'>('details');
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
@@ -38,6 +135,7 @@ export default function EventPage({ params }: PageProps) {
   const [paymentNotice, setPaymentNotice] = useState<{ text: string; tone: 'success' | 'error' } | null>(null);
   const [confirmedVoucher, setConfirmedVoucher] = useState<{ registration: Registration; athlete: Athlete; cpf?: string } | null>(null);
   const [selectedDivisionForCourseId, setSelectedDivisionForCourseId] = useState<string>('');
+  const [expandedHeatIds, setExpandedHeatIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!isSessionHydrated) return;
@@ -224,8 +322,66 @@ export default function EventPage({ params }: PageProps) {
     () => athletes.some(athlete => eventDivisionIds.has(athlete.divisionId)),
     [athletes, eventDivisionIds]
   );
+  const scheduleHeatGroups = React.useMemo(
+    () => buildScheduleHeatGroups(scheduleItems, event?.workouts || []),
+    [scheduleItems, event?.workouts]
+  );
+  const scheduleBlocks = React.useMemo<ScheduleBlock[]>(() => {
+    const groupsById = new Map(scheduleHeatGroups.map(group => [group.id, group]));
+    const renderedGroupIds = new Set<string>();
+    const blocks: ScheduleBlock[] = [];
+
+    scheduleItems.forEach((item) => {
+      if (item.kind !== 'heat') {
+        blocks.push({ id: item.id, type: 'general', item });
+        return;
+      }
+
+      const groupId = item.workoutId || getHeatGroupFallbackTitle(item);
+      if (renderedGroupIds.has(groupId)) return;
+
+      renderedGroupIds.add(groupId);
+      const group = groupsById.get(groupId);
+      if (group) {
+        blocks.push({ id: group.id, type: 'heatGroup', group });
+      }
+    });
+
+    return blocks;
+  }, [scheduleHeatGroups, scheduleItems]);
+  const scheduleSummary = React.useMemo(() => {
+    const heatCount = scheduleHeatGroups.reduce((total, group) => total + group.heatCount, 0);
+    const participantCount = scheduleHeatGroups.reduce((total, group) => total + group.participantCount, 0);
+    const firstGroup = scheduleHeatGroups[0];
+    const lastGroup = scheduleHeatGroups[scheduleHeatGroups.length - 1];
+
+    return {
+      heatCount,
+      participantCount,
+      groupCount: scheduleHeatGroups.length,
+      dateLabel: firstGroup?.dateLabel || formatScheduleDate(scheduleItems[0]?.date),
+      timeRange: firstGroup && lastGroup ? `${firstGroup.startTime} - ${lastGroup.endTime}` : 'A confirmar'
+    };
+  }, [scheduleHeatGroups, scheduleItems]);
+  const isEventLoading = !isSessionHydrated
+    || isLoading
+    || (bootstrapStatus !== 'ready' && bootstrapStatus !== 'degraded')
+    || publicEventDataStatus[eventId] === 'loading'
+    || publicEventDataStatus[eventId] === undefined;
 
   if (!event) {
+    if (isEventLoading) {
+      return (
+        <div className="min-h-[60vh] flex flex-col items-center justify-center space-y-4">
+          <Trophy className="h-16 w-16 text-muted animate-pulse" />
+          <h2 className="text-xl font-bold text-white uppercase tracking-wider">Carregando evento</h2>
+          <p className="max-w-sm text-center text-xs font-semibold uppercase tracking-wider text-muted">
+            Buscando cronograma, atletas e informações públicas.
+          </p>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center space-y-4">
         <Trophy className="h-16 w-16 text-muted animate-bounce" />
@@ -249,6 +405,18 @@ export default function EventPage({ params }: PageProps) {
       setShareFeedback(true);
       setTimeout(() => setShareFeedback(false), 2000);
     }
+  };
+
+  const toggleHeatDetails = (heatId: string) => {
+    setExpandedHeatIds(previous => {
+      const next = new Set(previous);
+      if (next.has(heatId)) {
+        next.delete(heatId);
+      } else {
+        next.add(heatId);
+      }
+      return next;
+    });
   };
 
   const getScheduleKindLabel = (kind: string) => {
@@ -429,7 +597,7 @@ export default function EventPage({ params }: PageProps) {
       {/* Navegação por Abas Rápidas */}
       <section className="sticky top-16 z-40 border-b border-card-border bg-background">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex overflow-x-auto gap-2 py-3 scrollbar-none">
+          <div className="flex overflow-x-auto gap-1.5 py-3 scrollbar-none sm:gap-2">
             {[
               { id: 'details', label: 'Detalhes', icon: AlignLeft, isLink: false },
               { id: 'divisions', label: 'Divisões', icon: Trophy, isLink: false },
@@ -438,7 +606,7 @@ export default function EventPage({ params }: PageProps) {
               { id: 'leaderboard', label: 'Leaderboard', icon: Medal, isLink: true }
             ].map((tab) => {
               const Icon = tab.icon;
-              const classes = `flex min-h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border px-4 py-2 text-xs font-extrabold uppercase tracking-wider transition-colors ${
+              const classes = `flex min-h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border px-3 py-2 text-xs font-extrabold uppercase tracking-wider transition-colors sm:px-4 ${
                 activeTab === tab.id
                   ? 'bg-primary/10 border-primary text-primary font-black'
                   : 'bg-transparent text-muted border-transparent hover:text-white hover:border-card-border'
@@ -555,131 +723,220 @@ export default function EventPage({ params }: PageProps) {
 
             {/* Aba 3: Horários / Cronograma */}
             {activeTab === 'schedule' && (
-              <div className="space-y-6 rounded-xl border border-card-border bg-card p-6">
-                <h3 className="text-lg font-black text-white uppercase tracking-wider border-b border-card-border pb-3">
-                  Cronograma Oficial
-                </h3>
-                
-                <div className="space-y-6 relative before:absolute before:left-3.5 before:top-2 before:bottom-2 before:w-[2px] before:bg-card-border">
-                  {scheduleItems.length > 0 ? (
-                    scheduleItems.map((item, index) => {
-	                      const isHeat = item.kind === 'heat';
-	                      const heatParticipants = resolveHeatParticipantSlots(item.athleteIds, athletes);
-	                      const heatSlotLabel = getHeatSlotLabel(event.eventType);
-                      const isPublicEventLoading = publicEventDataStatus[eventId] === 'loading'
-                        || (publicEventDataStatus[eventId] === undefined && !hasPublicEventAthletes);
-	                      return (
-	                        <div key={item.id} className="flex gap-4 relative">
-                          <div className={`z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border bg-dark-gray ${
-                            index === scheduleItems.length - 1 ? 'border-card-border' : 'border-primary'
-                          }`}>
-                            <span className={`h-2.5 w-2.5 rounded-full ${index === scheduleItems.length - 1 ? 'bg-muted' : 'bg-primary'}`}></span>
-                          </div>
-                          {isHeat ? (
-                            <div className="space-y-2 w-full bg-dark-gray/25 p-4 rounded-xl border border-card-border/60 hover:border-primary/20 transition-colors text-white">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="rounded border border-primary/20 bg-primary/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-primary">
-                                  Bateria de Prova
-                                </span>
-                                <span className="text-[9px] font-black uppercase tracking-wider text-muted-soft">{item.date}</span>
-                              </div>
-                              <h4 className="text-sm font-extrabold text-white uppercase">{item.title}</h4>
-                              <div className="grid grid-cols-4 gap-2 pt-2 text-center text-[10px] font-bold uppercase tracking-wider">
-                                <div className="bg-dark-gray/50 p-2 rounded border border-card-border/30">
-                                  <span className="text-muted block text-[8px] mb-1 font-sans">Aquecimento</span>
-                                  <span className="text-white text-xs font-number font-bold">{item.warmupTime}</span>
-                                </div>
-                                <div className="bg-dark-gray/50 p-2 rounded border border-card-border/30">
-                                  <span className="text-muted block text-[8px] mb-1 font-sans">Fila</span>
-                                  <span className="text-white text-xs font-number font-bold">{item.checkinTime}</span>
-                                </div>
-                                <div className="bg-primary/20 p-2 rounded border border-primary/30">
-                                  <span className="text-primary block text-[8px] mb-1 font-sans">Início</span>
-                                  <span className="text-primary text-xs font-number font-bold">{item.time}</span>
-                                </div>
-                                <div className="bg-dark-gray/50 p-2 rounded border border-card-border/30">
-                                  <span className="text-muted block text-[8px] mb-1 font-sans">Final</span>
-                                  <span className="text-white text-xs font-number font-bold">{item.endTime}</span>
-                                </div>
-                              </div>
-	                              <div className="mt-3 pt-3 border-t border-card-border/40 space-y-2 text-left">
-	                                <div className="flex flex-wrap items-center justify-between gap-2">
-	                                  <span className="text-[9px] font-black text-muted-soft uppercase tracking-wider block">
-	                                    Atletas / Equipes
-	                                  </span>
-	                                  {heatParticipants.totalCount > 0 && (
-	                                    <span className="rounded border border-card-border/60 bg-black/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-muted-soft font-number">
-	                                      {heatParticipants.resolvedCount}/{heatParticipants.totalCount}
-	                                    </span>
-	                                  )}
-	                                </div>
+              <div className="min-w-0 space-y-6 overflow-hidden rounded-xl border border-card-border bg-card p-4 sm:p-6">
+                <div className="flex flex-col gap-2 border-b border-card-border pb-4 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-wider text-primary">Cronograma agrupado por prova</p>
+                    <h3 className="mt-1 text-lg font-black uppercase tracking-wider text-white">
+                      Cronograma Oficial
+                    </h3>
+                  </div>
+                  {scheduleItems.length > 0 && (
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted">
+                      {scheduleSummary.dateLabel} · {scheduleSummary.timeRange}
+                    </p>
+                  )}
+                </div>
 
-	                                {heatParticipants.resolvedParticipants.length > 0 ? (
-	                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-	                                    {heatParticipants.resolvedParticipants.map(({ athlete, athleteId, displayIndex }) => {
-	                                      const safeBox = athlete.box && athlete.box !== 'undefined' ? athlete.box : '';
-	                                      return (
-	                                        <div
-	                                          key={`${item.id}-${athleteId}-${displayIndex}`}
-	                                          className="flex min-w-0 items-center gap-2 rounded bg-black/40 border border-card-border/60 px-2.5 py-2 text-[10px] text-white transition-colors hover:border-primary/30"
-	                                        >
-	                                          <span className="shrink-0 rounded bg-primary/10 border border-primary/20 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-primary">
-	                                            {heatSlotLabel} {displayIndex}
-	                                          </span>
-	                                          {athlete.isTeam && (
-	                                            <span className="shrink-0 text-[8px] bg-primary/20 text-primary px-1 rounded font-black">EQ</span>
-	                                          )}
-	                                          <div className="min-w-0 flex-1">
-	                                            <p className="truncate font-bold uppercase tracking-wider">{athlete.name}</p>
-	                                            <p className="truncate text-[9px] font-medium text-muted-soft">
-	                                              {getDivisionName(athlete.divisionId)}{safeBox ? ` - ${safeBox}` : ''}
-	                                            </p>
-	                                          </div>
-	                                        </div>
-	                                      );
-	                                    })}
-	                                  </div>
-	                                ) : heatParticipants.totalCount > 0 ? (
-	                                  <p className="rounded border border-card-border/50 bg-black/20 px-3 py-2 text-[10px] font-semibold text-muted-soft">
-	                                    {isPublicEventLoading
-	                                      ? 'Participantes em carregamento...'
-	                                      : 'Participantes vinculados, mas os perfis públicos ainda não foram encontrados.'}
-	                                  </p>
-	                                ) : (
-	                                  <p className="rounded border border-card-border/50 bg-black/20 px-3 py-2 text-[10px] font-semibold text-muted-soft">
-	                                    Nenhum participante publicado nesta bateria.
-	                                  </p>
-	                                )}
-
-	                                {heatParticipants.unresolvedCount > 0 && heatParticipants.resolvedCount > 0 && (
-	                                  <p className="text-[9px] font-semibold text-muted-soft">
-	                                    {heatParticipants.unresolvedCount} participante(s) ainda sem dados públicos carregados.
-	                                  </p>
-	                                )}
-	                              </div>
-	                            </div>
-	                          ) : (
-                            <div className="space-y-1">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="rounded border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-primary">
-                                  {getScheduleKindLabel(item.kind)}
-                                </span>
-                                <span className="rounded border border-card-border bg-dark-gray px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-muted">
-                                  {getScheduleModeLabel(item.mode)}
-                                </span>
-                                <span className="text-[10px] font-black uppercase tracking-wider text-white">{item.date} às {item.time}</span>
-                              </div>
-                              <h4 className="text-sm font-extrabold text-white">{item.title}</h4>
-                              <p className="text-xs text-muted">{item.description}</p>
-                              {item.location && (
-                                <p className="text-xs text-muted">Local/link: {item.location}</p>
-                              )}
-                            </div>
-                          )}
+                {scheduleItems.length > 0 ? (
+                  <div className="space-y-5">
+                    {scheduleHeatGroups.length > 0 && (
+                      <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 sm:grid-cols-4">
+                        <div className="rounded-lg border border-card-border/70 bg-dark-gray/30 p-3">
+                          <span className="block text-[9px] font-black uppercase tracking-wider text-muted">Provas</span>
+                          <strong className="mt-1 block text-xl font-black text-white font-number">{scheduleSummary.groupCount}</strong>
                         </div>
+                        <div className="rounded-lg border border-card-border/70 bg-dark-gray/30 p-3">
+                          <span className="block text-[9px] font-black uppercase tracking-wider text-muted">Baterias</span>
+                          <strong className="mt-1 block text-xl font-black text-white font-number">{scheduleSummary.heatCount}</strong>
+                        </div>
+                        <div className="rounded-lg border border-card-border/70 bg-dark-gray/30 p-3">
+                          <span className="block text-[9px] font-black uppercase tracking-wider text-muted">Atletas</span>
+                          <strong className="mt-1 block text-xl font-black text-white font-number">{scheduleSummary.participantCount}</strong>
+                        </div>
+                        <div className="rounded-lg border border-primary/30 bg-primary/10 p-3">
+                          <span className="block text-[9px] font-black uppercase tracking-wider text-primary">Janela</span>
+                          <strong className="mt-1 block text-sm font-black text-primary font-number">{scheduleSummary.timeRange}</strong>
+                        </div>
+                      </div>
+                    )}
+
+                    {scheduleBlocks.map((block) => {
+                      if (block.type === 'general') {
+                        const item = block.item;
+                        return (
+                          <article key={block.id} className="rounded-lg border border-card-border/70 bg-dark-gray/20 p-4">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="rounded border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-primary">
+                                {getScheduleKindLabel(item.kind)}
+                              </span>
+                              <span className="rounded border border-card-border bg-dark-gray px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-muted">
+                                {getScheduleModeLabel(item.mode)}
+                              </span>
+                              <span className="text-[10px] font-black uppercase tracking-wider text-white">
+                                {formatScheduleDate(item.date)} às {item.time}
+                              </span>
+                            </div>
+                            <h4 className="mt-2 text-sm font-extrabold text-white">{item.title}</h4>
+                            <p className="mt-1 text-xs leading-relaxed text-muted">{item.description}</p>
+                            {item.location && (
+                              <p className="mt-1 text-xs text-muted">Local/link: {item.location}</p>
+                            )}
+                          </article>
+                        );
+                      }
+
+                      const group = block.group;
+                      const groupIndex = scheduleHeatGroups.findIndex(candidate => candidate.id === group.id);
+
+                      return (
+                        <section key={block.id} className="min-w-0 overflow-hidden rounded-lg border border-card-border/80 bg-dark-gray/20">
+                          <div className="border-b border-card-border/70 bg-black/20 p-4">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                              <div className="min-w-0">
+                                <span className="rounded border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-primary">
+                                  Prova {groupIndex + 1}
+                                </span>
+                                <h4 className="mt-2 text-base font-black uppercase tracking-wider text-white sm:text-lg">
+                                  {group.title}
+                                </h4>
+                                <p className="mt-1 text-xs font-semibold uppercase tracking-wider text-muted">
+                                  {group.dateLabel} · {group.startTime} - {group.endTime}
+                                </p>
+                              </div>
+                              <div className="grid grid-cols-1 gap-2 text-right min-[420px]:grid-cols-2 sm:min-w-48">
+                                <span className="rounded border border-card-border/60 bg-background/50 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-muted">
+                                  <strong className="block text-sm text-white font-number">{group.heatCount}</strong>
+                                  baterias
+                                </span>
+                                <span className="rounded border border-card-border/60 bg-background/50 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-muted">
+                                  <strong className="block text-sm text-white font-number">{group.participantCount}</strong>
+                                  atletas
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="divide-y divide-card-border/60">
+                            {group.items.map((item) => {
+                              const heatParticipants = resolveHeatParticipantSlots(item.athleteIds, athletes);
+                              const heatSlotLabel = getHeatSlotLabel(event.eventType);
+                              const isPublicEventLoading = publicEventDataStatus[eventId] === 'loading'
+                                || (publicEventDataStatus[eventId] === undefined && !hasPublicEventAthletes);
+                              const isExpanded = expandedHeatIds.has(item.id);
+                              const panelId = `heat-participants-${item.id}`;
+
+                              return (
+                                <article key={item.id} className="p-4">
+                                  <div className="flex min-w-0 flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                                    <div className="min-w-0">
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <span className="rounded border border-primary/20 bg-primary/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-primary">
+                                          Bateria de Prova
+                                        </span>
+                                        <span className="text-[9px] font-black uppercase tracking-wider text-muted-soft">
+                                          {formatScheduleDate(item.date)}
+                                        </span>
+                                      </div>
+                                      <h5 className="mt-2 truncate text-sm font-extrabold uppercase text-white">
+                                        {item.title}
+                                      </h5>
+                                    </div>
+
+                                    <div className="grid min-w-0 grid-cols-1 gap-2 text-center text-[10px] font-bold uppercase tracking-wider min-[360px]:grid-cols-2 sm:grid-cols-4 xl:min-w-[430px]">
+                                      <div className="rounded border border-card-border/40 bg-background/50 p-2">
+                                        <span className="mb-1 block text-[8px] text-muted">Aquecimento</span>
+                                        <span className="text-xs font-bold text-white font-number">{item.warmupTime || '-'}</span>
+                                      </div>
+                                      <div className="rounded border border-card-border/40 bg-background/50 p-2">
+                                        <span className="mb-1 block text-[8px] text-muted">Fila</span>
+                                        <span className="text-xs font-bold text-white font-number">{item.checkinTime || '-'}</span>
+                                      </div>
+                                      <div className="rounded border border-primary/30 bg-primary/20 p-2">
+                                        <span className="mb-1 block text-[8px] text-primary">Início</span>
+                                        <span className="text-xs font-bold text-primary font-number">{item.time || '-'}</span>
+                                      </div>
+                                      <div className="rounded border border-card-border/40 bg-background/50 p-2">
+                                        <span className="mb-1 block text-[8px] text-muted">Final</span>
+                                        <span className="text-xs font-bold text-white font-number">{item.endTime || '-'}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="mt-3 flex flex-col items-stretch gap-2 border-t border-card-border/40 pt-3 sm:flex-row sm:items-center sm:justify-between">
+                                    <span className="text-[9px] font-black uppercase tracking-wider text-muted-soft">
+                                      Atletas / Equipes
+                                    </span>
+                                    <button
+                                      type="button"
+                                      aria-expanded={isExpanded}
+                                      aria-controls={panelId}
+                                      onClick={() => toggleHeatDetails(item.id)}
+                                      className="flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-card-border/70 bg-background/70 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-white transition-colors hover:border-primary hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary sm:w-auto"
+                                    >
+                                      <span className="font-number">
+                                        {heatParticipants.totalCount > 0
+                                          ? `${heatParticipants.resolvedCount}/${heatParticipants.totalCount}`
+                                          : '0'}
+                                      </span>
+                                      <span>{isExpanded ? 'Ocultar atletas' : 'Ver atletas'}</span>
+                                      <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} aria-hidden="true" />
+                                    </button>
+                                  </div>
+
+                                  <div id={panelId} hidden={!isExpanded} className="mt-3 space-y-2">
+                                    {heatParticipants.resolvedParticipants.length > 0 ? (
+                                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                        {heatParticipants.resolvedParticipants.map(({ athlete, athleteId, displayIndex }) => {
+                                          const safeBox = athlete.box && athlete.box !== 'undefined' ? athlete.box : '';
+                                          return (
+                                            <div
+                                              key={`${item.id}-${athleteId}-${displayIndex}`}
+                                              className="flex min-w-0 items-center gap-2 rounded border border-card-border/60 bg-black/40 px-2.5 py-2 text-[10px] text-white transition-colors hover:border-primary/30"
+                                            >
+                                              <span className="shrink-0 rounded border border-primary/20 bg-primary/10 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-primary">
+                                                {heatSlotLabel} {displayIndex}
+                                              </span>
+                                              {athlete.isTeam && (
+                                                <span className="shrink-0 rounded bg-primary/20 px-1 text-[8px] font-black text-primary">EQ</span>
+                                              )}
+                                              <div className="min-w-0 flex-1">
+                                                <p className="truncate font-bold uppercase tracking-wider">{athlete.name}</p>
+                                                <p className="truncate text-[9px] font-medium text-muted-soft">
+                                                  {getDivisionName(athlete.divisionId)}{safeBox ? ` - ${safeBox}` : ''}
+                                                </p>
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    ) : heatParticipants.totalCount > 0 ? (
+                                      <p className="rounded border border-card-border/50 bg-black/20 px-3 py-2 text-[10px] font-semibold text-muted-soft">
+                                        {isPublicEventLoading
+                                          ? 'Participantes em carregamento...'
+                                          : 'Participantes vinculados, mas os perfis públicos ainda não foram encontrados.'}
+                                      </p>
+                                    ) : (
+                                      <p className="rounded border border-card-border/50 bg-black/20 px-3 py-2 text-[10px] font-semibold text-muted-soft">
+                                        Nenhum participante publicado nesta bateria.
+                                      </p>
+                                    )}
+
+                                    {heatParticipants.unresolvedCount > 0 && heatParticipants.resolvedCount > 0 && (
+                                      <p className="text-[9px] font-semibold text-muted-soft">
+                                        {heatParticipants.unresolvedCount} participante(s) ainda sem dados públicos carregados.
+                                      </p>
+                                    )}
+                                  </div>
+                                </article>
+                              );
+                            })}
+                          </div>
+                        </section>
                       );
-                    })
-                  ) : (
+                    })}
+                  </div>
+                ) : (
                     <>
                       <div className="flex gap-4 relative">
                         <div className="w-7 h-7 rounded-full bg-dark-gray border border-primary flex items-center justify-center shrink-0 z-10">
@@ -719,8 +976,7 @@ export default function EventPage({ params }: PageProps) {
                         </div>
                       </div>
                     </>
-                  )}
-                </div>
+                )}
               </div>
             )}
 
