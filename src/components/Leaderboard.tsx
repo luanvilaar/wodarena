@@ -23,12 +23,14 @@ const InstagramIcon = ({ className = 'h-3.5 w-3.5' }: { className?: string }) =>
 );
 import { Event, Athlete, Workout, Score } from '@/types';
 import { getAgeGroupFromDate } from '@/lib/fitnessRacing';
-import { SCORE_TIE_BREAKER_SPLIT_KEY, shouldUseTimeTieBreaker } from '@/lib/scoring';
 import { getTeamDisplayName } from '@/lib/teamDisplay';
 
 interface LeaderboardProps {
   event: Event;
 }
+
+const SCORE_TIE_BREAKER_SPLIT_KEY = 'tieBreaker';
+const shouldUseTimeTieBreaker = (tieBreaker?: string | null) => tieBreaker?.trim().toLowerCase() === 'tempo';
 
 const getTeamMembersArray = (teamMembers: unknown): { name: string; instagram?: string }[] => {
   if (!teamMembers) return [];
