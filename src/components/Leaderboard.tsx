@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Search, ShieldAlert, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, X, TrendingUp, User, Flame, Zap, BarChart3, Clock, Info } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -23,6 +23,7 @@ const InstagramIcon = ({ className = 'h-3.5 w-3.5' }: { className?: string }) =>
 );
 import { Event, Athlete, Workout, Score } from '@/types';
 import { getAgeGroupFromDate } from '@/lib/fitnessRacing';
+import { SCORE_TIE_BREAKER_SPLIT_KEY, shouldUseTimeTieBreaker } from '@/lib/scoring';
 import { getTeamDisplayName } from '@/lib/teamDisplay';
 
 interface LeaderboardProps {
@@ -147,6 +148,113 @@ const ScorePerWorkoutList = ({ workouts, scores }: { workouts: Workout[]; scores
         );
       })}
     </div>
+  );
+};
+
+const getTieBreakerLabel = (tieBreaker?: string) => {
+  if (shouldUseTimeTieBreaker(tieBreaker)) return 'Tempo de desempate';
+  return tieBreaker?.trim() || 'Critério de desempate';
+};
+
+type WorkoutScoreResultProps = {
+  workout: Workout;
+  score: Score;
+  tieBreakGroupSize: number;
+  compact?: boolean;
+};
+
+const WorkoutScoreResult = ({ workout, score, tieBreakGroupSize, compact = false }: WorkoutScoreResultProps) => {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLSpanElement | null>(null);
+  const tooltipId = useId();
+  const tieBreakerLabel = getTieBreakerLabel(workout.tieBreaker);
+  const tieBreakerValue = score.splits?.[SCORE_TIE_BREAKER_SPLIT_KEY] || '-';
+  const shouldShowTieBreaker = shouldUseTimeTieBreaker(workout.tieBreaker) && tieBreakGroupSize > 1 && tieBreakerValue !== '-';
+
+  useEffect(() => {
+    if (!open) return;
+
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Node && !containerRef.current?.contains(target)) {
+        setOpen(false);
+      }
+    };
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener('pointerdown', closeOnOutsidePointer);
+    document.addEventListener('keydown', closeOnEscape);
+
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointer);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [open]);
+
+  if (!shouldShowTieBreaker) {
+    return (
+      <span className={`${compact ? 'text-[10px]' : 'text-xs'} truncate px-0.5 text-muted`} title={score.result}>
+        {score.result}
+      </span>
+    );
+  }
+
+  return (
+    <span
+      ref={containerRef}
+      className="relative inline-flex max-w-full items-center justify-center"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+      onBlur={(event) => {
+        const nextTarget = event.relatedTarget;
+        if (!(nextTarget instanceof Node) || !event.currentTarget.contains(nextTarget)) {
+          setOpen(false);
+        }
+      }}
+    >
+      <button
+        type="button"
+        className={`inline-flex max-w-full items-center justify-center gap-1 rounded-md border border-primary/35 bg-primary/10 font-black text-primary transition-colors hover:border-primary hover:bg-primary/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 ${compact ? 'min-h-11 min-w-11 px-1 text-[10px]' : 'min-h-9 min-w-11 px-2 text-xs'}`}
+        aria-controls={tooltipId}
+        aria-describedby={open ? tooltipId : undefined}
+        aria-expanded={open}
+        aria-label={`Ver desempate de ${score.result} em ${workout.name}`}
+        onClick={(event) => {
+          event.stopPropagation();
+          setOpen((current) => !current);
+        }}
+        onFocus={() => setOpen(true)}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') {
+            event.stopPropagation();
+            setOpen(false);
+          }
+        }}
+      >
+        <span className="truncate">{score.result}</span>
+        <Info className="h-3 w-3 shrink-0" aria-hidden="true" />
+      </button>
+      {open && (
+        <span
+          id={tooltipId}
+          role="tooltip"
+          className="fixed inset-x-3 top-20 z-[60] rounded-lg border border-primary/30 bg-card p-3 text-left font-sans text-white shadow-2xl shadow-black/50 sm:absolute sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-full sm:mt-2 sm:w-64 sm:-translate-x-1/2"
+        >
+          <span className="block text-[9px] font-black uppercase tracking-[0.16em] text-primary">Tie-break aplicado</span>
+          <span className="mt-2 block text-xs font-bold leading-5 text-white">
+            {tieBreakerLabel}: <span className="font-mono text-primary">{tieBreakerValue}</span>
+          </span>
+          <span className="mt-1 block text-[11px] leading-4 text-muted">
+            {tieBreakGroupSize} competidores empataram com {score.result}. Este atleta ficou em {score.rank ? `${score.rank}º` : 'rank pendente'} nesta prova.
+          </span>
+        </span>
+      )}
+    </span>
   );
 };
 
@@ -368,6 +476,26 @@ export function Leaderboard({ event }: LeaderboardProps) {
     return data;
   }, [leaderboardData, searchQuery, ageGroupFilter, event.eventType, activeCategory]);
 
+  const workoutTieBreakGroupSizes = useMemo(() => {
+    const groups: Record<string, Record<string, number>> = {};
+
+    divisionWorkouts.forEach((workout) => {
+      groups[workout.id] = {};
+    });
+
+    leaderboardData.forEach((row) => {
+      divisionWorkouts.forEach((workout) => {
+        const score = row.scores[workout.id];
+        if (!score || score.result === '-' || score.result === '') return;
+
+        const groupKey = String(score.value);
+        groups[workout.id][groupKey] = (groups[workout.id][groupKey] || 0) + 1;
+      });
+    });
+
+    return groups;
+  }, [divisionWorkouts, leaderboardData]);
+
   // Líder do Fitness Racing para cálculo de diferença
   const leaderTime = useMemo(() => {
     if (event.eventType !== 'fitness_racing') return 0;
@@ -579,7 +707,12 @@ export function Leaderboard({ event }: LeaderboardProps) {
                               <div className="grid min-h-16 grid-cols-3 items-center px-1 text-xs font-black text-white">
                                 <span>{score.points ?? 0}</span>
                                 <span className="text-muted">{score.rank ? `${score.rank}º` : '–'}</span>
-                                <span className="truncate px-0.5 text-[10px] text-muted" title={score.result}>{score.result}</span>
+                                <WorkoutScoreResult
+                                  workout={activeMobileWorkout}
+                                  score={score}
+                                  tieBreakGroupSize={workoutTieBreakGroupSizes[activeMobileWorkout.id]?.[String(score.value)] || 0}
+                                  compact
+                                />
                               </div>
                             ) : (
                               <div className="flex min-h-16 items-center justify-center text-xs font-bold text-muted-soft">–</div>
@@ -717,7 +850,11 @@ export function Leaderboard({ event }: LeaderboardProps) {
                               <div className="grid min-h-[5.5rem] grid-cols-3 items-center px-3 text-sm font-black text-white">
                                 <span>{score.points ?? 0}</span>
                                 <span className="text-muted">{score.rank ? `${score.rank}º` : '–'}</span>
-                                <span className="truncate px-1 text-xs text-muted" title={score.result}>{score.result}</span>
+                                <WorkoutScoreResult
+                                  workout={workout}
+                                  score={score}
+                                  tieBreakGroupSize={workoutTieBreakGroupSizes[workout.id]?.[String(score.value)] || 0}
+                                />
                               </div>
                             ) : (
                               <div className="flex min-h-[5.5rem] items-center justify-center text-sm font-bold text-muted-soft">–</div>

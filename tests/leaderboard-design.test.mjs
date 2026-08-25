@@ -23,6 +23,19 @@ test('uses a focused workout view with explicit navigation on mobile', () => {
   assert.doesNotMatch(leaderboard, /MobileLeaderboardCard/);
 });
 
+test('discloses workout tie-break details without changing the leaderboard matrix', () => {
+  assert.match(leaderboard, /WorkoutScoreResult/);
+  assert.match(leaderboard, /SCORE_TIE_BREAKER_SPLIT_KEY/);
+  assert.match(leaderboard, /workoutTieBreakGroupSizes/);
+  assert.match(leaderboard, /shouldUseTimeTieBreaker\(workout\.tieBreaker\)/);
+  assert.match(leaderboard, /Tie-break aplicado/);
+  assert.match(leaderboard, /aria-controls=\{tooltipId\}/);
+  assert.match(leaderboard, /aria-expanded=\{open\}/);
+  assert.match(leaderboard, /document\.addEventListener\('pointerdown'/);
+  assert.match(leaderboard, /fixed inset-x-3 top-20/);
+  assert.match(leaderboard, /min-h-11 min-w-11/);
+});
+
 test('expands the leaderboard page container for the dense results layout', () => {
   assert.match(leaderboardPage, /max-w-\[1600px\]/);
   assert.match(leaderboardPage, /Resultados oficiais/);
