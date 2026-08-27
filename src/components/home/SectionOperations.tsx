@@ -88,30 +88,34 @@ export function SectionOperations() {
             `
           }}
         />
-        <div className="absolute right-4 top-6 flex w-14 items-center justify-center sm:top-8 sm:w-16 lg:right-6 lg:top-8 lg:w-[15vw] lg:min-w-[130px] lg:max-w-[210px]">
-          <div className="relative aspect-square w-full opacity-90 mix-blend-screen">
-            {canAnimateLogo && !reducedMotion ? (
-              <video
-                className="h-full w-full object-contain"
-                poster={ROCHAFIT_LOGO_FALLBACK}
-                autoPlay
-                loop
-                muted
-                playsInline
-                preload="metadata"
-              >
-                <source src="/rochafit-logo-alpha.webm" type="video/webm" />
-              </video>
-            ) : (
-              <Image
-                src={ROCHAFIT_LOGO_FALLBACK}
-                alt=""
-                fill
-                sizes="420px"
-                className="object-contain"
-              />
-            )}
-          </div>
+      </div>
+
+      <div
+        className="pointer-events-none absolute right-4 top-6 z-20 flex w-14 items-center justify-center sm:top-8 sm:w-16 lg:right-6 lg:top-8 lg:w-[15vw] lg:min-w-[130px] lg:max-w-[210px]"
+        aria-hidden="true"
+      >
+        <div className="relative aspect-square w-full opacity-90 mix-blend-screen">
+          {canAnimateLogo && !reducedMotion ? (
+            <video
+              className="h-full w-full object-contain"
+              poster={ROCHAFIT_LOGO_FALLBACK}
+              autoPlay
+              loop
+              muted
+              playsInline
+              preload="metadata"
+            >
+              <source src="/rochafit-logo-alpha.webm" type="video/webm" />
+            </video>
+          ) : (
+            <Image
+              src={ROCHAFIT_LOGO_FALLBACK}
+              alt=""
+              fill
+              sizes="420px"
+              className="object-contain"
+            />
+          )}
         </div>
       </div>
 
@@ -119,7 +123,7 @@ export function SectionOperations() {
         {/* Área Hero de Operações */}
         <div className="min-h-[15.75rem] sm:min-h-[20.125rem] lg:min-h-[25.375rem] flex items-end pb-8 sm:pb-12">
           <div className="grid gap-8 lg:grid-cols-2 lg:items-end w-full">
-            <div className="relative inline-flex max-w-xl flex-col items-start gap-4 rounded-2xl bg-background p-5 sm:p-6">
+            <div className="relative inline-flex max-w-xl flex-col items-start gap-3 rounded-2xl bg-background/40 p-4 backdrop-blur-sm sm:gap-4 sm:p-5">
               <h1 className="text-3xl font-black uppercase leading-[0.92] tracking-[-0.04em] text-white sm:text-5xl lg:text-6xl">
                 Gestão completa<br />para eventos de<br />alto rendimento
               </h1>
@@ -127,7 +131,7 @@ export function SectionOperations() {
                 Do planejamento à publicação dos resultados, o WODArena centraliza toda a operação em uma única plataforma.
               </p>
             </div>
-            <div className="inline-flex flex-col items-start gap-3 rounded-2xl bg-background p-5 sm:p-6">
+            <div className="inline-flex flex-col items-start gap-3 rounded-2xl bg-background/40 p-4 backdrop-blur-sm sm:p-5">
               <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-foreground">
                 Eventos suportados
               </h2>
@@ -135,7 +139,7 @@ export function SectionOperations() {
                 {sportsTags.map((tag) => (
                   <span
                     key={tag}
-                    className="rounded-full border border-card-border bg-card px-4 py-2.5 text-xs font-bold text-foreground"
+                    className="rounded-full border border-card-border bg-card/85 px-4 py-2.5 text-xs font-bold text-foreground backdrop-blur-sm"
                   >
                     {tag}
                   </span>
