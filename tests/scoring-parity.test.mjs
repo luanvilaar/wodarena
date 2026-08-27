@@ -36,3 +36,31 @@ test('score parser canonicalizes time and rejects invalid inputs before review',
   assert.throws(() => scoring.parseScoreForWorkout('reps', '-1'));
   assert.throws(() => scoring.parseScoreForWorkout('points', 'not-a-score'));
 });
+
+test('max weight workout ranking uses time tie-breaker only after equal loads', () => {
+  const ranked = scoring.rankWorkoutScores('maxweight', 'Tempo', [
+    { athleteId: 'ath-a', result: '120', value: 120, splits: { tieBreaker: '00:45' } },
+    { athleteId: 'ath-b', result: '120', value: 120, splits: { tieBreaker: '00:50' } },
+    { athleteId: 'ath-c', result: '125', value: 125, splits: { tieBreaker: '01:30' } },
+    { athleteId: 'ath-d', result: '120', value: 120, splits: { tieBreaker: '00:45' } },
+  ], 4);
+
+  assert.equal(ranked.find(score => score.athleteId === 'ath-c').rank, 1);
+  assert.equal(ranked.find(score => score.athleteId === 'ath-a').rank, 2);
+  assert.equal(ranked.find(score => score.athleteId === 'ath-d').rank, 2);
+  assert.equal(ranked.find(score => score.athleteId === 'ath-b').rank, 4);
+  assert.equal(ranked.find(score => score.athleteId === 'ath-a').points, 2);
+  assert.equal(ranked.find(score => score.athleteId === 'ath-d').points, 2);
+});
+
+test('equal loads still share rank when no time tie-breaker is configured', () => {
+  const ranked = scoring.rankWorkoutScores('maxweight', '', [
+    { athleteId: 'ath-a', result: '120', value: 120, splits: { tieBreaker: '00:45' } },
+    { athleteId: 'ath-b', result: '120', value: 120, splits: { tieBreaker: '00:50' } },
+  ], 2);
+
+  assert.equal(ranked[0].rank, 1);
+  assert.equal(ranked[1].rank, 1);
+  assert.equal(ranked[0].points, 1);
+  assert.equal(ranked[1].points, 1);
+});

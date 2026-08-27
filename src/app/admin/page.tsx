@@ -54,6 +54,7 @@ import { FITNESS_RACING_AGE_GROUPS, FITNESS_RACING_STATION_LIBRARY, buildFitness
 import { buildDivisionOrderMap, getDivisionOrderPosition, moveDivisionId, shiftDivisionId } from '@/lib/divisionOrder';
 import { getTeamDisplayName } from '@/lib/teamDisplay';
 import { fortalezaDateTimeLocalToUtc, normalizeQualifierSubmissionWindow, utcToFortalezaDateTimeLocal } from '@/lib/submissionWindow';
+import { SCORE_TIE_BREAKER_SPLIT_KEY, shouldUseTimeTieBreaker } from '@/lib/scoring';
 
 const currencyFormatter = new Intl.NumberFormat('pt-BR', {
   style: 'currency',
@@ -61,6 +62,25 @@ const currencyFormatter = new Intl.NumberFormat('pt-BR', {
 });
 
 const SHIRT_SIZE_OPTIONS = ['P', 'M', 'G', 'GG'];
+const WORKOUT_SCORE_TYPE_OPTIONS: { value: WorkoutType; label: string; detail: string }[] = [
+  { value: 'fortime', label: 'Tempo', detail: 'Menor tempo vence' },
+  { value: 'amrap', label: 'AMRAP', detail: 'Mais reps no tempo' },
+  { value: 'reps', label: 'Repetições', detail: 'Maior número vence' },
+  { value: 'maxweight', label: 'Peso', detail: 'Maior carga vence' },
+  { value: 'distance', label: 'Distância', detail: 'Maior distância vence' },
+  { value: 'points', label: 'Pontos', detail: 'Maior pontuação vence' }
+];
+const WORKOUT_TIE_BREAKER_OPTIONS = [
+  'Tempo',
+  'AMRAP',
+  'Repetições',
+  'Peso',
+  'Distância',
+  'Pontos',
+  'Melhor colocação na prova anterior',
+  'Maior número de vitórias em provas'
+];
+const getWorkoutScoreTypeLabel = (type: WorkoutType) => WORKOUT_SCORE_TYPE_OPTIONS.find(option => option.value === type)?.label || 'Pontos';
 
 const transactionalLabelClassName = 'mb-1 block text-xs font-bold uppercase tracking-wider text-muted-soft';
 // Mantido para o teste de design system que valida a superfície transacional clara do admin.
@@ -700,6 +720,7 @@ export default function AdminPage() {
   const [scoreFilterCatId, setScoreFilterCatId] = useState('');
   const [scoreFilterWodId, setScoreFilterWodId] = useState('');
   const [scoreInputs, setScoreInputs] = useState<Record<string, string>>({}); // athleteId -> result string
+  const [scoreTieBreakerInputs, setScoreTieBreakerInputs] = useState<Record<string, string>>({});
   const [scoreSaveSuccess, setScoreSaveSuccess] = useState('');
 
   // Estados do Leaderboard
@@ -805,6 +826,21 @@ export default function AdminPage() {
       categoryAthletes.forEach(ath => {
         const existingScore = scores.find(s => s.athleteId === ath.id && s.workoutId === scoreFilterWodId);
         initialInputs[ath.id] = existingScore ? existingScore.result : '';
+      });
+
+      return initialInputs;
+    }
+    return {};
+  }, [scoreFilterCatId, scoreFilterWodId, scores, athletes, approvedAthleteIds]);
+
+  const derivedScoreTieBreakerInputs = useMemo(() => {
+    if (scoreFilterCatId && scoreFilterWodId) {
+      const categoryAthletes = athletes.filter(a => a.divisionId === scoreFilterCatId && approvedAthleteIds.has(a.id));
+      const initialInputs: Record<string, string> = {};
+
+      categoryAthletes.forEach(ath => {
+        const existingScore = scores.find(s => s.athleteId === ath.id && s.workoutId === scoreFilterWodId);
+        initialInputs[ath.id] = existingScore?.splits?.[SCORE_TIE_BREAKER_SPLIT_KEY] || '';
       });
 
       return initialInputs;
@@ -1961,23 +1997,36 @@ export default function AdminPage() {
     if (!currentWod) return;
 
     const mergedInputs = { ...derivedScoreInputs, ...scoreInputs };
+    const mergedTieBreakerInputs = { ...derivedScoreTieBreakerInputs, ...scoreTieBreakerInputs };
+    const usesTimeTieBreaker = shouldUseTimeTieBreaker(currentWod.tieBreaker);
     const scoresToSubmit: Score[] = [];
 
     Object.entries(mergedInputs).forEach(([athleteId, resultStr]) => {
       if (resultStr === undefined || resultStr === null) return;
 
       const trimmed = resultStr.trim();
-      const hasExisting = scores.some(s => s.athleteId === athleteId && s.workoutId === scoreFilterWodId);
+      const existingScore = scores.find(s => s.athleteId === athleteId && s.workoutId === scoreFilterWodId);
+      const hasExisting = Boolean(existingScore);
 
       // Se está vazio e não tinha score gravado, ignoramos para não encher o banco de linhas vazias
       if (trimmed === '' && !hasExisting) return;
 
       const val = parseScoreValue(trimmed, currentWod.type);
+      const splits = { ...(existingScore?.splits || {}) };
+      if (usesTimeTieBreaker) {
+        const tieBreakerResult = (mergedTieBreakerInputs[athleteId] || '').trim();
+        if (tieBreakerResult) {
+          splits[SCORE_TIE_BREAKER_SPLIT_KEY] = tieBreakerResult;
+        } else {
+          delete splits[SCORE_TIE_BREAKER_SPLIT_KEY];
+        }
+      }
       scoresToSubmit.push({
         athleteId,
         workoutId: scoreFilterWodId,
         result: trimmed || '-', // Grava "-" se o usuário apagou a pontuação para limpá-la
-        value: val
+        value: val,
+        splits
       });
     });
 
@@ -6490,16 +6539,14 @@ export default function AdminPage() {
                 <label htmlFor="wod-score-type-input" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Tipo Score *</label>
                 <select
                   id="wod-score-type-input"
+                  name="scoreType"
                   value={wodType}
                   onChange={(e) => setWodType(e.target.value as WorkoutType)}
                   className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"
                 >
-                  <option value="fortime">Tempo (Fortime)</option>
-                  <option value="amrap">Repetições (AMRAP)</option>
-                  <option value="maxweight">Peso Máximo</option>
-                  <option value="reps">Repetições Fixas</option>
-                  <option value="distance">Distância</option>
-                  <option value="points">Pontos</option>
+                  {WORKOUT_SCORE_TYPE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label} - {option.detail}</option>
+                  ))}
                 </select>
               </div>
               <div>
@@ -6532,14 +6579,22 @@ export default function AdminPage() {
 
             <div>
               <label htmlFor="wod-tiebreaker-input" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Critério de Desempate</label>
-              <input
+              <select
                 id="wod-tiebreaker-input"
-                type="text"
-                placeholder="Ex: Tempo do WOD 1, Reps do WOD 2"
+                name="tieBreaker"
                 value={wodTieBreaker}
                 onChange={(e) => setWodTieBreaker(e.target.value)}
                 className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white placeholder:text-muted focus:border-primary/50 focus:outline-none"
-              />
+              >
+                <option value="">Sem critério adicional</option>
+                {WORKOUT_TIE_BREAKER_OPTIONS.map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+                {wodTieBreaker && !WORKOUT_TIE_BREAKER_OPTIONS.includes(wodTieBreaker) && (
+                  <option value={wodTieBreaker}>{wodTieBreaker}</option>
+                )}
+              </select>
+              <p className="mt-1 text-[10px] text-muted">Use quando dois atletas/equipes terminarem empatados no score principal.</p>
             </div>
 
             {selectedEventToManage?.eventType === 'functional_fitness_qualifier' && (
@@ -6642,12 +6697,7 @@ export default function AdminPage() {
                     <div className="sm:text-right space-y-2 flex flex-col justify-center items-start sm:items-end">
                       <p className="text-xs font-semibold text-muted uppercase text-[10px]">Pontuação</p>
                       <span className="text-xs font-bold text-white uppercase">
-                        {wod.type === 'fortime' ? 'Tempo (Cap: ' + (wod.timeCap || 'Sem limite') + ')'
-                          : wod.type === 'amrap' ? 'AMRAP'
-                          : wod.type === 'maxweight' ? 'Carga Máxima'
-                          : wod.type === 'reps' ? 'Repetições'
-                          : wod.type === 'distance' ? 'Distância'
-                          : 'Pontos'}
+                        {getWorkoutScoreTypeLabel(wod.type)}{wod.type === 'fortime' ? ' (Cap: ' + (wod.timeCap || 'Sem limite') + ')' : ''}
                       </span>
                       {wod.tieBreaker && (
                         <p className="text-[9px] text-muted-soft">Desempate: {wod.tieBreaker}</p>
@@ -7796,6 +7846,7 @@ export default function AdminPage() {
     const filteredWorkouts = workouts.filter(w => !w.divisionId || w.divisionId === scoreFilterCatId);
     const categoryAthletes = athletes.filter(a => a.divisionId === scoreFilterCatId && approvedAthleteIds.has(a.id));
     const activeWod = workouts.find(w => w.id === scoreFilterWodId);
+    const activeWodUsesTimeTieBreaker = shouldUseTimeTieBreaker(activeWod?.tieBreaker);
 
     return (
       <div className="bg-card border border-card-border rounded-xl p-6 space-y-6 text-white">
@@ -7820,6 +7871,7 @@ export default function AdminPage() {
                 setScoreFilterCatId(e.target.value);
                 setScoreFilterWodId('');
                 setScoreInputs({});
+                setScoreTieBreakerInputs({});
               }}
               className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"
             >
@@ -7838,6 +7890,7 @@ export default function AdminPage() {
               onChange={(e) => {
                 setScoreFilterWodId(e.target.value);
                 setScoreInputs({});
+                setScoreTieBreakerInputs({});
               }}
               disabled={!scoreFilterCatId}
               className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none disabled:opacity-50"
@@ -7881,35 +7934,58 @@ export default function AdminPage() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 w-full sm:w-auto">
-                      <label htmlFor={`score-input-${ath.id}`} className="sr-only">Resultado para {ath.name}</label>
-                      <input
-                        id={`score-input-${ath.id}`}
-                        type="text"
-                        placeholder={
-                          activeWod.type === 'fortime' ? '12:32'
-                          : activeWod.type === 'amrap' ? '187'
-                          : activeWod.type === 'maxweight' ? '125'
-                          : activeWod.type === 'distance' ? '1500'
-                          : '100'
-                        }
-                        value={(scoreInputs[ath.id] !== undefined ? scoreInputs[ath.id] : derivedScoreInputs[ath.id]) || ''}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setScoreInputs(prev => ({
-                            ...prev,
-                            [ath.id]: val
-                          }));
-                        }}
-                        className="w-full sm:w-44 rounded-md border border-card-border bg-dark-gray px-3 py-1.5 text-sm text-white placeholder:text-muted-soft focus:border-primary/50 focus:outline-none font-number text-center font-bold"
-                      />
-                      <span className="text-xs font-bold text-primary text-[10px] uppercase w-12 font-sans">
-                        {activeWod.type === 'fortime' ? 'Min'
-                          : activeWod.type === 'amrap' ? 'Reps'
-                          : activeWod.type === 'maxweight' ? 'Kg'
-                          : activeWod.type === 'distance' ? 'Mts'
-                          : 'Pts'}
-                      </span>
+                    <div className="flex flex-col gap-2 w-full sm:w-auto sm:flex-row sm:items-center">
+                      <div className="flex flex-1 items-center gap-2 sm:flex-initial">
+                        <label htmlFor={`score-input-${ath.id}`} className="sr-only">Resultado para {ath.name}</label>
+                        <input
+                          id={`score-input-${ath.id}`}
+                          type="text"
+                          placeholder={
+                            activeWod.type === 'fortime' ? '12:32'
+                            : activeWod.type === 'amrap' ? '187'
+                            : activeWod.type === 'maxweight' ? '125'
+                            : activeWod.type === 'distance' ? '1500'
+                            : '100'
+                          }
+                          value={(scoreInputs[ath.id] !== undefined ? scoreInputs[ath.id] : derivedScoreInputs[ath.id]) || ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setScoreInputs(prev => ({
+                              ...prev,
+                              [ath.id]: val
+                            }));
+                          }}
+                          className="w-full sm:w-44 rounded-md border border-card-border bg-dark-gray px-3 py-1.5 text-sm text-white placeholder:text-muted-soft focus:border-primary/50 focus:outline-none font-number text-center font-bold"
+                        />
+                        <span className="text-xs font-bold text-primary text-[10px] uppercase w-12 font-sans">
+                          {activeWod.type === 'fortime' ? 'Min'
+                            : activeWod.type === 'amrap' ? 'Reps'
+                            : activeWod.type === 'maxweight' ? 'Kg'
+                            : activeWod.type === 'distance' ? 'Mts'
+                            : 'Pts'}
+                        </span>
+                      </div>
+                      {activeWodUsesTimeTieBreaker && (
+                        <div className="flex flex-1 items-center gap-2 sm:flex-initial">
+                          <label htmlFor={`score-tiebreaker-input-${ath.id}`} className="sr-only">Tempo de desempate para {ath.name}</label>
+                          <input
+                            id={`score-tiebreaker-input-${ath.id}`}
+                            name={`tieBreaker-${ath.id}`}
+                            type="text"
+                            placeholder="00:45"
+                            value={(scoreTieBreakerInputs[ath.id] !== undefined ? scoreTieBreakerInputs[ath.id] : derivedScoreTieBreakerInputs[ath.id]) || ''}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setScoreTieBreakerInputs(prev => ({
+                                ...prev,
+                                [ath.id]: val
+                              }));
+                            }}
+                            className="w-full sm:w-32 rounded-md border border-card-border bg-dark-gray px-3 py-1.5 text-sm text-white placeholder:text-muted-soft focus:border-primary/50 focus:outline-none font-number text-center font-bold"
+                          />
+                          <span className="w-16 text-[10px] font-bold uppercase text-muted font-sans">Tie Tempo</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}

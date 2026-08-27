@@ -66,6 +66,29 @@ test('workouts can be edited without recreating them and nullable fields can be 
   assert.match(updateWorkoutImplementation, /catch \(error\) \{\s*setEvents\(previousEvents\);/);
 });
 
+test('workout form exposes score type and tie-breaker selectors', () => {
+  assert.match(adminPage, /WORKOUT_SCORE_TYPE_OPTIONS/);
+  assert.match(adminPage, /WORKOUT_TIE_BREAKER_OPTIONS/);
+  assert.match(adminPage, /id="wod-score-type-input"/);
+  assert.match(adminPage, /name="scoreType"/);
+  assert.match(adminPage, /id="wod-tiebreaker-input"/);
+  assert.match(adminPage, /name="tieBreaker"/);
+  for (const option of ['Tempo', 'AMRAP', 'Repetições', 'Peso', 'Distância', 'Pontos']) {
+    assert.match(adminPage, new RegExp(option));
+  }
+  assert.match(adminPage, /Use quando dois atletas\/equipes terminarem empatados/);
+});
+
+test('score entry persists a time tie-breaker separately from the main score', () => {
+  assert.match(adminPage, /scoreTieBreakerInputs/);
+  assert.match(adminPage, /derivedScoreTieBreakerInputs/);
+  assert.match(adminPage, /shouldUseTimeTieBreaker\(currentWod\.tieBreaker\)/);
+  assert.match(adminPage, /splits\[SCORE_TIE_BREAKER_SPLIT_KEY\] = tieBreakerResult/);
+  assert.match(adminPage, /id=\{`score-tiebreaker-input-\$\{ath\.id\}`\}/);
+  assert.match(adminPage, /Tempo de desempate para/);
+  assert.match(adminPage, /activeWodUsesTimeTieBreaker/);
+});
+
 test('a Judge can be owned by a manager or owner without weakening privileged RPC access', () => {
   assert.match(originalJudgeMigration, /qualifier_create_and_assign_judge/);
   assert.match(ownerJudgeMigration, /CREATE OR REPLACE FUNCTION qualifier_create_judge/);

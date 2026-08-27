@@ -7,6 +7,7 @@ import { buildFitnessRacingCourse, buildFitnessRacingDefaults, normalizeInstagra
 import { mapContestationFromDb } from '@/lib/contestations';
 import { getNextDivisionOrderIndex, sortDivisions } from '@/lib/divisionOrder';
 import { getManagerAccessStatus, normalizeServiceValidUntil } from '@/lib/managerAccess';
+import { rankWorkoutScores } from '@/lib/scoring';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type LeaderboardEntry = Record<string, any>;
@@ -952,10 +953,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     // 2. Achar o workout para saber o tipo (fortime, amrap, etc.)
     let workoutType: WorkoutType = 'fortime';
+    let workoutTieBreaker = '';
     for (const e of events) {
       const w = e.workouts.find(work => work.id === workoutId);
       if (w) {
         workoutType = w.type;
+        workoutTieBreaker = w.tieBreaker || '';
         break;
       }
     }
@@ -965,58 +968,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       s => s.workoutId === workoutId && athleteIds.includes(s.athleteId)
     );
 
-    // 4. Ordenar scores baseados no tipo do workout, jogando pendentes ('-') para o final
-    const sortedScores = [...workoutScores].sort((a, b) => {
-      const aPending = !a.result || a.result === '-' || a.result === '';
-      const bPending = !b.result || b.result === '-' || b.result === '';
-      if (aPending && !bPending) return 1;
-      if (!aPending && bPending) return -1;
-      if (aPending && bPending) return 0;
+    // 4. Atribuir ranks e pontos do workout sem alterar a ordenação geral do leaderboard.
+    const rankedWorkoutScores = rankWorkoutScores(workoutType, workoutTieBreaker, workoutScores, athleteIds.length);
+    const updatedScoresMap = new Map(rankedWorkoutScores.map(score => [score.athleteId, score]));
 
-      if (workoutType === 'fortime') {
-        return a.value - b.value;
-      } else {
-        return b.value - a.value;
-      }
-    });
-
-    // 5. Atribuir Ranks e Pontos com regras de empates do Low-Point
-    const updatedScoresMap = new Map<string, Score>();
-
-    sortedScores.forEach((score, index) => {
-      const isPending = !score.result || score.result === '-' || score.result === '';
-      let rank = 0;
-      let points = 0;
-
-      if (!isPending) {
-        if (index > 0) {
-          const prevScore = sortedScores[index - 1];
-          const prevPending = !prevScore.result || prevScore.result === '-' || prevScore.result === '';
-          if (!prevPending && score.value === prevScore.value) {
-            // Empate: compartilha a mesma colocação do competidor anterior
-            rank = updatedScoresMap.get(prevScore.athleteId)?.rank || (index + 1);
-          } else {
-            // Não empatou: a colocação pula para o índice atual + 1
-            rank = index + 1;
-          }
-        } else {
-          rank = 1;
-        }
-        points = rank; // Em Low-Point, os pontos de colocação são iguais à classificação
-      } else {
-        // Penalidade para competidores sem resultado: número de atletas da divisão + 1
-        rank = 0;
-        points = athleteIds.length + 1;
-      }
-
-      updatedScoresMap.set(score.athleteId, {
-        ...score,
-        rank,
-        points
-      });
-    });
-
-    // 6. Retornar nova lista de scores mesclando os alterados
+    // 5. Retornar nova lista de scores mesclando os alterados
     return currentScores.map(score => {
       if (score.workoutId === workoutId && athleteIds.includes(score.athleteId)) {
         return updatedScoresMap.get(score.athleteId) || score;

@@ -2,6 +2,15 @@ import { WorkoutType } from '@/types';
 
 export type ParsedScore = { result: string; value: number };
 export type QualifierDecision = 'validated' | 'penalized' | 'rejected' | 'manual_adjustment';
+export type WorkoutScoreForRanking = {
+  athleteId: string;
+  result?: string;
+  value: number;
+  rank?: number;
+  points?: number;
+  splits?: Record<string, string>;
+};
+export const SCORE_TIE_BREAKER_SPLIT_KEY = 'tieBreaker';
 
 const numericScore = (raw: string) => {
   const normalized = raw.trim().replace(',', '.');
@@ -78,3 +87,102 @@ export const applyQualifierDecision = (
 };
 
 export const isLowerScoreBetter = (workoutType: WorkoutType) => workoutType === 'fortime';
+
+export const shouldUseTimeTieBreaker = (tieBreaker?: string | null) => tieBreaker?.trim().toLowerCase() === 'tempo';
+
+const optionalTimeToSeconds = (raw?: string) => {
+  if (!raw?.trim()) return null;
+  try {
+    return timeToSeconds(raw);
+  } catch {
+    return null;
+  }
+};
+
+export const compareTimeTieBreaker = (aRaw?: string, bRaw?: string) => {
+  const a = optionalTimeToSeconds(aRaw);
+  const b = optionalTimeToSeconds(bRaw);
+  if (a === null && b === null) return 0;
+  if (a !== null && b === null) return -1;
+  if (a === null && b !== null) return 1;
+  return (a as number) - (b as number);
+};
+
+const isPendingRankScore = (score: WorkoutScoreForRanking) => !score.result || score.result === '-' || score.result === '';
+
+export const compareWorkoutScoresForRank = (
+  workoutType: WorkoutType,
+  tieBreaker: string | undefined,
+  a: WorkoutScoreForRanking,
+  b: WorkoutScoreForRanking
+) => {
+  const aPending = isPendingRankScore(a);
+  const bPending = isPendingRankScore(b);
+  if (aPending && !bPending) return 1;
+  if (!aPending && bPending) return -1;
+  if (aPending && bPending) return 0;
+
+  const primaryComparison = isLowerScoreBetter(workoutType)
+    ? a.value - b.value
+    : b.value - a.value;
+  if (primaryComparison !== 0) return primaryComparison;
+
+  if (!shouldUseTimeTieBreaker(tieBreaker)) return 0;
+  return compareTimeTieBreaker(
+    a.splits?.[SCORE_TIE_BREAKER_SPLIT_KEY],
+    b.splits?.[SCORE_TIE_BREAKER_SPLIT_KEY]
+  );
+};
+
+export const workoutScoresShareRank = (
+  workoutType: WorkoutType,
+  tieBreaker: string | undefined,
+  a: WorkoutScoreForRanking,
+  b: WorkoutScoreForRanking
+) => (
+  !isPendingRankScore(a)
+  && !isPendingRankScore(b)
+  && a.value === b.value
+  && compareWorkoutScoresForRank(workoutType, tieBreaker, a, b) === 0
+);
+
+export const rankWorkoutScores = <T extends WorkoutScoreForRanking>(
+  workoutType: WorkoutType,
+  tieBreaker: string | undefined,
+  scores: T[],
+  athleteCount: number
+) => {
+  const sortedScores = [...scores].sort((a, b) => compareWorkoutScoresForRank(workoutType, tieBreaker, a, b));
+  const updatedScoresMap = new Map<string, T & { rank: number; points: number }>();
+
+  sortedScores.forEach((score, index) => {
+    const isPending = isPendingRankScore(score);
+    let rank = 0;
+    let points = 0;
+
+    if (!isPending) {
+      if (index > 0) {
+        const prevScore = sortedScores[index - 1];
+        if (workoutScoresShareRank(workoutType, tieBreaker, score, prevScore)) {
+          rank = updatedScoresMap.get(prevScore.athleteId)?.rank || (index + 1);
+        } else {
+          rank = index + 1;
+        }
+      } else {
+        rank = 1;
+      }
+      points = rank; // Em Low-Point, os pontos de colocação são iguais à classificação
+    } else {
+      rank = 0;
+      points = athleteCount + 1;
+    }
+
+    updatedScoresMap.set(score.athleteId, {
+      ...score,
+      rank,
+      points
+    });
+  });
+
+  return scores.map(score => updatedScoresMap.get(score.athleteId) || score);
+};
