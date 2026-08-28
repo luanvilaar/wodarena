@@ -54,19 +54,21 @@ test('mobile featured banner shows the full artwork through next/image instead o
   assert.doesNotMatch(mobileFeaturedBanner, /min-h-\[520px\]/);
 });
 
-test('hero video opens the home with optimized RochaFit media and safe fallbacks', () => {
-  assert.match(sectionOperations, /ROCHAFIT_HERO_POSTER = '\/rochafit-hero-poster\.jpg'/);
+test('hero video opens the home with optimized WODArena media and safe fallbacks', () => {
+  assert.match(sectionOperations, /HERO_VIDEO_POSTER = '\/hero-vertical-poster\.jpg'/);
   assert.match(sectionOperations, /prefers-reduced-motion: reduce/);
   assert.match(sectionOperations, /preload="metadata"/);
-  assert.match(sectionOperations, /<source src="\/rochafit-hero\.webm" type="video\/webm" \/>/);
-  assert.match(sectionOperations, /<source src="\/rochafit-hero\.mp4" type="video\/mp4" \/>/);
+  assert.match(sectionOperations, /<source src="\/hero-vertical\.webm" type="video\/webm" \/>/);
+  assert.match(sectionOperations, /<source src="\/hero-vertical-h264\.mp4" type="video\/mp4" \/>/);
   assert.match(sectionOperations, /<source src="\/rochafit-logo-alpha\.webm" type="video\/webm" \/>/);
   assert.match(sectionOperations, /ROCHAFIT_LOGO_FALLBACK = '\/rochafit-logo\.png'/);
+  assert.doesNotMatch(sectionOperations, /rochafit-hero/);
 
   for (const asset of [
-    '../public/rochafit-hero-poster.jpg',
-    '../public/rochafit-hero.webm',
-    '../public/rochafit-hero.mp4',
+    '../public/hero-vertical.mp4',
+    '../public/hero-vertical-poster.jpg',
+    '../public/hero-vertical.webm',
+    '../public/hero-vertical-h264.mp4',
     '../public/rochafit-logo-alpha.webm',
     '../public/rochafit-logo.png',
   ]) {
@@ -76,16 +78,34 @@ test('hero video opens the home with optimized RochaFit media and safe fallbacks
   }
 });
 
-test('RochaFit hero media keeps web-safe codecs, dimensions and file weights', () => {
-  const heroMp4 = probeMedia('../public/rochafit-hero.mp4');
-  const heroWebm = probeMedia('../public/rochafit-hero.webm');
+test('hero video keeps a fixed 16:9 frame identically on mobile and desktop', () => {
+  const heroBlockMatch = sectionOperations.match(/\{\/\* Vídeo da Hero[\s\S]*?(?=\{\/\* Feature Grid \*\/\})/);
+  assert.ok(heroBlockMatch, 'hero video block not found');
+  const heroBlock = heroBlockMatch[0];
+
+  assert.match(heroBlock, /aspect-video w-full overflow-hidden/);
+  assert.doesNotMatch(heroBlock, /\bsm:hidden\b/);
+  assert.doesNotMatch(heroBlock, /\bsm:block\b/);
+  assert.doesNotMatch(heroBlock, /\blg:hidden\b/);
+});
+
+test('hero master and optimized derivatives keep the intended codecs and file weights', () => {
+  const heroMaster = probeMedia('../public/hero-vertical.mp4');
+  const heroMp4 = probeMedia('../public/hero-vertical-h264.mp4');
+  const heroWebm = probeMedia('../public/hero-vertical.webm');
   const logoWebm = probeMedia('../public/rochafit-logo-alpha.webm');
-  const poster = statSync(new URL('../public/rochafit-hero-poster.jpg', import.meta.url));
+  const poster = statSync(new URL('../public/hero-vertical-poster.jpg', import.meta.url));
   const logoPng = statSync(new URL('../public/rochafit-logo.png', import.meta.url));
 
+  const [masterVideo] = heroMaster.streams.filter((stream) => stream.codec_type === 'video');
   const [mp4Video] = heroMp4.streams.filter((stream) => stream.codec_type === 'video');
   const [webmVideo] = heroWebm.streams.filter((stream) => stream.codec_type === 'video');
   const [logoVideo] = logoWebm.streams.filter((stream) => stream.codec_type === 'video');
+
+  assert.equal(masterVideo.codec_name, 'hevc');
+  assert.equal(masterVideo.width, 1920);
+  assert.equal(masterVideo.height, 1080);
+  assert.equal(heroMaster.streams.some((stream) => stream.codec_type === 'audio'), true);
 
   assert.equal(heroMp4.streams.some((stream) => stream.codec_type === 'audio'), false);
   assert.equal(heroWebm.streams.some((stream) => stream.codec_type === 'audio'), false);
@@ -94,16 +114,18 @@ test('RochaFit hero media keeps web-safe codecs, dimensions and file weights', (
   assert.equal(mp4Video.codec_name, 'h264');
   assert.equal(mp4Video.width, 1920);
   assert.equal(mp4Video.height, 1080);
+  assert.equal(mp4Video.width / mp4Video.height, 16 / 9);
   assert.equal(webmVideo.codec_name, 'vp9');
   assert.equal(webmVideo.width, 1920);
   assert.equal(webmVideo.height, 1080);
+  assert.equal(webmVideo.width / webmVideo.height, 16 / 9);
   assert.equal(logoVideo.codec_name, 'vp9');
   assert.equal(logoVideo.width, 512);
   assert.equal(logoVideo.height, 512);
   assert.equal(logoVideo.tags?.alpha_mode, '1');
 
   assert.ok(Number(heroMp4.format.size) < 10_000_000, 'MP4 hero should stay under 10 MB');
-  assert.ok(Number(heroWebm.format.size) < 9_000_000, 'WebM hero should stay under 9 MB');
+  assert.ok(Number(heroWebm.format.size) < 10_000_000, 'WebM hero should stay under 10 MB');
   assert.ok(Number(logoWebm.format.size) < 300_000, 'animated logo should stay under 300 KB');
   assert.ok(poster.size < 300_000, 'poster should stay under 300 KB');
   assert.ok(logoPng.size < 700_000, 'logo fallback should stay under 700 KB');
