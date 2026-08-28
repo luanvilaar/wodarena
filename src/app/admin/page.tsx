@@ -5322,6 +5322,38 @@ export default function AdminPage() {
         }
       }
 
+      // 1.5 Proteção: nunca republicar automaticamente uma REDUÇÃO ESTRUTURAL (menos
+      // baterias ou menos raias/vagas do que a versão já publicada) que deixaria de
+      // fora competidores já alocados. Edições normais (reordenar, remover/realocar
+      // um atleta pontualmente) sem reduzir a estrutura continuam publicando direto,
+      // como sempre — só a redução de contagem/capacidade exige "Publicar" de novo.
+      const previousHeatItems = (selectedEventToManage.scheduleItems || [])
+        .filter(item => item.kind === 'heat'
+          && (isFitnessRacingEvent ? !item.workoutId : item.workoutId === heatWorkoutId));
+      const previousTotalSlots = previousHeatItems
+        .reduce((total, item) => total + (item.athleteIds || []).length, 0);
+      const newTotalSlots = newHeatItems
+        .reduce((total, item) => total + (item.athleteIds || []).length, 0);
+      const isStructuralReduction = newTotalSlots < previousTotalSlots;
+
+      const previouslyAllocatedIds = new Set(
+        previousHeatItems
+          .flatMap(item => item.athleteIds || [])
+          .filter((id): id is string => Boolean(id))
+      );
+      const newlyAllocatedIds = new Set(
+        newHeatItems
+          .flatMap(item => item.athleteIds || [])
+          .filter((id): id is string => Boolean(id))
+      );
+      const droppedAthleteCount = Array.from(previouslyAllocatedIds)
+        .filter(id => !newlyAllocatedIds.has(id)).length;
+      const shouldForceDraft = wasPublishedBefore && isStructuralReduction && droppedAthleteCount > 0;
+
+      if (shouldForceDraft) {
+        newHeatItems.forEach(item => { item.isPublished = false; });
+      }
+
       // 2. Mesclar removendo baterias antigas de todos os workouts do grupo
       const existingItems = selectedEventToManage.scheduleItems || [];
       const filteredItems = isFitnessRacingEvent
@@ -5336,12 +5368,17 @@ export default function AdminPage() {
       try {
         await updateEvent(selectedEventToManage.id, { scheduleItems: updatedSchedule });
         setSelectedEventToManage(prev => prev ? { ...prev, scheduleItems: updatedSchedule } : null);
-        setAdminNotice({
-          text: isFitnessRacingEvent
-            ? 'Cronograma de largadas do Fitness Race salvo com sucesso para todos os inscritos.'
-            : 'Baterias salvas com sucesso para o grupo de categorias equivalentes!',
-          tone: 'success'
-        });
+        setAdminNotice(shouldForceDraft
+          ? {
+              text: `Cronograma salvo como rascunho: ${droppedAthleteCount} competidor(es) que já estavam publicados ficariam de fora das baterias atuais. Ajuste a alocação e clique em "Publicar" quando estiver correto.`,
+              tone: 'error'
+            }
+          : {
+              text: isFitnessRacingEvent
+                ? 'Cronograma de largadas do Fitness Race salvo com sucesso para todos os inscritos.'
+                : 'Baterias salvas com sucesso para o grupo de categorias equivalentes!',
+              tone: 'success'
+            });
       } catch (err) {
         console.error(err);
         setAdminNotice({ text: 'Não foi possível salvar o cronograma de baterias.', tone: 'error' });
@@ -6113,6 +6150,26 @@ export default function AdminPage() {
                       value={heatCount}
                       onChange={(e) => {
                         const newCount = Number(e.target.value);
+                        if (!Number.isFinite(newCount) || newCount < 1) return;
+
+                        if (hasActiveHeatScope && newCount < heatCount) {
+                          const droppedIds = new Set<string>();
+                          Object.keys(heatAllocations).forEach(key => {
+                            if (!key.startsWith(heatKeyPrefix)) return;
+                            const num = Number(key.split('-').pop());
+                            if (num > newCount) {
+                              (heatAllocations[key] || []).forEach(id => { if (id) droppedIds.add(id); });
+                            }
+                          });
+                          if (droppedIds.size > 0) {
+                            const label = isFitnessRacingEvent ? 'grupo(s)' : 'bateria(s)';
+                            const confirmed = window.confirm(
+                              `Reduzir para ${newCount} ${label} vai remover ${droppedIds.size} competidor(es) já alocado(s) das baterias excedentes. Deseja continuar?`
+                            );
+                            if (!confirmed) return;
+                          }
+                        }
+
                         setHeatCount(newCount);
                         if (hasActiveHeatScope) {
                           setHeatAllocations(prev => {
@@ -6150,6 +6207,25 @@ export default function AdminPage() {
                       value={heatCapacity}
                       onChange={(e) => {
                         const newCapacity = Number(e.target.value);
+                        if (!Number.isFinite(newCapacity) || newCapacity < 1) return;
+
+                        if (hasActiveHeatScope && newCapacity < heatCapacity) {
+                          let droppedCount = 0;
+                          Object.keys(heatAllocations).forEach(key => {
+                            if (!key.startsWith(heatKeyPrefix)) return;
+                            (heatAllocations[key] || []).forEach((id, idx) => {
+                              if (id && idx >= newCapacity) droppedCount++;
+                            });
+                          });
+                          if (droppedCount > 0) {
+                            const label = isFitnessRacingEvent ? 'vaga(s) por grupo' : 'raia(s)';
+                            const confirmed = window.confirm(
+                              `Reduzir para ${newCapacity} ${label} vai remover ${droppedCount} competidor(es) já alocado(s) das posições excedentes. Deseja continuar?`
+                            );
+                            if (!confirmed) return;
+                          }
+                        }
+
                         setHeatCapacity(newCapacity);
                         if (hasActiveHeatScope) {
                           setHeatAllocations(prev => {

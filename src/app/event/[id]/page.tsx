@@ -289,9 +289,18 @@ export default function EventPage({ params }: PageProps) {
       })
       : [];
 
+    const currentWorkoutIds = new Set((event?.workouts || []).map(workout => workout.id));
+
     return [...(event?.scheduleItems || []), ...qualifierDeadlines]
       .filter(item => event?.eventType !== 'functional_fitness_qualifier' || item.kind !== 'heat')
       .filter(item => item.kind !== 'heat' || item.isPublished)
+      .filter(item => {
+        // Baterias orfas: apontam para um workoutId que nao existe mais na prova atual
+        // do evento (a prova foi excluida/recriada e o cronograma nao foi limpo). Sem
+        // esse filtro elas continuam aparecendo como um grupo "fantasma" duplicado.
+        if (item.kind !== 'heat' || !item.workoutId) return true;
+        return currentWorkoutIds.has(item.workoutId);
+      })
       .filter(item => {
         if (item.kind !== 'heat') return true;
 
@@ -384,7 +393,7 @@ export default function EventPage({ params }: PageProps) {
 
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center space-y-4">
-        <Trophy className="h-16 w-16 text-muted animate-bounce" />
+        <Trophy className="h-16 w-16 text-muted" />
         <h2 className="text-xl font-bold text-white uppercase tracking-wider">Evento não encontrado</h2>
         <Link href="/" className="text-sm text-primary hover:underline uppercase font-extrabold tracking-widest">
           Voltar para Home

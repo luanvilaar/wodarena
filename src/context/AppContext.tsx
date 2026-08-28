@@ -1254,6 +1254,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     const athleteIds = athletes.filter(a => a.divisionId === divisionId).map(a => a.id);
     const linkedWorkoutIds = event.workouts.filter(w => w.divisionId === divisionId).map(w => w.id);
+    const cleanedSchedule = (event.scheduleItems || []).filter(
+      item => !(item.kind === 'heat' && item.workoutId && linkedWorkoutIds.includes(item.workoutId))
+    );
+    const scheduleChanged = cleanedSchedule.length !== (event.scheduleItems || []).length;
 
     const previousEvents = events;
     const previousAthletes = athletes;
@@ -1265,7 +1269,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return {
         ...e,
         divisions: e.divisions.filter(d => d.id !== divisionId),
-        workouts: e.workouts.filter(w => w.divisionId !== divisionId)
+        workouts: e.workouts.filter(w => w.divisionId !== divisionId),
+        scheduleItems: cleanedSchedule
       };
     }));
     setAthletes(prev => prev.filter(a => a.divisionId !== divisionId));
@@ -1274,6 +1279,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     try {
       await adminPersist('deleteDivision', { eventId, divisionId });
+      // A prova excluida em cascata pode ter baterias publicadas vinculadas a ela no
+      // cronograma; sem essa limpeza elas ficam orfas (workoutId inexistente) e continuam
+      // aparecendo publicamente para sempre, ja que event_schedule nao tem FK com workouts.
+      if (scheduleChanged) {
+        await adminPersist('updateEvent', { eventId, data: { event_schedule: cleanedSchedule } });
+      }
     } catch (error) {
       setEvents(previousEvents);
       setAthletes(previousAthletes);
@@ -1330,18 +1341,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     const previousEvents = events;
     const previousScores = scores;
+    const cleanedSchedule = (event.scheduleItems || []).filter(
+      item => !(item.kind === 'heat' && item.workoutId === workoutId)
+    );
+    const scheduleChanged = cleanedSchedule.length !== (event.scheduleItems || []).length;
 
     setEvents(prev => prev.map(e => {
       if (e.id !== eventId) return e;
       return {
         ...e,
-        workouts: e.workouts.filter(w => w.id !== workoutId)
+        workouts: e.workouts.filter(w => w.id !== workoutId),
+        scheduleItems: cleanedSchedule
       };
     }));
     setScores(prev => prev.filter(s => s.workoutId !== workoutId));
 
     try {
       await adminPersist('deleteWorkout', { eventId, workoutId });
+      // Baterias publicadas para esta prova ficariam orfas (workoutId inexistente) e
+      // continuariam aparecendo publicamente para sempre, ja que event_schedule nao tem
+      // FK com workouts — precisam ser removidas do cronograma junto com a prova.
+      if (scheduleChanged) {
+        await adminPersist('updateEvent', { eventId, data: { event_schedule: cleanedSchedule } });
+      }
     } catch (error) {
       setEvents(previousEvents);
       setScores(previousScores);
