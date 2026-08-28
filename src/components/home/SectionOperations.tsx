@@ -74,16 +74,16 @@ export function SectionOperations() {
           style={{
             background: `
               linear-gradient(180deg,
-                rgba(11, 14, 17, 0.1) 0%,
-                rgba(11, 14, 17, 0.08) 18%,
-                rgba(11, 14, 17, 0.31) 55%,
-                rgba(11, 14, 17, 0.49) 82%,
-                rgba(11, 14, 17, 0.5) 100%
+                rgba(11, 14, 17, 0.16) 0%,
+                rgba(11, 14, 17, 0.14) 18%,
+                rgba(11, 14, 17, 0.38) 55%,
+                rgba(11, 14, 17, 0.54) 82%,
+                rgba(11, 14, 17, 0.56) 100%
               ),
               linear-gradient(90deg,
-                rgba(11, 14, 17, 0.38) 0%,
-                rgba(11, 14, 17, 0.22) 42%,
-                rgba(11, 14, 17, 0.09) 100%
+                rgba(11, 14, 17, 0.44) 0%,
+                rgba(11, 14, 17, 0.28) 42%,
+                rgba(11, 14, 17, 0.13) 100%
               )
             `
           }}
@@ -123,16 +123,16 @@ export function SectionOperations() {
         {/* Área Hero de Operações */}
         <div className="min-h-[15.75rem] sm:min-h-[20.125rem] lg:min-h-[25.375rem] flex items-end pb-8 sm:pb-12">
           <div className="grid gap-8 lg:grid-cols-2 lg:items-end w-full">
-            <div className="relative inline-flex max-w-xl flex-col items-start gap-3 rounded-2xl bg-background/40 p-4 backdrop-blur-sm sm:gap-4 sm:p-5">
-              <h1 className="text-3xl font-black uppercase leading-[0.92] tracking-[-0.04em] text-white sm:text-5xl lg:text-6xl">
+            <div className="relative inline-flex max-w-xl flex-col items-start gap-3 sm:gap-4">
+              <h1 className="text-3xl font-black uppercase leading-[0.92] tracking-[-0.04em] text-white drop-shadow-[0_2px_14px_rgba(0,0,0,0.85)] sm:text-5xl lg:text-6xl">
                 Gestão completa<br />para eventos de<br />alto rendimento
               </h1>
-              <p className="max-w-md text-sm sm:text-base leading-relaxed text-foreground">
+              <p className="max-w-md text-sm sm:text-base leading-relaxed text-foreground drop-shadow-[0_1px_8px_rgba(0,0,0,0.8)]">
                 Do planejamento à publicação dos resultados, o WODArena centraliza toda a operação em uma única plataforma.
               </p>
             </div>
-            <div className="inline-flex flex-col items-start gap-3 rounded-2xl bg-background/40 p-4 backdrop-blur-sm sm:p-5">
-              <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-foreground">
+            <div className="inline-flex flex-col items-start gap-3">
+              <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-foreground drop-shadow-[0_1px_8px_rgba(0,0,0,0.8)]">
                 Eventos suportados
               </h2>
               <div className="flex flex-wrap gap-2">
