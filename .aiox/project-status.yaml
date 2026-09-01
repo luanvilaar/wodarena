@@ -1,19 +1,21 @@
 status:
   branch: main
   modifiedFiles:
-    - .aiox/project-status.yaml
-    - docs/stories/1.2.story.md
-    - src/app/admin/page.tsx
-    - src/context/AppContext.tsx
-    - src/lib/scoring.ts
-  modifiedFilesTotalCount: 9
+    - .claude/agent-memory/aiox-devops/MEMORY.md
+    - .claude/agent-memory/aiox-devops/project_push-agent-authority-env.md
+    - next-env.d.ts
+    - src/components/EventCard.tsx
+    - .claude/agent-memory/aiox-devops/reference_coderabbit-cli-state.md
+  modifiedFilesTotalCount: 6
   recentCommits:
-    - 'feat: improve public event schedule UX'
-    - 'docs: registrar validação manual do judge'
+    - >-
+      fix(admin): corrige cronograma preso em rascunho e baterias órfãs no
+      público
+    - 'feat(home): troca hero para vídeo hero-vertical em bloco 16:9 dedicado'
   currentEpic: null
   currentStory: null
-  lastUpdate: '2026-08-25T20:31:12.970Z'
+  lastUpdate: '2026-08-31T10:45:52.387Z'
   isGitRepo: true
-timestamp: 1787689872971
+timestamp: 1788173152446
 ttl: 60
-gitFingerprint: 1780618055577.6655:1787689831964.481
+gitFingerprint: 1780618055577.6655:1788172686479.1653

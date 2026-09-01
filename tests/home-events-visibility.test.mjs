@@ -45,6 +45,18 @@ test('event card renders artwork in the same 5:2 ratio required on upload', () =
   assert.doesNotMatch(eventCard, /aspect-video/);
 });
 
+test('event card keeps interface controls outside the event artwork', () => {
+  assert.match(eventCard, /flex min-h-11 flex-wrap items-center justify-between/);
+  assert.doesNotMatch(eventCard, /absolute (?:left|right|top|bottom|inset)/);
+});
+
+test('event card uses the established flat surfaces, tokens, and type hierarchy', () => {
+  assert.match(eventCard, /border-card-border bg-card/);
+  assert.match(eventCard, /text-xl font-bold leading-tight tracking-tight/);
+  assert.match(eventCard, /font-number text-primary/);
+  assert.doesNotMatch(eventCard, /backdrop-blur|shadow-\[|font-black|#[0-9a-fA-F]{3,8}/);
+});
+
 test('mobile featured banner shows the full artwork through next/image instead of a stretched background', () => {
   assert.match(featuredBanner, /^import Image from 'next\/image';$/m);
   assert.match(mobileFeaturedBanner, /aspect-\[5\/2\] w-full overflow-hidden bg-dark-gray/);
