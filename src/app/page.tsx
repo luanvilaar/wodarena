@@ -135,7 +135,7 @@ export default function Home() {
       <FeaturedEventBanner openLeadModal={() => setLeadFormOpen(true)} />
 
       <section id="eventos" className="mx-auto w-full max-w-7xl space-y-6 px-4 pb-12 pt-8 sm:space-y-8 sm:px-6 sm:pt-12 lg:px-8">
-        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
+        <div className="home-broadcast-section-header flex flex-col justify-between gap-3 sm:flex-row sm:items-end" style={{ '--motion-delay': '120ms' } as React.CSSProperties}>
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Calendário oficial</p>
             <h2 className="mt-2 text-2xl font-bold tracking-tight text-white sm:text-3xl">Eventos em destaque</h2>
@@ -143,7 +143,7 @@ export default function Home() {
           <p className="max-w-md text-sm leading-6 text-muted">Encontre sua próxima competição, acompanhe resultados ou garanta sua inscrição.</p>
         </div>
 
-        <div className="flex flex-col gap-4 rounded-xl border border-card-border bg-card p-4 md:flex-row md:items-center md:justify-between">
+        <div className="home-broadcast-filters flex flex-col gap-4 rounded-xl border border-card-border bg-card p-4 md:flex-row md:items-center md:justify-between" style={{ '--motion-delay': '190ms' } as React.CSSProperties}>
           <div className="flex flex-wrap gap-1.5">
             {[
               { id: 'all', label: 'Todos' },
@@ -183,15 +183,21 @@ export default function Home() {
         {upcomingEvents.length > 0 ? (
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {upcomingEvents.map((event, index) => (
-              <EventCard key={event.id} event={event} priority={index === 0} />
+              <div
+                key={event.id}
+                className="home-broadcast-event-card h-full"
+                style={{ '--motion-delay': `${260 + Math.min(index, 5) * 45}ms` } as React.CSSProperties}
+              >
+                <EventCard event={event} priority={index === 0} />
+              </div>
             ))}
           </div>
         ) : pastEvents.length > 0 ? (
-          <div className="rounded-xl border border-dashed border-card-border bg-card py-10 text-center">
+          <div className="home-broadcast-empty rounded-xl border border-dashed border-card-border bg-card py-10 text-center">
             <p className="text-sm text-muted">Nenhum evento em aberto para estes filtros. Veja os eventos passados abaixo.</p>
           </div>
         ) : (
-          <div className="space-y-4 rounded-xl border border-dashed border-card-border bg-card py-20 text-center">
+          <div className="home-broadcast-empty space-y-4 rounded-xl border border-dashed border-card-border bg-card py-20 text-center">
             <Search className="mx-auto h-12 w-12 text-muted" />
             <div className="space-y-1">
               <h4 className="text-lg font-bold uppercase tracking-wider text-white">Nenhum evento encontrado</h4>
@@ -203,7 +209,7 @@ export default function Home() {
 
       {pastEvents.length > 0 && (
         <section id="eventos-passados" className="mx-auto w-full max-w-7xl space-y-8 px-4 py-12 sm:px-6 lg:px-8">
-          <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
+          <div className="home-broadcast-section-header flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted">Histórico</p>
               <h2 className="mt-2 text-3xl font-bold tracking-tight text-white">Eventos passados</h2>
@@ -212,8 +218,14 @@ export default function Home() {
           </div>
 
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {pastEvents.map((event) => (
-              <EventCard key={event.id} event={event} />
+            {pastEvents.map((event, index) => (
+              <div
+                key={event.id}
+                className="home-broadcast-event-card h-full"
+                style={{ '--motion-delay': `${120 + Math.min(index, 5) * 35}ms` } as React.CSSProperties}
+              >
+                <EventCard event={event} />
+              </div>
             ))}
           </div>
         </section>
@@ -224,7 +236,7 @@ export default function Home() {
         <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4" role="dialog" aria-modal="true">
           {/* Overlay de fundo */}
           <div 
-            className="fixed inset-0 bg-black/85 backdrop-blur-sm transition-opacity" 
+            className="home-broadcast-modal-overlay fixed inset-0 bg-black/85 backdrop-blur-sm transition-opacity"
             onClick={() => {
               setLeadFormOpen(false);
               setLeadErrorMessage('');
@@ -234,7 +246,7 @@ export default function Home() {
           />
 
           {/* Container do Modal */}
-          <div className="relative transform overflow-hidden rounded-2xl border border-card-border bg-card p-6 shadow-2xl transition duration-200 max-w-lg w-full z-10">
+          <div className="home-broadcast-modal-panel relative transform overflow-hidden rounded-2xl border border-card-border bg-card p-6 shadow-2xl transition duration-200 max-w-lg w-full z-10">
             {/* Botão de Fechar */}
             <button
               type="button"

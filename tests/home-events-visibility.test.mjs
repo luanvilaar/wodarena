@@ -5,6 +5,7 @@ import test from 'node:test';
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
+const globals = read('../src/app/globals.css');
 const homePage = read('../src/app/page.tsx');
 const eventCard = read('../src/components/EventCard.tsx');
 const adminPage = read('../src/app/admin/page.tsx');
@@ -72,17 +73,14 @@ test('hero video opens the home with optimized WODArena media and safe fallbacks
   assert.match(sectionOperations, /preload="metadata"/);
   assert.match(sectionOperations, /<source src="\/hero-vertical\.webm" type="video\/webm" \/>/);
   assert.match(sectionOperations, /<source src="\/hero-vertical-h264\.mp4" type="video\/mp4" \/>/);
-  assert.match(sectionOperations, /<source src="\/rochafit-logo-alpha\.webm" type="video\/webm" \/>/);
-  assert.match(sectionOperations, /ROCHAFIT_LOGO_FALLBACK = '\/rochafit-logo\.png'/);
   assert.doesNotMatch(sectionOperations, /rochafit-hero/);
+  assert.doesNotMatch(sectionOperations, /rochafit-logo-alpha|ROCHAFIT_LOGO_FALLBACK|mix-blend-screen/);
 
   for (const asset of [
     '../public/hero-vertical.mp4',
     '../public/hero-vertical-poster.jpg',
     '../public/hero-vertical.webm',
     '../public/hero-vertical-h264.mp4',
-    '../public/rochafit-logo-alpha.webm',
-    '../public/rochafit-logo.png',
   ]) {
     const url = new URL(asset, import.meta.url);
     assert.ok(existsSync(url), `missing hero asset: ${asset}`);
@@ -101,18 +99,40 @@ test('hero video keeps a fixed 16:9 frame identically on mobile and desktop', ()
   assert.doesNotMatch(heroBlock, /\blg:hidden\b/);
 });
 
+test('home entrance motion follows the Arena Broadcast package with reduced-motion guardrails', () => {
+  for (const token of [
+    '--motion-broadcast-ease',
+    '@keyframes home-broadcast-title',
+    '@keyframes home-broadcast-video',
+    '@keyframes home-broadcast-panel',
+    '@keyframes home-broadcast-modal-panel',
+  ]) {
+    assert.match(globals, new RegExp(token), `missing motion token: ${token}`);
+  }
+
+  assert.match(globals, /@media \(prefers-reduced-motion: no-preference\)[\s\S]*\.home-broadcast-video/);
+  assert.match(globals, /@media \(prefers-reduced-motion: reduce\)[\s\S]*\[class\*="home-broadcast-"\]/);
+  assert.doesNotMatch(globals, /animation-iteration-count:\s*infinite|filter:|backdrop-filter:|will-change:/);
+
+  assert.match(sectionOperations, /home-broadcast-title/);
+  assert.match(sectionOperations, /home-broadcast-video/);
+  assert.match(sectionOperations, /home-broadcast-chip/);
+  assert.match(featuredBanner, /home-broadcast-featured-media|home-broadcast-featured-backdrop/);
+  assert.match(featuredBanner, /home-broadcast-featured-title/);
+  assert.match(featuredBanner, /home-broadcast-countdown/);
+  assert.match(homePage, /home-broadcast-event-card/);
+  assert.match(homePage, /Math\.min\(index, 5\)/);
+});
+
 test('hero master and optimized derivatives keep the intended codecs and file weights', () => {
   const heroMaster = probeMedia('../public/hero-vertical.mp4');
   const heroMp4 = probeMedia('../public/hero-vertical-h264.mp4');
   const heroWebm = probeMedia('../public/hero-vertical.webm');
-  const logoWebm = probeMedia('../public/rochafit-logo-alpha.webm');
   const poster = statSync(new URL('../public/hero-vertical-poster.jpg', import.meta.url));
-  const logoPng = statSync(new URL('../public/rochafit-logo.png', import.meta.url));
 
   const [masterVideo] = heroMaster.streams.filter((stream) => stream.codec_type === 'video');
   const [mp4Video] = heroMp4.streams.filter((stream) => stream.codec_type === 'video');
   const [webmVideo] = heroWebm.streams.filter((stream) => stream.codec_type === 'video');
-  const [logoVideo] = logoWebm.streams.filter((stream) => stream.codec_type === 'video');
 
   assert.equal(masterVideo.codec_name, 'hevc');
   assert.equal(masterVideo.width, 1920);
@@ -121,7 +141,6 @@ test('hero master and optimized derivatives keep the intended codecs and file we
 
   assert.equal(heroMp4.streams.some((stream) => stream.codec_type === 'audio'), false);
   assert.equal(heroWebm.streams.some((stream) => stream.codec_type === 'audio'), false);
-  assert.equal(logoWebm.streams.some((stream) => stream.codec_type === 'audio'), false);
 
   assert.equal(mp4Video.codec_name, 'h264');
   assert.equal(mp4Video.width, 1920);
@@ -131,16 +150,10 @@ test('hero master and optimized derivatives keep the intended codecs and file we
   assert.equal(webmVideo.width, 1920);
   assert.equal(webmVideo.height, 1080);
   assert.equal(webmVideo.width / webmVideo.height, 16 / 9);
-  assert.equal(logoVideo.codec_name, 'vp9');
-  assert.equal(logoVideo.width, 512);
-  assert.equal(logoVideo.height, 512);
-  assert.equal(logoVideo.tags?.alpha_mode, '1');
 
   assert.ok(Number(heroMp4.format.size) < 10_000_000, 'MP4 hero should stay under 10 MB');
   assert.ok(Number(heroWebm.format.size) < 10_000_000, 'WebM hero should stay under 10 MB');
-  assert.ok(Number(logoWebm.format.size) < 300_000, 'animated logo should stay under 300 KB');
   assert.ok(poster.size < 300_000, 'poster should stay under 300 KB');
-  assert.ok(logoPng.size < 700_000, 'logo fallback should stay under 700 KB');
 });
 
 test('featured banner image is no longer marked priority now that it does not open the home', () => {

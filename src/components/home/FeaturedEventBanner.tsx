@@ -64,7 +64,7 @@ export function FeaturedEventBanner({ openLeadModal }: { openLeadModal: () => vo
   if (!featuredEvent) {
     return (
       <section 
-        className="relative overflow-hidden min-h-[460px] sm:min-h-[600px] border-b border-card-border bg-cover bg-center flex flex-col justify-end"
+        className="home-broadcast-featured-backdrop relative overflow-hidden min-h-[460px] sm:min-h-[600px] border-b border-card-border bg-cover bg-center flex flex-col justify-end"
         style={{ backgroundImage: `url('/banner_compor.png')` }}
       >
         {/* Máscara de gradientes */}
@@ -85,10 +85,10 @@ export function FeaturedEventBanner({ openLeadModal }: { openLeadModal: () => vo
           }}
         />
 
-        <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 w-full pb-12 sm:pb-16 flex flex-col items-center text-center">
+        <div className="home-broadcast-featured-copy relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 w-full pb-12 sm:pb-16 flex flex-col items-center text-center">
           <div className="max-w-2xl space-y-6">
             <span className="inline-flex text-[10px] font-bold uppercase tracking-wider text-primary">Plataforma WODArena</span>
-            <h2 className="text-3xl font-black uppercase leading-[0.9] tracking-[-0.06em] text-white sm:text-6xl">
+            <h2 className="home-broadcast-featured-title text-3xl font-black uppercase leading-[0.9] tracking-[-0.06em] text-white sm:text-6xl">
               CRIE E GERENCIE SEU <span className="text-primary">EVENTO</span>
             </h2>
             <p className="text-sm text-muted leading-relaxed max-w-lg mx-auto">
@@ -96,7 +96,8 @@ export function FeaturedEventBanner({ openLeadModal }: { openLeadModal: () => vo
             </p>
             <button 
               onClick={openLeadModal}
-              className="inline-flex h-12 items-center gap-2 rounded-md bg-primary px-6 text-sm font-black uppercase text-ink transition-colors hover:bg-primary-hover active:bg-primary-hover shadow-lg shadow-primary/15"
+              className="home-broadcast-actions inline-flex h-12 items-center gap-2 rounded-md bg-primary px-6 text-sm font-black uppercase text-ink transition-colors hover:bg-primary-hover active:bg-primary-hover shadow-lg shadow-primary/15"
+              style={{ '--motion-delay': '420ms' } as React.CSSProperties}
             >
               Quero utilizar o WODArena
             </button>
@@ -132,7 +133,7 @@ export function FeaturedEventBanner({ openLeadModal }: { openLeadModal: () => vo
       {/* Banner Versão Mobile */}
       <section className="md:hidden border-b border-card-border bg-background">
         {/* Arte do evento na proporção original (5:2 — 1600 × 640), sem corte lateral */}
-        <div className="relative aspect-[5/2] w-full overflow-hidden bg-dark-gray">
+        <div className="home-broadcast-featured-media relative aspect-[5/2] w-full overflow-hidden bg-dark-gray">
           <Image
             src={featuredEvent.bannerUrl || '/banner_compor.png'}
             alt={`${featuredEvent.name} banner`}
@@ -157,10 +158,10 @@ export function FeaturedEventBanner({ openLeadModal }: { openLeadModal: () => vo
         </div>
 
         <div className="w-full px-4 pb-8 pt-4">
-          <div className="space-y-3.5">
+          <div className="home-broadcast-featured-copy space-y-3.5">
             
             {/* Status e badges */}
-            <div className="flex flex-wrap items-center gap-1.5">
+            <div className="home-broadcast-panel flex flex-wrap items-center gap-1.5" style={{ '--motion-delay': '260ms' } as React.CSSProperties}>
               <span className={`inline-flex items-center gap-1 rounded-full border bg-dark-gray/85 px-2.5 py-1 text-[9px] font-bold uppercase tracking-normal ${
                 registrationsAvailable ? 'border-trading-up/30 text-trading-up' : 'border-card-border text-muted'
               }`}>
@@ -173,13 +174,13 @@ export function FeaturedEventBanner({ openLeadModal }: { openLeadModal: () => vo
             </div>
 
             {/* Título do Evento */}
-            <h2 className="max-w-[19rem] text-4xl font-black uppercase leading-[0.92] tracking-normal text-white text-balance">
+            <h2 className="home-broadcast-featured-title max-w-[19rem] text-4xl font-black uppercase leading-[0.92] tracking-normal text-white text-balance">
               {nameMain}{' '}
               <span className="text-primary">{nameHighlight}</span>
             </h2>
 
             {/* Informações essenciais */}
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-card-border bg-card px-3 py-2 text-[11px] font-bold text-white">
+            <div className="home-broadcast-panel flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-card-border bg-card px-3 py-2 text-[11px] font-bold text-white" style={{ '--motion-delay': '340ms' } as React.CSSProperties}>
               <span>{featuredEvent.date}</span>
               <span className="h-1 w-1 rounded-full bg-muted-soft" aria-hidden="true" />
               <span>{featuredEvent.city || featuredEvent.location}, {featuredEvent.state || 'BR'}</span>
@@ -188,7 +189,7 @@ export function FeaturedEventBanner({ openLeadModal }: { openLeadModal: () => vo
             </div>
 
             {/* Countdown Compacto */}
-            <div className="rounded-md border border-card-border bg-dark-gray px-3 py-2 text-[11px] font-bold uppercase text-white">
+            <div className="home-broadcast-countdown rounded-md border border-card-border bg-dark-gray px-3 py-2 text-[11px] font-bold uppercase text-white">
               <span className="block text-[10px] font-black tracking-normal text-muted">Restam</span>
               <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
                 <span><strong className="font-number text-sm font-black">{formatNum(countdown.days)}</strong>D</span>
@@ -199,7 +200,7 @@ export function FeaturedEventBanner({ openLeadModal }: { openLeadModal: () => vo
             </div>
 
             {/* Botões de Ação */}
-            <div className="flex flex-col gap-2.5 pt-2">
+            <div className="home-broadcast-actions flex flex-col gap-2.5 pt-2" style={{ '--motion-delay': '430ms' } as React.CSSProperties}>
               <button
                 disabled={!registrationsAvailable}
                 onClick={() => registrationsAvailable && setIsRegisterOpen(true)}
@@ -225,7 +226,7 @@ export function FeaturedEventBanner({ openLeadModal }: { openLeadModal: () => vo
 
       {/* Banner Versão Desktop */}
       <section 
-        className="hidden md:flex relative overflow-hidden min-h-[600px] border-b border-card-border bg-cover bg-center flex-col justify-end"
+        className="home-broadcast-featured-backdrop hidden md:flex relative overflow-hidden min-h-[600px] border-b border-card-border bg-cover bg-center flex-col justify-end"
         style={{ backgroundImage: `url(${featuredEvent.bannerUrl || '/banner_compor.png'})` }}
       >
         {/* Máscara de gradientes */}
@@ -249,7 +250,7 @@ export function FeaturedEventBanner({ openLeadModal }: { openLeadModal: () => vo
         <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 w-full pb-12 sm:pb-16">
           <div className="grid gap-8 lg:grid-cols-[1.25fr_0.75fr] lg:items-end w-full">
             {/* Lado Esquerdo: Evento em Destaque */}
-            <div className="space-y-6">
+            <div className="home-broadcast-featured-copy space-y-6">
               <div className="inline-flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-trading-up shadow-[0_0_8px_rgba(14,203,129,0.7)] animate-pulse" />
                 <span className="text-xs font-black uppercase tracking-[0.18em] text-trading-up">
@@ -257,7 +258,7 @@ export function FeaturedEventBanner({ openLeadModal }: { openLeadModal: () => vo
                 </span>
               </div>
 
-              <div className="flex flex-wrap gap-2">
+              <div className="home-broadcast-panel flex flex-wrap gap-2" style={{ '--motion-delay': '300ms' } as React.CSSProperties}>
                 <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-wider backdrop-blur-md ${
                   registrationsAvailable ? 'border-trading-up/30 bg-trading-up/15 text-trading-up' : 'border-card-border bg-dark-gray/70 text-muted'
                 }`}>
@@ -273,12 +274,12 @@ export function FeaturedEventBanner({ openLeadModal }: { openLeadModal: () => vo
                 </span>
               </div>
 
-              <h2 className="text-4xl font-black uppercase leading-[0.9] tracking-[-0.06em] text-white sm:text-6xl lg:text-7xl">
+              <h2 className="home-broadcast-featured-title text-4xl font-black uppercase leading-[0.9] tracking-[-0.06em] text-white sm:text-6xl lg:text-7xl">
                 {nameMain}{' '}
                 <span className="text-primary">{nameHighlight}</span>
               </h2>
 
-              <div className="flex flex-wrap items-center text-sm font-bold text-white/70 gap-2 sm:gap-4">
+              <div className="home-broadcast-panel flex flex-wrap items-center text-sm font-bold text-white/70 gap-2 sm:gap-4" style={{ '--motion-delay': '360ms' } as React.CSSProperties}>
                 <span>{featuredEvent.date}</span>
                 <span className="h-1.5 w-1.5 rounded-full bg-white/30 hidden sm:inline" />
                 <span>{featuredEvent.location}</span>
@@ -287,7 +288,7 @@ export function FeaturedEventBanner({ openLeadModal }: { openLeadModal: () => vo
               </div>
 
               {/* Painel de Countdown em Glassmorphism */}
-              <div className="inline-flex gap-4 sm:gap-6 items-center p-4 sm:p-5 rounded-2xl border border-card-border bg-[#0b0e11]/65 backdrop-blur-md w-fit">
+              <div className="home-broadcast-countdown inline-flex gap-4 sm:gap-6 items-center p-4 sm:p-5 rounded-2xl border border-card-border bg-[#0b0e11]/65 backdrop-blur-md w-fit">
                 {/* Countdown */}
                 <div className="flex gap-4 sm:gap-6 justify-between sm:justify-start items-center">
                   <div className="flex flex-col items-center">
@@ -318,7 +319,7 @@ export function FeaturedEventBanner({ openLeadModal }: { openLeadModal: () => vo
               </div>
 
               {/* Ações do Evento */}
-              <div className="flex flex-wrap gap-3">
+              <div className="home-broadcast-actions flex flex-wrap gap-3" style={{ '--motion-delay': '440ms' } as React.CSSProperties}>
                 <button
                   disabled={!registrationsAvailable}
                   onClick={() => registrationsAvailable && setIsRegisterOpen(true)}
@@ -339,7 +340,7 @@ export function FeaturedEventBanner({ openLeadModal }: { openLeadModal: () => vo
             </div>
 
             {/* Lado Direito: Card de Captação Comercial (Dividindo Espaço) */}
-            <div className="rounded-2xl border border-card-border bg-[#0b0e11]/80 p-6 backdrop-blur-md space-y-4 lg:mb-1">
+            <div className="home-broadcast-commercial-card rounded-2xl border border-card-border bg-[#0b0e11]/80 p-6 backdrop-blur-md space-y-4 lg:mb-1" style={{ '--motion-delay': '500ms' } as React.CSSProperties}>
               <div className="space-y-1.5">
                 <span className="inline-flex text-[9px] font-black uppercase tracking-[0.15em] text-primary">Plataforma WODArena</span>
                 <h3 className="text-lg font-black uppercase text-white leading-tight">Organize seu evento</h3>

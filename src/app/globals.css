@@ -20,6 +20,7 @@
   --trading-up: #0ecb81;
   --trading-down: #f6465d;
   --info: #3b82f6;
+  --motion-broadcast-ease: cubic-bezier(0.16, 1, 0.3, 1);
   --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-number: "IBM Plex Sans", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
@@ -171,6 +172,138 @@ input[type=number] {
   color-scheme: light;
 }
 
+@keyframes home-broadcast-rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 18px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes home-broadcast-title {
+  from {
+    opacity: 0;
+    clip-path: inset(0 0 18% 0);
+    transform: translate3d(0, 24px, 0);
+  }
+  to {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes home-broadcast-video {
+  from {
+    opacity: 0.72;
+    clip-path: inset(12% 0 0 0);
+    transform: translate3d(0, 12px, 0) scale(1.015);
+  }
+  to {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes home-broadcast-panel {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes home-broadcast-modal-overlay {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes home-broadcast-modal-panel {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .home-broadcast-title {
+    animation: home-broadcast-title 680ms var(--motion-broadcast-ease) both;
+    animation-delay: 80ms;
+  }
+
+  .home-broadcast-support {
+    animation: home-broadcast-rise 460ms var(--motion-broadcast-ease) both;
+    animation-delay: 170ms;
+  }
+
+  .home-broadcast-tags,
+  .home-broadcast-panel,
+  .home-broadcast-section-header,
+  .home-broadcast-filters,
+  .home-broadcast-empty,
+  .home-broadcast-actions {
+    animation: home-broadcast-panel 440ms var(--motion-broadcast-ease) both;
+    animation-delay: var(--motion-delay, 240ms);
+  }
+
+  .home-broadcast-chip,
+  .home-broadcast-tile,
+  .home-broadcast-event-card {
+    animation: home-broadcast-rise 380ms var(--motion-broadcast-ease) both;
+    animation-delay: var(--motion-delay, 0ms);
+  }
+
+  .home-broadcast-video {
+    animation: home-broadcast-video 760ms var(--motion-broadcast-ease) both;
+    animation-delay: 260ms;
+  }
+
+  .home-broadcast-featured-media,
+  .home-broadcast-featured-backdrop {
+    animation: home-broadcast-video 620ms var(--motion-broadcast-ease) both;
+    animation-delay: 120ms;
+  }
+
+  .home-broadcast-featured-copy {
+    animation: home-broadcast-rise 520ms var(--motion-broadcast-ease) both;
+    animation-delay: 210ms;
+  }
+
+  .home-broadcast-featured-title {
+    animation: home-broadcast-title 640ms var(--motion-broadcast-ease) both;
+    animation-delay: 270ms;
+  }
+
+  .home-broadcast-countdown,
+  .home-broadcast-commercial-card {
+    animation: home-broadcast-panel 460ms var(--motion-broadcast-ease) both;
+    animation-delay: var(--motion-delay, 360ms);
+  }
+
+  .home-broadcast-modal-overlay {
+    animation: home-broadcast-modal-overlay 150ms ease-out both;
+  }
+
+  .home-broadcast-modal-panel {
+    animation: home-broadcast-modal-panel 220ms var(--motion-broadcast-ease) both;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -179,5 +312,11 @@ input[type=number] {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+
+  [class*="home-broadcast-"] {
+    opacity: 1 !important;
+    clip-path: inset(0 0 0 0) !important;
+    transform: none !important;
   }
 }
