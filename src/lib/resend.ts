@@ -184,6 +184,25 @@ export async function sendRegistrationEmail(
   const hasBanner = Boolean(safeBannerUrl);
   const hasLogo = Boolean(safeLogoUrl);
 
+  // Categoria do evento (mesma lógica de rótulo usada no card de destaque da home)
+  const eventTypeLabel = event.eventType === 'fitness_racing'
+    ? 'Fitness Race'
+    : event.eventType === 'functional_fitness_qualifier'
+      ? 'Functional Fitness Qualifier'
+      : 'Functional Fitness';
+  const journeyWord = event.eventType === 'fitness_racing' ? 'seu percurso' : 'sua bateria';
+
+  const safeCity = event.city ? escapeHtml(event.city) : '';
+  const safeState = event.state ? escapeHtml(event.state) : '';
+  const cityStateLabel = [safeCity, safeState].filter(Boolean).join(' / ');
+
+  // Links oficiais do evento (mesma normalização usada na página pública do evento)
+  const instagramHandle = event.instagram ? event.instagram.trim().replace(/^@+/, '') : '';
+  const safeInstagramHref = instagramHandle ? `https://instagram.com/${escapeHtml(instagramHandle)}` : '';
+  const safeWebsiteHref = event.website
+    ? escapeHtml(event.website.startsWith('http') ? event.website : `https://${event.website}`)
+    : '';
+
   // Template HTML do E-mail (Estilo Binance Flat / Visual Profissional)
   const htmlContent = `
     <!DOCTYPE html>
@@ -323,11 +342,12 @@ export async function sendRegistrationEmail(
       <div class="wrapper">
         <div class="container">
           
-          <!-- Header: faixa de marca WODArena + banner do evento + logo -->
+          <!-- Header: o evento é o protagonista visual; a WODArena vira selo discreto -->
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse: collapse;">
             <tr>
-              <td style="background-color: #181a20; padding: 14px 24px; text-align: center; border-bottom: 3px solid #FCD535;">
-                <span style="color: #FCD535; font-size: 15px; font-weight: 900; letter-spacing: 0.14em; text-transform: uppercase; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;">WODArena</span>
+              <td style="background-color: #181a20; padding: 10px 24px; text-align: center; border-bottom: 3px solid #FCD535;">
+                <span style="color: #FCD535; font-size: 11px; font-weight: 900; letter-spacing: 0.16em; text-transform: uppercase; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;">WODArena</span>
+                <span style="color: #707a8a; font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; margin-left: 8px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;">Plataforma oficial de inscrições</span>
               </td>
             </tr>
             ${hasBanner ? `
@@ -339,24 +359,35 @@ export async function sendRegistrationEmail(
             ${hasLogo ? `
             <tr>
               <td style="background-color: #ffffff; text-align: center; padding: 0;">
-                <table role="presentation" align="center" cellpadding="0" cellspacing="0" border="0" style="margin: ${hasBanner ? '-40px' : '24px'} auto 0 auto;">
+                <table role="presentation" align="center" cellpadding="0" cellspacing="0" border="0" style="margin: ${hasBanner ? '-40px' : '28px'} auto 0 auto;">
                   <tr>
-                    <td style="background-color: #ffffff; border: 1px solid #eaecef; border-radius: 12px; padding: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">
-                      <img src="${safeLogoUrl}" alt="${safeEventName} logo" width="72" height="72" style="display: block; width: 72px; height: 72px; border-radius: 8px; border: 0;">
+                    <td style="background-color: #ffffff; border: 1px solid #eaecef; border-radius: 12px; padding: ${hasBanner ? '8px' : '12px'}; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">
+                      <img src="${safeLogoUrl}" alt="${safeEventName} logo" width="${hasBanner ? '72' : '96'}" height="${hasBanner ? '72' : '96'}" style="display: block; width: ${hasBanner ? '72px' : '96px'}; height: ${hasBanner ? '72px' : '96px'}; border-radius: 8px; border: 0;">
                     </td>
                   </tr>
                 </table>
+                ${!hasBanner ? `<div style="padding: 14px 24px 0; font-size: 20px; font-weight: 900; text-transform: uppercase; letter-spacing: -0.3px; color: #181a20; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;">${safeEventName}</div>` : ''}
+              </td>
+            </tr>` : ''}
+            ${!hasBanner && !hasLogo ? `
+            <tr>
+              <td style="background-color: #0b0e11; padding: 34px 24px; text-align: center;">
+                <div style="color: #FCD535; font-size: 10px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 10px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;">${eventTypeLabel}</div>
+                <div style="color: #ffffff; font-size: 26px; font-weight: 900; text-transform: uppercase; letter-spacing: -0.4px; line-height: 1.15; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;">${safeEventName}</div>
               </td>
             </tr>` : ''}
           </table>
           
           <!-- Body Content -->
           <div class="body">
-            <div class="success-badge">${isPaymentApproved ? 'Inscrição Confirmada' : 'Inscrição Registrada'}</div>
+            <div style="margin-bottom: 16px;">
+              <span class="success-badge" style="margin-right: 6px; margin-bottom: 0;">${isPaymentApproved ? 'Inscrição Confirmada' : 'Inscrição Registrada'}</span>
+              <span style="display: inline-block; background-color: #fff7d6; color: #8a6a00; border: 1px solid #d4a900; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; padding: 6px 10px; border-radius: 4px;">${eventTypeLabel}</span>
+            </div>
             <h1 class="title">${isPaymentApproved ? 'Sua inscrição está confirmada!' : 'Sua inscrição foi registrada'}</h1>
             <p class="subtitle">
-              Olá, <strong>${registration.athleteName}</strong>. Sua inscrição para o evento <strong>${event.name}</strong> foi registrada na WODArena. Status atual: <strong>${statusLabel}</strong>.
-              ${isPaymentApproved ? 'Abaixo estão os detalhes oficiais da sua vaga.' : 'A participação no evento depende da regularização do pagamento.'}
+              Olá, <strong>${registration.athleteName}</strong>. Sua inscrição para <strong>${event.name}</strong> foi registrada na WODArena. Status atual: <strong>${statusLabel}</strong>.
+              ${isPaymentApproved ? `Abaixo estão os detalhes oficiais de ${journeyWord}.` : 'A participação no evento depende da regularização do pagamento.'}
             </p>
             
             <div class="divider"></div>
@@ -399,6 +430,11 @@ export async function sendRegistrationEmail(
                 <td class="label">Local</td>
                 <td class="value">${event.location}</td>
               </tr>
+              ${cityStateLabel ? `
+              <tr>
+                <td class="label">Cidade / Estado</td>
+                <td class="value">${cityStateLabel}</td>
+              </tr>` : ''}
               <tr>
                 <td class="label">Total Pago</td>
                 <td class="value" style="color: #0ecb81; font-size: 15px;">${totalPaidFormatted}</td>
@@ -430,8 +466,14 @@ export async function sendRegistrationEmail(
             <p>
               Cada evento possui organizadores independentes. Em caso de dúvidas sobre cronogramas, kits ou locais, entre em contato diretamente com a organização do evento.
             </p>
+            ${(safeInstagramHref || safeWebsiteHref) ? `
             <p style="margin-top: 16px;">
-              <a href="https://wodarena.com/termos" target="_blank">Termos de Inscrição</a> &bull; 
+              ${safeInstagramHref ? `<a href="${safeInstagramHref}" target="_blank" rel="noopener noreferrer">Instagram do evento</a>` : ''}
+              ${safeInstagramHref && safeWebsiteHref ? ' &bull; ' : ''}
+              ${safeWebsiteHref ? `<a href="${safeWebsiteHref}" target="_blank" rel="noopener noreferrer">Site do evento</a>` : ''}
+            </p>` : ''}
+            <p style="margin-top: 16px;">
+              <a href="https://wodarena.com/termos" target="_blank">Termos de Inscrição</a> &bull;
               <a href="https://wodarena.com/termos#privacidade" target="_blank">Políticas de Privacidade</a>
             </p>
           </div>
