@@ -19,7 +19,9 @@ test('public event schedule renders heat participants and useful empty states', 
   assert.match(eventPage, /const eventDivisionIds = React\.useMemo\(/);
   assert.match(eventPage, /athletes\.some\(athlete => eventDivisionIds\.has\(athlete\.divisionId\)\)/);
   assert.match(eventPage, /publicEventDataStatus\[eventId\] === undefined && !hasPublicEventAthletes/);
-  assert.match(eventPage, /Atletas \/ Equipes/);
+  // "Painel de Pregão" (Direção A): a lista de atletas some por trás de um chip de contagem
+  // dentro da própria linha da bateria, em vez de um rótulo "Atletas / Equipes" separado.
+  assert.match(eventPage, /: '0'\} atletas/);
   assert.match(eventPage, /Participantes em carregamento\.\.\./);
   assert.match(eventPage, /Nenhum participante publicado nesta bateria\./);
 });
@@ -34,7 +36,18 @@ test('public event schedule groups heats by workout with accessible expandable p
   assert.match(eventPage, /aria-controls=\{panelId\}/);
   assert.match(eventPage, /hidden=\{!isExpanded\}/);
   assert.match(eventPage, /toggleHeatDetails\(item\.id\)/);
-  assert.match(eventPage, /Ver atletas/);
-  assert.match(eventPage, /Ocultar atletas/);
+  // "Painel de Pregão": a linha inteira da bateria é o controle de expandir/ocultar (sem texto
+  // "Ver atletas"/"Ocultar atletas" — o estado é lido via aria-expanded acima e o chevron rotaciona).
+  assert.match(eventPage, /ChevronDown className=\{`h-3\.5 w-3\.5 shrink-0 text-muted-soft transition-transform \$\{isExpanded \? 'rotate-180' : ''\}`\}/);
   assert.match(eventPage, /formatScheduleDate\(item\.date\)/);
+});
+
+test('public event schedule shows a live/next/done status per heat, timezone-safe', () => {
+  assert.match(eventPage, /type HeatLiveStatus = 'live' \| 'next' \| 'upcoming' \| 'done'/);
+  assert.match(eventPage, /const heatStatusById = React\.useMemo\(/);
+  // Fuso fixo do evento (América/Fortaleza, sem horário de verão) em vez do fuso do dispositivo.
+  assert.match(eventPage, /const EVENT_UTC_OFFSET = '-03:00'/);
+  // O fim de uma bateria sem "Final" explícito é derivado do início da próxima da mesma prova,
+  // nunca de uma bateria paralela de outra prova nem de uma empatada no mesmo horário.
+  assert.match(eventPage, /candidate\.groupId === groupId && candidate\.start > start/);
 });

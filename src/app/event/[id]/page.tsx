@@ -34,12 +34,28 @@ type ScheduleBlock =
   | { id: string; type: 'general'; item: EventScheduleItem }
   | { id: string; type: 'heatGroup'; group: ScheduleHeatGroup };
 
-const parseScheduleTimestamp = (item: EventScheduleItem) => {
-  const date = item.date?.includes('/')
-    ? item.date.split('/').reverse().join('-')
-    : item.date;
-  const timestamp = Date.parse(`${date || '1970-01-01'}T${item.time || '00:00'}:00`);
-  return Number.isNaN(timestamp) ? 0 : timestamp;
+// Eventos WODArena rodam no horário de Brasília/Fortaleza (UTC-03:00, sem horário de verão desde 2019);
+// fixar o offset garante que o status "ao vivo" não dependa do fuso do dispositivo de quem acessa.
+const EVENT_UTC_OFFSET = '-03:00';
+
+const parseScheduleClock = (dateValue?: string, timeValue?: string): number | null => {
+  if (!dateValue || !timeValue) return null;
+  const date = dateValue.includes('/')
+    ? dateValue.split('/').reverse().join('-')
+    : dateValue;
+  const timestamp = Date.parse(`${date}T${timeValue}:00${EVENT_UTC_OFFSET}`);
+  return Number.isNaN(timestamp) ? null : timestamp;
+};
+
+const parseScheduleTimestamp = (item: EventScheduleItem) => parseScheduleClock(item.date, item.time) ?? 0;
+
+type HeatLiveStatus = 'live' | 'next' | 'upcoming' | 'done';
+
+const HEAT_STATUS_META: Record<HeatLiveStatus, { dotClass: string; label: string; badge?: string }> = {
+  live: { dotClass: 'bg-trading-up ring-4 ring-trading-up/30 animate-pulse', label: 'Em andamento', badge: 'Ao vivo' },
+  next: { dotClass: 'bg-primary ring-4 ring-primary/25', label: 'Próxima bateria', badge: 'Próxima' },
+  upcoming: { dotClass: 'bg-muted-soft', label: 'Bateria agendada' },
+  done: { dotClass: 'bg-transparent ring-2 ring-muted-soft', label: 'Bateria encerrada', badge: 'Encerrada' },
 };
 
 const formatScheduleDate = (value?: string) => {
@@ -136,6 +152,20 @@ export default function EventPage({ params }: PageProps) {
   const [confirmedVoucher, setConfirmedVoucher] = useState<{ registration: Registration; athlete: Athlete; cpf?: string } | null>(null);
   const [selectedDivisionForCourseId, setSelectedDivisionForCourseId] = useState<string>('');
   const [expandedHeatIds, setExpandedHeatIds] = useState<Set<string>>(new Set());
+  const [scheduleNowTs, setScheduleNowTs] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (activeTab !== 'schedule') return;
+    // Defer o refresh imediato para o próximo macrotask: evita setState síncrono dentro do
+    // efeito (cascata de render) e ainda assim atualiza o relógio assim que a aba abre,
+    // sem esperar os 30s do próximo tick do interval.
+    const refreshId = setTimeout(() => setScheduleNowTs(Date.now()), 0);
+    const intervalId = setInterval(() => setScheduleNowTs(Date.now()), 30000);
+    return () => {
+      clearTimeout(refreshId);
+      clearInterval(intervalId);
+    };
+  }, [activeTab]);
 
   useEffect(() => {
     if (!isSessionHydrated) return;
@@ -372,6 +402,60 @@ export default function EventPage({ params }: PageProps) {
       timeRange: firstGroup && lastGroup ? `${firstGroup.startTime} - ${lastGroup.endTime}` : 'A confirmar'
     };
   }, [scheduleHeatGroups, scheduleItems]);
+  const heatStatusById = React.useMemo(() => {
+    const statuses = new Map<string, HeatLiveStatus>();
+    const FALLBACK_DURATION_MS = 15 * 60 * 1000;
+    const DAY_MS = 24 * 60 * 60 * 1000;
+
+    const allHeats = scheduleHeatGroups.flatMap(group => group.items.map(item => ({ item, groupId: group.id })));
+
+    // Baterias sem data/horário utilizável ficam de fora do cálculo de "ao vivo"/"próxima"
+    // (tratadas como agendadas ao final) em vez de caírem erradamente em "encerrada".
+    const scheduled = allHeats
+      .map(({ item, groupId }) => ({ item, groupId, start: parseScheduleClock(item.date, item.time) }))
+      .filter((entry): entry is { item: EventScheduleItem; groupId: string; start: number } => entry.start !== null)
+      .sort((a, b) => a.start - b.start);
+
+    scheduled.forEach(({ item, groupId, start }, index) => {
+      const explicitEnd = item.endTime ? parseScheduleClock(item.date, item.endTime) : null;
+      // Só conta como "Final" explícito se for diferente do "Início" — "08:00–08:00" é dado
+      // incompleto, não uma bateria de 24h, então cai no mesmo fallback de quem não tem Final.
+      let end: number | null = null;
+      if (explicitEnd !== null && explicitEnd !== start) {
+        // "Final" já passou da meia-noite em relação ao "Início" (ex.: 23:30 -> 00:15): soma um dia.
+        end = explicitEnd > start ? explicitEnd : explicitEnd + DAY_MS;
+      }
+      if (end === null) {
+        // Sem "Final" definido: a bateria termina quando a próxima **da mesma prova** começa
+        // (baterias paralelas de outra prova, ou empatadas no mesmo horário, não contam) —
+        // a última bateria da prova usa um teto padrão.
+        const nextInGroup = scheduled.find((candidate, candidateIndex) => (
+          candidateIndex > index && candidate.groupId === groupId && candidate.start > start
+        ));
+        end = nextInGroup ? nextInGroup.start : start + FALLBACK_DURATION_MS;
+      }
+
+      if (scheduleNowTs >= start && scheduleNowTs < end) {
+        statuses.set(item.id, 'live');
+      } else if (scheduleNowTs >= end) {
+        statuses.set(item.id, 'done');
+      }
+    });
+
+    // "Próxima" é o(s) horário(s) de início mais próximo(s) no futuro — todas as baterias
+    // empatadas nesse horário (ex.: raias/lanes paralelas) recebem o mesmo destaque.
+    const nextStart = scheduled.find(({ start }) => scheduleNowTs < start)?.start;
+    scheduled.forEach(({ item, start }) => {
+      if (statuses.has(item.id)) return;
+      statuses.set(item.id, nextStart !== undefined && start === nextStart ? 'next' : 'upcoming');
+    });
+
+    allHeats.forEach(({ item }) => {
+      if (!statuses.has(item.id)) statuses.set(item.id, 'upcoming');
+    });
+
+    return statuses;
+  }, [scheduleHeatGroups, scheduleNowTs]);
   const isEventLoading = !isSessionHydrated
     || isLoading
     || (bootstrapStatus !== 'ready' && bootstrapStatus !== 'degraded')
@@ -750,23 +834,14 @@ export default function EventPage({ params }: PageProps) {
                 {scheduleItems.length > 0 ? (
                   <div className="space-y-5">
                     {scheduleHeatGroups.length > 0 && (
-                      <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 sm:grid-cols-4">
-                        <div className="rounded-lg border border-card-border/70 bg-dark-gray/30 p-3">
-                          <span className="block text-[9px] font-black uppercase tracking-wider text-muted">Provas</span>
-                          <strong className="mt-1 block text-xl font-black text-white font-number">{scheduleSummary.groupCount}</strong>
-                        </div>
-                        <div className="rounded-lg border border-card-border/70 bg-dark-gray/30 p-3">
-                          <span className="block text-[9px] font-black uppercase tracking-wider text-muted">Baterias</span>
-                          <strong className="mt-1 block text-xl font-black text-white font-number">{scheduleSummary.heatCount}</strong>
-                        </div>
-                        <div className="rounded-lg border border-card-border/70 bg-dark-gray/30 p-3">
-                          <span className="block text-[9px] font-black uppercase tracking-wider text-muted">Atletas</span>
-                          <strong className="mt-1 block text-xl font-black text-white font-number">{scheduleSummary.participantCount}</strong>
-                        </div>
-                        <div className="rounded-lg border border-primary/30 bg-primary/10 p-3">
-                          <span className="block text-[9px] font-black uppercase tracking-wider text-primary">Janela</span>
-                          <strong className="mt-1 block text-sm font-black text-primary font-number">{scheduleSummary.timeRange}</strong>
-                        </div>
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-md border border-card-border/60 bg-dark-gray/30 px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-muted">
+                        <span><strong className="font-number text-white">{scheduleSummary.groupCount}</strong> provas</span>
+                        <span className="h-1 w-1 shrink-0 rounded-full bg-muted-soft" aria-hidden="true" />
+                        <span><strong className="font-number text-white">{scheduleSummary.heatCount}</strong> baterias</span>
+                        <span className="h-1 w-1 shrink-0 rounded-full bg-muted-soft" aria-hidden="true" />
+                        <span><strong className="font-number text-white">{scheduleSummary.participantCount}</strong> atletas</span>
+                        <span className="h-1 w-1 shrink-0 rounded-full bg-muted-soft" aria-hidden="true" />
+                        <span className="text-primary">Janela <strong className="font-number">{scheduleSummary.timeRange}</strong></span>
                       </div>
                     )}
 
@@ -797,36 +872,33 @@ export default function EventPage({ params }: PageProps) {
 
                       const group = block.group;
                       const groupIndex = scheduleHeatGroups.findIndex(candidate => candidate.id === group.id);
+                      // group.items já vem ordenado cronologicamente por buildScheduleHeatGroups.
+                      const groupItemsByTime = group.items;
+                      const groupFirstDateLabel = formatScheduleDate(groupItemsByTime[0]?.date);
+                      const groupLastDateLabel = formatScheduleDate(groupItemsByTime[groupItemsByTime.length - 1]?.date);
+                      // Prova que atravessa a virada do dia: o cabeçalho declara as duas datas em vez de
+                      // afirmar (incorretamente) que tudo acontece na data da primeira bateria cadastrada.
+                      const groupDateHeading = groupFirstDateLabel !== groupLastDateLabel
+                        ? `${groupFirstDateLabel} ${group.startTime} – ${groupLastDateLabel} ${group.endTime}`
+                        : `${group.dateLabel} · ${group.startTime}–${group.endTime}`;
 
                       return (
-                        <section key={block.id} className="min-w-0 overflow-hidden rounded-lg border border-card-border/80 bg-dark-gray/20">
-                          <div className="border-b border-card-border/70 bg-black/20 p-4">
-                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                              <div className="min-w-0">
-                                <span className="rounded border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-primary">
-                                  Prova {groupIndex + 1}
-                                </span>
-                                <h4 className="mt-2 text-base font-black uppercase tracking-wider text-white sm:text-lg">
-                                  {group.title}
-                                </h4>
-                                <p className="mt-1 text-xs font-semibold uppercase tracking-wider text-muted">
-                                  {group.dateLabel} · {group.startTime} - {group.endTime}
-                                </p>
-                              </div>
-                              <div className="grid grid-cols-1 gap-2 text-right min-[420px]:grid-cols-2 sm:min-w-48">
-                                <span className="rounded border border-card-border/60 bg-background/50 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-muted">
-                                  <strong className="block text-sm text-white font-number">{group.heatCount}</strong>
-                                  baterias
-                                </span>
-                                <span className="rounded border border-card-border/60 bg-background/50 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-muted">
-                                  <strong className="block text-sm text-white font-number">{group.participantCount}</strong>
-                                  atletas
-                                </span>
-                              </div>
+                        <section key={block.id} className="min-w-0 overflow-hidden rounded-lg border border-card-border/70">
+                          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b border-card-border/70 bg-dark-gray/40 px-4 py-2.5">
+                            <div className="flex min-w-0 items-baseline gap-2">
+                              <span className="shrink-0 text-[10px] font-black uppercase tracking-wider text-primary">
+                                Prova {groupIndex + 1}
+                              </span>
+                              <h4 className="truncate text-xs font-bold uppercase tracking-wider text-white">
+                                {group.title}
+                              </h4>
                             </div>
+                            <span className="shrink-0 font-number text-[10px] font-bold text-muted">
+                              {groupDateHeading}
+                            </span>
                           </div>
 
-                          <div className="divide-y divide-card-border/60">
+                          <div className="divide-y divide-card-border/50" role="list">
                             {group.items.map((item) => {
                               const heatParticipants = resolveHeatParticipantSlots(item.athleteIds, athletes);
                               const heatSlotLabel = getHeatSlotLabel(event.eventType);
@@ -834,66 +906,52 @@ export default function EventPage({ params }: PageProps) {
                                 || (publicEventDataStatus[eventId] === undefined && !hasPublicEventAthletes);
                               const isExpanded = expandedHeatIds.has(item.id);
                               const panelId = `heat-participants-${item.id}`;
+                              const status = heatStatusById.get(item.id) ?? 'upcoming';
+                              const statusMeta = HEAT_STATUS_META[status];
+                              const itemDateLabel = formatScheduleDate(item.date);
+                              const showItemDate = itemDateLabel !== groupFirstDateLabel;
 
                               return (
-                                <article key={item.id} className="p-4">
-                                  <div className="flex min-w-0 flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                                    <div className="min-w-0">
-                                      <div className="flex flex-wrap items-center gap-2">
-                                        <span className="rounded border border-primary/20 bg-primary/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-primary">
-                                          Bateria de Prova
+                                <div key={item.id} role="listitem">
+                                  <button
+                                    type="button"
+                                    aria-expanded={isExpanded}
+                                    aria-controls={panelId}
+                                    onClick={() => toggleHeatDetails(item.id)}
+                                    className="flex w-full min-w-0 flex-col gap-2 px-4 py-3 text-left transition-colors hover:bg-primary/5 sm:flex-row sm:items-center sm:gap-3"
+                                  >
+                                    <span className="flex min-w-0 items-center gap-2 sm:w-[38%] sm:shrink-0">
+                                      <span className={`h-2 w-2 shrink-0 rounded-full ${statusMeta.dotClass}`} aria-hidden="true" />
+                                      <span className="sr-only">{statusMeta.label}. </span>
+                                      {statusMeta.badge && (
+                                        <span className={`shrink-0 text-[10px] font-black uppercase tracking-wider ${status === 'live' ? 'text-trading-up' : status === 'done' ? 'text-muted' : 'text-primary'}`} aria-hidden="true">
+                                          {statusMeta.badge}
                                         </span>
-                                        <span className="text-[9px] font-black uppercase tracking-wider text-muted-soft">
-                                          {formatScheduleDate(item.date)}
-                                        </span>
-                                      </div>
-                                      <h5 className="mt-2 truncate text-sm font-extrabold uppercase text-white">
-                                        {item.title}
-                                      </h5>
-                                    </div>
-
-                                    <div className="grid min-w-0 grid-cols-1 gap-2 text-center text-[10px] font-bold uppercase tracking-wider min-[360px]:grid-cols-2 sm:grid-cols-4 xl:min-w-[430px]">
-                                      <div className="rounded border border-card-border/40 bg-background/50 p-2">
-                                        <span className="mb-1 block text-[8px] text-muted">Aquecimento</span>
-                                        <span className="text-xs font-bold text-white font-number">{item.warmupTime || '-'}</span>
-                                      </div>
-                                      <div className="rounded border border-card-border/40 bg-background/50 p-2">
-                                        <span className="mb-1 block text-[8px] text-muted">Fila</span>
-                                        <span className="text-xs font-bold text-white font-number">{item.checkinTime || '-'}</span>
-                                      </div>
-                                      <div className="rounded border border-primary/30 bg-primary/20 p-2">
-                                        <span className="mb-1 block text-[8px] text-primary">Início</span>
-                                        <span className="text-xs font-bold text-primary font-number">{item.time || '-'}</span>
-                                      </div>
-                                      <div className="rounded border border-card-border/40 bg-background/50 p-2">
-                                        <span className="mb-1 block text-[8px] text-muted">Final</span>
-                                        <span className="text-xs font-bold text-white font-number">{item.endTime || '-'}</span>
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  <div className="mt-3 flex flex-col items-stretch gap-2 border-t border-card-border/40 pt-3 sm:flex-row sm:items-center sm:justify-between">
-                                    <span className="text-[9px] font-black uppercase tracking-wider text-muted-soft">
-                                      Atletas / Equipes
+                                      )}
+                                      <span title={item.title} className="truncate text-xs font-extrabold uppercase text-white">{item.title}</span>
+                                      {showItemDate && (
+                                        <span className="shrink-0 text-[9px] font-bold uppercase text-muted">{itemDateLabel}</span>
+                                      )}
                                     </span>
-                                    <button
-                                      type="button"
-                                      aria-expanded={isExpanded}
-                                      aria-controls={panelId}
-                                      onClick={() => toggleHeatDetails(item.id)}
-                                      className="flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-card-border/70 bg-background/70 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-white transition-colors hover:border-primary hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary sm:w-auto"
-                                    >
-                                      <span className="font-number">
+
+                                    <span className="flex flex-1 flex-wrap items-baseline gap-x-4 gap-y-1 font-number text-[11px] font-medium text-muted">
+                                      <span className="whitespace-nowrap">Aquec. <b className="font-semibold text-white">{item.warmupTime || '-'}</b></span>
+                                      <span className="whitespace-nowrap">Fila <b className="font-semibold text-white">{item.checkinTime || '-'}</b></span>
+                                      <span className="whitespace-nowrap text-[12px] text-primary/80">Início <b className="text-base font-extrabold text-primary">{item.time || '-'}</b></span>
+                                      <span className="whitespace-nowrap">Final <b className="font-semibold text-white">{item.endTime || '-'}</b></span>
+                                    </span>
+
+                                    <span className="flex shrink-0 items-center justify-between gap-2 sm:justify-end">
+                                      <span className="rounded border border-card-border bg-dark-gray px-2 py-1 font-number text-[10px] font-bold text-muted">
                                         {heatParticipants.totalCount > 0
                                           ? `${heatParticipants.resolvedCount}/${heatParticipants.totalCount}`
-                                          : '0'}
+                                          : '0'} atletas
                                       </span>
-                                      <span>{isExpanded ? 'Ocultar atletas' : 'Ver atletas'}</span>
-                                      <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} aria-hidden="true" />
-                                    </button>
-                                  </div>
+                                      <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-muted-soft transition-transform ${isExpanded ? 'rotate-180' : ''}`} aria-hidden="true" />
+                                    </span>
+                                  </button>
 
-                                  <div id={panelId} hidden={!isExpanded} className="mt-3 space-y-2">
+                                  <div id={panelId} hidden={!isExpanded} className="space-y-2 bg-black/20 px-4 pb-4 pt-1 sm:pl-9">
                                     {heatParticipants.resolvedParticipants.length > 0 ? (
                                       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                                         {heatParticipants.resolvedParticipants.map(({ athlete, athleteId, displayIndex }) => {
@@ -937,7 +995,7 @@ export default function EventPage({ params }: PageProps) {
                                       </p>
                                     )}
                                   </div>
-                                </article>
+                                </div>
                               );
                             })}
                           </div>
