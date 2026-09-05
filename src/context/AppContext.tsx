@@ -13,6 +13,7 @@ import { rankWorkoutScores } from '@/lib/scoring';
 type LeaderboardEntry = Record<string, any>;
 
 const MAX_PUBLIC_EVENT_DATA_ATTEMPTS = 2;
+type LoadPublicEventDataOptions = { force?: boolean };
 
 type RegistrationDraft = Omit<Registration, 'id' | 'createdAt'> & Partial<Pick<Registration, 'id' | 'createdAt'>>;
 
@@ -73,7 +74,7 @@ interface AppContextType {
   bootstrapError: string | null;
   retryBootstrap: () => void;
   publicEventDataStatus: Record<string, PublicEventDataStatus>;
-  loadPublicEventData: (eventId: string) => Promise<void>;
+  loadPublicEventData: (eventId: string, options?: LoadPublicEventDataOptions) => Promise<void>;
   events: Event[];
   athletes: Athlete[];
   scores: Score[];
@@ -96,6 +97,7 @@ interface AppContextType {
   deleteDivision: (eventId: string, divisionId: string) => Promise<void>;
   deleteWorkout: (eventId: string, workoutId: string) => Promise<void>;
   registerTicket: (registration: RegistrationDraft, athleteProfile?: AthleteProfileDraft) => Registration;
+  createManualRegistration: (registration: RegistrationDraft, athleteProfile?: AthleteProfileDraft) => Promise<Registration>;
   updateRegistrationDetails: (registrationId: string, eventId: string, data: RegistrationEditInput) => Promise<void>;
   cancelRegistration: (registrationId: string, eventId: string, data: RegistrationCancellationInput) => Promise<void>;
   markRegistrationRefunded: (registrationId: string, eventId: string, data: RegistrationRefundInput) => Promise<void>;
@@ -416,14 +418,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return mappedRegs;
   }, []);
 
-  const loadPublicEventData = useCallback(async (eventId: string) => {
+  const loadPublicEventData = useCallback(async (eventId: string, options: LoadPublicEventDataOptions = {}) => {
     // A pagina publica do evento tambem pode ser aberta pelo gestor/proprietario.
     // Nessa situacao o bootstrap privado nao e uma fonte confiavel para a lista
     // publicada da bateria (por exemplo, apos uma inscricao ou troca de aba).
     // Sempre hidratamos os perfis publicos do evento e os mesclamos ao contexto.
     if (!eventId) return;
-    const previousAttempts = publicEventLoadAttemptsRef.current.get(eventId) || 0;
-    if (previousAttempts >= MAX_PUBLIC_EVENT_DATA_ATTEMPTS) return;
+    const previousAttempts = options.force ? 0 : publicEventLoadAttemptsRef.current.get(eventId) || 0;
+    if (!options.force && previousAttempts >= MAX_PUBLIC_EVENT_DATA_ATTEMPTS) return;
 
     const existingRequest = publicEventRequestsRef.current.get(eventId);
     if (existingRequest) return existingRequest;
@@ -463,7 +465,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               rank: score.rank || undefined,
               points: score.points || undefined,
               splits: parsedSplits || {},
-              resultStatus: optionalString(score.result_status) as Score['resultStatus']
+              resultStatus: optionalString(score.result_status) as Score['resultStatus'],
+              penaltyPercent: score.penalty_percent !== null && score.penalty_percent !== undefined ? Number(score.penalty_percent) : undefined
             } as Score;
           });
           mappedLeaderboardEntries = payload.leaderboardEntries || [];
@@ -473,8 +476,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           ...previous.filter(athlete => !mappedAthletes.some(incoming => incoming.id === athlete.id)),
           ...mappedAthletes
         ]);
+        const eventWorkoutIds = new Set(
+          (events.find(event => event.id === eventId)?.workouts || []).map(workout => workout.id)
+        );
+        mappedScores.forEach(score => eventWorkoutIds.add(score.workoutId));
         setScores(previous => [
-          ...previous.filter(score => !mappedScores.some(incoming => incoming.athleteId === score.athleteId && incoming.workoutId === score.workoutId)),
+          ...previous.filter(score => !eventWorkoutIds.has(score.workoutId)),
           ...mappedScores
         ]);
         setLeaderboardEntries(previous => [
@@ -502,7 +509,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     publicEventRequestsRef.current.set(eventId, request);
     return request;
-  }, []);
+  }, [events]);
 
   // Carregar dados iniciais do Supabase
   useEffect(() => {
@@ -580,7 +587,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               rank: s.rank || undefined,
               points: s.points || undefined,
               splits: parsedSplits || {},
-              resultStatus: optionalString(s.result_status) as Score['resultStatus']
+              resultStatus: optionalString(s.result_status) as Score['resultStatus'],
+              penaltyPercent: s.penalty_percent !== null && s.penalty_percent !== undefined ? Number(s.penalty_percent) : undefined
             };
           });
           setScores(mappedScores);
@@ -1472,6 +1480,65 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return newRegistration;
   };
 
+  // Inscrição manual criada pelo gestor (painel "Bilheteria"), incluindo
+  // convites com 100% de desconto. Ao contrário de registerTicket (que só
+  // espelha em memória uma inscrição já persistida pelo checkout público),
+  // esta função persiste de fato via /api/admin/persistence: sem isso, a
+  // inscrição nunca chegava ao banco e ficava presa como "Pendente" na UI
+  // até desaparecer no próximo refresh.
+  const createManualRegistration = async (
+    registrationData: RegistrationDraft,
+    athleteProfile?: AthleteProfileDraft
+  ): Promise<Registration> => {
+    const result = await adminPersist('createRegistration', {
+      eventId: registrationData.eventId,
+      divisionId: registrationData.divisionId,
+      registrationData: {
+        athleteName: registrationData.athleteName,
+        athleteEmail: registrationData.athleteEmail,
+        athletePhone: registrationData.athletePhone,
+        box: registrationData.box,
+        gender: registrationData.gender,
+        couponCode: registrationData.couponCode
+      },
+      athleteProfile: athleteProfile ? {
+        birthDate: athleteProfile.birthDate,
+        city: athleteProfile.city,
+        state: athleteProfile.state,
+        instagram: normalizeInstagram(athleteProfile.instagram),
+        photoUrl: athleteProfile.photoUrl,
+        shirtSize: athleteProfile.shirtSize,
+        isTeam: athleteProfile.isTeam,
+        teamMembers: athleteProfile.teamMembers?.map(m => ({
+          name: m.name,
+          instagram: normalizeInstagram(m.instagram),
+          shirtSize: m.shirtSize || ''
+        }))
+      } : undefined
+    });
+
+    const newRegistration = result.registration as Registration;
+    const newAthlete = result.athlete as Athlete | null;
+
+    setRegistrations(prev => {
+      const existsInState = prev.some(r => r.id === newRegistration.id);
+      return existsInState
+        ? prev.map(r => r.id === newRegistration.id ? newRegistration : r)
+        : [...prev, newRegistration];
+    });
+
+    if (newAthlete) {
+      setAthletes(prev => {
+        const exists = prev.some(a => a.id === newAthlete.id);
+        return exists
+          ? prev.map(a => a.id === newAthlete.id ? newAthlete : a)
+          : [...prev, newAthlete];
+      });
+    }
+
+    return newRegistration;
+  };
+
   // Editar uma inscrição existente (correção de cadastro pelo gestor).
   // Persiste no banco (registrations + athletes) e sincroniza o estado local
   // com os dados normalizados retornados pelo servidor.
@@ -2262,6 +2329,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         deleteDivision,
         deleteWorkout,
         registerTicket,
+        createManualRegistration,
         updateRegistrationDetails,
         cancelRegistration,
         markRegistrationRefunded,

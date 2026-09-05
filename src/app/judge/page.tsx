@@ -7,6 +7,8 @@ import { LogOut } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { getYouTubeNoCookieEmbedUrl } from '@/lib/videoProof';
 
+const JUDGE_QUEUE_REFRESH_MS = 15000;
+
 type QueueItem = {
   id: string;
   eventId: string;
@@ -20,8 +22,11 @@ type QueueItem = {
   videoId: string;
   athleteNote?: string;
   status: string;
+  finalResult?: string;
+  penaltyPercent?: number;
   currentVersion: number;
   submittedAt: string;
+  reviewedAt?: string;
 };
 
 type ReviewItem = {
@@ -37,6 +42,7 @@ export default function JudgePage() {
   const { currentUser, logout } = useApp();
   const router = useRouter();
   const [queue, setQueue] = useState<QueueItem[]>([]);
+  const [recentDecisions, setRecentDecisions] = useState<QueueItem[]>([]);
   const [selectedId, setSelectedId] = useState('');
   const [decision, setDecision] = useState('validated');
   const [manualResult, setManualResult] = useState('');
@@ -46,17 +52,40 @@ export default function JudgePage() {
   const [busy, setBusy] = useState(false);
 
   const loadQueue = useCallback(async () => {
-    const response = await fetch('/api/judge/queue?status=pending_review');
+    const response = await fetch('/api/judge/queue');
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.error || 'Erro ao carregar a fila.');
-    setQueue(data.queue || []);
+    const items = (data.queue || []) as QueueItem[];
+    const pending = items.filter((item) => item.status === 'pending_review');
+    const decided = items
+      .filter((item) => item.status !== 'pending_review')
+      .sort((a, b) => new Date(b.reviewedAt || b.submittedAt).getTime() - new Date(a.reviewedAt || a.submittedAt).getTime())
+      .slice(0, 5);
+
+    setQueue(pending);
+    setRecentDecisions(decided);
+    setSelectedId((current) => pending.some((item) => item.id === current) ? current : '');
   }, []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
       void loadQueue().catch((error) => setNotice(error instanceof Error ? error.message : 'Erro ao carregar fila.'));
     }, 0);
-    return () => window.clearTimeout(timer);
+    const intervalId = window.setInterval(() => {
+      void loadQueue().catch((error) => console.error('[Judge] Atualização da fila falhou:', error));
+    }, JUDGE_QUEUE_REFRESH_MS);
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        void loadQueue().catch((error) => console.error('[Judge] Atualização da fila falhou:', error));
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      window.clearTimeout(timer);
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [loadQueue]);
 
   const selected = useMemo(() => queue.find((item) => item.id === selectedId) || queue[0], [queue, selectedId]);
@@ -126,6 +155,12 @@ export default function JudgePage() {
   }
 
   const embedUrl = selected ? getYouTubeNoCookieEmbedUrl(selected.videoId) : null;
+  const statusLabel = (item: QueueItem) => {
+    if (item.status === 'penalized') return item.penaltyPercent ? `Penalizado ${item.penaltyPercent}%` : 'Penalizado';
+    if (item.status === 'validated') return 'Validado';
+    if (item.status === 'rejected') return 'Rejeitado';
+    return item.status;
+  };
 
   return (
     <main className="mx-auto w-full max-w-7xl space-y-5 overflow-x-hidden px-4 py-6 sm:space-y-6 sm:px-6 sm:py-8 lg:px-8">
@@ -279,9 +314,31 @@ export default function JudgePage() {
             </section>
           </section>
         ) : (
-          <section aria-labelledby="judge-empty-title" className="rounded-xl border border-dashed border-card-border bg-card p-8 text-center">
-            <h2 id="judge-empty-title" className="text-lg font-bold text-white">Fila vazia</h2>
-            <p className="mt-2 text-sm leading-6 text-muted">Quando houver uma submissão pendente, os detalhes de revisão aparecerão aqui.</p>
+          <section aria-labelledby="judge-empty-title" className="space-y-5 rounded-xl border border-dashed border-card-border bg-card p-8">
+            <div className="text-center">
+              <h2 id="judge-empty-title" className="text-lg font-bold text-white">Fila vazia</h2>
+              <p className="mt-2 text-sm leading-6 text-muted">Quando houver uma submissão pendente, os detalhes de revisão aparecerão aqui.</p>
+            </div>
+            {recentDecisions.length > 0 && (
+              <div className="border-t border-card-border pt-5 text-left">
+                <h3 className="text-sm font-bold uppercase tracking-wider text-white">Decisões recentes</h3>
+                <div className="mt-3 space-y-2">
+                  {recentDecisions.map((item) => (
+                    <article key={item.id} className="rounded-lg border border-card-border bg-dark-gray/30 p-3 text-xs leading-5 text-muted">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <strong className="text-white">{item.athleteName}</strong>
+                        <span className="rounded border border-primary/30 bg-primary/10 px-2 py-0.5 font-bold uppercase tracking-wide text-primary">
+                          {statusLabel(item)}
+                        </span>
+                      </div>
+                      <p className="mt-1">
+                        {item.workoutCode} · {item.finalResult || item.submittedResult}
+                      </p>
+                    </article>
+                  ))}
+                </div>
+              </div>
+            )}
           </section>
         )}
       </div>

@@ -36,6 +36,14 @@ test('discloses workout tie-break details without changing the leaderboard matri
   assert.match(leaderboard, /min-h-11 min-w-11/);
 });
 
+test('marks qualifier penalty and manual adjustment statuses in public results', () => {
+  assert.match(leaderboard, /ResultStatusBadge/);
+  assert.match(leaderboard, /status === 'penalized'/);
+  assert.match(leaderboard, /Penalidade \$\{penaltyPercent\}%/);
+  assert.match(leaderboard, /status === 'manual'/);
+  assert.match(leaderboard, /score\.penaltyPercent/);
+});
+
 test('expands the leaderboard page container for the dense results layout', () => {
   assert.match(leaderboardPage, /max-w-\[1600px\]/);
   assert.match(leaderboardPage, /Resultados oficiais/);

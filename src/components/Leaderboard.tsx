@@ -29,6 +29,7 @@ interface LeaderboardProps {
   event: Event;
 }
 
+const QUALIFIER_LEADERBOARD_REFRESH_MS = 15000;
 const SCORE_TIE_BREAKER_SPLIT_KEY = 'tieBreaker';
 const shouldUseTimeTieBreaker = (tieBreaker?: string | null) => tieBreaker?.trim().toLowerCase() === 'tempo';
 
@@ -158,6 +159,32 @@ const getTieBreakerLabel = (tieBreaker?: string) => {
   return tieBreaker?.trim() || 'Critério de desempate';
 };
 
+const ResultStatusBadge = ({ status, penaltyPercent }: { status?: Score['resultStatus']; penaltyPercent?: number }) => {
+  if (status === 'penalized') {
+    const label = penaltyPercent ? `Penalidade ${penaltyPercent}%` : 'Penalidade';
+    return (
+      <span className="inline-flex shrink-0 rounded border border-red-300/40 bg-red-950/30 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wide text-red-200">
+        {label}
+      </span>
+    );
+  }
+  if (status === 'manual') {
+    return (
+      <span className="inline-flex shrink-0 rounded border border-primary/35 bg-primary/10 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wide text-primary">
+        Ajustado
+      </span>
+    );
+  }
+  if (status === 'absent') {
+    return (
+      <span className="inline-flex shrink-0 rounded border border-muted/40 bg-dark-gray px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wide text-muted">
+        Ausente
+      </span>
+    );
+  }
+  return null;
+};
+
 type WorkoutScoreResultProps = {
   workout: Workout;
   score: Score;
@@ -200,8 +227,11 @@ const WorkoutScoreResult = ({ workout, score, tieBreakGroupSize, compact = false
 
   if (!shouldShowTieBreaker) {
     return (
-      <span className={`${compact ? 'text-[10px]' : 'text-xs'} truncate px-0.5 text-muted`} title={score.result}>
-        {score.result}
+      <span className="inline-flex min-w-0 flex-col items-center gap-1 px-0.5" title={score.result}>
+        <span className={`${compact ? 'text-[10px]' : 'text-xs'} max-w-full truncate text-muted`}>
+          {score.result}
+        </span>
+        <ResultStatusBadge status={score.resultStatus} penaltyPercent={score.penaltyPercent} />
       </span>
     );
   }
@@ -241,6 +271,7 @@ const WorkoutScoreResult = ({ workout, score, tieBreakGroupSize, compact = false
         <span className="truncate">{score.result}</span>
         <Info className="h-3 w-3 shrink-0" aria-hidden="true" />
       </button>
+      <ResultStatusBadge status={score.resultStatus} penaltyPercent={score.penaltyPercent} />
       {open && (
         <span
           id={tooltipId}
@@ -450,6 +481,26 @@ export function Leaderboard({ event }: LeaderboardProps) {
       console.error('[Leaderboard] Erro ao carregar dados públicos do evento:', error);
     });
   }, [event.id, loadPublicEventData]);
+
+  useEffect(() => {
+    if (event.eventType !== 'functional_fitness_qualifier') return;
+
+    const refreshQualifierLeaderboard = () => {
+      void loadPublicEventData(event.id, { force: true }).catch((error) => {
+        console.error('[Leaderboard] Atualização do qualifier falhou:', error);
+      });
+    };
+    const intervalId = window.setInterval(refreshQualifierLeaderboard, QUALIFIER_LEADERBOARD_REFRESH_MS);
+    const handleVisibilityChange = () => {
+      if (!document.hidden) refreshQualifierLeaderboard();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [event.eventType, event.id, loadPublicEventData]);
 
   const publicDataStatus = publicEventDataStatus[event.id];
 

@@ -49,7 +49,7 @@ test('public bootstrap is minimal and event data is lazy and single-flight', () 
   assert.match(appContext, /publicEventRequestsRef = useRef\(new Map<string, Promise<void>>\(\)\)/);
   assert.match(appContext, /const existingRequest = publicEventRequestsRef\.current\.get\(eventId\)/);
   assert.match(appContext, /PUBLIC_EVENT_BOOTSTRAP_ENDPOINT/);
-  assert.match(appContext, /const loadPublicEventData = useCallback\(async \(eventId: string\) => \{\s*\/\/ A pagina publica[\s\S]*?if \(!eventId\) return;/);
+  assert.match(appContext, /const loadPublicEventData = useCallback\(async \(eventId: string, options: LoadPublicEventDataOptions = \{\}\) => \{\s*\/\/ A pagina publica[\s\S]*?if \(!eventId\) return;/);
   assert.doesNotMatch(appContext, /if \(!eventId \|\| currentUser\?\.role === 'owner' \|\| currentUser\?\.role === 'manager'\) return;/);
   assert.match(eventPage, /loadPublicEventData\(eventId\)/);
   assert.match(leaderboard, /loadPublicEventData\(event\.id\)/);
@@ -58,10 +58,22 @@ test('public bootstrap is minimal and event data is lazy and single-flight', () 
 test('public event hydration retries empty athlete payloads with a bounded cache', () => {
   assert.match(appContext, /const MAX_PUBLIC_EVENT_DATA_ATTEMPTS = 2/);
   assert.match(appContext, /publicEventLoadAttemptsRef = useRef\(new Map<string, number>\(\)\)/);
-  assert.match(appContext, /if \(previousAttempts >= MAX_PUBLIC_EVENT_DATA_ATTEMPTS\) return/);
+  assert.match(appContext, /type LoadPublicEventDataOptions = \{ force\?: boolean \}/);
+  assert.match(appContext, /if \(!options\.force && previousAttempts >= MAX_PUBLIC_EVENT_DATA_ATTEMPTS\) return/);
   assert.match(appContext, /do \{[\s\S]*?publicEventLoadAttemptsRef\.current\.set\(eventId, attemptCount\)[\s\S]*?\} while \(mappedAthletes\.length === 0 && attemptCount < MAX_PUBLIC_EVENT_DATA_ATTEMPTS\)/);
   assert.match(appContext, /setLeaderboardEntries\([\s\S]*?setPublicEventDataStatus\(previous => \(\{ \.\.\.previous, \[eventId\]: 'ready' \}\)\)/);
   assert.doesNotMatch(appContext, /loadedPublicEventIdsRef/);
+});
+
+test('public qualifier leaderboard can refresh without keeping stale event scores', () => {
+  assert.match(appContext, /loadPublicEventData: \(eventId: string, options\?: LoadPublicEventDataOptions\) => Promise<void>/);
+  assert.match(appContext, /const previousAttempts = options\.force \? 0 : publicEventLoadAttemptsRef\.current\.get\(eventId\) \|\| 0/);
+  assert.match(appContext, /const eventWorkoutIds = new Set\(/);
+  assert.match(appContext, /\.\.\.previous\.filter\(score => !eventWorkoutIds\.has\(score\.workoutId\)\)/);
+  assert.match(leaderboard, /const QUALIFIER_LEADERBOARD_REFRESH_MS = 15000/);
+  assert.match(leaderboard, /event\.eventType !== 'functional_fitness_qualifier'/);
+  assert.match(leaderboard, /loadPublicEventData\(event\.id, \{ force: true \}\)/);
+  assert.match(leaderboard, /document\.addEventListener\('visibilitychange', handleVisibilityChange\)/);
 });
 
 test('private bootstrap applies role scope before returning rows', () => {

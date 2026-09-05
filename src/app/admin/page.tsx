@@ -123,8 +123,8 @@ export default function AdminPage() {
   const {
     events, athletes, scores, registrations, contestations, coupons, currentUser,
     login, logout, addEvent, addDivision, updateDivision, reorderDivisions,
-    addWorkout, deleteEvent, deleteDivision, deleteWorkout, submitScore, submitScoresBulk, updateEvent, getLeaderboard, registerTicket, saveCourseLayout, updateWorkout,
-    refreshRegistrations, updateRegistrationDetails, cancelRegistration, markRegistrationRefunded, addCoupon, updateCoupon, toggleCouponActive, incrementCouponUsage, changePassword, updateAthleteProfile
+    addWorkout, deleteEvent, deleteDivision, deleteWorkout, submitScore, submitScoresBulk, updateEvent, getLeaderboard, createManualRegistration, saveCourseLayout, updateWorkout,
+    refreshRegistrations, updateRegistrationDetails, cancelRegistration, markRegistrationRefunded, addCoupon, updateCoupon, toggleCouponActive, changePassword, updateAthleteProfile
   } = useApp();
 
   // 1. Estados de Login (vinculado ao currentUser do contexto)
@@ -1146,7 +1146,7 @@ export default function AdminPage() {
   };
 
   // Submeter inscrição manual / bilheteria
-  const handleBilheteriaSubmit = (e: React.FormEvent) => {
+  const handleBilheteriaSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedEventToManage) return;
 
@@ -1190,43 +1190,46 @@ export default function AdminPage() {
 
     const finalPrice = Math.max(0, div.price - bilDiscountApplied);
 
-    registerTicket({
-      eventId: selectedEventToManage.id,
-      divisionId: div.id,
-      athleteName: finalAthleteName,
-      athleteEmail: bilAthleteEmail,
-      athletePhone: bilAthletePhone,
-      box: bilBox || 'Independente',
-      gender: div.category === 'female' ? 'female' : 'male',
-      ticketType: div.name,
-      ticketPrice: div.price,
-      quantity: 1,
-      totalPaid: finalPrice,
-      couponCode: bilAppliedCouponCode || undefined
-    }, {
-      birthDate: bilBirthDate,
-      gender: div.category === 'female' ? 'female' : 'male',
-      city: bilCity,
-      state: bilState,
-      instagram: cleanInsta(bilInstagram),
-      photoUrl: '',
-      shirtSize: bilShirtSize,
-      email: bilAthleteEmail,
-      phone: bilAthletePhone,
-      isTeam: isTeamCategory,
-      teamMembers: teamMembersPayload
-    });
+    try {
+      await createManualRegistration({
+        eventId: selectedEventToManage.id,
+        divisionId: div.id,
+        athleteName: finalAthleteName,
+        athleteEmail: bilAthleteEmail,
+        athletePhone: bilAthletePhone,
+        box: bilBox || 'Independente',
+        gender: div.category === 'female' ? 'female' : 'male',
+        ticketType: div.name,
+        ticketPrice: div.price,
+        quantity: 1,
+        totalPaid: finalPrice,
+        couponCode: bilAppliedCouponCode || undefined
+      }, {
+        birthDate: bilBirthDate,
+        gender: div.category === 'female' ? 'female' : 'male',
+        city: bilCity,
+        state: bilState,
+        instagram: cleanInsta(bilInstagram),
+        photoUrl: '',
+        shirtSize: bilShirtSize,
+        email: bilAthleteEmail,
+        phone: bilAthletePhone,
+        isTeam: isTeamCategory,
+        teamMembers: teamMembersPayload
+      });
 
-    if (bilAppliedCouponCode) {
-      incrementCouponUsage(selectedEventToManage.id, bilAppliedCouponCode);
+      setAdminNotice({
+        text: `Inscrição manual de "${finalAthleteName}" em "${div.name}" registrada com sucesso!`,
+        tone: 'success'
+      });
+
+      resetBilheteriaForm();
+    } catch (error) {
+      setAdminNotice({
+        text: error instanceof Error ? error.message : 'Erro ao registrar a inscrição manual.',
+        tone: 'error'
+      });
     }
-
-    setAdminNotice({
-      text: `Inscrição manual de "${finalAthleteName}" em "${div.name}" registrada com sucesso!`,
-      tone: 'success'
-    });
-
-    resetBilheteriaForm();
   };
 
   // Aplicar cupom na bilheteria

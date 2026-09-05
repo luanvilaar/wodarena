@@ -1,6 +1,7 @@
+import { randomBytes } from 'node:crypto';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { assertManagerSalesAccessForEvent } from '@/lib/serverManagerAccess';
-import { getRequestSession, verifyRegistrationAccessToken } from '@/lib/serverSecurity';
+import { getRequestSession, hashPassword, verifyRegistrationAccessToken } from '@/lib/serverSecurity';
 import { sendRegistrationEmail } from '@/lib/resend';
 import { getRegistrationAvailability } from '@/lib/eventStatus';
 import { Registration, Athlete, Event } from '@/types';
@@ -557,4 +558,229 @@ export const triggerRegistrationApprovedEmail = async (
     console.error(`[Email Trigger] Erro crítico no envio do e-mail da inscrição ${registrationId}:`, err);
     return { success: false, error: err };
   }
+};
+
+export type ManagerRegistrationInput = {
+  eventId: string;
+  divisionId: string;
+  athleteName: string;
+  athleteEmail: string;
+  athletePhone: string;
+  box?: string;
+  gender: 'male' | 'female';
+  couponCode?: string;
+  birthDate?: string;
+  city?: string;
+  state?: string;
+  instagram?: string;
+  photoUrl?: string;
+  shirtSize?: string;
+  isTeam?: boolean;
+  teamMembers?: { name: string; instagram?: string; shirtSize?: string }[];
+};
+
+/**
+ * Cria uma inscrição manual iniciada pelo gestor (painel "Bilheteria"),
+ * incluindo convites com 100% de desconto. Ao contrário do checkout público
+ * (auto-atendimento, com senha escolhida pelo próprio atleta), aqui o gestor
+ * já recebeu o pagamento (ou é um convite gratuito) no momento da inscrição:
+ * o registro nasce aprovado quando o valor final calculado no servidor é
+ * zero, e pendente caso contrário — nunca fica "esquecido" sem persistir,
+ * que era a causa raiz do bug (o fluxo antigo só existia em memória local).
+ */
+export const createManagerRegistration = async (
+  supabaseAdmin: SupabaseClient,
+  input: ManagerRegistrationInput
+): Promise<{ registration: Record<string, unknown>; athlete: Record<string, unknown> | null }> => {
+  const email = asString(input.athleteEmail).toLowerCase();
+  if (!email || !email.includes('@')) {
+    throw new RegistrationAccessError('Informe um e-mail válido para o atleta.', 400);
+  }
+  const athleteName = asString(input.athleteName);
+  if (!athleteName) throw new RegistrationAccessError('Informe o nome do atleta.', 400);
+  const athletePhone = asString(input.athletePhone);
+  if (!athletePhone) throw new RegistrationAccessError('Informe o telefone de contato.', 400);
+
+  const secureSnapshot = await calculateSecureRegistrationSnapshot(
+    supabaseAdmin,
+    {
+      eventId: input.eventId,
+      divisionId: input.divisionId,
+      couponCode: input.couponCode,
+      quantity: 1
+    },
+    {}
+  );
+  const safeRegistrationData = secureSnapshot.registrationData;
+
+  const { data: existingUser, error: existingUserError } = await supabaseAdmin
+    .from('users')
+    .select('id, role')
+    .eq('email', email)
+    .maybeSingle<{ id: string; role: string }>();
+  if (existingUserError) {
+    throw new RegistrationAccessError('Erro ao validar usuário do atleta.', 500);
+  }
+
+  let userId: string;
+  if (existingUser) {
+    if (existingUser.role !== 'athlete') {
+      throw new RegistrationAccessError('Este e-mail já pertence a uma conta administrativa e não pode ser usado para inscrição de atleta.', 409);
+    }
+    userId = existingUser.id;
+  } else {
+    userId = `ath-user-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const { error: userError } = await supabaseAdmin
+      .from('users')
+      .insert({
+        id: userId,
+        name: athleteName,
+        email,
+        role: 'athlete',
+        organization: input.box || 'Atleta WODArena'
+      });
+    if (userError) {
+      const isRoleConstraintError = userError.code === '23514'
+        || String(userError.message || '').includes('users_role_check');
+      throw new RegistrationAccessError(
+        isRoleConstraintError
+          ? 'Banco de dados ainda não aceita o papel de atleta. Aplique as migrations pendentes antes de tentar novamente.'
+          : 'Erro ao criar o painel do atleta.',
+        500
+      );
+    }
+
+    // Sem senha escolhida pelo gestor: gera um segredo aleatório descartável.
+    // O atleta define a própria senha depois via "esqueci minha senha".
+    const { error: secretError } = await supabaseAdmin
+      .from('users_secrets')
+      .insert({
+        user_id: userId,
+        password: hashPassword(randomBytes(24).toString('hex'))
+      });
+    if (secretError) {
+      throw new RegistrationAccessError('Erro ao configurar o acesso do atleta.', 500);
+    }
+  }
+
+  const { data: existingRegistration, error: regCheckError } = await supabaseAdmin
+    .from('registrations')
+    .select('id')
+    .eq('event_id', input.eventId)
+    .eq('athlete_email', email)
+    .not('payment_status', 'eq', 'payment_cancelled')
+    .maybeSingle();
+  if (regCheckError) {
+    throw new RegistrationAccessError('Erro ao verificar inscrições existentes.', 500);
+  }
+  if (existingRegistration) {
+    throw new RegistrationAccessError('Este e-mail já possui uma inscrição ativa para este evento.', 409);
+  }
+
+  let athleteId = `ath-${Date.now()}`;
+  const teamMembersJson = JSON.stringify(input.teamMembers || []);
+  const { data: existingAthlete } = await supabaseAdmin
+    .from('athletes')
+    .select('id')
+    .eq('email', email)
+    .eq('division_id', input.divisionId)
+    .maybeSingle<{ id: string }>();
+
+  if (existingAthlete) {
+    athleteId = existingAthlete.id;
+    const { error: athleteUpdateError } = await supabaseAdmin
+      .from('athletes')
+      .update({
+        shirt_size: input.shirtSize || null,
+        team_members: teamMembersJson
+      })
+      .eq('id', athleteId);
+    if (athleteUpdateError) {
+      throw new RegistrationAccessError('Erro ao atualizar dados do atleta.', 500);
+    }
+  } else {
+    const { error: athleteError } = await supabaseAdmin
+      .from('athletes')
+      .insert({
+        id: athleteId,
+        name: athleteName,
+        box: input.box || 'Independente',
+        country: 'BR',
+        division_id: input.divisionId,
+        birth_date: input.birthDate || null,
+        gender: input.gender || null,
+        city: input.city || null,
+        state: input.state || null,
+        instagram: input.instagram || null,
+        photo_url: input.photoUrl || null,
+        shirt_size: input.shirtSize || null,
+        email,
+        phone: athletePhone,
+        is_team: input.isTeam || false,
+        team_members: teamMembersJson
+      });
+    if (athleteError) {
+      throw new RegistrationAccessError('Erro ao registrar atleta.', 500);
+    }
+  }
+
+  // payment_status nunca vem do cliente: só nasce aprovado quando o valor
+  // calculado no servidor (cupom incluso) é zero — mesma regra do checkout
+  // de auto-atendimento em /api/registrations/start.
+  const paymentStatus = secureSnapshot.transactionAmount === 0 ? 'payment_approved' : 'payment_pending';
+  const now = new Date().toISOString();
+  const regId = `reg-${Date.now()}`;
+  const registrationPayload = {
+    id: regId,
+    event_id: input.eventId,
+    division_id: input.divisionId,
+    user_id: userId,
+    athlete_id: athleteId,
+    athlete_name: athleteName,
+    athlete_email: email,
+    athlete_phone: athletePhone,
+    box: input.box || 'Independente',
+    gender: input.gender,
+    ticket_type: safeRegistrationData.ticketType,
+    ticket_price: Number(safeRegistrationData.ticketPrice),
+    quantity: 1,
+    total_paid: Number(safeRegistrationData.totalPaid),
+    service_fee_percent: null,
+    service_fee_amount: 0,
+    amount_collected: Number(safeRegistrationData.totalPaid),
+    application_fee_charged: 0,
+    created_at: now,
+    coupon_code: safeRegistrationData.couponCode || null,
+    payment_status: paymentStatus,
+    payment_method: 'manual',
+    updated_at: now
+  };
+
+  const { data: dbRegistration, error: regError } = await supabaseAdmin
+    .from('registrations')
+    .insert(registrationPayload)
+    .select('*')
+    .single();
+
+  if (regError || !dbRegistration) {
+    if (regError?.code === '23505') {
+      throw new RegistrationAccessError('Este e-mail já possui uma inscrição ativa para este evento.', 409);
+    }
+    throw new RegistrationAccessError('Erro ao registrar inscrição.', 500);
+  }
+
+  // Inscrição gratuita (cupom 100%) já nasce aprovada — contabiliza o uso do
+  // cupom aqui, no mesmo ponto de transição para payment_approved usado pelo
+  // checkout público, para não perder nem duplicar a contagem.
+  if (paymentStatus === 'payment_approved') {
+    await applyCouponUsageForApprovedRegistration(supabaseAdmin, regId);
+  }
+
+  const { data: dbAthlete } = await supabaseAdmin
+    .from('athletes')
+    .select('*')
+    .eq('id', athleteId)
+    .maybeSingle();
+
+  return { registration: dbRegistration, athlete: dbAthlete || null };
 };

@@ -121,6 +121,7 @@ export interface Score {
   points?: number;     // Pontos ganhos na prova (ex: 100, 95, 90...)
   splits?: Record<string, string>;
   resultStatus?: 'validated' | 'penalized' | 'rejected' | 'manual' | 'absent';
+  penaltyPercent?: number;
 }
 
 export interface AthleteOverall {

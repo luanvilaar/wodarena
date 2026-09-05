@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { ManagerAccessError, assertManagerOperationalAccess, managerAccessErrorResponse } from '@/lib/serverManagerAccess';
+import { createManagerRegistration, RegistrationAccessError } from '@/lib/serverCheckout';
 import { checkRateLimit, createSupabaseAdmin, hashPassword, requireSession, safeErrorMessage, SessionUser } from '@/lib/serverSecurity';
 
 type DbClient = ReturnType<typeof createSupabaseAdmin>;
@@ -217,6 +218,37 @@ const mapRegistrationForClient = (registration: Record<string, unknown>) => ({
   refundProcessedAt: registration.refund_processed_at || undefined,
   refundProcessedBy: registration.refund_processed_by || undefined,
   updatedAt: registration.updated_at || undefined
+});
+
+const mapAthleteForClient = (athlete: Record<string, unknown>) => ({
+  id: athlete.id,
+  name: athlete.name,
+  box: athlete.box,
+  country: athlete.country || 'BR',
+  divisionId: athlete.division_id,
+  birthDate: athlete.birth_date || undefined,
+  gender: athlete.gender || undefined,
+  city: athlete.city || undefined,
+  state: athlete.state || undefined,
+  instagram: athlete.instagram || undefined,
+  photoUrl: athlete.photo_url || undefined,
+  shirtSize: athlete.shirt_size || undefined,
+  email: athlete.email || undefined,
+  phone: athlete.phone || undefined,
+  isTeam: Boolean(athlete.is_team),
+  teamMembers: (() => {
+    const raw = athlete.team_members;
+    if (Array.isArray(raw)) return raw;
+    if (typeof raw === 'string') {
+      try {
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  })()
 });
 
 export async function POST(request: Request) {
@@ -601,6 +633,49 @@ export async function POST(request: Request) {
           .eq('id', payload.couponId);
         if (error) throw error;
         return NextResponse.json({ success: true });
+      }
+
+      case 'createRegistration': {
+        const { eventId, divisionId, registrationData, athleteProfile } = payload as {
+          eventId: string;
+          divisionId: string;
+          registrationData: Record<string, unknown>;
+          athleteProfile?: Record<string, unknown>;
+        };
+
+        await ensureEventOwner(supabaseAdmin, actor, eventId);
+
+        try {
+          const result = await createManagerRegistration(supabaseAdmin, {
+            eventId,
+            divisionId,
+            athleteName: asTrimmed(registrationData?.athleteName),
+            athleteEmail: asTrimmed(registrationData?.athleteEmail),
+            athletePhone: asTrimmed(registrationData?.athletePhone),
+            box: asTrimmed(registrationData?.box) || undefined,
+            gender: registrationData?.gender === 'female' ? 'female' : 'male',
+            couponCode: asTrimmed(registrationData?.couponCode) || undefined,
+            birthDate: asTrimmed(athleteProfile?.birthDate) || undefined,
+            city: asTrimmed(athleteProfile?.city) || undefined,
+            state: asTrimmed(athleteProfile?.state) || undefined,
+            instagram: asTrimmed(athleteProfile?.instagram) || undefined,
+            photoUrl: asTrimmed(athleteProfile?.photoUrl) || undefined,
+            shirtSize: asTrimmed(athleteProfile?.shirtSize) || undefined,
+            isTeam: Boolean(athleteProfile?.isTeam),
+            teamMembers: Array.isArray(athleteProfile?.teamMembers) ? athleteProfile.teamMembers as { name: string; instagram?: string; shirtSize?: string }[] : []
+          });
+
+          return NextResponse.json({
+            success: true,
+            registration: mapRegistrationForClient(result.registration),
+            athlete: result.athlete ? mapAthleteForClient(result.athlete) : null
+          });
+        } catch (error) {
+          if (error instanceof RegistrationAccessError) {
+            return NextResponse.json({ error: error.message }, { status: error.status });
+          }
+          throw error;
+        }
       }
 
       case 'cancelRegistration': {

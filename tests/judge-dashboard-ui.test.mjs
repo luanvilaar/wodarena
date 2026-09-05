@@ -31,6 +31,18 @@ test('Judge dashboard exposes async feedback and useful empty states accessibly'
   assert.match(judgePage, /Quando houver uma submissão pendente/);
 });
 
+test('Judge dashboard refreshes pending queue and shows recent decisions without manual reload', () => {
+  assert.match(judgePage, /const JUDGE_QUEUE_REFRESH_MS = 15000/);
+  assert.match(judgePage, /const \[recentDecisions, setRecentDecisions\] = useState<QueueItem\[\]>\(\[\]\)/);
+  assert.match(judgePage, /fetch\('\/api\/judge\/queue'\)/);
+  assert.match(judgePage, /item\.status === 'pending_review'/);
+  assert.match(judgePage, /setRecentDecisions\(decided\)/);
+  assert.match(judgePage, /window\.setInterval\(\(\) => \{/);
+  assert.match(judgePage, /document\.addEventListener\('visibilitychange', handleVisibilityChange\)/);
+  assert.match(judgePage, /Decisões recentes/);
+  assert.match(judgePage, /statusLabel\(item\)/);
+});
+
 test('Judge dashboard exposes a safe, touch-friendly logout action', () => {
   assert.match(judgePage, /const \{ currentUser, logout \} = useApp\(\);/);
   assert.match(judgePage, /const router = useRouter\(\);/);
