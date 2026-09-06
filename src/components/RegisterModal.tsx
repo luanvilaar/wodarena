@@ -236,6 +236,8 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
   }, [pixData, event.id, registerTicket, onSuccess, onClose, cpf]);
 
   useEffect(() => {
+    if (!isOpen) return;
+
     let active = true;
     void fetch(`/api/checkout/config?event_id=${event.id}`)
       .then(async response => {
@@ -252,7 +254,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
     return () => {
       active = false;
     };
-  }, [event.id]);
+  }, [event.id, isOpen]);
 
   const isValidCPF = (val: string) => {
     const clean = val.replace(/\D/g, '');

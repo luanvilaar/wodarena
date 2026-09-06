@@ -65,7 +65,7 @@ export function FeaturedEventBanner({ openLeadModal }: { openLeadModal: () => vo
     return (
       <section 
         className="home-broadcast-featured-backdrop relative overflow-hidden min-h-[460px] sm:min-h-[600px] border-b border-card-border bg-cover bg-center flex flex-col justify-end"
-        style={{ backgroundImage: `url('/banner_compor.png')` }}
+        style={{ backgroundImage: `url('/hero-vertical-poster.jpg')` }}
       >
         {/* Máscara de gradientes */}
         <div className="absolute inset-0 z-0 pointer-events-none"
@@ -135,7 +135,7 @@ export function FeaturedEventBanner({ openLeadModal }: { openLeadModal: () => vo
         {/* Arte do evento na proporção original (5:2 — 1600 × 640), sem corte lateral */}
         <div className="home-broadcast-featured-media relative aspect-[5/2] w-full overflow-hidden bg-dark-gray">
           <Image
-            src={featuredEvent.bannerUrl || '/banner_compor.png'}
+            src={featuredEvent.bannerUrl || '/hero-vertical-poster.jpg'}
             alt={`${featuredEvent.name} banner`}
             fill
             unoptimized
@@ -227,7 +227,7 @@ export function FeaturedEventBanner({ openLeadModal }: { openLeadModal: () => vo
       {/* Banner Versão Desktop */}
       <section 
         className="home-broadcast-featured-backdrop hidden md:flex relative overflow-hidden min-h-[600px] border-b border-card-border bg-cover bg-center flex-col justify-end"
-        style={{ backgroundImage: `url(${featuredEvent.bannerUrl || '/banner_compor.png'})` }}
+        style={{ backgroundImage: `url(${featuredEvent.bannerUrl || '/hero-vertical-poster.jpg'})` }}
       >
         {/* Máscara de gradientes */}
         <div className="absolute inset-0 z-0 pointer-events-none"

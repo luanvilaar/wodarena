@@ -81,6 +81,16 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Development uses Turbopack; the production script explicitly uses Webpack.
+  turbopack: {},
+  webpack(config, { dev, buildId }) {
+    // next/font embeds ?dpl= in generated CSS. Do not reuse that CSS from a
+    // previous production build, whose preload URLs use another deployment ID.
+    if (!dev && config.cache && typeof config.cache === "object") {
+      config.cache.version = `${config.cache.version ?? ""}|build:${buildId}`;
+    }
+    return config;
+  },
   async headers() {
     return [
       {
