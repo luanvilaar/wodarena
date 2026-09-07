@@ -1,6 +1,8 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { usePathname } from 'next/navigation';
+import { requestLogin, type LoginOptions, type LoginResult } from '@/lib/authClient';
 import { WorkoutType, Event, Athlete, Division, Score, CourseStage, Coupon, Registration, User, Workout, AthleteOverall, EventScheduleItem, Contestation, EventType } from '../types';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { buildFitnessRacingCourse, buildFitnessRacingDefaults, normalizeInstagram } from '@/lib/fitnessRacing';
@@ -83,7 +85,7 @@ interface AppContextType {
   contestations: Contestation[];
   users: User[];
   currentUser: User | null;
-  login: (email: string, password: string) => Promise<User | null>;
+  login: (email: string, password: string, options?: LoginOptions) => Promise<LoginResult>;
   logout: () => void;
   createManagerAccount: (name: string, email: string, password: string, organization: string, serviceValidUntil?: string) => Promise<boolean>;
   updateManagerServiceValidity: (userId: string, serviceValidUntil?: string | null) => Promise<User | null>;
@@ -169,10 +171,9 @@ type BootstrapPayload = {
   mercadopagoAccounts: any[];
 };
 
-type BootstrapFetchResult = {
-  payload: BootstrapPayload;
-  authLost: boolean;
-};
+type BootstrapFetchResult =
+  | { payload: BootstrapPayload; authLost: false }
+  | { payload: null; authLost: true };
 
 const optionalString = (value: unknown) => typeof value === 'string' && value.length > 0 ? value : undefined;
 
@@ -353,6 +354,8 @@ const readBootstrapResponseWithTelemetry = (response: Response, payload: unknown
 };
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const isOwnerPage = pathname === '/owner';
   const [isLoading, setIsLoading] = useState(true);
   const [bootstrapStatus, setBootstrapStatus] = useState<BootstrapStatus>('loading');
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
@@ -373,10 +376,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const currentUserId = currentUser?.id || null;
   const bootstrapAbortRef = useRef<AbortController | null>(null);
   const bootstrapRequestIdRef = useRef(0);
-  const skipNextPublicBootstrapRef = useRef(false);
   const hasLoadedBootstrapRef = useRef(false);
+  const loginRequestRef = useRef<Promise<LoginResult> | null>(null);
+  const logoutRequestRef = useRef<Promise<void> | null>(null);
+  const sessionVersionRef = useRef(0);
   const publicEventRequestsRef = useRef(new Map<string, Promise<void>>());
   const publicEventLoadAttemptsRef = useRef(new Map<string, number>());
+
+  const clearSessionData = useCallback(() => {
+    setUsers([]);
+    setAthletes([]);
+    setScores([]);
+    setRegistrations([]);
+    setRegistrationsCount(null);
+    setContestations([]);
+    setCoupons([]);
+    setLeaderboardEntries([]);
+    setEvents([]);
+    setPublicEventDataStatus({});
+    publicEventRequestsRef.current.clear();
+    publicEventLoadAttemptsRef.current.clear();
+    hasLoadedBootstrapRef.current = false;
+  }, []);
 
   const retryBootstrap = useCallback(() => {
     setBootstrapError(null);
@@ -385,18 +406,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const fetchBootstrapPayload = useCallback(async (preferPrivate: boolean, signal: AbortSignal): Promise<BootstrapFetchResult> => {
     const initialEndpoint = preferPrivate ? PRIVATE_BOOTSTRAP_ENDPOINT : PUBLIC_BOOTSTRAP_ENDPOINT;
-    let httpResponse = await fetchWithTimeout(initialEndpoint, signal);
+    const httpResponse = await fetchWithTimeout(initialEndpoint, signal);
 
     if (preferPrivate && httpResponse.response.status === 401) {
-      console.info('[Bootstrap Client] Sessão expirada; migrando para o endpoint público:', JSON.stringify({
+      console.info('[Bootstrap Client] Sessão expirada; encerrando estado autenticado:', JSON.stringify({
         endpoint: initialEndpoint,
         status: httpResponse.response.status
       }));
-      httpResponse = await fetchWithTimeout(PUBLIC_BOOTSTRAP_ENDPOINT, signal);
-      return {
-        payload: readBootstrapResponseWithTelemetry(httpResponse.response, httpResponse.payload, PUBLIC_BOOTSTRAP_ENDPOINT),
-        authLost: true
-      };
+      // Limpar a sessão antes de qualquer consulta pública: uma falha pública
+      // não pode manter dados privados da sessão expirada no contexto.
+      return { payload: null, authLost: true };
     }
 
     return {
@@ -514,8 +533,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // Carregar dados iniciais do Supabase
   useEffect(() => {
     if (!isSessionHydrated) return;
-    if (!currentUserId && skipNextPublicBootstrapRef.current) {
-      skipNextPublicBootstrapRef.current = false;
+    if (!currentUserId && isOwnerPage) {
+      bootstrapAbortRef.current?.abort();
+      bootstrapRequestIdRef.current += 1;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setIsLoading(false);
+      setBootstrapStatus('ready');
+      setBootstrapError(null);
       return;
     }
 
@@ -533,6 +557,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const { payload, authLost } = await fetchBootstrapPayload(Boolean(currentUserId), controller.signal);
 
         if (controller.signal.aborted || requestId !== bootstrapRequestIdRef.current) return;
+
+        if (authLost) {
+          clearSessionData();
+          setCurrentUser(null);
+          setBootstrapStatus('ready');
+          return;
+        }
 
         const payloadBytes = new TextEncoder().encode(JSON.stringify(payload)).byteLength;
         console.info('[Bootstrap Client] Concluído:', JSON.stringify({
@@ -720,10 +751,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           setEvents([]);
         }
 
-        if (authLost) {
-          skipNextPublicBootstrapRef.current = true;
-          setCurrentUser(null);
-        }
         hasLoadedBootstrapRef.current = true;
         setBootstrapStatus('ready');
       } catch (err) {
@@ -752,7 +779,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     void fetchAllData();
     return () => controller.abort();
-  }, [currentUserId, fetchBootstrapPayload, isSessionHydrated, retryNonce, setCurrentUser]);
+  }, [currentUserId, fetchBootstrapPayload, isSessionHydrated, isOwnerPage, retryNonce, setCurrentUser, clearSessionData]);
 
   // Rotina de reparo automático (Self-Healing) de dados legados do Fitness Racing
   useEffect(() => {
@@ -834,38 +861,61 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [events, currentUser]);
 
   // Lógica de Login
-  const login = async (emailInput: string, passwordInput: string): Promise<User | null> => {
-    try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          email: emailInput,
-          password: passwordInput
-        })
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        console.error('Erro de login:', data.error);
-        return null;
+  const login = async (emailInput: string, passwordInput: string, options?: LoginOptions): Promise<LoginResult> => {
+    if (loginRequestRef.current) {
+      return { success: false, error: 'Uma tentativa de login já está em andamento.' };
+    }
+    const version = ++sessionVersionRef.current;
+    const request: Promise<LoginResult> = (async () => {
+      // Uma resposta tardia de logout não pode apagar o cookie do novo login.
+      if (logoutRequestRef.current) await logoutRequestRef.current;
+      if (version !== sessionVersionRef.current) {
+        return { success: false, error: 'A sessão foi encerrada. Tente entrar novamente.' };
       }
-
-      setCurrentUser(data.user);
-      return data.user as User;
-    } catch (err) {
-      console.error('Erro crítico no login:', err);
-      return null;
+      return requestLogin(emailInput, passwordInput, options);
+    })();
+    loginRequestRef.current = request;
+    try {
+      const result = await request;
+      if (version !== sessionVersionRef.current) {
+        return { success: false, error: 'A sessão foi encerrada. Tente entrar novamente.' };
+      }
+      if (result.success) {
+        bootstrapAbortRef.current?.abort();
+        bootstrapRequestIdRef.current += 1;
+        clearSessionData();
+        setCurrentUser(result.user);
+        retryBootstrap();
+      }
+      return result;
+    } catch {
+      return { success: false, error: 'Não foi possível encerrar a sessão anterior. Tente sair novamente antes de entrar.' };
+    } finally {
+      loginRequestRef.current = null;
     }
   };
 
   // Lógica de Logout
   const logout = () => {
+    sessionVersionRef.current += 1;
+    bootstrapAbortRef.current?.abort();
+    bootstrapRequestIdRef.current += 1;
+    clearSessionData();
     setCurrentUser(null);
-    fetch('/api/auth/logout', { method: 'POST' }).catch(err => {
-      console.warn('Erro ao encerrar sessão no servidor:', err);
+    if (logoutRequestRef.current) return;
+    const pendingLogin = loginRequestRef.current;
+    const request = (async () => {
+      // Se o usuário sair durante o login, apagar o cookie após sua resposta.
+      if (pendingLogin) await pendingLogin.catch(() => undefined);
+      const response = await fetch('/api/auth/logout', { method: 'POST' });
+      if (!response.ok) throw new Error('Falha ao encerrar sessão.');
+    })();
+    logoutRequestRef.current = request;
+    void request.then(() => {
+      logoutRequestRef.current = null;
+    }, () => {
+      logoutRequestRef.current = null;
+      console.warn('Não foi possível encerrar a sessão no servidor.');
     });
   };
 

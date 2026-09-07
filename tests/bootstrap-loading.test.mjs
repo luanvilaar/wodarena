@@ -30,7 +30,8 @@ test('bootstrap has timeout, cancellation, controlled 401 fallback and retry sta
   assert.match(appContext, /setTimeout\(\(\) => timeoutController\.abort\(\), BOOTSTRAP_TIMEOUT_MS\)/);
   assert.match(appContext, /cache: 'no-store'/);
   assert.match(appContext, /if \(preferPrivate && httpResponse\.response\.status === 401\)/);
-  assert.match(appContext, /skipNextPublicBootstrapRef\.current = true/);
+  assert.match(appContext, /return \{ payload: null, authLost: true \}/);
+  assert.match(appContext, /if \(authLost\) \{\s*clearSessionData\(\);\s*setCurrentUser\(null\)/);
   assert.match(appContext, /'loading' \| 'ready' \| 'degraded' \| 'error'/);
   assert.match(appContext, /setRetryNonce\(previous => previous \+ 1\)/);
   assert.match(appContext, /setBootstrapStatus\(hasLoadedBootstrapRef\.current \? 'degraded' : 'error'\)/);

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import { useApp } from '@/context/AppContext';
 import { Leaderboard } from '@/components/Leaderboard';
@@ -36,6 +36,8 @@ export default function OwnerPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const loginPendingRef = useRef(false);
 
   // Abas do Painel
   const [activeTab, setActiveTab] = useState<'dashboard' | 'managers' | 'events' | 'leaderboards' | 'leads'>('dashboard');
@@ -284,14 +286,17 @@ export default function OwnerPage() {
   // Ação de Login
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const user = await login(email, password);
-    if (user?.role === 'owner') {
-      setLoginError('');
-    } else if (user) {
-      logout();
-      setLoginError('Acesso negado. Esta conta não possui privilégios de proprietário do site.');
-    } else {
-      setLoginError('E-mail ou senha incorretos.');
+    if (loginPendingRef.current) return;
+    loginPendingRef.current = true;
+    setIsLoggingIn(true);
+    setLoginError('');
+    try {
+      const result = await login(email, password, { ownerOnly: true });
+      if (!result.success) setLoginError(result.error);
+      else setPassword('');
+    } finally {
+      loginPendingRef.current = false;
+      setIsLoggingIn(false);
     }
   };
 
@@ -390,7 +395,7 @@ export default function OwnerPage() {
             </div>
           )}
 
-          <form onSubmit={handleLogin} className="space-y-4">
+          <form onSubmit={handleLogin} aria-busy={isLoggingIn} className="space-y-4">
             <div>
               <label htmlFor="owner-email" className="block text-xs font-bold text-muted uppercase tracking-wider mb-1">E-mail do Proprietário</label>
               <div className="relative">
@@ -400,7 +405,8 @@ export default function OwnerPage() {
                   autoComplete="email"
                   type="email"
                   required
-              placeholder="Ex: l.vilaar@gmail.com"
+                  placeholder="seu@email.com"
+                  disabled={isLoggingIn}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full px-4 py-2.5 bg-dark-gray border border-card-border rounded-lg text-white focus:outline-none focus:border-primary/50 text-sm"
@@ -416,7 +422,8 @@ export default function OwnerPage() {
                 autoComplete="current-password"
                 type="password"
                 required
-                placeholder="Ex: owner"
+                placeholder="Digite sua senha"
+                disabled={isLoggingIn}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full px-4 py-2.5 bg-dark-gray border border-card-border rounded-lg text-white focus:outline-none focus:border-primary/50 text-sm"
@@ -425,9 +432,10 @@ export default function OwnerPage() {
 
             <button
               type="submit"
-              className="w-full py-3 bg-primary hover:bg-primary-hover text-black font-bold uppercase tracking-wider rounded-md transition-colors flex items-center justify-center gap-1.5 active:scale-95"
+              disabled={isLoggingIn}
+              className="w-full py-3 bg-primary hover:bg-primary-hover text-black font-bold uppercase tracking-wider rounded-md transition-colors flex items-center justify-center gap-1.5 active:scale-95 disabled:cursor-wait disabled:opacity-60"
             >
-              <span>Autenticar Proprietário</span>
+              <span aria-live="polite">{isLoggingIn ? 'Entrando…' : 'Autenticar Proprietário'}</span>
               <ShieldCheck className="h-4 w-4" />
             </button>
           </form>

@@ -18,10 +18,11 @@ const DUMMY_PASSWORD_HASH = hashPassword('wodarena-login-timing-decoy');
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { email, password } = body;
+    const body = await request.json().catch(() => null);
+    const { email, password, ownerOnly } = body || {};
 
-    if (!email || !password) {
+    if (typeof email !== 'string' || !email.trim() || typeof password !== 'string' || !password
+      || (ownerOnly !== undefined && typeof ownerOnly !== 'boolean')) {
       return NextResponse.json({ error: 'E-mail e senha são obrigatórios.' }, { status: 400 });
     }
 
@@ -42,7 +43,12 @@ export async function POST(request: Request) {
       .eq('email', normalizedEmail)
       .maybeSingle();
 
-    if (userError || !user) {
+    if (userError) {
+      console.error('[API Auth Login] Falha na consulta de usuário:', JSON.stringify({ code: userError.code }));
+      return NextResponse.json({ error: 'Serviço de autenticação indisponível.' }, { status: 503 });
+    }
+
+    if (!user) {
       verifyPassword(String(password), DUMMY_PASSWORD_HASH);
       console.warn(`[API Auth Login] Login fracassado: usuario nao encontrado para ${maskEmailForLog(normalizedEmail)}`);
       return NextResponse.json({ error: 'E-mail ou senha incorretos.' }, { status: 401 });
@@ -55,15 +61,25 @@ export async function POST(request: Request) {
       .eq('user_id', user.id)
       .maybeSingle();
 
-    if (secretError || !secret) {
-      console.error(`[API Auth Login] Falha ao recuperar segredo para o usuário ${user.id}`);
-      return NextResponse.json({ error: 'Erro de autenticação interna.' }, { status: 500 });
+    if (secretError) {
+      console.error('[API Auth Login] Falha na consulta de credenciais:', JSON.stringify({ code: secretError.code }));
+      return NextResponse.json({ error: 'Serviço de autenticação indisponível.' }, { status: 503 });
+    }
+    if (!secret) {
+      verifyPassword(String(password), DUMMY_PASSWORD_HASH);
+      return NextResponse.json({ error: 'E-mail ou senha incorretos.' }, { status: 401 });
     }
 
     const passwordCheck = verifyPassword(String(password), secret.password);
     if (!passwordCheck.valid) {
       console.warn(`[API Auth Login] Senha incorreta para o e-mail: ${maskEmailForLog(normalizedEmail)}`);
       return NextResponse.json({ error: 'E-mail ou senha incorretos.' }, { status: 401 });
+    }
+
+    // O modo proprietário só restringe o acesso; nunca define o papel da sessão.
+    // Conferir após a senha evita revelar o papel de contas a visitantes.
+    if (ownerOnly === true && user.role !== 'owner') {
+      return NextResponse.json({ error: 'Acesso restrito ao proprietário.' }, { status: 403 });
     }
 
     if (passwordCheck.needsRehash) {

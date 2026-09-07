@@ -20,7 +20,7 @@ export function Navbar() {
             <Image
               src="/Ativo_1.svg"
               alt="WODArena"
-              width={140}
+              width={146}
               height={18}
               priority
               className="h-4.5 w-auto object-contain shrink-0"

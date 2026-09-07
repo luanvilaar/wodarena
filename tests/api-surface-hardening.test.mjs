@@ -76,7 +76,9 @@ test('AppContext uses the public bootstrap for anonymous navigation and the priv
   assert.match(appContext, /const initialEndpoint = preferPrivate \? PRIVATE_BOOTSTRAP_ENDPOINT : PUBLIC_BOOTSTRAP_ENDPOINT/);
   assert.match(appContext, /await fetchWithTimeout\(initialEndpoint, signal\)/);
   assert.match(appContext, /if \(preferPrivate && httpResponse\.response\.status === 401\)/);
-  assert.match(appContext, /httpResponse = await fetchWithTimeout\(PUBLIC_BOOTSTRAP_ENDPOINT, signal\)/);
+  assert.match(appContext, /return \{ payload: null, authLost: true \}/);
+  assert.match(appContext, /if \(authLost\) \{/);
+  assert.match(appContext, /clearSessionData\(\);/);
   assert.match(appContext, /cache: 'no-store'/);
 });
 

@@ -1,1 +1,2 @@
 - [Repo público — regras de disclosure](project_public_repo_disclosure.md) — wodarena é PUBLIC no GitHub; varrer secrets e disclosure de vulns em todo pré-push
+- [:focus-visible fora de @layer](project_focus_visible_unlayered.md) — classes focus-visible:* dos componentes são código morto no app inteiro; correção adiada de propósito

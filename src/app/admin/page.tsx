@@ -1013,14 +1013,14 @@ export default function AdminPage() {
   // Lógica de Login
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const authenticatedUser = await login(email, password);
-    if (authenticatedUser) {
+    const result = await login(email, password);
+    if (result.success) {
       if (rememberLogin && typeof window !== 'undefined') {
         window.localStorage.setItem('wodarena_login_email', email);
       }
       setLoginError('');
     } else {
-      setLoginError('E-mail ou senha incorretos.');
+      setLoginError(result.error);
     }
   };
 

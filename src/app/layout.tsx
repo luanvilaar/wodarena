@@ -20,6 +20,7 @@ const ibmPlexSans = IBM_Plex_Sans({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "https://wodarena.com"),
   title: "WODArena | Líder em Competições de Functional Fitness",
   description: "Gerencie e acompanhe rankings, eventos, cronogramas e inscrições de Functional Fitness e Cross Training em tempo real.",
   keywords: ["crossfit", "functional fitness", "leaderboard", "competição", "wodarena", "box games"],

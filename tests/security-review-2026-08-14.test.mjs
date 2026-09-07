@@ -111,7 +111,7 @@ test('V-10 (MEDIUM): raw Postgres/Supabase error messages never reach the client
 
 test('V-11 (LOW): login burns the same scrypt cost for unknown emails, closing the timing side-channel', () => {
   assert.match(loginRoute, /const DUMMY_PASSWORD_HASH = hashPassword\('wodarena-login-timing-decoy'\)/);
-  const notFoundBlock = loginRoute.match(/if \(userError \|\| !user\) \{[\s\S]*?\n {4}\}/)?.[0] || '';
+  const notFoundBlock = loginRoute.match(/if \(!user\) \{[\s\S]*?\n {4}\}/)?.[0] || '';
   assert.match(notFoundBlock, /verifyPassword\(String\(password\), DUMMY_PASSWORD_HASH\)/);
 });
 
