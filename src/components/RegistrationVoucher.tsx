@@ -3,7 +3,10 @@
 import React from 'react';
 import Image from 'next/image';
 import { AlertTriangle, Calendar, CheckCircle2, MapPin, Printer, ShieldCheck, TicketCheck, User, X } from 'lucide-react';
-import { Registration, Athlete, Event } from '@/types';
+import { useLocale, useTranslations } from 'next-intl';
+import { Registration, Athlete, Event, AppLocale } from '@/types';
+import { formatMoney } from '@/lib/intl/format';
+import { toBcp47 } from '@/i18n/locales';
 
 interface RegistrationVoucherProps {
   registration: Registration;
@@ -20,6 +23,9 @@ export function RegistrationVoucher({
   cpf = '',
   onClose
 }: RegistrationVoucherProps) {
+  const t = useTranslations('Voucher');
+  const locale = useLocale() as AppLocale;
+
   const getMaskedCPF = (rawCpf: string) => {
     const clean = rawCpf.replace(/\D/g, '');
     if (clean.length !== 11) return rawCpf;
@@ -33,18 +39,15 @@ export function RegistrationVoucher({
   };
 
   const createdAtDate = registration.createdAt ? new Date(registration.createdAt) : new Date('2026-06-04T12:00:00.000Z');
-  const formattedIssueDate = createdAtDate.toLocaleDateString('pt-BR', {
+  const formattedIssueDate = new Intl.DateTimeFormat(toBcp47(locale), {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit'
-  });
+  }).format(createdAtDate);
 
-  const formattedPrice = new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL'
-  }).format(registration.totalPaid);
+  const formattedPrice = formatMoney(registration.totalPaid, registration.currency ?? 'BRL', locale);
 
   const teamMembers = athlete.isTeam && athlete.teamMembers && athlete.teamMembers.length > 0
     ? athlete.teamMembers.map(member => member.name).join(' / ')
@@ -55,14 +58,14 @@ export function RegistrationVoucher({
   const paymentStatus = registration.paymentStatus || 'payment_approved';
   const isPaymentApproved = paymentStatus === 'payment_approved';
   const statusLabel = paymentStatus === 'payment_failed'
-    ? 'Pagamento não processado'
+    ? t('statusFailed')
     : paymentStatus === 'payment_in_review'
-      ? 'Pagamento em análise'
+      ? t('statusInReview')
       : paymentStatus === 'payment_cancelled'
-        ? 'Pagamento cancelado'
+        ? t('statusCancelled')
         : paymentStatus === 'payment_pending'
-          ? 'Pagamento pendente'
-          : 'Inscrição confirmada';
+          ? t('statusPending')
+          : t('statusApproved');
   const StatusIcon = isPaymentApproved ? CheckCircle2 : AlertTriangle;
 
   return (
@@ -71,7 +74,7 @@ export function RegistrationVoucher({
       className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-[#0b0e11]/95 px-3 py-4 sm:p-6"
       role="dialog"
       aria-modal="true"
-      aria-label="Comprovante de inscrição"
+      aria-label={t('dialogAriaLabel')}
     >
       <style dangerouslySetInnerHTML={{ __html: `
         @media print {
@@ -117,7 +120,7 @@ export function RegistrationVoucher({
           <button
             onClick={onClose}
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-[#929aa5] transition-colors hover:bg-[#2b3139] hover:text-white focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/50"
-            aria-label="Fechar comprovante"
+            aria-label={t('closeAria')}
             type="button"
           >
             <X className="h-4 w-4" aria-hidden="true" />
@@ -168,35 +171,35 @@ export function RegistrationVoucher({
                 </div>
               )}
               <div className="absolute left-4 top-4 rounded-md border border-[#FCD535]/50 bg-[#0b0e11] px-3 py-1">
-                <span className="text-[10px] font-black uppercase text-[#FCD535]">{isPaymentApproved ? 'Comprovante oficial' : 'Registro de inscrição'}</span>
+                <span className="text-[10px] font-black uppercase text-[#FCD535]">{isPaymentApproved ? t('officialProof') : t('registrationRecord')}</span>
               </div>
             </section>
 
             <section className="bg-[#FCD535] px-5 py-5 text-[#181a20]">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                  <p className="text-[11px] font-bold uppercase text-[#181a20]/70">Participante</p>
+                  <p className="text-[11px] font-bold uppercase text-[#181a20]/70">{t('participantLabel')}</p>
                   <h1 className="mt-1 break-words text-2xl font-black uppercase leading-tight">{registration.athleteName}</h1>
                 </div>
                 <TicketCheck className="mt-1 h-8 w-8 shrink-0 text-[#181a20]" aria-hidden="true" />
               </div>
               {teamMembers && (
                 <p className="mt-3 text-xs font-semibold leading-relaxed text-[#181a20]/80">
-                  Integrantes: {teamMembers}
+                  {t('membersLabel', { names: teamMembers })}
                 </p>
               )}
             </section>
 
             <section className="grid grid-cols-2 gap-px bg-[#2b3139] text-[#eaecef]">
-              <VoucherInfo label="Categoria" value={registration.ticketType} icon={<TicketCheck className="h-4 w-4" />} />
-              <VoucherInfo label="Valor pago" value={formattedPrice} strong />
-              <VoucherInfo label="Data" value={event.date} icon={<Calendar className="h-4 w-4" />} />
-              <VoucherInfo label="Local" value={event.location} icon={<MapPin className="h-4 w-4" />} />
-              <VoucherInfo label="Box" value={registration.box || 'Independente'} icon={<User className="h-4 w-4" />} />
-              <VoucherInfo label="Emissão" value={formattedIssueDate} />
-              <VoucherInfo label="Status" value={statusLabel} wide={!cpf} />
-              {cpf && <VoucherInfo label="CPF" value={getMaskedCPF(cpf)} />}
-              <VoucherInfo label="ID" value={registration.id} mono wide={false} />
+              <VoucherInfo label={t('categoryLabel')} value={registration.ticketType} icon={<TicketCheck className="h-4 w-4" />} />
+              <VoucherInfo label={t('amountPaidLabel')} value={formattedPrice} strong />
+              <VoucherInfo label={t('dateLabel')} value={event.date} icon={<Calendar className="h-4 w-4" />} />
+              <VoucherInfo label={t('locationLabel')} value={event.location} icon={<MapPin className="h-4 w-4" />} />
+              <VoucherInfo label={t('boxLabel')} value={registration.box || t('boxFallback')} icon={<User className="h-4 w-4" />} />
+              <VoucherInfo label={t('issuedLabel')} value={formattedIssueDate} />
+              <VoucherInfo label={t('statusFieldLabel')} value={statusLabel} wide={!cpf} />
+              {cpf && <VoucherInfo label={t('cpfLabel')} value={getMaskedCPF(cpf)} />}
+              <VoucherInfo label={t('idLabel')} value={registration.id} mono wide={false} />
             </section>
 
             <footer className="mt-auto space-y-4 bg-[#0b0e11] px-5 py-5">
@@ -208,11 +211,11 @@ export function RegistrationVoucher({
                     <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-[#FCD535]" aria-hidden="true" />
                   )}
                   <div>
-                    <p className="text-xs font-bold uppercase text-white">{isPaymentApproved ? 'Inscrição validada' : 'Inscrição registrada'}</p>
+                    <p className="text-xs font-bold uppercase text-white">{isPaymentApproved ? t('validatedTitle') : t('registeredTitle')}</p>
                     <p className="mt-1 text-[11px] leading-relaxed text-[#929aa5]">
                       {isPaymentApproved
-                        ? 'Este comprovante confirma a inscrição no evento e pode ser salvo ou compartilhado pelo atleta.'
-                        : 'Este registro não confirma a vaga financeiramente. A participação depende da regularização do pagamento.'}
+                        ? t('validatedDescription')
+                        : t('registeredDescription')}
                     </p>
                   </div>
                 </div>
@@ -232,7 +235,7 @@ export function RegistrationVoucher({
             type="button"
           >
             <Printer className="h-4 w-4" aria-hidden="true" />
-            Imprimir
+            {t('print')}
           </button>
           <button
             onClick={onClose}
@@ -240,7 +243,7 @@ export function RegistrationVoucher({
             type="button"
           >
             <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-            Concluir
+            {t('done')}
           </button>
         </div>
       </div>

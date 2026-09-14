@@ -2,6 +2,7 @@
 
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Search, ShieldAlert, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, X, TrendingUp, User, Flame, Zap, BarChart3, Clock, Info } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useApp } from '@/context/AppContext';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 
@@ -81,11 +82,12 @@ const getRankBadgeClasses = (rank?: number): string => {
 
 // Badge numérico estilizado de colocação, com aria-label (não depende só de cor — WCAG AA)
 const RankBadge = ({ rank }: { rank?: number }) => {
+  const t = useTranslations('Leaderboard');
   const hasRank = typeof rank === 'number' && rank > 0;
   return (
     <span
       className={`inline-flex items-center justify-center min-w-[2.25rem] h-7 px-2 rounded-md border font-mono text-xs font-black ${getRankBadgeClasses(rank)}`}
-      aria-label={hasRank ? `${rank}º lugar` : 'Sem colocação'}
+      aria-label={hasRank ? t('rankPlaceAria', { rank }) : t('rankNoneAria')}
     >
       {hasRank ? `${rank}º` : '–'}
     </span>
@@ -93,27 +95,31 @@ const RankBadge = ({ rank }: { rank?: number }) => {
 };
 
 // Card de resumo: colocação geral + pontos totais reais (Functional Fitness)
-const OverallPlacementCard = ({ rank, totalPoints }: { rank?: number; totalPoints?: number }) => (
-  <div className="col-span-2 rounded-xl border border-primary/20 bg-primary/5 p-4 flex items-center justify-between gap-3">
-    <span className="text-[10px] font-bold text-muted uppercase tracking-wider">Colocação Geral</span>
-    <div className="flex items-center gap-3">
-      <RankBadge rank={rank} />
-      <span className="font-mono text-2xl font-black text-primary leading-none whitespace-nowrap">
-        {totalPoints ?? 0}
-        <span className="text-[10px] font-bold uppercase tracking-wider text-muted font-sans ml-1">pts</span>
-      </span>
+const OverallPlacementCard = ({ rank, totalPoints }: { rank?: number; totalPoints?: number }) => {
+  const t = useTranslations('Leaderboard');
+  return (
+    <div className="col-span-2 rounded-xl border border-primary/20 bg-primary/5 p-4 flex items-center justify-between gap-3">
+      <span className="text-[10px] font-bold text-muted uppercase tracking-wider">{t('overallPlacementLabel')}</span>
+      <div className="flex items-center gap-3">
+        <RankBadge rank={rank} />
+        <span className="font-mono text-2xl font-black text-primary leading-none whitespace-nowrap">
+          {totalPoints ?? 0}
+          <span className="text-[10px] font-bold uppercase tracking-wider text-muted font-sans ml-1">{t('ptsSuffix')}</span>
+        </span>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 // Molécula: pontuação e colocação obtidas por prova (Functional Fitness)
 const ScorePerWorkoutList = ({ workouts, scores }: { workouts: Workout[]; scores: Record<string, Score> }) => {
+  const t = useTranslations('Leaderboard');
   const ordered = [...workouts].sort((a, b) => a.orderIndex - b.orderIndex);
 
   if (ordered.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-card-border p-6 text-center">
-        <p className="text-xs text-muted">Nenhuma prova cadastrada nesta categoria.</p>
+        <p className="text-xs text-muted">{t('noWorkoutsRegistered')}</p>
       </div>
     );
   }
@@ -131,7 +137,7 @@ const ScorePerWorkoutList = ({ workouts, scores }: { workouts: Workout[]; scores
             </p>
             {pending ? (
               <p className="text-[11px] text-muted-soft mt-2 flex items-center gap-1.5">
-                <Clock className="h-3 w-3" /> Aguardando lançamento
+                <Clock className="h-3 w-3" /> {t('pendingScore')}
               </p>
             ) : (
               <div className="flex items-center justify-between mt-2 gap-2">
@@ -143,7 +149,7 @@ const ScorePerWorkoutList = ({ workouts, scores }: { workouts: Workout[]; scores
                 </div>
                 <span className="font-mono text-sm font-black text-primary whitespace-nowrap">
                   {score.points ?? 0}
-                  <span className="text-[8px] font-bold uppercase tracking-wider text-muted font-sans ml-0.5">pts</span>
+                  <span className="text-[8px] font-bold uppercase tracking-wider text-muted font-sans ml-0.5">{t('ptsSuffix')}</span>
                 </span>
               </div>
             )}
@@ -154,14 +160,15 @@ const ScorePerWorkoutList = ({ workouts, scores }: { workouts: Workout[]; scores
   );
 };
 
-const getTieBreakerLabel = (tieBreaker?: string) => {
-  if (shouldUseTimeTieBreaker(tieBreaker)) return 'Tempo de desempate';
-  return tieBreaker?.trim() || 'Critério de desempate';
+const getTieBreakerLabel = (tieBreaker: string | undefined, t: ReturnType<typeof useTranslations>) => {
+  if (shouldUseTimeTieBreaker(tieBreaker)) return t('tieBreakerTime');
+  return tieBreaker?.trim() || t('tieBreakerDefault');
 };
 
 const ResultStatusBadge = ({ status, penaltyPercent }: { status?: Score['resultStatus']; penaltyPercent?: number }) => {
+  const t = useTranslations('Leaderboard');
   if (status === 'penalized') {
-    const label = penaltyPercent ? `Penalidade ${penaltyPercent}%` : 'Penalidade';
+    const label = penaltyPercent ? t('penalizedPercent', { percent: penaltyPercent }) : t('penalized');
     return (
       <span className="inline-flex shrink-0 rounded border border-red-300/40 bg-red-950/30 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wide text-red-200">
         {label}
@@ -171,14 +178,14 @@ const ResultStatusBadge = ({ status, penaltyPercent }: { status?: Score['resultS
   if (status === 'manual') {
     return (
       <span className="inline-flex shrink-0 rounded border border-primary/35 bg-primary/10 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wide text-primary">
-        Ajustado
+        {t('adjusted')}
       </span>
     );
   }
   if (status === 'absent') {
     return (
       <span className="inline-flex shrink-0 rounded border border-muted/40 bg-dark-gray px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wide text-muted">
-        Ausente
+        {t('absent')}
       </span>
     );
   }
@@ -193,10 +200,11 @@ type WorkoutScoreResultProps = {
 };
 
 const WorkoutScoreResult = ({ workout, score, tieBreakGroupSize, compact = false }: WorkoutScoreResultProps) => {
+  const t = useTranslations('Leaderboard');
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLSpanElement | null>(null);
   const tooltipId = useId();
-  const tieBreakerLabel = getTieBreakerLabel(workout.tieBreaker);
+  const tieBreakerLabel = getTieBreakerLabel(workout.tieBreaker, t);
   const tieBreakerValue = score.splits?.[SCORE_TIE_BREAKER_SPLIT_KEY] || '-';
   const shouldShowTieBreaker = shouldUseTimeTieBreaker(workout.tieBreaker) && tieBreakGroupSize > 1 && tieBreakerValue !== '-';
 
@@ -255,7 +263,7 @@ const WorkoutScoreResult = ({ workout, score, tieBreakGroupSize, compact = false
         aria-controls={tooltipId}
         aria-describedby={open ? tooltipId : undefined}
         aria-expanded={open}
-        aria-label={`Ver desempate de ${score.result} em ${workout.name}`}
+        aria-label={t('tieBreakAriaLabel', { result: score.result, workout: workout.name })}
         onClick={(event) => {
           event.stopPropagation();
           setOpen((current) => !current);
@@ -278,12 +286,12 @@ const WorkoutScoreResult = ({ workout, score, tieBreakGroupSize, compact = false
           role="tooltip"
           className="fixed inset-x-3 top-20 z-[60] rounded-lg border border-primary/30 bg-card p-3 text-left font-sans text-white shadow-2xl shadow-black/50 sm:absolute sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-full sm:mt-2 sm:w-64 sm:-translate-x-1/2"
         >
-          <span className="block text-[9px] font-black uppercase tracking-[0.16em] text-primary">Tie-break aplicado</span>
+          <span className="block text-[9px] font-black uppercase tracking-[0.16em] text-primary">{t('tieBreakApplied')}</span>
           <span className="mt-2 block text-xs font-bold leading-5 text-white">
             {tieBreakerLabel}: <span className="font-mono text-primary">{tieBreakerValue}</span>
           </span>
           <span className="mt-1 block text-[11px] leading-4 text-muted">
-            {tieBreakGroupSize} competidores empataram com {score.result}. Este atleta ficou em {score.rank ? `${score.rank}º` : 'rank pendente'} nesta prova.
+            {t('tieBreakSummary', { count: tieBreakGroupSize, result: score.result, rank: score.rank ? `${score.rank}º` : t('rankPending') })}
           </span>
         </span>
       )}
@@ -315,6 +323,7 @@ const LeaderboardParticipantCell = ({
   onToggleTeam,
   onOpenProfile
 }: LeaderboardParticipantCellProps) => {
+  const t = useTranslations('Leaderboard');
   const isTeam = athlete.isTeam;
   const members = getTeamMembersArray(athlete.teamMembers);
   const displayName = isTeam ? athlete.name.split('(')[0].trim() : athlete.name;
@@ -331,7 +340,7 @@ const LeaderboardParticipantCell = ({
           onOpenProfile();
         }
       }}
-      aria-label={`Abrir perfil de ${displayName}`}
+      aria-label={t('openProfileAria', { name: displayName })}
     >
       <div className="flex justify-center">
         <span className={`inline-flex items-center justify-center rounded-full border font-number text-xs font-black ${compact ? 'h-6 w-6' : 'h-7 w-7'} ${getLeaderboardRankClasses(rank)}`}>
@@ -351,7 +360,7 @@ const LeaderboardParticipantCell = ({
                 onToggleTeam();
               }}
               className="inline-flex shrink-0 items-center text-muted-soft transition-colors hover:text-primary"
-              aria-label={isExpanded ? 'Ocultar integrantes' : 'Mostrar integrantes'}
+              aria-label={isExpanded ? t('hideMembers') : t('showMembers')}
               aria-expanded={isExpanded}
             >
               {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
@@ -363,17 +372,17 @@ const LeaderboardParticipantCell = ({
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex shrink-0 text-primary transition-colors hover:text-primary-hover"
-              title={`Ver Instagram de ${athlete.name}`}
+              title={t('instagramOfAria', { name: athlete.name })}
               onClick={(event) => event.stopPropagation()}
             >
               <InstagramIcon className="h-3.5 w-3.5" />
-              <span className="sr-only">Instagram</span>
+              <span className="sr-only">{t('instagramSr')}</span>
             </a>
           )}
         </div>
         {!compact && (
           <div className="mt-1 flex min-w-0 items-center gap-2">
-            <span className="truncate text-[10px] font-semibold uppercase tracking-wide text-muted-soft">{athlete.box || 'Box não informado'}</span>
+            <span className="truncate text-[10px] font-semibold uppercase tracking-wide text-muted-soft">{athlete.box || t('boxNotInformed')}</span>
             {athlete.country && (
               <span className="shrink-0 border-l border-card-border/70 pl-2 text-[9px] font-bold uppercase tracking-wider text-muted">{athlete.country}</span>
             )}
@@ -391,7 +400,7 @@ const LeaderboardParticipantCell = ({
                     rel="noopener noreferrer"
                     className="text-primary hover:text-primary-hover"
                     onClick={(event) => event.stopPropagation()}
-                    aria-label={`Instagram de ${member.name}`}
+                    aria-label={t('instagramMemberAria', { name: member.name })}
                   >
                     <InstagramIcon className="h-2.5 w-2.5" />
                   </a>
@@ -411,34 +420,38 @@ const LeaderboardParticipantHeader = ({
 }: {
   searchQuery: string;
   onSearchChange: (value: string) => void;
-}) => (
+}) => {
+  const t = useTranslations('Leaderboard');
+  return (
   <div className="min-w-[17rem] px-3 pb-3 pt-5 sm:min-w-[21rem] sm:px-4">
-    <span className="text-xs font-black uppercase tracking-[0.08em] text-white">Participante</span>
+    <span className="text-xs font-black uppercase tracking-[0.08em] text-white">{t('participantLabel')}</span>
     <div className="relative mt-3">
       <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-soft" aria-hidden="true" />
       <input
         type="search"
-        placeholder="Buscar atleta ou box"
+        placeholder={t('searchPlaceholder')}
         value={searchQuery}
         onChange={(event) => onSearchChange(event.target.value)}
         className="h-10 w-full rounded-full border border-muted-soft bg-transparent pl-10 pr-9 text-sm text-white placeholder:text-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-        aria-label="Buscar atleta ou box"
+        aria-label={t('searchAria')}
       />
       {searchQuery && (
         <button
           type="button"
           onClick={() => onSearchChange('')}
           className="absolute right-2.5 top-1/2 inline-flex h-5 w-5 -translate-y-1/2 items-center justify-center text-muted transition-colors hover:text-white"
-          aria-label="Limpar busca"
+          aria-label={t('clearSearchAria')}
         >
           <X className="h-4 w-4" />
         </button>
       )}
     </div>
   </div>
-);
+  );
+};
 
 export function Leaderboard({ event }: LeaderboardProps) {
+  const t = useTranslations('Leaderboard');
   const { getLeaderboard, loadPublicEventData, publicEventDataStatus } = useApp();
   const isMobile = useMediaQuery('(max-width: 640px)');
   const [selectedCategoryId, setSelectedCategoryId] = useState(event.divisions[0]?.id || '');
@@ -565,7 +578,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
           {isMobile ? (
             <div className="w-full flex flex-col gap-1.5">
               <label htmlFor={`divisions-${event.id}`} className="text-xs font-bold text-muted uppercase tracking-wider">
-                Categoria
+                {t('categoryLabel')}
               </label>
               <select
                 id={`divisions-${event.id}`}
@@ -603,7 +616,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
           {event.eventType === 'fitness_racing' && activeCategory?.useAgeGroups && (
             <div className="flex flex-col gap-1.5 w-full sm:w-auto sm:flex-row sm:items-end sm:gap-2 lg:flex-grow lg:justify-end">
               <label htmlFor={`leaderboard-age-${event.id}`} className="text-xs font-bold uppercase tracking-wider text-muted">
-                Idade
+                {t('ageLabel')}
               </label>
               <select
                 id={`leaderboard-age-${event.id}`}
@@ -611,9 +624,9 @@ export function Leaderboard({ event }: LeaderboardProps) {
                 onChange={(e) => setAgeGroupFilter(e.target.value)}
                 className="h-10 w-full sm:w-auto rounded-md border border-card-border bg-dark-gray px-3 text-sm font-bold uppercase tracking-wider text-white focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
               >
-                <option value="">Todas</option>
+                <option value="">{t('ageAll')}</option>
                 {(activeCategory?.ageGroups || ['16-24', '25-29', '30-34', '35-39', '40-44', '45-49', '50-54', '55-59', '60+']).map(ag => (
-                  <option key={ag} value={ag}>{ag} anos</option>
+                  <option key={ag} value={ag}>{ag} {t('ageSuffix')}</option>
                 ))}
               </select>
             </div>
@@ -623,19 +636,19 @@ export function Leaderboard({ event }: LeaderboardProps) {
 
       {publicDataStatus === 'loading' && (
         <div className="rounded-lg border border-card-border bg-card px-4 py-3 text-xs font-medium text-muted" role="status">
-          Carregando atletas e resultados deste evento...
+          {t('loadingResults')}
         </div>
       )}
 
       {publicDataStatus === 'error' && (
         <div className="flex items-center justify-between gap-4 rounded-lg border border-red-500/30 bg-red-950/20 px-4 py-3 text-xs text-red-200" role="alert">
-          <span>Não foi possível carregar os resultados deste evento.</span>
+          <span>{t('loadErrorMessage')}</span>
           <button
             type="button"
             onClick={() => void loadPublicEventData(event.id).catch((error) => console.error('[Leaderboard] Retry falhou:', error))}
             className="shrink-0 rounded border border-primary/50 px-3 py-2 font-bold uppercase tracking-wide text-primary hover:bg-primary hover:text-ink"
           >
-            Tentar novamente
+            {t('retry')}
           </button>
         </div>
       )}
@@ -647,16 +660,16 @@ export function Leaderboard({ event }: LeaderboardProps) {
             type="search"
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="Buscar atleta ou box"
+            placeholder={t('searchPlaceholder')}
             className="h-11 w-full rounded-md border border-card-border bg-dark-gray pl-10 pr-10 text-sm text-white placeholder:text-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-            aria-label="Buscar atleta ou box"
+            aria-label={t('searchAria')}
           />
           {searchQuery && (
             <button
               type="button"
               onClick={() => setSearchQuery('')}
               className="absolute right-3 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center text-muted transition-colors hover:text-white"
-              aria-label="Limpar busca"
+              aria-label={t('clearSearchAria')}
             >
               <X className="h-4 w-4" />
             </button>
@@ -673,16 +686,16 @@ export function Leaderboard({ event }: LeaderboardProps) {
                 <thead className="bg-dark-gray">
                   <tr>
                     <th className="sticky left-0 z-30 w-[9.5rem] border-b border-r border-card-border bg-dark-gray px-2 py-3 text-left shadow-[6px_0_14px_rgba(0,0,0,0.16)]">
-                      <span className="block text-[10px] font-black uppercase tracking-[0.08em] text-white">Participante</span>
-                      <span className="mt-1 block text-[9px] font-bold uppercase tracking-wider text-muted"># Nome</span>
+                      <span className="block text-[10px] font-black uppercase tracking-[0.08em] text-white">{t('participantLabel')}</span>
+                      <span className="mt-1 block text-[9px] font-bold uppercase tracking-wider text-muted">{t('nameSubheader')}</span>
                     </th>
                     <th className="sticky left-[9.5rem] z-30 w-20 border-b border-r border-card-border bg-dark-gray px-1 text-center shadow-[6px_0_14px_rgba(0,0,0,0.12)]">
-                      <span className="block text-[10px] font-black uppercase tracking-[0.06em] text-white">Tempo</span>
-                      <span className="mt-1 block text-[9px] font-bold uppercase tracking-wider text-muted">Oficial</span>
+                      <span className="block text-[10px] font-black uppercase tracking-[0.06em] text-white">{t('timeHeader')}</span>
+                      <span className="mt-1 block text-[9px] font-bold uppercase tracking-wider text-muted">{t('officialHeader')}</span>
                     </th>
                     <th className="border-b border-card-border px-2 text-center">
-                      <span className="block text-[10px] font-black uppercase tracking-[0.06em] text-white">Diferença</span>
-                      <span className="mt-1 block text-[9px] font-bold uppercase tracking-wider text-muted">Para o líder</span>
+                      <span className="block text-[10px] font-black uppercase tracking-[0.06em] text-white">{t('diffHeader')}</span>
+                      <span className="mt-1 block text-[9px] font-bold uppercase tracking-wider text-muted">{t('toLeaderHeader')}</span>
                     </th>
                   </tr>
                 </thead>
@@ -706,7 +719,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
                           {hasTime ? secondsToTimeStr(row.totalPoints) : '–'}
                         </td>
                         <td className="border-b border-card-border px-2 text-center text-xs font-black text-primary">
-                          {hasTime && diffSecs > 0 ? `+${secondsToTimeStr(diffSecs)}` : hasTime && index === 0 ? 'Líder' : '–'}
+                          {hasTime && diffSecs > 0 ? `+${secondsToTimeStr(diffSecs)}` : hasTime && index === 0 ? t('leaderLabel') : '–'}
                         </td>
                       </tr>
                     );
@@ -719,20 +732,20 @@ export function Leaderboard({ event }: LeaderboardProps) {
                   <thead className="bg-dark-gray">
                     <tr>
                       <th className="sticky left-0 z-30 w-[9.5rem] border-b border-r border-card-border bg-dark-gray px-2 py-3 text-left shadow-[6px_0_14px_rgba(0,0,0,0.16)]">
-                        <span className="block text-[10px] font-black uppercase tracking-[0.08em] text-white">Participante</span>
-                        <span className="mt-1 block text-[9px] font-bold uppercase tracking-wider text-muted"># Nome</span>
+                        <span className="block text-[10px] font-black uppercase tracking-[0.08em] text-white">{t('participantLabel')}</span>
+                        <span className="mt-1 block text-[9px] font-bold uppercase tracking-wider text-muted">{t('nameSubheader')}</span>
                       </th>
                       <th className="sticky left-[9.5rem] z-30 w-[4.5rem] border-b border-r border-card-border bg-dark-gray px-1 text-center shadow-[6px_0_14px_rgba(0,0,0,0.12)]">
-                        <span className="block text-[10px] font-black uppercase tracking-[0.06em] text-white">Total</span>
-                        <span className="mt-1 block text-[9px] font-bold uppercase tracking-wider text-muted">Pontos</span>
+                        <span className="block text-[10px] font-black uppercase tracking-[0.06em] text-white">{t('totalHeader')}</span>
+                        <span className="mt-1 block text-[9px] font-bold uppercase tracking-wider text-muted">{t('pointsHeader')}</span>
                       </th>
                       <th className="border-b border-card-border px-2 text-center">
                         <div className="flex items-center justify-center gap-1 text-[10px] font-black uppercase tracking-[0.06em] text-white">
-                          <span className="max-w-24 truncate" title={activeMobileWorkout?.name}>{activeMobileWorkout?.name || 'Prova'}</span>
-                          {activeMobileWorkout && <Info className="h-3.5 w-3.5 shrink-0 text-muted" aria-label={activeMobileWorkout.timeCap ? `Time cap: ${activeMobileWorkout.timeCap}` : `Detalhes de ${activeMobileWorkout.name}`} />}
+                          <span className="max-w-24 truncate" title={activeMobileWorkout?.name}>{activeMobileWorkout?.name || t('proveFallback')}</span>
+                          {activeMobileWorkout && <Info className="h-3.5 w-3.5 shrink-0 text-muted" aria-label={activeMobileWorkout.timeCap ? t('timeCapLabel', { cap: activeMobileWorkout.timeCap }) : t('detailsOfLabel', { name: activeMobileWorkout.name })} />}
                         </div>
                         <div className="mt-1 grid grid-cols-3 text-[8px] font-bold uppercase tracking-wide text-muted">
-                          <span>Pts</span><span>Rank</span><span>Tempo</span>
+                          <span>{t('ptsShort')}</span><span>{t('rankShort')}</span><span>{t('timeShort')}</span>
                         </div>
                       </th>
                     </tr>
@@ -777,7 +790,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
                   </tbody>
                 </table>
                 {divisionWorkouts.length > 1 && (
-                  <nav className="grid grid-cols-2 border-t border-card-border bg-dark-gray" aria-label="Navegação entre provas">
+                  <nav className="grid grid-cols-2 border-t border-card-border bg-dark-gray" aria-label={t('workoutNavigationAria')}>
                     <button
                       type="button"
                       onClick={() => setMobileWorkoutIndex(Math.max(0, activeMobileWorkoutIndex - 1))}
@@ -785,7 +798,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
                       className="inline-flex min-h-12 items-center justify-center gap-2 border-r border-card-border px-2 text-[10px] font-black uppercase tracking-wide text-white transition-colors hover:bg-elevated disabled:cursor-not-allowed disabled:text-muted-soft"
                     >
                       <ChevronLeft className="h-4 w-4" />
-                      Exercício anterior
+                      {t('prevWorkout')}
                     </button>
                     <button
                       type="button"
@@ -793,13 +806,13 @@ export function Leaderboard({ event }: LeaderboardProps) {
                       disabled={activeMobileWorkoutIndex === maxMobileWorkoutIndex}
                       className="inline-flex min-h-12 items-center justify-center gap-2 px-2 text-[10px] font-black uppercase tracking-wide text-white transition-colors hover:bg-elevated disabled:cursor-not-allowed disabled:text-muted-soft"
                     >
-                      Próximo treino
+                      {t('nextWorkout')}
                       <ChevronRight className="h-4 w-4" />
                     </button>
                   </nav>
                 )}
                 <p className="border-t border-card-border bg-dark-gray/60 px-3 py-2 text-center text-[9px] font-bold uppercase tracking-wider text-muted">
-                  Prova {Math.min(activeMobileWorkoutIndex + 1, Math.max(divisionWorkouts.length, 1))} de {Math.max(divisionWorkouts.length, 1)}
+                  {t('proveXOfY', { current: Math.min(activeMobileWorkoutIndex + 1, Math.max(divisionWorkouts.length, 1)), total: Math.max(divisionWorkouts.length, 1) })}
                 </p>
               </div>
             )
@@ -813,14 +826,14 @@ export function Leaderboard({ event }: LeaderboardProps) {
                       <LeaderboardParticipantHeader searchQuery={searchQuery} onSearchChange={setSearchQuery} />
                     </th>
                     {activeCategory?.useAgeGroups && (
-                      <th rowSpan={2} className="min-w-28 border-b border-r border-card-border px-4 text-center text-xs font-black uppercase tracking-[0.08em] text-white">Faixa etária</th>
+                      <th rowSpan={2} className="min-w-28 border-b border-r border-card-border px-4 text-center text-xs font-black uppercase tracking-[0.08em] text-white">{t('ageGroupHeader')}</th>
                     )}
-                    <th className="min-w-44 border-b border-r border-card-border px-5 pt-5 text-center align-top text-sm font-black uppercase tracking-[0.06em] text-white">Tempo total</th>
-                    <th className="min-w-36 border-b border-card-border px-5 pt-5 text-center align-top text-sm font-black uppercase tracking-[0.06em] text-white">Diferença</th>
+                    <th className="min-w-44 border-b border-r border-card-border px-5 pt-5 text-center align-top text-sm font-black uppercase tracking-[0.06em] text-white">{t('totalTimeHeader')}</th>
+                    <th className="min-w-36 border-b border-card-border px-5 pt-5 text-center align-top text-sm font-black uppercase tracking-[0.06em] text-white">{t('diffHeader')}</th>
                   </tr>
                   <tr>
-                    <th className="border-r border-card-border px-5 pb-4 pt-3 text-center text-[10px] font-bold uppercase tracking-wider text-muted">Resultado</th>
-                    <th className="px-5 pb-4 pt-3 text-center text-[10px] font-bold uppercase tracking-wider text-muted">Para o líder</th>
+                    <th className="border-r border-card-border px-5 pb-4 pt-3 text-center text-[10px] font-bold uppercase tracking-wider text-muted">{t('resultHeader')}</th>
+                    <th className="px-5 pb-4 pt-3 text-center text-[10px] font-bold uppercase tracking-wider text-muted">{t('toLeaderHeader')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -840,14 +853,14 @@ export function Leaderboard({ event }: LeaderboardProps) {
                         </td>
                         {activeCategory?.useAgeGroups && (
                           <td className="border-b border-r border-card-border px-4 text-center text-xs font-semibold text-muted">
-                            {getAgeGroupFromDate(row.athlete.birthDate, activeCategory.ageGroups)} anos
+                            {getAgeGroupFromDate(row.athlete.birthDate, activeCategory.ageGroups)} {t('ageSuffix')}
                           </td>
                         )}
                         <td className="border-b border-r border-card-border bg-primary/[0.035] px-5 text-center text-lg font-black text-white">
                           {hasTime ? secondsToTimeStr(row.totalPoints) : '–'}
                         </td>
                         <td className="border-b border-card-border px-5 text-center text-sm font-black text-primary">
-                          {hasTime && diffSecs > 0 ? `+${secondsToTimeStr(diffSecs)}` : hasTime && index === 0 ? 'Líder' : '–'}
+                          {hasTime && diffSecs > 0 ? `+${secondsToTimeStr(diffSecs)}` : hasTime && index === 0 ? t('leaderLabel') : '–'}
                         </td>
                       </tr>
                     );
@@ -861,22 +874,22 @@ export function Leaderboard({ event }: LeaderboardProps) {
                     <th rowSpan={2} className="sticky left-0 z-30 border-b border-r border-card-border bg-dark-gray p-0 align-top shadow-[8px_0_18px_rgba(0,0,0,0.18)]">
                       <LeaderboardParticipantHeader searchQuery={searchQuery} onSearchChange={setSearchQuery} />
                     </th>
-                    <th className="min-w-28 border-b border-r border-card-border px-4 pt-5 text-center align-top text-sm font-black uppercase tracking-[0.06em] text-white">Total</th>
+                    <th className="min-w-28 border-b border-r border-card-border px-4 pt-5 text-center align-top text-sm font-black uppercase tracking-[0.06em] text-white">{t('totalHeader')}</th>
                     {divisionWorkouts.map((workout) => (
                       <th key={workout.id} className="min-w-44 border-b border-r border-card-border px-4 pt-5 align-top last:border-r-0">
                         <div className="flex items-center justify-center gap-1.5 text-center text-sm font-black uppercase tracking-[0.06em] text-white">
                           <span className="max-w-36 truncate" title={workout.name}>{workout.name}</span>
-                          <Info className="h-4 w-4 shrink-0 text-muted" aria-label={workout.timeCap ? `Time cap: ${workout.timeCap}` : `Detalhes de ${workout.name}`} />
+                          <Info className="h-4 w-4 shrink-0 text-muted" aria-label={workout.timeCap ? t('timeCapLabel', { cap: workout.timeCap }) : t('detailsOfLabel', { name: workout.name })} />
                         </div>
                       </th>
                     ))}
                   </tr>
                   <tr>
-                    <th className="border-b border-r border-card-border px-4 pb-4 pt-3 text-center text-[10px] font-bold uppercase tracking-wider text-muted">Pontos</th>
+                    <th className="border-b border-r border-card-border px-4 pb-4 pt-3 text-center text-[10px] font-bold uppercase tracking-wider text-muted">{t('pointsHeader')}</th>
                     {divisionWorkouts.map((workout) => (
                       <th key={`${workout.id}-labels`} className="border-b border-r border-card-border px-3 pb-4 pt-3 last:border-r-0">
                         <div className="grid grid-cols-3 text-center text-[10px] font-bold uppercase tracking-wider text-muted">
-                          <span>Pontos</span><span>Rank</span><span>Resultado</span>
+                          <span>{t('pointsHeader')}</span><span>{t('rankShort')}</span><span>{t('resultHeader')}</span>
                         </div>
                       </th>
                     ))}
@@ -923,15 +936,15 @@ export function Leaderboard({ event }: LeaderboardProps) {
           </div>
           )}
           <div className="flex flex-col gap-1 border-t border-card-border bg-dark-gray/60 px-4 py-3 text-[10px] font-semibold uppercase tracking-wider text-muted sm:flex-row sm:items-center sm:justify-between">
-            <span>Classificação atualizada com os resultados publicados</span>
-            <span className="text-muted-soft">{filteredLeaderboard.length} {filteredLeaderboard.length === 1 ? 'competidor' : 'competidores'}</span>
+            <span>{t('footerUpdated')}</span>
+            <span className="text-muted-soft">{t('competitorCount', { count: filteredLeaderboard.length })}</span>
           </div>
         </section>
       ) : (
         <div className="space-y-3 rounded-xl border border-card-border bg-card py-16 text-center">
           <ShieldAlert className="mx-auto h-10 w-10 text-muted" aria-hidden="true" />
-          <h4 className="text-sm font-bold uppercase tracking-wider text-white">Sem dados de leaderboard</h4>
-          <p className="text-xs text-muted">Ainda não há resultados disponíveis para os critérios de busca.</p>
+          <h4 className="text-sm font-bold uppercase tracking-wider text-white">{t('emptyTitle')}</h4>
+          <p className="text-xs text-muted">{t('emptyDescription')}</p>
         </div>
       )}
 
@@ -970,7 +983,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
                   <div className="px-6 flex items-start justify-between border-b border-card-border pb-4">
                     <div className="space-y-1">
                       <span className="inline-flex rounded-full bg-primary/20 border border-primary/30 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-primary">
-                        Atleta Individual
+                        {t('individualBadge')}
                       </span>
                       <h2 className="text-xl font-bold text-white uppercase tracking-wide" id="slide-over-title">
                         {selectedAthleteForProfile.name}
@@ -981,7 +994,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
                       onClick={() => setSelectedAthleteForProfile(null)}
                       className="rounded-md text-muted hover:text-white focus:outline-none focus:ring-2 focus:ring-primary"
                     >
-                      <span className="sr-only">Fechar painel</span>
+                      <span className="sr-only">{t('closePanel')}</span>
                       <X className="h-6 w-6" aria-hidden="true" />
                     </button>
                   </div>
@@ -1003,7 +1016,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
                       )}
                       <div className="space-y-1">
                         <p className="text-xs text-muted font-medium flex items-center gap-1">
-                          <User className="h-3 w-3" /> {activeCategory?.name || 'Categoria'}
+                          <User className="h-3 w-3" /> {activeCategory?.name || t('categoryFallback')}
                         </p>
                         {selectedAthleteForProfile.instagram && (
                           <a
@@ -1018,7 +1031,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
                           </a>
                         )}
                         <p className="text-xs text-muted-soft">
-                          {selectedAthleteForProfile.city ? `${selectedAthleteForProfile.city} / ${selectedAthleteForProfile.state || ''}` : 'Localização não informada'}
+                          {selectedAthleteForProfile.city ? `${selectedAthleteForProfile.city} / ${selectedAthleteForProfile.state || ''}` : t('locationNotInformed')}
                         </p>
                       </div>
                     </div>
@@ -1026,18 +1039,18 @@ export function Leaderboard({ event }: LeaderboardProps) {
                     {/* Detalhes de Registro */}
                     <div className="grid grid-cols-2 gap-3 text-xs">
                       <div className="rounded-xl border border-card-border/50 bg-dark-gray/20 p-3.5 space-y-1">
-                        <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">Box / Academia</span>
-                        <span className="font-bold text-white uppercase text-xs block truncate">{selectedAthleteForProfile.box || 'Nenhum'}</span>
+                        <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">{t('boxAcademy')}</span>
+                        <span className="font-bold text-white uppercase text-xs block truncate">{selectedAthleteForProfile.box || t('none')}</span>
                       </div>
-                      
+
                       <div className="rounded-xl border border-card-border/50 bg-dark-gray/20 p-3.5 space-y-1">
-                        <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">Nacionalidade</span>
+                        <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">{t('nationality')}</span>
                         <span className="font-bold text-white uppercase text-xs block">{selectedAthleteForProfile.country || 'BR'}</span>
                       </div>
 
                       {event.eventType === 'fitness_racing' ? (
                       <div className="col-span-2 rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-1">
-                        <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">Tempo Oficial Total</span>
+                        <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">{t('officialTotalTime')}</span>
                         <div className="flex items-baseline gap-2">
                           <span className="font-mono text-2xl font-black text-primary">
                             {(() => {
@@ -1046,7 +1059,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
                               return score && score.value < 999999 ? score.result : '-';
                             })()}
                           </span>
-                          <span className="text-[10px] font-semibold text-muted font-sans">no percurso completo</span>
+                          <span className="text-[10px] font-semibold text-muted font-sans">{t('fullCourse')}</span>
                         </div>
                       </div>
                       ) : (() => {
@@ -1059,7 +1072,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
                     {event.eventType !== 'fitness_racing' ? (
                       <div className="border-t border-card-border/50 pt-5 space-y-4">
                         <h3 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-1.5">
-                          <BarChart3 className="h-4 w-4" /> Pontuação por Prova
+                          <BarChart3 className="h-4 w-4" /> {t('scorePerWorkoutHeading')}
                         </h3>
                         {(() => {
                           const row = leaderboardData.find(r => r.athlete.id === selectedAthleteForProfile.id);
@@ -1069,7 +1082,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
                     ) : (
                     <div className="border-t border-card-border/50 pt-5 space-y-4">
                       <h3 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-1.5">
-                        <TrendingUp className="h-4 w-4" /> Análise de Performance
+                        <TrendingUp className="h-4 w-4" /> {t('performanceAnalysis')}
                       </h3>
 
                       {(() => {
@@ -1081,7 +1094,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
                         if (!score || !score.splits || Object.keys(score.splits).length === 0) {
                           return (
                             <div className="rounded-xl border border-dashed border-card-border p-6 text-center">
-                              <p className="text-xs text-muted">Nenhum split de tempo lançado para este competidor.</p>
+                              <p className="text-xs text-muted">{t('noSplitsAthlete')}</p>
                             </div>
                           );
                         }
@@ -1095,7 +1108,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
                         if (splitsArray.length === 0) {
                           return (
                             <div className="rounded-xl border border-dashed border-card-border p-6 text-center">
-                              <p className="text-xs text-muted">Nenhum split de tempo lançado para este competidor.</p>
+                              <p className="text-xs text-muted">{t('noSplitsAthlete')}</p>
                             </div>
                           );
                         }
@@ -1119,7 +1132,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
                             <div className="grid grid-cols-2 gap-2 text-xs">
                               <div className="rounded-lg bg-dark-gray/30 border border-card-border/60 p-2.5">
                                 <p className="text-[9px] uppercase font-bold text-muted flex items-center gap-1">
-                                  <Flame className="h-3 w-3 text-emerald-400" /> Melhor Split
+                                  <Flame className="h-3 w-3 text-emerald-400" /> {t('bestSplit')}
                                 </p>
                                 <p className="font-bold text-emerald-400 mt-1 truncate" title={`${bestSplit.stage.name} (${bestSplit.timeStr})`}>
                                   {bestSplit.stage.name} <span className="font-mono font-medium text-[10px] text-white ml-0.5">({bestSplit.timeStr})</span>
@@ -1128,7 +1141,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
 
                               <div className="rounded-lg bg-dark-gray/30 border border-card-border/60 p-2.5">
                                 <p className="text-[9px] uppercase font-bold text-muted flex items-center gap-1">
-                                  <Flame className="h-3 w-3 text-red-400" /> Pior Split
+                                  <Flame className="h-3 w-3 text-red-400" /> {t('worstSplit')}
                                 </p>
                                 <p className="font-bold text-red-400 mt-1 truncate" title={`${worstSplit.stage.name} (${worstSplit.timeStr})`}>
                                   {worstSplit.stage.name} <span className="font-mono font-medium text-[10px] text-white ml-0.5">({worstSplit.timeStr})</span>
@@ -1138,7 +1151,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
                               {bestStation && (
                                 <div className="rounded-lg bg-dark-gray/30 border border-card-border/60 p-2.5">
                                   <p className="text-[9px] uppercase font-bold text-muted flex items-center gap-1">
-                                    <Zap className="h-3 w-3 text-yellow-400" /> Estação Forte
+                                    <Zap className="h-3 w-3 text-yellow-400" /> {t('strongStation')}
                                   </p>
                                   <p className="font-bold text-white mt-1 truncate" title={`${bestStation.stage.name} (${bestStation.timeStr})`}>
                                     {bestStation.stage.name} <span className="font-mono font-medium text-[10px] text-muted-soft ml-0.5">({bestStation.timeStr})</span>
@@ -1149,7 +1162,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
                               {worstStation && (
                                 <div className="rounded-lg bg-dark-gray/30 border border-card-border/60 p-2.5">
                                   <p className="text-[9px] uppercase font-bold text-muted flex items-center gap-1">
-                                    <Zap className="h-3 w-3 text-amber-600" /> Estação Lenta
+                                    <Zap className="h-3 w-3 text-amber-600" /> {t('slowStation')}
                                   </p>
                                   <p className="font-bold text-white mt-1 truncate" title={`${worstStation.stage.name} (${worstStation.timeStr})`}>
                                     {worstStation.stage.name} <span className="font-mono font-medium text-[10px] text-muted-soft ml-0.5">({worstStation.timeStr})</span>
@@ -1158,26 +1171,26 @@ export function Leaderboard({ event }: LeaderboardProps) {
                               )}
 
                               <div className="rounded-lg bg-dark-gray/30 border border-card-border/60 p-2.5">
-                                <p className="text-[9px] uppercase font-bold text-muted">Corrida Total</p>
+                                <p className="text-[9px] uppercase font-bold text-muted">{t('totalRun')}</p>
                                 <p className="font-mono font-bold text-white mt-1">{secondsToTimeStr(totalRunSecs)}</p>
                               </div>
 
                               <div className="rounded-lg bg-dark-gray/30 border border-card-border/60 p-2.5">
-                                <p className="text-[9px] uppercase font-bold text-muted">Estações Total</p>
+                                <p className="text-[9px] uppercase font-bold text-muted">{t('totalStations')}</p>
                                 <p className="font-mono font-bold text-white mt-1">{secondsToTimeStr(totalStationSecs)}</p>
                               </div>
 
                               {runs.length > 0 && (
                                 <div className="rounded-lg bg-dark-gray/30 border border-card-border/60 p-2.5 col-span-2">
-                                  <p className="text-[9px] uppercase font-bold text-muted">Pace Médio de Corrida</p>
-                                  <p className="font-mono font-bold text-primary mt-1">{secondsToTimeStr(avgRunSecs)} / km</p>
+                                  <p className="text-[9px] uppercase font-bold text-muted">{t('avgRunPace')}</p>
+                                  <p className="font-mono font-bold text-primary mt-1">{secondsToTimeStr(avgRunSecs)} {t('perKm')}</p>
                                 </div>
                               )}
                             </div>
 
                             {/* Splits timeline */}
                             <div className="border-t border-card-border/30 pt-4 space-y-2">
-                              <p className="text-[10px] uppercase font-bold text-muted tracking-wider">Parciais por Etapa (Timeline)</p>
+                              <p className="text-[10px] uppercase font-bold text-muted tracking-wider">{t('splitsTimeline')}</p>
                               <div className="max-h-[220px] overflow-y-auto pr-1 space-y-1.5 scrollbar-thin">
                                 {stages.map(stg => {
                                   const timeStr = score.splits?.[stg.id] || '-';
@@ -1231,7 +1244,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
                       onClick={() => setSelectedTeamForProfile(null)}
                       className="rounded-md text-muted hover:text-white focus:outline-none focus:ring-2 focus:ring-primary"
                     >
-                      <span className="sr-only">Fechar painel</span>
+                      <span className="sr-only">{t('closePanel')}</span>
                       <X className="h-6 w-6" aria-hidden="true" />
                     </button>
                   </div>
@@ -1241,19 +1254,19 @@ export function Leaderboard({ event }: LeaderboardProps) {
                     {/* Informações da Equipe */}
                     <div className="grid grid-cols-2 gap-3 text-xs">
                       <div className="rounded-xl border border-card-border/50 bg-dark-gray/20 p-3.5 space-y-1">
-                        <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">Box / Academia</span>
-                        <span className="font-bold text-white uppercase text-xs block truncate">{selectedTeamForProfile.box || 'Nenhum'}</span>
+                        <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">{t('boxAcademy')}</span>
+                        <span className="font-bold text-white uppercase text-xs block truncate">{selectedTeamForProfile.box || t('none')}</span>
                       </div>
-                      
+
                       <div className="rounded-xl border border-card-border/50 bg-dark-gray/20 p-3.5 space-y-1">
-                        <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">Localização</span>
+                        <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">{t('teamLocation')}</span>
                         <span className="font-bold text-white uppercase text-xs block truncate">
-                          {selectedTeamForProfile.city ? `${selectedTeamForProfile.city} / ${selectedTeamForProfile.state || ''}` : 'Não informado'}
+                          {selectedTeamForProfile.city ? `${selectedTeamForProfile.city} / ${selectedTeamForProfile.state || ''}` : t('notInformed')}
                         </span>
                       </div>
 
                       <div className="col-span-2 rounded-xl border border-card-border/50 bg-dark-gray/20 p-3.5 space-y-1">
-                        <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">Instagram da Equipe</span>
+                        <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">{t('teamInstagram')}</span>
                         {selectedTeamForProfile.instagram ? (
                           <a
                             href={`https://instagram.com/${selectedTeamForProfile.instagram.replace(/^@/, '')}`}
@@ -1266,13 +1279,13 @@ export function Leaderboard({ event }: LeaderboardProps) {
                             @{selectedTeamForProfile.instagram.replace(/^@/, '')}
                           </a>
                         ) : (
-                          <span className="text-muted">Não informado</span>
+                          <span className="text-muted">{t('notInformed')}</span>
                         )}
                       </div>
 
                       {event.eventType === 'fitness_racing' ? (
                       <div className="col-span-2 rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-1">
-                        <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">Tempo Oficial Total</span>
+                        <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">{t('officialTotalTime')}</span>
                         <div className="flex items-baseline gap-2">
                           <span className="font-mono text-2xl font-black text-primary">
                             {(() => {
@@ -1281,7 +1294,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
                               return score && score.value < 999999 ? score.result : '-';
                             })()}
                           </span>
-                          <span className="text-[10px] font-semibold text-muted font-sans">no percurso completo</span>
+                          <span className="text-[10px] font-semibold text-muted font-sans">{t('fullCourse')}</span>
                         </div>
                       </div>
                       ) : (() => {
@@ -1292,7 +1305,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
 
                     {/* Integrantes da Equipe */}
                     <div className="space-y-2">
-                      <p className="text-[10px] uppercase font-bold text-primary tracking-wider">Integrantes da Equipe</p>
+                      <p className="text-[10px] uppercase font-bold text-primary tracking-wider">{t('teamMembersHeading')}</p>
                       {selectedTeamForProfile.teamMembers && selectedTeamForProfile.teamMembers.length > 0 ? (
                         <div className="grid grid-cols-1 gap-2">
                           {selectedTeamForProfile.teamMembers.map((m: { name: string; instagram: string }, idx: number) => (
@@ -1310,13 +1323,13 @@ export function Leaderboard({ event }: LeaderboardProps) {
                                   @{m.instagram.replace(/^@/, '')}
                                 </a>
                               ) : (
-                                <span className="text-muted text-[10px]">Sem Instagram</span>
+                                <span className="text-muted text-[10px]">{t('noInstagram')}</span>
                               )}
                             </div>
                           ))}
                         </div>
                       ) : (
-                        <p className="text-xs text-muted">Nenhum integrante cadastrado nesta equipe.</p>
+                        <p className="text-xs text-muted">{t('noMembers')}</p>
                       )}
                     </div>
 
@@ -1324,7 +1337,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
                     {event.eventType !== 'fitness_racing' ? (
                       <div className="border-t border-card-border/50 pt-5 space-y-4">
                         <h3 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-1.5">
-                          <BarChart3 className="h-4 w-4" /> Pontuação por Prova
+                          <BarChart3 className="h-4 w-4" /> {t('scorePerWorkoutHeading')}
                         </h3>
                         {(() => {
                           const row = leaderboardData.find(r => r.athlete.id === selectedTeamForProfile.id);
@@ -1334,7 +1347,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
                     ) : (
                     <div className="border-t border-card-border/50 pt-5 space-y-4">
                       <h3 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-1.5">
-                        <TrendingUp className="h-4 w-4" /> Análise de Performance
+                        <TrendingUp className="h-4 w-4" /> {t('performanceAnalysis')}
                       </h3>
 
                       {(() => {
@@ -1346,7 +1359,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
                         if (!score || !score.splits || Object.keys(score.splits).length === 0) {
                           return (
                             <div className="rounded-xl border border-dashed border-card-border p-6 text-center">
-                              <p className="text-xs text-muted">Nenhum split de tempo lançado para esta equipe.</p>
+                              <p className="text-xs text-muted">{t('noSplitsTeam')}</p>
                             </div>
                           );
                         }
@@ -1360,7 +1373,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
                         if (splitsArray.length === 0) {
                           return (
                             <div className="rounded-xl border border-dashed border-card-border p-6 text-center">
-                              <p className="text-xs text-muted">Nenhum split de tempo lançado para esta equipe.</p>
+                              <p className="text-xs text-muted">{t('noSplitsTeam')}</p>
                             </div>
                           );
                         }
@@ -1384,7 +1397,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
                             <div className="grid grid-cols-2 gap-2 text-xs">
                               <div className="rounded-lg bg-dark-gray/30 border border-card-border/60 p-2.5">
                                 <p className="text-[9px] uppercase font-bold text-muted flex items-center gap-1">
-                                  <Flame className="h-3 w-3 text-emerald-400" /> Melhor Split
+                                  <Flame className="h-3 w-3 text-emerald-400" /> {t('bestSplit')}
                                 </p>
                                 <p className="font-bold text-emerald-400 mt-1 truncate" title={`${bestSplit.stage.name} (${bestSplit.timeStr})`}>
                                   {bestSplit.stage.name} <span className="font-mono font-medium text-[10px] text-white ml-0.5">({bestSplit.timeStr})</span>
@@ -1393,7 +1406,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
 
                               <div className="rounded-lg bg-dark-gray/30 border border-card-border/60 p-2.5">
                                 <p className="text-[9px] uppercase font-bold text-muted flex items-center gap-1">
-                                  <Flame className="h-3 w-3 text-red-400" /> Pior Split
+                                  <Flame className="h-3 w-3 text-red-400" /> {t('worstSplit')}
                                 </p>
                                 <p className="font-bold text-red-400 mt-1 truncate" title={`${worstSplit.stage.name} (${worstSplit.timeStr})`}>
                                   {worstSplit.stage.name} <span className="font-mono font-medium text-[10px] text-white ml-0.5">({worstSplit.timeStr})</span>
@@ -1403,7 +1416,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
                               {bestStation && (
                                 <div className="rounded-lg bg-dark-gray/30 border border-card-border/60 p-2.5">
                                   <p className="text-[9px] uppercase font-bold text-muted flex items-center gap-1">
-                                    <Zap className="h-3 w-3 text-yellow-400" /> Estação Forte
+                                    <Zap className="h-3 w-3 text-yellow-400" /> {t('strongStation')}
                                   </p>
                                   <p className="font-bold text-white mt-1 truncate" title={`${bestStation.stage.name} (${bestStation.timeStr})`}>
                                     {bestStation.stage.name} <span className="font-mono font-medium text-[10px] text-muted-soft ml-0.5">({bestStation.timeStr})</span>
@@ -1414,7 +1427,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
                               {worstStation && (
                                 <div className="rounded-lg bg-dark-gray/30 border border-card-border/60 p-2.5">
                                   <p className="text-[9px] uppercase font-bold text-muted flex items-center gap-1">
-                                    <Zap className="h-3 w-3 text-amber-600" /> Estação Lenta
+                                    <Zap className="h-3 w-3 text-amber-600" /> {t('slowStation')}
                                   </p>
                                   <p className="font-bold text-white mt-1 truncate" title={`${worstStation.stage.name} (${worstStation.timeStr})`}>
                                     {worstStation.stage.name} <span className="font-mono font-medium text-[10px] text-muted-soft ml-0.5">({worstStation.timeStr})</span>
@@ -1423,26 +1436,26 @@ export function Leaderboard({ event }: LeaderboardProps) {
                               )}
 
                               <div className="rounded-lg bg-dark-gray/30 border border-card-border/60 p-2.5">
-                                <p className="text-[9px] uppercase font-bold text-muted">Corrida Total</p>
+                                <p className="text-[9px] uppercase font-bold text-muted">{t('totalRun')}</p>
                                 <p className="font-mono font-bold text-white mt-1">{secondsToTimeStr(totalRunSecs)}</p>
                               </div>
 
                               <div className="rounded-lg bg-dark-gray/30 border border-card-border/60 p-2.5">
-                                <p className="text-[9px] uppercase font-bold text-muted">Estações Total</p>
+                                <p className="text-[9px] uppercase font-bold text-muted">{t('totalStations')}</p>
                                 <p className="font-mono font-bold text-white mt-1">{secondsToTimeStr(totalStationSecs)}</p>
                               </div>
 
                               {runs.length > 0 && (
                                 <div className="rounded-lg bg-dark-gray/30 border border-card-border/60 p-2.5 col-span-2">
-                                  <p className="text-[9px] uppercase font-bold text-muted">Pace Médio de Corrida</p>
-                                  <p className="font-mono font-bold text-primary mt-1">{secondsToTimeStr(avgRunSecs)} / km</p>
+                                  <p className="text-[9px] uppercase font-bold text-muted">{t('avgRunPace')}</p>
+                                  <p className="font-mono font-bold text-primary mt-1">{secondsToTimeStr(avgRunSecs)} {t('perKm')}</p>
                                 </div>
                               )}
                             </div>
 
                             {/* Splits timeline */}
                             <div className="border-t border-card-border/30 pt-4 space-y-2">
-                              <p className="text-[10px] uppercase font-bold text-muted tracking-wider">Parciais por Etapa (Timeline)</p>
+                              <p className="text-[10px] uppercase font-bold text-muted tracking-wider">{t('splitsTimeline')}</p>
                               <div className="max-h-[220px] overflow-y-auto pr-1 space-y-1.5 scrollbar-thin">
                                 {stages.map(stg => {
                                   const timeStr = score.splits?.[stg.id] || '-';

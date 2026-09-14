@@ -224,7 +224,10 @@ const mapRegistrationFromDb = (r: RegistrationDbRow): Registration => ({
   refundNote: optionalString(r.refund_note),
   refundProcessedAt: optionalString(r.refund_processed_at),
   refundProcessedBy: optionalString(r.refund_processed_by),
-  updatedAt: optionalString(r.updated_at)
+  updatedAt: optionalString(r.updated_at),
+  currency: (optionalString(r.currency) as Registration['currency']) || 'BRL',
+  paymentGateway: (optionalString(r.payment_gateway) as Registration['paymentGateway']) || 'mercadopago',
+  locale: (optionalString(r.locale) as Registration['locale']) || 'pt-br'
 });
 
 const mapAthleteFromDb = (a: AthleteDbRow): Athlete => {
@@ -743,7 +746,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 ? (typeof evt.event_schedule === 'string' ? JSON.parse(evt.event_schedule) : evt.event_schedule)
                 : [],
               mpPublicKey: evt.mp_public_key || organizerMp?.public_key || '',
-              registrationDeadline: evt.registration_deadline || undefined
+              registrationDeadline: evt.registration_deadline || undefined,
+              countryCode: evt.country_code || 'BR',
+              currency: evt.currency || 'BRL',
+              timeZone: evt.time_zone || 'America/Fortaleza',
+              paymentGateway: evt.payment_gateway || 'mercadopago',
+              defaultLocale: evt.default_locale || 'pt-br'
             };
           });
           setEvents(combinedEvents);

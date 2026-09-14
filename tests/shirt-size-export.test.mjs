@@ -16,7 +16,7 @@ const migration = read('../supabase/migrations/20260607234500_athlete_shirt_size
 
 test('registration form collects shirt size instead of athlete photo', () => {
   assert.match(types, /shirtSize\?: ShirtSize \| string/);
-  assert.match(registerModal, /Tamanho da camisa \*/);
+  assert.match(registerModal, /t\('shirtSizeLabel'\)/);
   assert.match(registerModal, /participants\.\$\{index\}\.shirtSize/);
   assert.match(registerModal, /!participant\.shirtSize/);
   assert.doesNotMatch(registerModal, /Foto do atleta \(opcional\)/);

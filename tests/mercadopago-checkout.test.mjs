@@ -18,9 +18,10 @@ const oauthStatesMigration = read('../supabase/migrations/20260624140000_create_
 const oauthVerificationMigration = read('../supabase/migrations/20260730143000_verify_mercadopago_oauth_provenance.sql');
 const registerModal = read('../src/components/RegisterModal.tsx');
 const appContext = read('../src/context/AppContext.tsx');
-const eventPage = read('../src/app/event/[id]/page.tsx');
+const eventPage = read('../src/app/[locale]/event/[id]/EventView.tsx');
 const provenanceCli = read('../bin/mercadopago-provenance.mjs');
 const packageJson = read('../package.json');
+const ptBrMessages = read('../src/messages/pt-br.json');
 
 test('Mercado Pago checkout resolves OAuth credentials from organizer secrets', () => {
   assert.match(helper, /from\('events'\)[\s\S]*select\('organizer_id'\)/);
@@ -55,9 +56,9 @@ test('card checkout resolves the seller OAuth public key for marketplace split',
 
 test('checkout surfaces backend payment errors instead of generic alerts', () => {
   assert.match(registerModal, /getCheckoutErrorMessage/);
-  assert.match(registerModal, /throw new Error\(await getCheckoutErrorMessage\(response, 'Erro ao criar cobrança Pix\.'\)\)/);
+  assert.match(registerModal, /throw new Error\(await getCheckoutErrorMessage\(response, t\('pixCreateError'\)\)\)/);
   assert.match(registerModal, /throw new Error\(await getCheckoutErrorMessage\(response, 'Erro ao processar pagamento com cartão\.'\)\)/);
-  assert.match(registerModal, /paymentAttemptStarted \? `\$\{baseMessage\}\\n\\n\$\{paymentFailureGuidance\}` : baseMessage/);
+  assert.match(registerModal, /paymentAttemptStarted \? `\$\{baseMessage\}\\n\\n\$\{t\('paymentFailureGuidance'\)\}` : baseMessage/);
 });
 
 test('transparent checkout sends payer CPF and applies the service split', () => {
@@ -114,13 +115,12 @@ test('public checkout propagates the signed registration access token through po
   assert.match(registerModal, /body: JSON\.stringify\(\{[\s\S]*accessToken: createdReg\.accessToken \|\| registrationPayload\?\.accessToken/);
   assert.match(pixRoute, /const \{ registrationData, cpf, accessToken \} = body/);
   assert.match(cardRoute, /const \{ registrationData, token, payment_method_id, installments, cpf, deviceId, accessToken \} = body/);
-  assert.match(preferenceRoute, /const \{ registrationData, origin, accessToken \} = body/);
+  assert.match(preferenceRoute, /const \{ registrationData, origin, accessToken, locale \} = body/);
 });
 
 test('payment failures surface athlete-area recovery guidance', () => {
   assert.match(registerModal, /paymentFailureGuidance/);
-  assert.match(registerModal, /Área do Atleta/);
-  assert.match(registerModal, /recuperação de senha/);
+  assert.match(ptBrMessages, /"paymentFailureGuidance": ".*Área do Atleta.*recuperação de senha/);
   assert.match(registerModal, /paymentAttemptStarted/);
 });
 
@@ -177,7 +177,7 @@ test('Mercado Pago OAuth uses an authenticated, atomic single-use state and same
 
 test('Mercado Pago callbacks sanitize production URLs and fall back to secure API validation', () => {
   assert.match(preferenceRoute, /const sanitizedOrigin = isLocalhost \? origin : origin\.replace\(/);
-  assert.match(preferenceRoute, /success: `\$\{sanitizedOrigin\}\/event\/\$\{checkoutSnapshot\.eventId\}\?payment=success`/);
+  assert.match(preferenceRoute, /success: `\$\{sanitizedOrigin\}\/\$\{typeof locale === 'string' \? locale : 'pt-br'\}\/event\/\$\{checkoutSnapshot\.eventId\}\?payment=success`/);
   assert.match(preferenceRoute, /notification_url: `\$\{sanitizedOrigin\}\/api\/webhooks\/mercadopago\?event_id=\$\{checkoutSnapshot\.eventId\}`/);
   // Assinatura invalida com segredo configurado bloqueia o webhook de imediato
   // (401) em vez de apenas logar e seguir processando por canal alternativo —

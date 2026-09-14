@@ -1,11 +1,14 @@
 'use client';
 
 import React from 'react';
-import Link from 'next/link';
+import NextLink from 'next/link';
 import Image from 'next/image';
 import { ArrowUpRight } from 'lucide-react';
+import { useTranslations } from 'next-intl';
+import { Link } from '@/i18n/navigation';
 
 export function Footer() {
+  const t = useTranslations('Footer');
   const currentYear = new Date().getFullYear();
 
   return (
@@ -21,50 +24,51 @@ export function Footer() {
               className="h-32 w-32 rounded-sm object-contain"
             />
             <p className="max-w-sm text-sm leading-6 text-muted-soft">
-              A infraestrutura de inscrições, rankings e operação para competições de Functional Fitness.
+              {t('tagline')}
             </p>
-            <Link href="/admin" className="inline-flex items-center gap-1.5 text-sm font-bold text-ink transition-colors hover:text-[#a87f00]">
-              Organize seu evento <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
-            </Link>
+            {/* /admin é o painel interno, fora do escopo de i18n — usa o Link do next/link puro para nunca ganhar prefixo de locale */}
+            <NextLink href="/admin" className="inline-flex items-center gap-1.5 text-sm font-bold text-ink transition-colors hover:text-[#a87f00]">
+              {t('organizeEvent')} <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
+            </NextLink>
           </div>
 
           <div>
-            <h2 className="text-xs font-bold uppercase tracking-[0.14em] text-ink">Plataforma</h2>
+            <h2 className="text-xs font-bold uppercase tracking-[0.14em] text-ink">{t('platformHeading')}</h2>
             <div className="mt-4 flex flex-col gap-3 text-sm text-muted-soft">
-              <Link href="/" className="transition-colors hover:text-ink">Eventos</Link>
-              <Link href="/admin" className="transition-colors hover:text-ink">Organizadores</Link>
+              <Link href="/" className="transition-colors hover:text-ink">{t('eventsLink')}</Link>
+              <NextLink href="/admin" className="transition-colors hover:text-ink">{t('organizersLink')}</NextLink>
             </div>
           </div>
 
           <div>
-            <h2 className="text-xs font-bold uppercase tracking-[0.14em] text-ink">Recursos</h2>
+            <h2 className="text-xs font-bold uppercase tracking-[0.14em] text-ink">{t('resourcesHeading')}</h2>
             <div className="mt-4 flex flex-col gap-3 text-sm text-muted-soft">
-              <a href="#eventos" className="transition-colors hover:text-ink">Inscrições</a>
-              <a href="#eventos" className="transition-colors hover:text-ink">Leaderboards</a>
-              <a href="#eventos" className="transition-colors hover:text-ink">Cronogramas</a>
+              <a href="#eventos" className="transition-colors hover:text-ink">{t('registrationsLink')}</a>
+              <a href="#eventos" className="transition-colors hover:text-ink">{t('leaderboardsLink')}</a>
+              <a href="#eventos" className="transition-colors hover:text-ink">{t('schedulesLink')}</a>
             </div>
           </div>
           <div>
-            <h2 className="text-xs font-bold uppercase tracking-[0.14em] text-ink">Operação</h2>
+            <h2 className="text-xs font-bold uppercase tracking-[0.14em] text-ink">{t('operationHeading')}</h2>
             <div className="mt-4 flex flex-col gap-3 text-sm text-muted-soft">
-              <span>Atualização em tempo real</span>
-              <span>Pagamentos sandbox</span>
-              <span>Suporte para boxes</span>
+              <span>{t('realtimeUpdates')}</span>
+              <span>{t('sandboxPayments')}</span>
+              <span>{t('boxSupport')}</span>
             </div>
           </div>
         </div>
 
         <div className="flex flex-col justify-between gap-4 pt-6 text-xs text-muted-soft sm:flex-row sm:items-center">
-          <p>© {currentYear} WODArena. Todos os direitos reservados.</p>
+          <p>{t('copyright', { year: currentYear })}</p>
           <div className="flex flex-wrap gap-x-6 gap-y-2">
             <Link href="/termos" className="transition-colors hover:text-ink">
-              Termos e Políticas de Compra
+              {t('termsLink')}
             </Link>
             <Link href="/termos#privacidade" className="transition-colors hover:text-ink">
-              Políticas de Privacidade
+              {t('privacyLink')}
             </Link>
           </div>
-          <p>Feito para arenas, boxes e atletas.</p>
+          <p>{t('madeFor')}</p>
         </div>
       </div>
     </footer>

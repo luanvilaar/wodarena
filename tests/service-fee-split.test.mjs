@@ -86,7 +86,7 @@ test('owner controls the global switch and checkout shows the fee breakdown', ()
   assert.match(ownerRoute, /service_fee_enabled: enabled/);
   assert.match(ownerPage, />Taxa de serviço<\/p>/);
   assert.match(ownerPage, /Receita Real de Taxas/);
-  assert.match(registerModal, /Taxa de serviço \(\{serviceFeeConfig\.percent\}%\)/);
+  assert.match(registerModal, /t\('serviceFeeLabel', \{ percent: serviceFeeConfig\.percent \}\)/);
   assert.match(registerModal, /calculateServiceFee\(totalPaid, serviceFeeConfig\.percent, serviceFeeConfig\.enabled\)/);
   assert.match(registerModal, /amountCollectedPreview/);
 });

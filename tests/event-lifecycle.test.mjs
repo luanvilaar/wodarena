@@ -7,9 +7,9 @@ const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
 const eventStatus = read('../src/lib/eventStatus.ts');
 const eventCard = read('../src/components/EventCard.tsx');
-const homePage = read('../src/app/page.tsx');
+const homePage = read('../src/app/[locale]/HomeView.tsx');
 const featuredBanner = read('../src/components/home/FeaturedEventBanner.tsx');
-const eventPage = read('../src/app/event/[id]/page.tsx');
+const eventPage = read('../src/app/[locale]/event/[id]/EventView.tsx');
 const serverCheckout = read('../src/lib/serverCheckout.ts');
 const registrationStart = read('../src/app/api/registrations/start/route.ts');
 const pixCheckout = read('../src/app/api/checkout/pix/route.ts');
@@ -17,6 +17,7 @@ const cardCheckout = read('../src/app/api/checkout/card/route.ts');
 const preferenceCheckout = read('../src/app/api/checkout/preference/route.ts');
 const checkoutStatus = read('../src/app/api/checkout/status/route.ts');
 const paymentWebhook = read('../src/app/api/webhooks/mercadopago/route.ts');
+const ptBrMessages = read('../src/messages/pt-br.json');
 const eventStatusModule = await import(`data:text/javascript;base64,${Buffer.from(
   ts.transpileModule(eventStatus, {
     compilerOptions: {
@@ -105,19 +106,22 @@ test('home splits events into chronological upcoming list and past events sectio
   assert.match(homePage, /upcomingEvents: upcoming\.sort\(compareEventsByDateAsc\)/);
   assert.match(homePage, /pastEvents: past\.sort\(compareEventsByDateDesc\)/);
   assert.match(homePage, /id="eventos-passados"/);
-  assert.match(homePage, /Eventos passados/);
+  assert.match(homePage, /t\('pastTitle'\)/);
+  assert.match(ptBrMessages, /"pastTitle": "Eventos passados"/);
   assert.match(homePage, /\{pastEvents\.length > 0 && \(/);
 });
 
 test('home banner fallback follows the chronological order of eligible events', () => {
-  assert.match(featuredBanner, /\)\)\.sort\(compareEventsByDateAsc\);/);
+  assert.match(featuredBanner, /\.sort\(compareEventsByDateAsc\), \[events\]\);/);
 });
 
 test('public surfaces consistently hide registration for derived finished events', () => {
   assert.match(eventCard, /const registrationAvailability = getRegistrationAvailability\(event\)/);
   assert.match(eventCard, /!registrationAvailability\.isAvailable/);
-  assert.match(eventCard, /Evento Encerrado/);
-  assert.match(eventCard, /Este evento não está mais disponível para inscrição\./);
+  assert.match(eventCard, /t\('eventEndedBadge'\)/);
+  assert.match(eventCard, /t\('finishedAux'\)/);
+  assert.match(ptBrMessages, /"eventEndedBadge": "Evento Encerrado"/);
+  assert.match(ptBrMessages, /"finishedAux": "Este evento não está mais disponível para inscrição\."/);
   assert.match(homePage, /statusFilter === 'finished' && lifecycle === 'finished'/);
   assert.match(homePage, /statusFilter === 'upcoming' && event\.status === 'upcoming' && lifecycle !== 'finished'/);
   assert.match(featuredBanner, /getEventStatus\(event\) !== 'finished'/);
@@ -142,11 +146,14 @@ test('manual ticketing closure has one public signal and blocks only new checkou
     { isAvailable: false, lifecycle: 'active', reason: 'sales_closed' },
   );
   assert.match(eventCard, /getRegistrationAvailability\(event\)/);
-  assert.match(eventCard, /Vendas Encerradas/);
-  assert.match(featuredBanner, /const registrationAvailability = getRegistrationAvailability\(featuredEvent\)/);
-  assert.match(featuredBanner, /Vendas encerradas/);
+  assert.match(eventCard, /t\('salesClosedBadge'\)/);
+  assert.match(ptBrMessages, /"salesClosedBadge": "Vendas Encerradas"/);
+  assert.match(featuredBanner, /const registrationAvailability = event \? getRegistrationAvailability\(event\) : null;/);
+  assert.match(featuredBanner, /t\('salesClosedBadge'\)/);
+  assert.match(ptBrMessages, /"salesClosedBadge": "Vendas encerradas"/);
   assert.match(eventPage, /const registrationAvailability = getRegistrationAvailability\(event\)/);
-  assert.match(eventPage, /Vendas Encerradas/);
+  assert.match(eventPage, /t\('statusLabels\.salesClosed'\)/);
+  assert.match(ptBrMessages, /"statusLabels": \{[\s\S]*?"salesClosed": "Vendas Encerradas"/);
   assert.match(serverCheckout, /export const assertEventRegistrationAvailable/);
   for (const checkoutRoute of [pixCheckout, cardCheckout, preferenceCheckout]) {
     assert.match(checkoutRoute, /assertEventRegistrationAvailable\(supabaseAdmin, checkoutSnapshot\.eventId\)/);

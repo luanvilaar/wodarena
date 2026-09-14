@@ -4,8 +4,8 @@ import test from 'node:test';
 
 const globals = readFileSync(new URL('../src/app/globals.css', import.meta.url), 'utf8');
 const sourceFiles = [
-  '../src/app/page.tsx',
-  '../src/app/event/[id]/page.tsx',
+  '../src/app/[locale]/HomeView.tsx',
+  '../src/app/[locale]/event/[id]/EventView.tsx',
   '../src/components/EventCard.tsx',
   '../src/components/Navbar.tsx',
   '../src/components/Footer.tsx',

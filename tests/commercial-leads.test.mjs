@@ -10,11 +10,12 @@ const migration = read('../supabase/migrations/20260620110000_commercial_leads.s
 const fixOwnerEmailMigration = read('../supabase/migrations/20260620123000_fix_owner_email_for_commercial_leads.sql');
 const route = read('../src/app/api/commercial-leads/route.ts');
 const resend = read('../src/lib/resend.ts');
-const homePage = read('../src/app/page.tsx');
+const homePage = read('../src/app/[locale]/HomeView.tsx');
 const banner = read('../src/components/home/FeaturedEventBanner.tsx');
 const combinedSource = homePage + '\n' + banner;
 const ownerPage = read('../src/app/owner/page.tsx');
 const story = read('../docs/stories/1.14.story.md');
+const ptBrMessages = read('../src/messages/pt-br.json');
 
 test('shared model exposes commercial lead entity and helper labels', () => {
   assert.match(types, /export type CommercialLeadStatus = 'new' \| 'contacted' \| 'qualified' \| 'discarded'/);
@@ -72,15 +73,26 @@ test('resend service exposes dedicated owner notification template', () => {
 });
 
 test('homepage renders the commercial campaign and inline form with privacy consent', () => {
-  assert.match(combinedSource, /Organize seu evento/);
-  assert.match(combinedSource, /Quero utilizar o WODArena/);
+  // Copy foi extraída para src/messages/*.json (i18n) — o teste verifica que
+  // o componente referencia as chaves de tradução certas e que o dicionário
+  // pt-BR ainda carrega o texto original.
+  assert.match(combinedSource, /t\('organizeCardTitle'\)/);
+  assert.match(ptBrMessages, /"organizeCardTitle": "Organize seu evento"/);
+  assert.match(combinedSource, /tLeadForm\('submit'\)/);
   assert.match(combinedSource, /fetch\('\/api\/commercial-leads'/);
-  assert.match(combinedSource, /Nome do gestor/);
-  assert.match(combinedSource, /Telefone/);
-  assert.match(combinedSource, /Estado \(UF\)/);
-  assert.match(combinedSource, /Politica de Privacidade/);
+  assert.match(combinedSource, /tLeadForm\('managerNameLabel'\)/);
+  assert.match(combinedSource, /tLeadForm\('phoneLabel'\)/);
+  assert.match(combinedSource, /tLeadForm\('stateLabel'\)/);
+  assert.match(combinedSource, /privacy: \(chunks\) =>/);
   assert.match(combinedSource, /\/termos#privacidade/);
-  assert.match(combinedSource, /Solicitação enviada com sucesso!/);
+  assert.match(combinedSource, /tLeadForm\('successTitle'\)/);
+
+  assert.match(ptBrMessages, /"submit": "Quero utilizar o WODArena"/);
+  assert.match(ptBrMessages, /"managerNameLabel": "Nome do gestor"/);
+  assert.match(ptBrMessages, /"phoneLabel": "Telefone"/);
+  assert.match(ptBrMessages, /"stateLabel": "Estado \(UF\)"/);
+  assert.match(ptBrMessages, /Politica de Privacidade/);
+  assert.match(ptBrMessages, /"successTitle": "Solicitação enviada com sucesso!"/);
 });
 
 test('owner panel exposes a dedicated leads tab with email notification status', () => {

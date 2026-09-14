@@ -5,6 +5,12 @@ export type CategoryType = 'male' | 'female' | 'team';
 export type ShirtSize = 'PP' | 'P' | 'M' | 'G' | 'GG' | 'XG' | 'XXG';
 export type ManagerAccessStatus = 'active' | 'expired' | 'expiring_soon' | 'unconfigured';
 
+export type AppLocale = 'pt-br' | 'pt-pt' | 'en-gb';
+export type EventCountryCode = 'BR' | 'PT' | 'GB';
+export type EventCurrency = 'BRL' | 'EUR' | 'GBP';
+export type PaymentGateway = 'mercadopago' | 'stripe';
+export type CommercialLeadCountry = 'BR' | 'PT' | 'GB' | 'OTHER';
+
 export interface User {
   id: string;
   name: string;
@@ -15,6 +21,7 @@ export interface User {
   parentManagerId?: string;
   serviceValidUntil?: string;
   managerAccessStatus?: ManagerAccessStatus;
+  locale?: AppLocale;
 }
 
 export type RegistrationPaymentStatus =
@@ -160,6 +167,11 @@ export interface Event {
   marketplace_fee?: number;
   registrationDeadline?: string;
   isFeatured?: boolean;
+  countryCode?: EventCountryCode;
+  currency?: EventCurrency;
+  timeZone?: string;
+  paymentGateway?: PaymentGateway;
+  defaultLocale?: AppLocale;
 }
 
 export interface Registration {
@@ -199,6 +211,9 @@ export interface Registration {
   refundProcessedAt?: string;
   refundProcessedBy?: string;
   updatedAt?: string;
+  currency?: EventCurrency;
+  paymentGateway?: PaymentGateway;
+  locale?: AppLocale;
 }
 
 export interface Contestation {
@@ -288,6 +303,8 @@ export interface CommercialLead {
   eventName: string;
   city: string;
   state: string;
+  country: CommercialLeadCountry;
+  countryOther?: string;
   leadStatus: CommercialLeadStatus;
   acceptedTerms: boolean;
   acceptedAt: string;

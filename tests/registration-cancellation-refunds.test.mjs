@@ -10,7 +10,7 @@ const bootstrapRoute = read('../src/app/api/app/bootstrap/route.ts');
 const persistenceRoute = read('../src/app/api/admin/persistence/route.ts');
 const appContext = read('../src/context/AppContext.tsx');
 const adminPage = read('../src/app/admin/page.tsx');
-const termsPage = read('../src/app/termos/page.tsx');
+const termsPage = read('../src/app/[locale]/termos/page.tsx');
 const packageJson = read('../package.json');
 const cli = read('../bin/registrations.mjs');
 

@@ -1,7 +1,8 @@
 'use client';
 
-import Link from 'next/link';
 import React, { useMemo, useState } from 'react';
+import { useLocale, useTranslations } from 'next-intl';
+import { Link } from '@/i18n/navigation';
 import { useApp } from '@/context/AppContext';
 import { EventCard } from '@/components/EventCard';
 import { SectionOperations } from '@/components/home/SectionOperations';
@@ -13,7 +14,7 @@ import {
   Search,
   ShieldCheck
 } from 'lucide-react';
-import { Event, EventStatus } from '@/types';
+import { AppLocale, CommercialLeadCountry, Event, EventStatus } from '@/types';
 import { compareEventsByDateAsc, compareEventsByDateDesc, getEventStatus } from '@/lib/eventStatus';
 
 type LeadFormState = {
@@ -22,6 +23,8 @@ type LeadFormState = {
   eventName: string;
   city: string;
   state: string;
+  country: CommercialLeadCountry;
+  countryOther: string;
   acceptedTerms: boolean;
 };
 
@@ -31,24 +34,47 @@ const UF_OPTIONS = [
   'SP', 'SE', 'TO'
 ];
 
-const EMPTY_LEAD_FORM: LeadFormState = {
+// Pre-seleciona o pais mais provavel a partir do idioma que a pessoa esta
+// navegando; o campo continua editavel, ja que idioma do site e pais do
+// gestor nao sao a mesma coisa (ex.: brasileiro navegando em en-gb).
+const DEFAULT_COUNTRY_BY_LOCALE: Record<AppLocale, CommercialLeadCountry> = {
+  'pt-br': 'BR',
+  'pt-pt': 'PT',
+  'en-gb': 'GB'
+};
+
+const createEmptyLeadForm = (country: CommercialLeadCountry): LeadFormState => ({
   managerName: '',
   phone: '',
   eventName: '',
   city: '',
   state: '',
+  country,
+  countryOther: '',
   acceptedTerms: false
-};
+});
 
-export default function Home() {
+export function HomeView() {
+  const t = useTranslations('Home');
+  const tLeadForm = useTranslations('Home.LeadForm');
+  const tCommon = useTranslations('Common');
+  const locale = useLocale() as AppLocale;
+  const defaultLeadCountry = DEFAULT_COUNTRY_BY_LOCALE[locale] || 'BR';
   const { events } = useApp();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | EventStatus>('all');
   const [leadFormOpen, setLeadFormOpen] = useState(false);
-  const [leadForm, setLeadForm] = useState<LeadFormState>(EMPTY_LEAD_FORM);
+  const [leadForm, setLeadForm] = useState<LeadFormState>(() => createEmptyLeadForm(defaultLeadCountry));
   const [leadSubmitting, setLeadSubmitting] = useState(false);
   const [leadErrorMessage, setLeadErrorMessage] = useState('');
   const [leadSuccessMessage, setLeadSuccessMessage] = useState('');
+
+  const statusTabs: { id: 'all' | EventStatus; label: string }[] = [
+    { id: 'all', label: t('filters.all') },
+    { id: 'live', label: t('filters.live') },
+    { id: 'upcoming', label: t('filters.upcoming') },
+    { id: 'finished', label: t('filters.finished') }
+  ];
 
   // Eventos abertos ficam em ordem cronológica crescente (o próximo a acontecer primeiro)
   // e os já encerrados vão para a seção de histórico, do mais recente para o mais antigo.
@@ -87,13 +113,24 @@ export default function Home() {
     }));
   };
 
+  const handleLeadCountryChange = (country: CommercialLeadCountry) => {
+    setLeadForm((current) => ({
+      ...current,
+      country,
+      // "Estado" tem formatos incompatíveis entre países (UF vs texto livre);
+      // troca de país limpa o campo para não persistir um valor sem sentido.
+      state: '',
+      countryOther: country === 'OTHER' ? current.countryOther : ''
+    }));
+  };
+
   const handleLeadSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setLeadErrorMessage('');
     setLeadSuccessMessage('');
 
     if (!leadForm.acceptedTerms) {
-      setLeadErrorMessage('Voce precisa aceitar os termos e a politica de privacidade para continuar.');
+      setLeadErrorMessage(tCommon('acceptTerms'));
       return;
     }
 
@@ -111,17 +148,17 @@ export default function Home() {
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        throw new Error(data.error || 'Nao foi possivel registrar seu interesse agora.');
+        throw new Error(data.error || tLeadForm('errorFallback'));
       }
 
       setLeadSuccessMessage(
-        data.message || 'Recebemos suas informacoes e, em breve, entraremos em contato.'
+        data.message || tLeadForm('successFallback')
       );
-      setLeadForm(EMPTY_LEAD_FORM);
+      setLeadForm(createEmptyLeadForm(defaultLeadCountry));
       setLeadFormOpen(true);
     } catch (err) {
       setLeadErrorMessage(
-        err instanceof Error ? err.message : 'Nao foi possivel registrar seu interesse agora.'
+        err instanceof Error ? err.message : tLeadForm('errorFallback')
       );
     } finally {
       setLeadSubmitting(false);
@@ -137,23 +174,18 @@ export default function Home() {
       <section id="eventos" className="mx-auto w-full max-w-7xl space-y-6 px-4 pb-12 pt-8 sm:space-y-8 sm:px-6 sm:pt-12 lg:px-8">
         <div className="home-broadcast-section-header flex flex-col justify-between gap-3 sm:flex-row sm:items-end" style={{ '--motion-delay': '120ms' } as React.CSSProperties}>
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Calendário oficial</p>
-            <h2 className="mt-2 text-2xl font-bold tracking-tight text-white sm:text-3xl">Eventos em destaque</h2>
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">{t('kicker')}</p>
+            <h2 className="mt-2 text-2xl font-bold tracking-tight text-white sm:text-3xl">{t('title')}</h2>
           </div>
-          <p className="max-w-md text-sm leading-6 text-muted">Encontre sua próxima competição, acompanhe resultados ou garanta sua inscrição.</p>
+          <p className="max-w-md text-sm leading-6 text-muted">{t('subtitle')}</p>
         </div>
 
         <div className="home-broadcast-filters flex flex-col gap-4 rounded-xl border border-card-border bg-card p-4 md:flex-row md:items-center md:justify-between" style={{ '--motion-delay': '190ms' } as React.CSSProperties}>
           <div className="flex flex-wrap gap-1.5">
-            {[
-              { id: 'all', label: 'Todos' },
-              { id: 'live', label: 'Ao Vivo' },
-              { id: 'upcoming', label: 'Em Breve' },
-              { id: 'finished', label: 'Finalizados' }
-            ].map((tab) => (
+            {statusTabs.map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setStatusFilter(tab.id as 'all' | EventStatus)}
+                onClick={() => setStatusFilter(tab.id)}
                 className={`min-h-10 rounded-md border px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors ${
                   statusFilter === tab.id
                     ? 'border-primary bg-primary text-ink'
@@ -166,13 +198,13 @@ export default function Home() {
           </div>
 
           <div className="relative w-full md:max-w-xs">
-            <label htmlFor="event-search" className="sr-only">Buscar evento ou local</label>
+            <label htmlFor="event-search" className="sr-only">{t('searchLabel')}</label>
             <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden="true" />
             <input
               id="event-search"
               name="event-search"
               type="text"
-              placeholder="Buscar evento ou local..."
+              placeholder={t('searchPlaceholder')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="h-10 w-full rounded-lg border border-card-border bg-dark-gray pl-10 pr-4 text-sm text-white placeholder:text-muted focus:border-primary focus:outline-none"
@@ -194,14 +226,14 @@ export default function Home() {
           </div>
         ) : pastEvents.length > 0 ? (
           <div className="home-broadcast-empty rounded-xl border border-dashed border-card-border bg-card py-10 text-center">
-            <p className="text-sm text-muted">Nenhum evento em aberto para estes filtros. Veja os eventos passados abaixo.</p>
+            <p className="text-sm text-muted">{t('emptyWithPast')}</p>
           </div>
         ) : (
           <div className="home-broadcast-empty space-y-4 rounded-xl border border-dashed border-card-border bg-card py-20 text-center">
             <Search className="mx-auto h-12 w-12 text-muted" />
             <div className="space-y-1">
-              <h4 className="text-lg font-bold uppercase tracking-wider text-white">Nenhum evento encontrado</h4>
-              <p className="text-sm text-muted">Tente ajustar seus termos de busca ou mudar os filtros de status.</p>
+              <h4 className="text-lg font-bold uppercase tracking-wider text-white">{t('emptyTitle')}</h4>
+              <p className="text-sm text-muted">{t('emptySubtitle')}</p>
             </div>
           </div>
         )}
@@ -211,10 +243,10 @@ export default function Home() {
         <section id="eventos-passados" className="mx-auto w-full max-w-7xl space-y-8 px-4 py-12 sm:px-6 lg:px-8">
           <div className="home-broadcast-section-header flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted">Histórico</p>
-              <h2 className="mt-2 text-3xl font-bold tracking-tight text-white">Eventos passados</h2>
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted">{t('pastKicker')}</p>
+              <h2 className="mt-2 text-3xl font-bold tracking-tight text-white">{t('pastTitle')}</h2>
             </div>
-            <p className="max-w-md text-sm leading-6 text-muted">Edições já encerradas, da mais recente para a mais antiga. Consulte os resultados finais.</p>
+            <p className="max-w-md text-sm leading-6 text-muted">{t('pastSubtitle')}</p>
           </div>
 
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -235,7 +267,7 @@ export default function Home() {
       {leadFormOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4" role="dialog" aria-modal="true">
           {/* Overlay de fundo */}
-          <div 
+          <div
             className="home-broadcast-modal-overlay fixed inset-0 bg-black/85 backdrop-blur-sm transition-opacity"
             onClick={() => {
               setLeadFormOpen(false);
@@ -256,7 +288,7 @@ export default function Home() {
                 setLeadSuccessMessage('');
               }}
               className="absolute right-4 top-4 text-muted hover:text-white transition-colors p-1 rounded-lg hover:bg-dark-gray/50"
-              aria-label="Fechar formulário"
+              aria-label={tLeadForm('closeAria')}
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -264,18 +296,18 @@ export default function Home() {
             </button>
 
             <div className="border-b border-card-border pb-4 pr-6">
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Captação de interesse</p>
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">{tLeadForm('kicker')}</p>
               <h3 className="mt-2 text-xl font-bold uppercase tracking-tight text-white">
-                Cadastro para gestores
+                {tLeadForm('title')}
               </h3>
               <p className="mt-2 text-sm leading-6 text-muted">
-                Preencha seus dados para que a equipe WODArena entre em contato e apresente a plataforma.
+                {tLeadForm('description')}
               </p>
             </div>
 
             {leadSuccessMessage && (
               <div role="status" aria-live="polite" className="mt-4 rounded-xl border border-primary/25 bg-primary/10 px-4 py-3">
-                <p className="text-sm font-bold text-white">Solicitação enviada com sucesso!</p>
+                <p className="text-sm font-bold text-white">{tLeadForm('successTitle')}</p>
                 <p className="mt-1 text-xs leading-6 text-primary">{leadSuccessMessage}</p>
               </div>
             )}
@@ -291,7 +323,7 @@ export default function Home() {
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="sm:col-span-2">
                     <label htmlFor="lead-manager-name" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">
-                      Nome do gestor
+                      {tLeadForm('managerNameLabel')}
                     </label>
                     <input
                       id="lead-manager-name"
@@ -299,14 +331,14 @@ export default function Home() {
                       required
                       value={leadForm.managerName}
                       onChange={(e) => handleLeadFieldChange('managerName', e.target.value)}
-                      placeholder="Ex: Carlos Roberto"
+                      placeholder={tLeadForm('managerNamePlaceholder')}
                       className="h-11 w-full rounded-lg border border-card-border bg-dark-gray px-4 text-sm text-white placeholder:text-muted focus:border-primary focus:outline-none"
                     />
                   </div>
 
                   <div>
                     <label htmlFor="lead-phone" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">
-                      Telefone
+                      {tLeadForm('phoneLabel')}
                     </label>
                     <div className="relative">
                       <PhoneInputIcon />
@@ -316,7 +348,7 @@ export default function Home() {
                         required
                         value={leadForm.phone}
                         onChange={(e) => handleLeadFieldChange('phone', e.target.value)}
-                        placeholder="(00) 00000-0000"
+                        placeholder={tLeadForm('phonePlaceholder')}
                         className="h-11 w-full rounded-lg border border-card-border bg-dark-gray pl-10 pr-4 text-sm text-white placeholder:text-muted focus:border-primary focus:outline-none"
                       />
                     </div>
@@ -324,7 +356,7 @@ export default function Home() {
 
                   <div>
                     <label htmlFor="lead-event-name" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">
-                      Nome do evento
+                      {tLeadForm('eventNameLabel')}
                     </label>
                     <input
                       id="lead-event-name"
@@ -332,14 +364,32 @@ export default function Home() {
                       required
                       value={leadForm.eventName}
                       onChange={(e) => handleLeadFieldChange('eventName', e.target.value)}
-                      placeholder="Ex: Arena Summer Challenge"
+                      placeholder={tLeadForm('eventNamePlaceholder')}
                       className="h-11 w-full rounded-lg border border-card-border bg-dark-gray px-4 text-sm text-white placeholder:text-muted focus:border-primary focus:outline-none"
                     />
                   </div>
 
                   <div>
+                    <label htmlFor="lead-country" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">
+                      {tLeadForm('countryLabel')}
+                    </label>
+                    <select
+                      id="lead-country"
+                      required
+                      value={leadForm.country}
+                      onChange={(e) => handleLeadCountryChange(e.target.value as CommercialLeadCountry)}
+                      className="h-11 w-full rounded-lg border border-card-border bg-dark-gray px-4 text-sm font-semibold text-white focus:border-primary focus:outline-none"
+                    >
+                      <option value="BR">{tLeadForm('countryOptionBr')}</option>
+                      <option value="PT">{tLeadForm('countryOptionPt')}</option>
+                      <option value="GB">{tLeadForm('countryOptionGb')}</option>
+                      <option value="OTHER">{tLeadForm('countryOptionOther')}</option>
+                    </select>
+                  </div>
+
+                  <div>
                     <label htmlFor="lead-city" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">
-                      Cidade
+                      {tLeadForm('cityLabel')}
                     </label>
                     <div className="relative">
                       <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden="true" />
@@ -349,28 +399,69 @@ export default function Home() {
                         required
                         value={leadForm.city}
                         onChange={(e) => handleLeadFieldChange('city', e.target.value)}
-                        placeholder="Ex: Fortaleza"
+                        placeholder={tLeadForm('cityPlaceholder')}
                         className="h-11 w-full rounded-lg border border-card-border bg-dark-gray pl-10 pr-4 text-sm text-white placeholder:text-muted focus:border-primary focus:outline-none"
                       />
                     </div>
                   </div>
 
-                  <div>
+                  {leadForm.country === 'OTHER' && (
+                    <div className="sm:col-span-2">
+                      <label htmlFor="lead-country-other" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">
+                        {tLeadForm('countryOtherLabel')}
+                      </label>
+                      <input
+                        id="lead-country-other"
+                        type="text"
+                        required
+                        value={leadForm.countryOther}
+                        onChange={(e) => handleLeadFieldChange('countryOther', e.target.value)}
+                        placeholder={tLeadForm('countryOtherPlaceholder')}
+                        className="h-11 w-full rounded-lg border border-card-border bg-dark-gray px-4 text-sm text-white placeholder:text-muted focus:border-primary focus:outline-none"
+                      />
+                    </div>
+                  )}
+
+                  <div className="sm:col-span-2">
                     <label htmlFor="lead-state" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">
-                      Estado (UF)
+                      {leadForm.country === 'BR'
+                        ? tLeadForm('stateLabel')
+                        : leadForm.country === 'PT'
+                          ? tLeadForm('stateLabelPt')
+                          : leadForm.country === 'GB'
+                            ? tLeadForm('stateLabelGb')
+                            : tLeadForm('stateLabelOther')}
                     </label>
-                    <select
-                      id="lead-state"
-                      required
-                      value={leadForm.state}
-                      onChange={(e) => handleLeadFieldChange('state', e.target.value)}
-                      className="h-11 w-full rounded-lg border border-card-border bg-dark-gray px-4 text-sm font-semibold text-white focus:border-primary focus:outline-none"
-                    >
-                      <option value="">Selecione</option>
-                      {UF_OPTIONS.map((uf) => (
-                        <option key={uf} value={uf}>{uf}</option>
-                      ))}
-                    </select>
+                    {leadForm.country === 'BR' ? (
+                      <select
+                        id="lead-state"
+                        required
+                        value={leadForm.state}
+                        onChange={(e) => handleLeadFieldChange('state', e.target.value)}
+                        className="h-11 w-full rounded-lg border border-card-border bg-dark-gray px-4 text-sm font-semibold text-white focus:border-primary focus:outline-none"
+                      >
+                        <option value="">{tLeadForm('stateSelectPlaceholder')}</option>
+                        {UF_OPTIONS.map((uf) => (
+                          <option key={uf} value={uf}>{uf}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        id="lead-state"
+                        type="text"
+                        required
+                        value={leadForm.state}
+                        onChange={(e) => handleLeadFieldChange('state', e.target.value)}
+                        placeholder={
+                          leadForm.country === 'PT'
+                            ? tLeadForm('statePlaceholderPt')
+                            : leadForm.country === 'GB'
+                              ? tLeadForm('statePlaceholderGb')
+                              : tLeadForm('statePlaceholderOther')
+                        }
+                        className="h-11 w-full rounded-lg border border-card-border bg-dark-gray px-4 text-sm text-white placeholder:text-muted focus:border-primary focus:outline-none"
+                      />
+                    )}
                   </div>
                 </div>
 
@@ -378,15 +469,18 @@ export default function Home() {
                   <div className="flex items-start gap-2">
                     <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
                     <p>
-                      Usaremos seus dados para registrar seu interesse no WODArena e permitir que nossa equipe entre em contato sobre a plataforma. Leia nossos{' '}
-                      <Link href="/termos" target="_blank" className="font-bold text-white underline transition-colors hover:text-primary">
-                        Termos de Uso
-                      </Link>{' '}
-                      e a{' '}
-                      <Link href="/termos#privacidade" target="_blank" className="font-bold text-white underline transition-colors hover:text-primary">
-                        Politica de Privacidade
-                      </Link>
-                      .
+                      {tLeadForm.rich('privacyNotice', {
+                        terms: (chunks) => (
+                          <Link href="/termos" target="_blank" className="font-bold text-white underline transition-colors hover:text-primary">
+                            {chunks}
+                          </Link>
+                        ),
+                        privacy: (chunks) => (
+                          <Link href="/termos#privacidade" target="_blank" className="font-bold text-white underline transition-colors hover:text-primary">
+                            {chunks}
+                          </Link>
+                        )
+                      })}
                     </p>
                   </div>
                 </div>
@@ -399,7 +493,7 @@ export default function Home() {
                     className="mt-1 h-4 w-4 rounded border-card-border bg-dark-gray text-primary focus:ring-1 focus:ring-primary"
                   />
                   <span className="text-xs leading-6 text-muted">
-                    Li e concordo com os Termos de Uso e com a Politica de Privacidade da WODArena, e autorizo o contato da equipe comercial sobre esta solicitacao.
+                    {tLeadForm('acceptTermsLabel')}
                   </span>
                 </label>
 
@@ -411,11 +505,11 @@ export default function Home() {
                   {leadSubmitting ? (
                     <>
                       <span className="h-4 w-4 animate-spin rounded-full border-2 border-ink border-t-transparent"></span>
-                      Enviando solicitação...
+                      {tLeadForm('submitting')}
                     </>
                   ) : (
                     <>
-                      Quero utilizar o WODArena <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                      {tLeadForm('submit')} <ArrowRight className="h-4 w-4" aria-hidden="true" />
                     </>
                   )}
                 </button>

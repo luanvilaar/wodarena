@@ -11,7 +11,7 @@ const privateRoute = read('../src/app/api/app/bootstrap/route.ts');
 const publicEventRoute = read('../src/app/api/app/bootstrap/public/event/[id]/route.ts');
 const loadingWrapper = read('../src/components/AppLoadingWrapper.tsx');
 const loadingOverlay = read('../src/components/LoadingOverlay.tsx');
-const eventPage = read('../src/app/event/[id]/page.tsx');
+const eventPage = read('../src/app/[locale]/event/[id]/EventView.tsx');
 const leaderboard = read('../src/components/Leaderboard.tsx');
 const envExample = read('../.env.example');
 

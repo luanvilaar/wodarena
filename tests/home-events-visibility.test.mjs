@@ -6,12 +6,11 @@ import test from 'node:test';
 const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
 const globals = read('../src/app/globals.css');
-const homePage = read('../src/app/page.tsx');
+const homePage = read('../src/app/[locale]/HomeView.tsx');
 const eventCard = read('../src/components/EventCard.tsx');
 const adminPage = read('../src/app/admin/page.tsx');
 const featuredBanner = read('../src/components/home/FeaturedEventBanner.tsx');
 const sectionOperations = read('../src/components/home/SectionOperations.tsx');
-const mobileFeaturedBanner = featuredBanner.match(/\{\/\* Banner Versão Mobile \*\/\}[\s\S]*?\{\/\* Banner Versão Desktop \*\/\}/)?.[0] ?? '';
 
 const probeMedia = (path) => JSON.parse(execFileSync('ffprobe', [
   '-v', 'error',
@@ -58,13 +57,11 @@ test('event card uses the established flat surfaces, tokens, and type hierarchy'
   assert.doesNotMatch(eventCard, /backdrop-blur|shadow-\[|font-black|#[0-9a-fA-F]{3,8}/);
 });
 
-test('mobile featured banner shows the full artwork through next/image instead of a stretched background', () => {
+test('featured banner shows the full artwork through next/image instead of a stretched background, at every screen size', () => {
   assert.match(featuredBanner, /^import Image from 'next\/image';$/m);
-  assert.match(mobileFeaturedBanner, /aspect-\[5\/2\] w-full overflow-hidden bg-dark-gray/);
-  assert.match(mobileFeaturedBanner, /sizes="100vw"/);
-  assert.match(mobileFeaturedBanner, /className="object-cover"/);
-  assert.doesNotMatch(mobileFeaturedBanner, /backgroundImage/);
-  assert.doesNotMatch(mobileFeaturedBanner, /min-h-\[520px\]/);
+  assert.match(featuredBanner, /sizes="100vw"/);
+  assert.match(featuredBanner, /className="object-cover"/);
+  assert.doesNotMatch(featuredBanner, /backgroundImage/);
 });
 
 test('hero video opens the home with optimized WODArena media and safe fallbacks', () => {
@@ -119,7 +116,7 @@ test('home entrance motion follows the Arena Broadcast package with reduced-moti
   assert.match(sectionOperations, /home-broadcast-chip/);
   assert.match(featuredBanner, /home-broadcast-featured-media|home-broadcast-featured-backdrop/);
   assert.match(featuredBanner, /home-broadcast-featured-title/);
-  assert.match(featuredBanner, /home-broadcast-countdown/);
+  assert.match(featuredBanner, /home-broadcast-actions/);
   assert.match(homePage, /home-broadcast-event-card/);
   assert.match(homePage, /Math\.min\(index, 5\)/);
 });
@@ -157,6 +154,6 @@ test('hero master and optimized derivatives keep the intended codecs and file we
 });
 
 test('featured banner image is no longer marked priority now that it does not open the home', () => {
-  assert.doesNotMatch(mobileFeaturedBanner, /\bpriority\b/);
-  assert.match(mobileFeaturedBanner, /loading="lazy"/);
+  assert.doesNotMatch(featuredBanner, /\bpriority\b/);
+  assert.match(featuredBanner, /loading="lazy"/);
 });

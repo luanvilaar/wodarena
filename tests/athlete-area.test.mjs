@@ -12,6 +12,7 @@ const webhookRoute = read('../src/app/api/webhooks/mercadopago/route.ts');
 const adminPage = read('../src/app/admin/page.tsx');
 const voucher = read('../src/components/RegistrationVoucher.tsx');
 const migration = read('../supabase/migrations/20260606110000_athlete_area_registrations.sql');
+const ptBrMessages = read('../src/messages/pt-br.json');
 
 test('athlete role and registration payment state are part of the shared model', () => {
   assert.match(types, /role: 'owner' \| 'manager' \| 'athlete'/);
@@ -25,8 +26,10 @@ test('registration checkout collects athlete panel password before payment', () 
   assert.match(registerModal, /athletePassword/);
   assert.match(registerModal, /athletePasswordConfirmation/);
   assert.match(registerModal, /\/api\/registrations\/start/);
-  assert.match(registerModal, /Crie uma senha de pelo menos 6 caracteres/);
-  assert.match(registerModal, /Informe um e-mail válido para criar o painel do atleta/);
+  assert.match(registerModal, /t\('passwordTooShort'\)/);
+  assert.match(registerModal, /t\('invalidEmail'\)/);
+  assert.match(ptBrMessages, /"passwordTooShort": "Crie uma senha de pelo menos 6 caracteres/);
+  assert.match(ptBrMessages, /"invalidEmail": "Informe um e-mail válido para criar o painel do atleta/);
 });
 
 test('registration start endpoint creates athlete user, secret, athlete and pending registration', () => {
@@ -78,7 +81,10 @@ test('manager manual sync prefers payment_id and falls back to registration_id f
 });
 
 test('voucher reflects non-approved payment status', () => {
-  assert.match(voucher, /Pagamento não processado/);
-  assert.match(voucher, /Inscrição registrada/);
-  assert.match(voucher, /não confirma a vaga financeiramente/);
+  assert.match(voucher, /t\('statusFailed'\)/);
+  assert.match(voucher, /t\('registeredTitle'\)/);
+  assert.match(voucher, /t\('registeredDescription'\)/);
+  assert.match(ptBrMessages, /"statusFailed": "Pagamento não processado"/);
+  assert.match(ptBrMessages, /"registeredTitle": "Inscrição registrada"/);
+  assert.match(ptBrMessages, /"registeredDescription": ".*não confirma a vaga financeiramente/);
 });

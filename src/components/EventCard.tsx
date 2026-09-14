@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState } from 'react';
-import Link from 'next/link';
 import Image from 'next/image';
 import {
   Calendar,
@@ -14,8 +13,11 @@ import {
   Tag,
   Layers,
 } from 'lucide-react';
-import { Event } from '@/types';
+import { useLocale, useTranslations } from 'next-intl';
+import { Link } from '@/i18n/navigation';
+import type { AppLocale, Event, EventCurrency } from '@/types';
 import { RegisterModal } from '@/components/RegisterModal';
+import { formatMoney } from '@/lib/intl/format';
 import {
   getEventStatus,
   getRegistrationAvailability,
@@ -30,6 +32,8 @@ interface EventCardProps {
 }
 
 export function EventCard({ event, priority = false }: EventCardProps) {
+  const t = useTranslations('EventCard');
+  const locale = useLocale() as AppLocale;
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
 
   const lifecycle = getEventStatus(event);
@@ -57,7 +61,7 @@ export function EventCard({ event, priority = false }: EventCardProps) {
       return (
         <span className={`${base} border-card-border bg-card text-muted`}>
           <Lock className="h-3 w-3 shrink-0" aria-hidden="true" />
-          {registrationAvailability.reason === 'sales_closed' ? 'Vendas Encerradas' : 'Evento Encerrado'}
+          {registrationAvailability.reason === 'sales_closed' ? t('salesClosedBadge') : t('eventEndedBadge')}
         </span>
       );
     }
@@ -66,7 +70,7 @@ export function EventCard({ event, priority = false }: EventCardProps) {
       return (
         <span className={`${base} border-primary/30 bg-primary/10 text-primary`}>
           <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary motion-safe:animate-pulse" />
-          Ao Vivo
+          {t('liveBadge')}
         </span>
       );
     }
@@ -76,14 +80,14 @@ export function EventCard({ event, priority = false }: EventCardProps) {
         return (
           <span className={`${base} border-primary-hover/60 bg-primary/10 text-primary`}>
             <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary-hover motion-safe:animate-pulse" />
-            Encerrando
+            {t('closingBadge')}
           </span>
         );
       }
       return (
         <span className={`${base} border-primary/30 bg-primary/10 text-primary`}>
           <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-          Inscrições Abertas
+          {t('openBadge')}
         </span>
       );
     }
@@ -91,7 +95,7 @@ export function EventCard({ event, priority = false }: EventCardProps) {
     return (
       <span className={`${base} border-card-border bg-card text-muted`}>
         <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-muted/40" />
-        Encerrado
+        {t('closedBadge')}
       </span>
     );
   };
@@ -108,7 +112,7 @@ export function EventCard({ event, priority = false }: EventCardProps) {
     lifecycle === 'closing' && event.registrationDeadline ? (
       <span
         className="inline-flex min-h-9 items-center gap-1.5 rounded-[2px] border border-primary-hover/60 bg-primary/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-primary"
-        aria-label="Período final de inscrições"
+        aria-label={t('deadlinePeriodAriaLabel')}
       >
         <Clock className="h-3 w-3 shrink-0" aria-hidden="true" />
         {formatDeadlineCountdown(event.registrationDeadline)}
@@ -119,22 +123,22 @@ export function EventCard({ event, priority = false }: EventCardProps) {
     registrationAvailability.reason === 'sales_closed' ? (
       <p className="flex items-start gap-1.5 text-xs font-medium leading-5 text-muted">
         <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-        Vendas online encerradas pelo organizador.
+        {t('salesClosedAux')}
       </p>
     ) : lifecycle === 'closing' && event.registrationDeadline ? (
       <p className="flex items-start gap-1.5 text-xs font-medium leading-5 text-primary">
         <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-        Inscrições encerram em {formatTimeUntilDeadline(event.registrationDeadline)}
+        {t('closingAux', { time: formatTimeUntilDeadline(event.registrationDeadline) })}
       </p>
     ) : lifecycle === 'finished' && event.registrationDeadline ? (
       <p className="flex items-start gap-1.5 text-xs font-medium leading-5 text-muted">
         <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-        Inscrições encerradas em {formatDeadlineDate(event.registrationDeadline)}
+        {t('finishedWithDeadlineAux', { date: formatDeadlineDate(event.registrationDeadline) })}
       </p>
     ) : lifecycle === 'finished' ? (
       <p className="flex items-start gap-1.5 text-xs font-medium leading-5 text-muted">
         <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-        Este evento não está mais disponível para inscrição.
+        {t('finishedAux')}
       </p>
     ) : null;
 
@@ -142,9 +146,9 @@ export function EventCard({ event, priority = false }: EventCardProps) {
     minPrice === null
       ? null
       : minPrice === 0
-        ? 'Gratuito'
-        : `R$ ${minPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
-  const pricePrefix = minPrice === 0 ? 'Inscrição' : 'A partir de';
+        ? t('free')
+        : formatMoney(minPrice, (event.currency ?? 'BRL') as EventCurrency, locale);
+  const pricePrefix = minPrice === 0 ? t('registrationPrefix') : t('from');
 
   return (
     <>
@@ -205,7 +209,7 @@ export function EventCard({ event, priority = false }: EventCardProps) {
             <div className="min-w-0 space-y-2">
               {auxiliaryText || (
                 <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">
-                  Próxima arena disponível
+                  {t('nextArenaLabel')}
                 </p>
               )}
 
@@ -226,14 +230,14 @@ export function EventCard({ event, priority = false }: EventCardProps) {
               <div className="flex min-w-0 items-start gap-2">
                 <Calendar className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
                 <div className="min-w-0">
-                  <dt className="sr-only">Data</dt>
+                  <dt className="sr-only">{t('dateLabel')}</dt>
                   <dd className="break-words font-medium text-white">{event.date}</dd>
                 </div>
               </div>
               <div className="flex min-w-0 items-start gap-2">
                 <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
                 <div className="min-w-0">
-                  <dt className="sr-only">Local</dt>
+                  <dt className="sr-only">{t('locationLabel')}</dt>
                   <dd className="break-words font-medium text-white">{event.location}</dd>
                 </div>
               </div>
@@ -242,7 +246,7 @@ export function EventCard({ event, priority = false }: EventCardProps) {
                 <div className="flex min-w-0 items-start gap-2">
                   <Tag className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
                   <div className="min-w-0">
-                    <dt className="sr-only">Preço</dt>
+                    <dt className="sr-only">{t('priceLabel')}</dt>
                     <dd className="break-words font-medium text-white">
                       <span className="text-muted">{pricePrefix} </span>
                       <span className="font-number text-primary">{priceLabel}</span>
@@ -255,7 +259,7 @@ export function EventCard({ event, priority = false }: EventCardProps) {
             {divisionCount > 0 && (
               <p className="flex items-center gap-1.5 text-xs font-medium text-muted">
                 <Layers className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
-                {divisionCount} {divisionCount === 1 ? 'divisão disponível' : 'divisões disponíveis'}
+                {t('divisionsAvailable', { count: divisionCount })}
               </p>
             )}
           </div>
@@ -265,7 +269,7 @@ export function EventCard({ event, priority = false }: EventCardProps) {
               href={`/event/${event.id}`}
               className="flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-card-border bg-dark-gray px-3 py-3 text-xs font-bold uppercase tracking-wider text-white transition-colors hover:border-primary hover:bg-elevated"
             >
-              <span>Ver Evento</span>
+              <span>{t('viewEvent')}</span>
               <ArrowRight className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
             </Link>
 
@@ -273,11 +277,11 @@ export function EventCard({ event, priority = false }: EventCardProps) {
               <button
                 type="button"
                 disabled
-                aria-label={registrationAvailability.reason === 'sales_closed' ? 'Vendas encerradas' : 'Inscrições encerradas'}
+                aria-label={registrationAvailability.reason === 'sales_closed' ? t('salesClosedAria') : t('registrationsClosedAria')}
                 className="flex min-h-12 cursor-not-allowed items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-card-border bg-dark-gray px-3 py-3 text-xs font-bold uppercase tracking-wider text-muted"
               >
                 <Lock className="h-3.5 w-3.5" aria-hidden="true" />
-                <span>{registrationAvailability.reason === 'sales_closed' ? 'Vendas encerradas' : 'Encerradas'}</span>
+                <span>{registrationAvailability.reason === 'sales_closed' ? t('salesClosedButton') : t('closedButton')}</span>
               </button>
             ) : event.status === 'upcoming' || isClosing ? (
               <button
@@ -285,7 +289,7 @@ export function EventCard({ event, priority = false }: EventCardProps) {
                 onClick={() => setIsRegisterOpen(true)}
                 className="flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-3 py-3 text-xs font-bold uppercase tracking-wider text-ink transition-colors hover:bg-primary-hover active:bg-primary-hover"
               >
-                <span>Garantir Vaga</span>
+                <span>{t('guaranteeSpot')}</span>
                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </button>
             ) : event.status === 'live' ? (
@@ -294,14 +298,14 @@ export function EventCard({ event, priority = false }: EventCardProps) {
                 className="flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-3 py-3 text-xs font-bold uppercase tracking-wider text-ink transition-colors hover:bg-primary-hover active:bg-primary-hover"
               >
                 <Trophy className="h-4 w-4 text-black" aria-hidden="true" />
-                <span>Leaderboard</span>
+                <span>{t('leaderboard')}</span>
               </Link>
             ) : (
               <Link
                 href={`/event/${event.id}/leaderboard`}
                 className="flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-card-border bg-dark-gray px-3 py-3 text-xs font-bold uppercase tracking-wider text-muted transition-colors hover:border-primary hover:text-white"
               >
-                <span>Resultados</span>
+                <span>{t('results')}</span>
               </Link>
             )}
           </div>

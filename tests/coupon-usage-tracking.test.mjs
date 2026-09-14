@@ -12,7 +12,7 @@ const pixRoute = read('../src/app/api/checkout/pix/route.ts');
 const statusRoute = read('../src/app/api/checkout/status/route.ts');
 const startRoute = read('../src/app/api/registrations/start/route.ts');
 const registerModal = read('../src/components/RegisterModal.tsx');
-const eventPage = read('../src/app/event/[id]/page.tsx');
+const eventPage = read('../src/app/[locale]/event/[id]/EventView.tsx');
 
 test('migration adds idempotency flag, atomic RPC and a backfill that fixes existing counters', () => {
   assert.match(migration, /ADD COLUMN IF NOT EXISTS coupon_counted BOOLEAN DEFAULT false/);

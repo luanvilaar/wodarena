@@ -1,23 +1,22 @@
 'use client';
 
-import React, { useState, use, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
+import { useLocale, useTranslations } from 'next-intl';
+import { Link } from '@/i18n/navigation';
 import { useApp } from '@/context/AppContext';
 import { RegisterModal } from '@/components/RegisterModal';
 import { RegistrationVoucher } from '@/components/RegistrationVoucher';
-import { 
-  Calendar, MapPin, Trophy, Share2, Ticket, Clock, 
+import {
+  Calendar, MapPin, Trophy, Share2, Ticket, Clock,
   Dumbbell, AlignLeft, ShieldCheck, ChevronRight, UserCheck, Medal,
   Sparkles, Footprints, Lock, ChevronDown
 } from 'lucide-react';
-import Link from 'next/link';
-import { Registration, Athlete, EventScheduleItem, Workout } from '@/types';
+import type { AppLocale, Registration, Athlete, EventScheduleItem, Workout } from '@/types';
 import { getEventStatus, getRegistrationAvailability } from '@/lib/eventStatus';
 import { getHeatSlotLabel, resolveHeatParticipantSlots } from '@/lib/scheduleParticipants';
-
-interface PageProps {
-  params: Promise<{ id: string }>;
-}
+import { formatMoney } from '@/lib/intl/format';
+import { toBcp47 } from '@/i18n/locales';
 
 interface ScheduleHeatGroup {
   id: string;
@@ -51,36 +50,36 @@ const parseScheduleTimestamp = (item: EventScheduleItem) => parseScheduleClock(i
 
 type HeatLiveStatus = 'live' | 'next' | 'upcoming' | 'done';
 
-const HEAT_STATUS_META: Record<HeatLiveStatus, { dotClass: string; label: string; badge?: string }> = {
-  live: { dotClass: 'bg-trading-up ring-4 ring-trading-up/30 animate-pulse', label: 'Em andamento', badge: 'Ao vivo' },
-  next: { dotClass: 'bg-primary ring-4 ring-primary/25', label: 'Próxima bateria', badge: 'Próxima' },
-  upcoming: { dotClass: 'bg-muted-soft', label: 'Bateria agendada' },
-  done: { dotClass: 'bg-transparent ring-2 ring-muted-soft', label: 'Bateria encerrada', badge: 'Encerrada' },
+const HEAT_STATUS_META: Record<HeatLiveStatus, { dotClass: string; labelKey: string; badgeKey?: string }> = {
+  live: { dotClass: 'bg-trading-up ring-4 ring-trading-up/30 animate-pulse', labelKey: 'heatStatusLiveLabel', badgeKey: 'heatStatusLiveBadge' },
+  next: { dotClass: 'bg-primary ring-4 ring-primary/25', labelKey: 'heatStatusNextLabel', badgeKey: 'heatStatusNextBadge' },
+  upcoming: { dotClass: 'bg-muted-soft', labelKey: 'heatStatusUpcomingLabel' },
+  done: { dotClass: 'bg-transparent ring-2 ring-muted-soft', labelKey: 'heatStatusDoneLabel', badgeKey: 'heatStatusDoneBadge' },
 };
 
-const formatScheduleDate = (value?: string) => {
-  if (!value) return 'Data a confirmar';
+const formatScheduleDate = (value: string | undefined, locale: AppLocale, fallback: string) => {
+  if (!value) return fallback;
 
   if (value.includes('/')) return value;
 
   const [year, month, day] = value.split('-').map(Number);
   if (!year || !month || !day) return value;
 
-  return new Intl.DateTimeFormat('pt-BR', {
+  return new Intl.DateTimeFormat(toBcp47(locale), {
     day: '2-digit',
     month: 'short',
     weekday: 'short'
   }).format(new Date(year, month - 1, day));
 };
 
-const getHeatGroupFallbackTitle = (item: EventScheduleItem) => {
+const getHeatGroupFallbackTitle = (item: EventScheduleItem, fallbackTitle: string) => {
   const match = item.title.match(/-\s*(.+)$/);
-  return match?.[1]?.trim() || 'Baterias do evento';
+  return match?.[1]?.trim() || fallbackTitle;
 };
 
-const getWorkoutScheduleTitle = (workouts: Workout[], item: EventScheduleItem) => {
+const getWorkoutScheduleTitle = (workouts: Workout[], item: EventScheduleItem, fallbackTitle: string) => {
   const workout = workouts.find(candidate => candidate.id === item.workoutId);
-  if (!workout) return getHeatGroupFallbackTitle(item);
+  if (!workout) return getHeatGroupFallbackTitle(item, fallbackTitle);
 
   return workout.code
     ? `${workout.code} · ${workout.name}`
@@ -89,14 +88,18 @@ const getWorkoutScheduleTitle = (workouts: Workout[], item: EventScheduleItem) =
 
 const buildScheduleHeatGroups = (
   items: EventScheduleItem[],
-  workouts: Workout[]
+  workouts: Workout[],
+  locale: AppLocale,
+  dateFallback: string,
+  timeFallback: string,
+  heatFallbackTitle: string
 ): ScheduleHeatGroup[] => {
   const groupMap = new Map<string, ScheduleHeatGroup>();
 
   items
     .filter(item => item.kind === 'heat')
     .forEach((item) => {
-      const id = item.workoutId || getHeatGroupFallbackTitle(item);
+      const id = item.workoutId || getHeatGroupFallbackTitle(item, heatFallbackTitle);
       const existing = groupMap.get(id);
       const participantCount = (item.athleteIds || []).filter(Boolean).length;
 
@@ -109,10 +112,10 @@ const buildScheduleHeatGroups = (
 
       groupMap.set(id, {
         id,
-        title: getWorkoutScheduleTitle(workouts, item),
-        dateLabel: formatScheduleDate(item.date),
-        startTime: item.time || 'A confirmar',
-        endTime: item.endTime || item.time || 'A confirmar',
+        title: getWorkoutScheduleTitle(workouts, item, heatFallbackTitle),
+        dateLabel: formatScheduleDate(item.date, locale, dateFallback),
+        startTime: item.time || timeFallback,
+        endTime: item.endTime || item.time || timeFallback,
         heatCount: 1,
         participantCount,
         items: [item]
@@ -130,10 +133,15 @@ const buildScheduleHeatGroups = (
   });
 };
 
-export default function EventPage({ params }: PageProps) {
-  const resolvedParams = use(params);
-  const eventId = resolvedParams.id;
-  
+export function EventView({ eventId }: { eventId: string }) {
+  const t = useTranslations('Event');
+  const tSchedule = useTranslations('Event.schedule');
+  const tDivisions = useTranslations('Event.divisions');
+  const tDetails = useTranslations('Event.details');
+  const tWorkouts = useTranslations('Event.workouts');
+  const tSidebar = useTranslations('Event.sidebar');
+  const locale = useLocale() as AppLocale;
+
   const {
     events,
     athletes,
@@ -153,6 +161,10 @@ export default function EventPage({ params }: PageProps) {
   const [selectedDivisionForCourseId, setSelectedDivisionForCourseId] = useState<string>('');
   const [expandedHeatIds, setExpandedHeatIds] = useState<Set<string>>(new Set());
   const [scheduleNowTs, setScheduleNowTs] = useState(() => Date.now());
+
+  const scheduleDateFallback = tSchedule('dateToConfirm');
+  const scheduleTimeFallback = tSchedule('timeToConfirm');
+  const scheduleHeatFallbackTitle = tSchedule('fallbackHeatTitle');
 
   useEffect(() => {
     if (activeTab !== 'schedule') return;
@@ -187,8 +199,8 @@ export default function EventPage({ params }: PageProps) {
   }, [event]);
 
   const formattedMinPrice = React.useMemo(() => {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(minPrice);
-  }, [minPrice]);
+    return formatMoney(minPrice, event?.currency ?? 'BRL', locale);
+  }, [minPrice, event?.currency, locale]);
 
   // Permitir trocar aba via query parameter se fornecido.
   useEffect(() => {
@@ -238,7 +250,7 @@ export default function EventPage({ params }: PageProps) {
                 cpf: cpf || ''
               });
               setPaymentNotice({
-                text: 'Sua inscrição foi confirmada e paga com sucesso via Mercado Pago! Seus dados já estão sincronizados.',
+                text: t('paymentSuccessLocal'),
                 tone: 'success'
               });
             }, 0);
@@ -254,7 +266,7 @@ export default function EventPage({ params }: PageProps) {
           });
           setTimeout(() => {
             setPaymentNotice({
-              text: 'Pagamento confirmado! Sua inscrição foi processada.',
+              text: t('paymentSuccessGeneric'),
               tone: 'success'
             });
           }, 0);
@@ -272,12 +284,12 @@ export default function EventPage({ params }: PageProps) {
       } else if (paymentStatus === 'failure') {
         setTimeout(() => {
           setPaymentNotice({
-            text: 'O pagamento não pôde ser concluído no Mercado Pago. Por favor, tente novamente.',
+            text: t('paymentFailure'),
             tone: 'error'
           });
         }, 0);
         sessionStorage.removeItem('pending_registration');
-        
+
         const cleanParams = new URLSearchParams(window.location.search);
         cleanParams.delete('payment');
         cleanParams.delete('payment_id');
@@ -287,7 +299,7 @@ export default function EventPage({ params }: PageProps) {
         window.history.replaceState(null, '', newUrl);
       }
     }
-  }, [event, registerTicket, refreshRegistrations]);
+  }, [event, registerTicket, refreshRegistrations, t]);
 
   // Inicializar a categoria selecionada para o percurso
   useEffect(() => {
@@ -362,8 +374,8 @@ export default function EventPage({ params }: PageProps) {
     [athletes, eventDivisionIds]
   );
   const scheduleHeatGroups = React.useMemo(
-    () => buildScheduleHeatGroups(scheduleItems, event?.workouts || []),
-    [scheduleItems, event?.workouts]
+    () => buildScheduleHeatGroups(scheduleItems, event?.workouts || [], locale, scheduleDateFallback, scheduleTimeFallback, scheduleHeatFallbackTitle),
+    [scheduleItems, event?.workouts, locale, scheduleDateFallback, scheduleTimeFallback, scheduleHeatFallbackTitle]
   );
   const scheduleBlocks = React.useMemo<ScheduleBlock[]>(() => {
     const groupsById = new Map(scheduleHeatGroups.map(group => [group.id, group]));
@@ -376,7 +388,7 @@ export default function EventPage({ params }: PageProps) {
         return;
       }
 
-      const groupId = item.workoutId || getHeatGroupFallbackTitle(item);
+      const groupId = item.workoutId || getHeatGroupFallbackTitle(item, scheduleHeatFallbackTitle);
       if (renderedGroupIds.has(groupId)) return;
 
       renderedGroupIds.add(groupId);
@@ -387,7 +399,7 @@ export default function EventPage({ params }: PageProps) {
     });
 
     return blocks;
-  }, [scheduleHeatGroups, scheduleItems]);
+  }, [scheduleHeatGroups, scheduleItems, scheduleHeatFallbackTitle]);
   const scheduleSummary = React.useMemo(() => {
     const heatCount = scheduleHeatGroups.reduce((total, group) => total + group.heatCount, 0);
     const participantCount = scheduleHeatGroups.reduce((total, group) => total + group.participantCount, 0);
@@ -398,10 +410,10 @@ export default function EventPage({ params }: PageProps) {
       heatCount,
       participantCount,
       groupCount: scheduleHeatGroups.length,
-      dateLabel: firstGroup?.dateLabel || formatScheduleDate(scheduleItems[0]?.date),
-      timeRange: firstGroup && lastGroup ? `${firstGroup.startTime} - ${lastGroup.endTime}` : 'A confirmar'
+      dateLabel: firstGroup?.dateLabel || formatScheduleDate(scheduleItems[0]?.date, locale, scheduleDateFallback),
+      timeRange: firstGroup && lastGroup ? `${firstGroup.startTime} - ${lastGroup.endTime}` : scheduleTimeFallback
     };
-  }, [scheduleHeatGroups, scheduleItems]);
+  }, [scheduleHeatGroups, scheduleItems, locale, scheduleDateFallback, scheduleTimeFallback]);
   const heatStatusById = React.useMemo(() => {
     const statuses = new Map<string, HeatLiveStatus>();
     const FALLBACK_DURATION_MS = 15 * 60 * 1000;
@@ -467,9 +479,9 @@ export default function EventPage({ params }: PageProps) {
       return (
         <div className="min-h-[60vh] flex flex-col items-center justify-center space-y-4">
           <Trophy className="h-16 w-16 text-muted animate-pulse" />
-          <h2 className="text-xl font-bold text-white uppercase tracking-wider">Carregando evento</h2>
+          <h2 className="text-xl font-bold text-white uppercase tracking-wider">{t('loadingTitle')}</h2>
           <p className="max-w-sm text-center text-xs font-semibold uppercase tracking-wider text-muted">
-            Buscando cronograma, atletas e informações públicas.
+            {t('loadingDescription')}
           </p>
         </div>
       );
@@ -478,9 +490,9 @@ export default function EventPage({ params }: PageProps) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center space-y-4">
         <Trophy className="h-16 w-16 text-muted" />
-        <h2 className="text-xl font-bold text-white uppercase tracking-wider">Evento não encontrado</h2>
+        <h2 className="text-xl font-bold text-white uppercase tracking-wider">{t('notFoundTitle')}</h2>
         <Link href="/" className="text-sm text-primary hover:underline uppercase font-extrabold tracking-widest">
-          Voltar para Home
+          {t('backToHome')}
         </Link>
       </div>
     );
@@ -513,21 +525,21 @@ export default function EventPage({ params }: PageProps) {
   };
 
   const getScheduleKindLabel = (kind: string) => {
-    if (kind === 'briefing') return 'Briefing';
-    if (kind === 'kit_delivery') return 'Entrega de kits';
-    if (kind === 'deadline') return 'Prazo importante';
-    return 'Cronograma do evento';
+    if (kind === 'briefing') return tSchedule('kindBriefing');
+    if (kind === 'kit_delivery') return tSchedule('kindKitDelivery');
+    if (kind === 'deadline') return tSchedule('kindDeadline');
+    return tSchedule('kindGeneral');
   };
 
   const getScheduleModeLabel = (mode?: string) => {
-    if (mode === 'online') return 'Online';
-    if (mode === 'presential') return 'Presencial';
-    return 'Evento';
+    if (mode === 'online') return tSchedule('modeOnline');
+    if (mode === 'presential') return tSchedule('modePresential');
+    return tSchedule('modeGeneral');
   };
 
   const getDivisionName = (divisionId?: string) => {
-    if (!divisionId) return 'Categoria geral';
-    return event.divisions?.find(division => division.id === divisionId)?.name || 'Categoria geral';
+    if (!divisionId) return tSchedule('generalCategory');
+    return event.divisions?.find(division => division.id === divisionId)?.name || tSchedule('generalCategory');
   };
 
   const handleTabChange = (tabId: typeof activeTab) => {
@@ -540,7 +552,7 @@ export default function EventPage({ params }: PageProps) {
       return (
         <span className="inline-flex items-center gap-1.5 rounded-[2px] border border-card-border bg-dark-gray/30 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted font-mono">
           <Lock className="h-3 w-3" />
-          Vendas Encerradas
+          {t('statusLabels.salesClosed')}
         </span>
       );
     }
@@ -549,7 +561,7 @@ export default function EventPage({ params }: PageProps) {
       return (
         <span className="inline-flex items-center gap-1.5 rounded-[2px] border border-card-border bg-dark-gray/30 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted font-mono">
           <Lock className="h-3 w-3" />
-          Evento Encerrado
+          {t('statusLabels.eventEnded')}
         </span>
       );
     }
@@ -559,21 +571,21 @@ export default function EventPage({ params }: PageProps) {
         return (
           <span className="inline-flex items-center gap-1.5 rounded-[2px] border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary font-mono">
             <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
-            Ao Vivo
+            {t('statusLabels.live')}
           </span>
         );
       case 'upcoming':
         return (
           <span className="inline-flex items-center gap-1.5 rounded-[2px] border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary font-mono">
             <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
-            Inscrições Abertas
+            {t('statusLabels.open')}
           </span>
         );
       case 'finished':
         return (
           <span className="inline-flex items-center gap-1.5 rounded-[2px] border border-card-border bg-dark-gray/30 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted font-mono">
             <span className="h-1.5 w-1.5 rounded-full bg-muted/40" />
-            Finalizado
+            {t('statusLabels.finished')}
           </span>
         );
     }
@@ -581,13 +593,13 @@ export default function EventPage({ params }: PageProps) {
 
   return (
     <div className="min-h-screen bg-background pb-16">
-      
+
       {/* Hero Banner */}
       <section className="relative h-[390px] w-full overflow-hidden border-b border-card-border bg-dark-gray md:h-[470px]">
         {event.bannerUrl ? (
           <Image
-            src={event.bannerUrl} 
-            alt={`${event.name} banner`} 
+            src={event.bannerUrl}
+            alt={`${event.name} banner`}
             width="1600"
             height="640"
             unoptimized
@@ -598,18 +610,18 @@ export default function EventPage({ params }: PageProps) {
           <div className="h-full w-full bg-gradient-to-br from-dark-gray to-background opacity-55" />
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/45 to-black/50"></div>
-        
+
         {/* Informações Sobrepostas no Banner */}
         <div className="absolute bottom-0 left-0 right-0 py-8">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row md:items-end justify-between gap-6">
-            
+
             {/* Esquerda: Logo e Infos Básicas */}
             <div className="flex flex-col sm:flex-row items-center sm:items-end gap-5 text-center sm:text-left">
               <div className="h-24 w-24 shrink-0 overflow-hidden rounded-xl border border-card-border bg-background p-2 md:h-32 md:w-32">
                 {event.logoUrl ? (
                   <Image
-                    src={event.logoUrl} 
-                    alt={`${event.name} logo`} 
+                    src={event.logoUrl}
+                    alt={`${event.name} logo`}
                     width="128"
                     height="128"
                     unoptimized
@@ -621,7 +633,7 @@ export default function EventPage({ params }: PageProps) {
                   </div>
                 )}
               </div>
-              
+
               <div className="space-y-2">
                 <div className="flex items-center justify-center sm:justify-start gap-2">
                   {getStatusLabel()}
@@ -629,7 +641,7 @@ export default function EventPage({ params }: PageProps) {
                 <h1 className="text-balance text-3xl font-extrabold uppercase tracking-tight text-white sm:text-5xl">
                   {event.name}
                 </h1>
-                
+
                 <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-3 gap-y-1.5 text-xs text-muted">
                   <span className="flex items-center gap-1.5">
                     <Calendar className="h-3.5 w-3.5 text-muted shrink-0" />
@@ -643,7 +655,7 @@ export default function EventPage({ params }: PageProps) {
                   <span className="text-card-border/60 hidden sm:inline">•</span>
                   <span className="flex items-center gap-1.5 capitalize">
                     <Dumbbell className="h-3.5 w-3.5 text-muted shrink-0" />
-                    <span className="font-semibold text-white">Formato: {event.format || 'individual'}</span>
+                    <span className="font-semibold text-white">{t('formatLabel', { format: event.format || 'individual' })}</span>
                   </span>
                 </div>
               </div>
@@ -651,16 +663,16 @@ export default function EventPage({ params }: PageProps) {
 
             {/* Direita: Botões Rápidos */}
             <div className="flex flex-row justify-center md:justify-end gap-3 w-full md:w-auto">
-              <button 
+              <button
                 onClick={handleShare}
                 className="flex flex-1 sm:flex-initial min-h-11 items-center justify-center gap-1.5 rounded-md border border-card-border bg-dark-gray px-5 py-3 text-xs font-bold text-white transition-colors hover:border-primary"
               >
                 <Share2 className="h-4 w-4 text-white" />
-                <span>{shareFeedback ? 'Copiado!' : 'Compartilhar'}</span>
+                <span>{shareFeedback ? t('copied') : t('share')}</span>
               </button>
 
               {event.status === 'upcoming' && (
-                <button 
+                <button
                   disabled={!registrationsAvailable}
                   onClick={() => {
                     if (registrationsAvailable) setIsRegisterOpen(true);
@@ -672,14 +684,14 @@ export default function EventPage({ params }: PageProps) {
                   }`}
                 >
                   <Ticket className="h-4 w-4" />
-                  <span>{registrationsAvailable ? 'Comprar Ingresso' : registrationAvailability.reason === 'sales_closed' ? 'Vendas Encerradas' : 'Inscrições Encerradas'}</span>
+                  <span>{registrationsAvailable ? t('buyTicket') : registrationAvailability.reason === 'sales_closed' ? t('salesClosed') : t('registrationsClosed')}</span>
                 </button>
               )}
             </div>
 
             {registrationAvailability.reason === 'sales_closed' && event.status === 'upcoming' && (
               <p role="status" className="text-center text-xs font-semibold text-gray-300 md:text-right">
-                As vendas online foram encerradas pelo organizador.
+                {t('salesClosedNotice')}
               </p>
             )}
 
@@ -692,11 +704,11 @@ export default function EventPage({ params }: PageProps) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex overflow-x-auto gap-1.5 py-3 scrollbar-none sm:gap-2">
             {[
-              { id: 'details', label: 'Detalhes', icon: AlignLeft, isLink: false },
-              { id: 'divisions', label: 'Divisões', icon: Trophy, isLink: false },
-              { id: 'schedule', label: 'Horário', icon: Clock, isLink: false },
-              { id: 'workouts', label: 'Exercícios', icon: Dumbbell, isLink: false },
-              { id: 'leaderboard', label: 'Leaderboard', icon: Medal, isLink: true }
+              { id: 'details', label: t('tabs.details'), icon: AlignLeft, isLink: false },
+              { id: 'divisions', label: t('tabs.divisions'), icon: Trophy, isLink: false },
+              { id: 'schedule', label: t('tabs.schedule'), icon: Clock, isLink: false },
+              { id: 'workouts', label: t('tabs.workouts'), icon: Dumbbell, isLink: false },
+              { id: 'leaderboard', label: t('tabs.leaderboard'), icon: Medal, isLink: true }
             ].map((tab) => {
               const Icon = tab.icon;
               const classes = `flex min-h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border px-3 py-2 text-xs font-extrabold uppercase tracking-wider transition-colors sm:px-4 ${
@@ -707,7 +719,7 @@ export default function EventPage({ params }: PageProps) {
 
               if (tab.isLink) {
                 return (
-                  <a
+                  <Link
                     key={tab.id}
                     href={`/event/${event.id}/leaderboard`}
                     target="_blank"
@@ -716,7 +728,7 @@ export default function EventPage({ params }: PageProps) {
                   >
                     <Icon className="h-3.5 w-3.5" />
                     <span>{tab.label}</span>
-                  </a>
+                  </Link>
                 );
               }
 
@@ -751,30 +763,30 @@ export default function EventPage({ params }: PageProps) {
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          
+
           {/* Esquerda/Centro: Conteúdo Principal das Abas */}
           <div className="lg:col-span-2 space-y-6">
-            
+
             {/* Aba 1: Detalhes */}
             {activeTab === 'details' && (
               <div className="space-y-4 rounded-xl border border-card-border bg-card p-6">
                 <h3 className="text-lg font-black text-white uppercase tracking-wider border-b border-card-border pb-3">
-                  Sobre o Evento
+                  {tDetails('heading')}
                 </h3>
                 <p className="text-sm text-muted leading-relaxed whitespace-pre-wrap font-normal">
                   {event.description}
                 </p>
                 <div className="pt-4 border-t border-card-border/50 grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <h4 className="text-xs font-bold text-primary uppercase tracking-wider">Cronograma de Datas</h4>
+                    <h4 className="text-xs font-bold text-primary uppercase tracking-wider">{tDetails('scheduleHeading')}</h4>
                     <p className="text-sm text-white font-semibold mt-1">{event.date}</p>
                   </div>
                   <div>
                     <h4 className="text-xs font-bold text-primary uppercase tracking-wider">
-                      {event.eventType === 'functional_fitness_qualifier' ? 'Modalidade' : 'Local das Baterias'}
+                      {event.eventType === 'functional_fitness_qualifier' ? tDetails('modalityHeading') : tDetails('venueHeading')}
                     </h4>
                     <p className="text-sm text-white font-semibold mt-1">
-                      {event.eventType === 'functional_fitness_qualifier' ? 'Qualifier online' : event.location}
+                      {event.eventType === 'functional_fitness_qualifier' ? tDetails('onlineQualifier') : event.location}
                     </p>
                   </div>
                 </div>
@@ -785,18 +797,18 @@ export default function EventPage({ params }: PageProps) {
             {activeTab === 'divisions' && (
               <div className="space-y-4">
                 <h3 className="text-lg font-black text-white uppercase tracking-wider border-b border-card-border pb-3 mb-2">
-                  Categorias e Divisões
+                  {tDivisions('heading')}
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {event.divisions.map((div) => (
                     <div key={div.id} className="flex flex-col justify-between rounded-xl border border-card-border bg-card p-5 transition-colors hover:border-primary/60">
                       <div className="space-y-2">
                         <span className="px-2.5 py-0.5 bg-dark-gray border border-card-border text-[9px] font-black uppercase tracking-widest text-primary rounded-full">
-                          {div.category === 'male' ? 'Masculino' : div.category === 'female' ? 'Feminino' : 'Equipes'}
+                          {div.category === 'male' ? tDivisions('male') : div.category === 'female' ? tDivisions('female') : tDivisions('teams')}
                         </span>
                         <h4 className="text-lg font-black text-white uppercase">{div.name}</h4>
                         <p className="text-xs text-muted font-normal leading-relaxed">
-                          Ideal para atletas que buscam competir dentro das cargas oficiais e movimentos propostos na categoria {div.name}.
+                          {tDivisions('description', { name: div.name })}
                         </p>
                       </div>
                       {registrationsAvailable && (
@@ -804,7 +816,7 @@ export default function EventPage({ params }: PageProps) {
                           onClick={() => setIsRegisterOpen(true)}
                           className="mt-4 flex items-center justify-between text-xs font-extrabold uppercase text-primary hover:text-white transition-colors"
                         >
-                          <span>Inscrever-se na categoria</span>
+                          <span>{tDivisions('registerCta')}</span>
                           <ChevronRight className="h-4 w-4" />
                         </button>
                       )}
@@ -819,9 +831,9 @@ export default function EventPage({ params }: PageProps) {
               <div className="min-w-0 space-y-6 overflow-hidden rounded-xl border border-card-border bg-card p-4 sm:p-6">
                 <div className="flex flex-col gap-2 border-b border-card-border pb-4 sm:flex-row sm:items-end sm:justify-between">
                   <div>
-                    <p className="text-[10px] font-black uppercase tracking-wider text-primary">Cronograma agrupado por prova</p>
+                    <p className="text-[10px] font-black uppercase tracking-wider text-primary">{tSchedule('kicker')}</p>
                     <h3 className="mt-1 text-lg font-black uppercase tracking-wider text-white">
-                      Cronograma Oficial
+                      {tSchedule('heading')}
                     </h3>
                   </div>
                   {scheduleItems.length > 0 && (
@@ -835,13 +847,13 @@ export default function EventPage({ params }: PageProps) {
                   <div className="space-y-5">
                     {scheduleHeatGroups.length > 0 && (
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-md border border-card-border/60 bg-dark-gray/30 px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-muted">
-                        <span><strong className="font-number text-white">{scheduleSummary.groupCount}</strong> provas</span>
+                        <span><strong className="font-number text-white">{scheduleSummary.groupCount}</strong> {tSchedule('provesLabel')}</span>
                         <span className="h-1 w-1 shrink-0 rounded-full bg-muted-soft" aria-hidden="true" />
-                        <span><strong className="font-number text-white">{scheduleSummary.heatCount}</strong> baterias</span>
+                        <span><strong className="font-number text-white">{scheduleSummary.heatCount}</strong> {tSchedule('heatsLabel')}</span>
                         <span className="h-1 w-1 shrink-0 rounded-full bg-muted-soft" aria-hidden="true" />
-                        <span><strong className="font-number text-white">{scheduleSummary.participantCount}</strong> atletas</span>
+                        <span><strong className="font-number text-white">{scheduleSummary.participantCount}</strong> {tSchedule('athletesLabel')}</span>
                         <span className="h-1 w-1 shrink-0 rounded-full bg-muted-soft" aria-hidden="true" />
-                        <span className="text-primary">Janela <strong className="font-number">{scheduleSummary.timeRange}</strong></span>
+                        <span className="text-primary">{tSchedule('windowLabel', { range: scheduleSummary.timeRange })}</span>
                       </div>
                     )}
 
@@ -858,13 +870,13 @@ export default function EventPage({ params }: PageProps) {
                                 {getScheduleModeLabel(item.mode)}
                               </span>
                               <span className="text-[10px] font-black uppercase tracking-wider text-white">
-                                {formatScheduleDate(item.date)} às {item.time}
+                                {formatScheduleDate(item.date, locale, scheduleDateFallback)} {tSchedule('atLabel')} {item.time}
                               </span>
                             </div>
                             <h4 className="mt-2 text-sm font-extrabold text-white">{item.title}</h4>
                             <p className="mt-1 text-xs leading-relaxed text-muted">{item.description}</p>
                             {item.location && (
-                              <p className="mt-1 text-xs text-muted">Local/link: {item.location}</p>
+                              <p className="mt-1 text-xs text-muted">{tSchedule('locationLabel', { location: item.location })}</p>
                             )}
                           </article>
                         );
@@ -874,8 +886,8 @@ export default function EventPage({ params }: PageProps) {
                       const groupIndex = scheduleHeatGroups.findIndex(candidate => candidate.id === group.id);
                       // group.items já vem ordenado cronologicamente por buildScheduleHeatGroups.
                       const groupItemsByTime = group.items;
-                      const groupFirstDateLabel = formatScheduleDate(groupItemsByTime[0]?.date);
-                      const groupLastDateLabel = formatScheduleDate(groupItemsByTime[groupItemsByTime.length - 1]?.date);
+                      const groupFirstDateLabel = formatScheduleDate(groupItemsByTime[0]?.date, locale, scheduleDateFallback);
+                      const groupLastDateLabel = formatScheduleDate(groupItemsByTime[groupItemsByTime.length - 1]?.date, locale, scheduleDateFallback);
                       // Prova que atravessa a virada do dia: o cabeçalho declara as duas datas em vez de
                       // afirmar (incorretamente) que tudo acontece na data da primeira bateria cadastrada.
                       const groupDateHeading = groupFirstDateLabel !== groupLastDateLabel
@@ -887,7 +899,7 @@ export default function EventPage({ params }: PageProps) {
                           <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b border-card-border/70 bg-dark-gray/40 px-4 py-2.5">
                             <div className="flex min-w-0 items-baseline gap-2">
                               <span className="shrink-0 text-[10px] font-black uppercase tracking-wider text-primary">
-                                Prova {groupIndex + 1}
+                                {tSchedule('proveNumber', { index: groupIndex + 1 })}
                               </span>
                               <h4 className="truncate text-xs font-bold uppercase tracking-wider text-white">
                                 {group.title}
@@ -908,7 +920,7 @@ export default function EventPage({ params }: PageProps) {
                               const panelId = `heat-participants-${item.id}`;
                               const status = heatStatusById.get(item.id) ?? 'upcoming';
                               const statusMeta = HEAT_STATUS_META[status];
-                              const itemDateLabel = formatScheduleDate(item.date);
+                              const itemDateLabel = formatScheduleDate(item.date, locale, scheduleDateFallback);
                               const showItemDate = itemDateLabel !== groupFirstDateLabel;
 
                               return (
@@ -922,10 +934,10 @@ export default function EventPage({ params }: PageProps) {
                                   >
                                     <span className="flex min-w-0 items-center gap-2 sm:w-[38%] sm:shrink-0">
                                       <span className={`h-2 w-2 shrink-0 rounded-full ${statusMeta.dotClass}`} aria-hidden="true" />
-                                      <span className="sr-only">{statusMeta.label}. </span>
-                                      {statusMeta.badge && (
+                                      <span className="sr-only">{tSchedule(statusMeta.labelKey)}. </span>
+                                      {statusMeta.badgeKey && (
                                         <span className={`shrink-0 text-[10px] font-black uppercase tracking-wider ${status === 'live' ? 'text-trading-up' : status === 'done' ? 'text-muted' : 'text-primary'}`} aria-hidden="true">
-                                          {statusMeta.badge}
+                                          {tSchedule(statusMeta.badgeKey)}
                                         </span>
                                       )}
                                       <span title={item.title} className="truncate text-xs font-extrabold uppercase text-white">{item.title}</span>
@@ -935,17 +947,15 @@ export default function EventPage({ params }: PageProps) {
                                     </span>
 
                                     <span className="flex flex-1 flex-wrap items-baseline gap-x-4 gap-y-1 font-number text-[11px] font-medium text-muted">
-                                      <span className="whitespace-nowrap">Aquec. <b className="font-semibold text-white">{item.warmupTime || '-'}</b></span>
-                                      <span className="whitespace-nowrap">Fila <b className="font-semibold text-white">{item.checkinTime || '-'}</b></span>
-                                      <span className="whitespace-nowrap text-[12px] text-primary/80">Início <b className="text-base font-extrabold text-primary">{item.time || '-'}</b></span>
-                                      <span className="whitespace-nowrap">Final <b className="font-semibold text-white">{item.endTime || '-'}</b></span>
+                                      <span className="whitespace-nowrap">{tSchedule('warmup')} <b className="font-semibold text-white">{item.warmupTime || '-'}</b></span>
+                                      <span className="whitespace-nowrap">{tSchedule('queue')} <b className="font-semibold text-white">{item.checkinTime || '-'}</b></span>
+                                      <span className="whitespace-nowrap text-[12px] text-primary/80">{tSchedule('start')} <b className="text-base font-extrabold text-primary">{item.time || '-'}</b></span>
+                                      <span className="whitespace-nowrap">{tSchedule('end')} <b className="font-semibold text-white">{item.endTime || '-'}</b></span>
                                     </span>
 
                                     <span className="flex shrink-0 items-center justify-between gap-2 sm:justify-end">
                                       <span className="rounded border border-card-border bg-dark-gray px-2 py-1 font-number text-[10px] font-bold text-muted">
-                                        {heatParticipants.totalCount > 0
-                                          ? `${heatParticipants.resolvedCount}/${heatParticipants.totalCount}`
-                                          : '0'} atletas
+                                        {tSchedule('athletesCount', { count: heatParticipants.totalCount > 0 ? `${heatParticipants.resolvedCount}/${heatParticipants.totalCount}` : '0' })}
                                       </span>
                                       <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-muted-soft transition-transform ${isExpanded ? 'rotate-180' : ''}`} aria-hidden="true" />
                                     </span>
@@ -980,18 +990,18 @@ export default function EventPage({ params }: PageProps) {
                                     ) : heatParticipants.totalCount > 0 ? (
                                       <p className="rounded border border-card-border/50 bg-black/20 px-3 py-2 text-[10px] font-semibold text-muted-soft">
                                         {isPublicEventLoading
-                                          ? 'Participantes em carregamento...'
-                                          : 'Participantes vinculados, mas os perfis públicos ainda não foram encontrados.'}
+                                          ? tSchedule('loadingParticipants')
+                                          : tSchedule('unresolvedParticipants')}
                                       </p>
                                     ) : (
                                       <p className="rounded border border-card-border/50 bg-black/20 px-3 py-2 text-[10px] font-semibold text-muted-soft">
-                                        Nenhum participante publicado nesta bateria.
+                                        {tSchedule('noParticipants')}
                                       </p>
                                     )}
 
                                     {heatParticipants.unresolvedCount > 0 && heatParticipants.resolvedCount > 0 && (
                                       <p className="text-[9px] font-semibold text-muted-soft">
-                                        {heatParticipants.unresolvedCount} participante(s) ainda sem dados públicos carregados.
+                                        {tSchedule('unresolvedCount', { count: heatParticipants.unresolvedCount })}
                                       </p>
                                     )}
                                   </div>
@@ -1010,10 +1020,10 @@ export default function EventPage({ params }: PageProps) {
                           <span className="w-2.5 h-2.5 rounded-full bg-primary"></span>
                         </div>
                         <div className="space-y-1">
-                          <span className="text-[10px] font-black text-primary uppercase tracking-wider bg-primary/10 px-2 py-0.5 rounded border border-primary/20">Dia 1 - Abertura</span>
-                          <h4 className="text-sm font-extrabold text-white">Credenciamento & Briefing Geral</h4>
-                          <p className="text-xs text-muted">14:00 - Retirada de kits de atletas e checagem de documentos.</p>
-                          <p className="text-xs text-muted">17:00 - Briefing obrigatório explicando todas as provas (WODs).</p>
+                          <span className="text-[10px] font-black text-primary uppercase tracking-wider bg-primary/10 px-2 py-0.5 rounded border border-primary/20">{tSchedule('fallbackDay1Badge')}</span>
+                          <h4 className="text-sm font-extrabold text-white">{tSchedule('fallbackDay1Title')}</h4>
+                          <p className="text-xs text-muted">{tSchedule('fallbackDay1Item1')}</p>
+                          <p className="text-xs text-muted">{tSchedule('fallbackDay1Item2')}</p>
                         </div>
                       </div>
 
@@ -1022,11 +1032,11 @@ export default function EventPage({ params }: PageProps) {
                           <span className="h-2.5 w-2.5 rounded-full bg-primary"></span>
                         </div>
                         <div className="space-y-1">
-                          <span className="rounded border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-primary">Dia 2 - Baterias</span>
-                          <h4 className="text-sm font-extrabold text-white">WOD 1 e WOD 2 (Todas as divisões)</h4>
-                          <p className="text-xs text-muted">08:00 - Início das baterias da categoria Scale (WOD 1).</p>
-                          <p className="text-xs text-muted">11:00 - Início das baterias da categoria RX (WOD 1).</p>
-                          <p className="text-xs text-muted">14:00 - WOD 2 (DT Speed & Heavy Grace combinados).</p>
+                          <span className="rounded border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-primary">{tSchedule('fallbackDay2Badge')}</span>
+                          <h4 className="text-sm font-extrabold text-white">{tSchedule('fallbackDay2Title')}</h4>
+                          <p className="text-xs text-muted">{tSchedule('fallbackDay2Item1')}</p>
+                          <p className="text-xs text-muted">{tSchedule('fallbackDay2Item2')}</p>
+                          <p className="text-xs text-muted">{tSchedule('fallbackDay2Item3')}</p>
                         </div>
                       </div>
 
@@ -1035,11 +1045,11 @@ export default function EventPage({ params }: PageProps) {
                           <span className="w-2.5 h-2.5 rounded-full bg-muted"></span>
                         </div>
                         <div className="space-y-1">
-                          <span className="text-[10px] font-black text-muted uppercase tracking-wider bg-dark-gray px-2 py-0.5 rounded border border-card-border">Dia 3 - Decisão</span>
-                          <h4 className="text-sm font-extrabold text-white">WOD 3, Finais & Premiação</h4>
-                          <p className="text-xs text-muted">08:30 - WOD 3 (Gymnastic Burner).</p>
-                          <p className="text-xs text-muted">12:30 - Baterias Finais (Top 5 de cada divisão).</p>
-                          <p className="text-xs text-muted">15:30 - Cerimônia de Premiação e Encerramento.</p>
+                          <span className="text-[10px] font-black text-muted uppercase tracking-wider bg-dark-gray px-2 py-0.5 rounded border border-card-border">{tSchedule('fallbackDay3Badge')}</span>
+                          <h4 className="text-sm font-extrabold text-white">{tSchedule('fallbackDay3Title')}</h4>
+                          <p className="text-xs text-muted">{tSchedule('fallbackDay3Item1')}</p>
+                          <p className="text-xs text-muted">{tSchedule('fallbackDay3Item2')}</p>
+                          <p className="text-xs text-muted">{tSchedule('fallbackDay3Item3')}</p>
                         </div>
                       </div>
                     </>
@@ -1051,21 +1061,21 @@ export default function EventPage({ params }: PageProps) {
             {activeTab === 'workouts' && (
               <div className="space-y-4">
                 <h3 className="text-lg font-black text-white uppercase tracking-wider border-b border-card-border pb-3 mb-2">
-                  {event.eventType === 'fitness_racing' ? 'Percurso Oficial' : event.eventType === 'functional_fitness_qualifier' ? 'Provas e prazos de envio' : 'Provas Anunciadas'}
+                  {event.eventType === 'fitness_racing' ? tWorkouts('headingRacing') : event.eventType === 'functional_fitness_qualifier' ? tWorkouts('headingQualifier') : tWorkouts('headingDefault')}
                 </h3>
-                
+
                 {event.eventType === 'fitness_racing' ? (
                   (() => {
                     const publishedDivs = event.divisions.filter(d => d.isCoursePublished);
-                    
+
                     if (publishedDivs.length === 0) {
                       return (
                         <div className="text-center py-16 space-y-4 rounded-xl border border-dashed border-card-border bg-card">
                           <Trophy className="h-12 w-12 text-muted mx-auto animate-pulse" />
                           <div className="space-y-1">
-                            <p className="text-sm font-bold text-white uppercase tracking-wider">Percurso em Preparação</p>
+                            <p className="text-sm font-bold text-white uppercase tracking-wider">{tWorkouts('coursePreparingTitle')}</p>
                             <p className="text-xs text-muted max-w-md mx-auto leading-relaxed">
-                              O organizador está definindo os detalhes oficiais das etapas e estações deste percurso. Fique atento, as informações serão publicadas em breve!
+                              {tWorkouts('coursePreparingDescription')}
                             </p>
                           </div>
                         </div>
@@ -1081,7 +1091,7 @@ export default function EventPage({ params }: PageProps) {
                         {/* Seletor de Categoria/Divisão */}
                         <div className="flex flex-col space-y-2">
                           <span className="text-xs font-bold uppercase tracking-wider text-muted">
-                            Selecione a Categoria para ver o Percurso:
+                            {tWorkouts('selectDivision')}
                           </span>
                           <div className="flex flex-wrap gap-2">
                             {publishedDivs.map((div) => (
@@ -1105,6 +1115,7 @@ export default function EventPage({ params }: PageProps) {
                         {(() => {
                           const totalWorkout = event.workouts.find(w => w.divisionId === activeDiv.id && w.code === 'TOTAL');
                           if (!totalWorkout) return null;
+                          const formatKey = activeDiv.type === 'duo' ? 'formatDuo' : activeDiv.type === 'trio' ? 'formatTrio' : (activeDiv.type === 'team' || activeDiv.type === 'team4' || activeDiv.type === 'team6') ? 'formatTeam' : 'formatIndividual';
                           return (
                             <div className="rounded-xl border border-card-border bg-card p-5 space-y-2">
                               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-card-border/50 pb-2">
@@ -1113,7 +1124,7 @@ export default function EventPage({ params }: PageProps) {
                                   {totalWorkout.name}
                                 </h4>
                                 <span className="rounded-md border border-primary/20 bg-primary/10 px-2.5 py-0.5 text-[9px] font-black uppercase tracking-widest text-primary">
-                                  Formato: {activeDiv.type === 'duo' ? 'Duplas' : activeDiv.type === 'trio' ? 'Trios' : (activeDiv.type === 'team' || activeDiv.type === 'team4' || activeDiv.type === 'team6') ? 'Equipes' : 'Individual'}
+                                  {tWorkouts('formatLabel', { format: tWorkouts(formatKey) })}
                                 </span>
                               </div>
                               <p className="text-xs text-muted leading-relaxed whitespace-pre-line font-medium">
@@ -1126,13 +1137,13 @@ export default function EventPage({ params }: PageProps) {
                         {/* Linha do Tempo do Percurso */}
                         {layout.length === 0 ? (
                           <div className="text-center py-12 rounded-xl border border-dashed border-card-border bg-card">
-                            <p className="text-xs text-muted">Nenhuma etapa configurada para esta categoria.</p>
+                            <p className="text-xs text-muted">{tWorkouts('noStages')}</p>
                           </div>
                         ) : (
                           <div className="relative space-y-4 pl-4 pr-1 bg-card border border-card-border rounded-xl p-6">
                             <div className="border-b border-card-border pb-3 mb-4">
-                              <h4 className="text-sm font-black text-white uppercase tracking-wider">Estações & Corridas</h4>
-                              <p className="text-xs text-muted font-medium">Confira abaixo a ordem oficial de execução de cada etapa do percurso.</p>
+                              <h4 className="text-sm font-black text-white uppercase tracking-wider">{tWorkouts('stationsHeading')}</h4>
+                              <p className="text-xs text-muted font-medium">{tWorkouts('stationsDescription')}</p>
                             </div>
 
                             {/* Linha Vertical Conectora */}
@@ -1170,28 +1181,28 @@ export default function EventPage({ params }: PageProps) {
                                                 ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-400'
                                                 : 'bg-primary/10 border-primary/25 text-primary'
                                             }`}>
-                                              {isRun ? 'Corrida' : 'Estação'}
+                                              {isRun ? tWorkouts('run') : tWorkouts('station')}
                                             </span>
                                           </div>
-                                          
+
                                           {/* Especificações da Estação */}
                                           <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted-soft font-medium">
                                             {stg.distance && (
                                               <span className="flex items-center gap-1">
                                                 <Footprints className="h-3 w-3 text-muted shrink-0" />
-                                                <span className="font-bold uppercase tracking-wider text-[9px]">Distância:</span>
+                                                <span className="font-bold uppercase tracking-wider text-[9px]">{tWorkouts('distanceLabel')}</span>
                                                 <span className="font-semibold text-white font-mono">{stg.distance}</span>
                                               </span>
                                             )}
                                             {stg.reps && (
                                               <span className="flex items-center gap-1">
-                                                <span className="font-bold uppercase tracking-wider text-[9px]">Repetições:</span>
+                                                <span className="font-bold uppercase tracking-wider text-[9px]">{tWorkouts('repsLabel')}</span>
                                                 <span className="font-semibold text-white font-mono">{stg.reps}</span>
                                               </span>
                                             )}
                                             {!isRun && (stg.maleWeight || stg.femaleWeight) && (
                                               <span className="flex items-center gap-1.5">
-                                                <span className="font-bold uppercase tracking-wider text-[9px]">Pesos (M/F):</span>
+                                                <span className="font-bold uppercase tracking-wider text-[9px]">{tWorkouts('weightsLabel')}</span>
                                                 <span className="rounded bg-dark-gray border border-card-border/60 px-1 py-0.5 text-[9px] font-bold text-white font-mono">{stg.maleWeight || '-'}</span>
                                                 <span className="text-muted-soft">/</span>
                                                 <span className="rounded bg-dark-gray border border-card-border/60 px-1 py-0.5 text-[9px] font-bold text-white font-mono">{stg.femaleWeight || '-'}</span>
@@ -1211,26 +1222,29 @@ export default function EventPage({ params }: PageProps) {
                   })()
                 ) : (
                   <div className="space-y-4">
-                    {event.workouts.map((wod) => (
-                      <div key={wod.id} className="space-y-3 rounded-xl border border-card-border bg-card p-6 transition-colors hover:border-primary/60">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-card-border/50 pb-2">
-                          <h4 className="text-base font-extrabold text-white uppercase">{wod.name}</h4>
-                          <div className="flex items-center gap-2">
-                            <span className="px-2.5 py-0.5 bg-dark-gray border border-card-border text-[9px] font-black uppercase text-primary tracking-widest rounded-md">
-                              Tipo: {wod.type === 'fortime' ? 'For Time' : wod.type === 'amrap' ? 'AMRAP' : wod.type === 'maxweight' ? 'Carga Máxima' : 'Reps'}
-                            </span>
-                            {wod.timeCap && (
-                              <span className="rounded-md border border-primary/20 bg-primary/10 px-2.5 py-0.5 text-[9px] font-black uppercase tracking-widest text-primary">
-                                Cap: {wod.timeCap}
+                    {event.workouts.map((wod) => {
+                      const typeKey = wod.type === 'fortime' ? 'typeForTime' : wod.type === 'amrap' ? 'typeAmrap' : wod.type === 'maxweight' ? 'typeMaxWeight' : 'typeReps';
+                      return (
+                        <div key={wod.id} className="space-y-3 rounded-xl border border-card-border bg-card p-6 transition-colors hover:border-primary/60">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-card-border/50 pb-2">
+                            <h4 className="text-base font-extrabold text-white uppercase">{wod.name}</h4>
+                            <div className="flex items-center gap-2">
+                              <span className="px-2.5 py-0.5 bg-dark-gray border border-card-border text-[9px] font-black uppercase text-primary tracking-widest rounded-md">
+                                {tWorkouts('typeLabel', { type: tWorkouts(typeKey) })}
                               </span>
-                            )}
+                              {wod.timeCap && (
+                                <span className="rounded-md border border-primary/20 bg-primary/10 px-2.5 py-0.5 text-[9px] font-black uppercase tracking-widest text-primary">
+                                  {tWorkouts('capLabel', { cap: wod.timeCap })}
+                                </span>
+                              )}
+                            </div>
                           </div>
+                          <p className="text-xs text-muted leading-relaxed whitespace-pre-line font-medium">
+                            {wod.description}
+                          </p>
                         </div>
-                        <p className="text-xs text-muted leading-relaxed whitespace-pre-line font-medium">
-                          {wod.description}
-                        </p>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -1240,31 +1254,31 @@ export default function EventPage({ params }: PageProps) {
 
           {/* Direita: Sidebar Lateral de Detalhes Rápidos */}
           <div className="space-y-6">
-            
+
             {/* Card de Inscrição na Lateral */}
             {registrationsAvailable && (
               <div className="space-y-4 rounded-xl border border-card-border bg-card p-6 transition-colors hover:border-primary">
-                <h4 className="text-sm font-bold text-white uppercase tracking-wider">Inscrições Disponíveis</h4>
+                <h4 className="text-sm font-bold text-white uppercase tracking-wider">{tSidebar('registrationHeading')}</h4>
                 <p className="text-xs text-muted font-normal leading-relaxed">
-                  Garanta sua vaga na arena. Selecione sua categoria, preencha seus dados de participante e sincronize instantaneamente com a plataforma.
+                  {tSidebar('registrationDescription')}
                 </p>
                 <div className="space-y-2">
                   <div className="flex justify-between items-center text-xs text-muted">
-                    <span>Valores a partir de</span>
+                    <span>{tSidebar('priceFrom')}</span>
                     <span className="text-white font-bold text-sm font-mono">{formattedMinPrice}</span>
                   </div>
                   <div className="flex justify-between items-center text-xs text-muted">
-                    <span>Gateway seguro</span>
+                    <span>{tSidebar('secureGateway')}</span>
                     <span className="text-white font-semibold flex items-center gap-1">
-                      <ShieldCheck className="h-4 w-4 text-muted" /> Sandbox
+                      <ShieldCheck className="h-4 w-4 text-muted" /> {tSidebar('sandbox')}
                     </span>
                   </div>
                 </div>
-                <button 
+                <button
                   onClick={() => setIsRegisterOpen(true)}
                   className="min-h-11 w-full rounded-md bg-primary py-3 font-bold uppercase tracking-wider text-ink transition-colors hover:bg-primary-hover"
                 >
-                  Inscrever-se Agora
+                  {tSidebar('registerCta')}
                 </button>
               </div>
             )}
@@ -1273,14 +1287,14 @@ export default function EventPage({ params }: PageProps) {
             {event.sponsors && event.sponsors.length > 0 && (
               <div className="space-y-4 rounded-xl border border-card-border bg-card p-6">
                 <h4 className="text-xs font-bold text-white uppercase tracking-widest text-center border-b border-card-border pb-3">
-                  Patrocinadores do Evento
+                  {tSidebar('sponsorsHeading')}
                 </h4>
                 <div className="grid grid-cols-2 gap-4">
                   {event.sponsors.map((sponsor, i) => {
                     const isLastOdd = event.sponsors.length % 2 !== 0 && i === event.sponsors.length - 1;
                     return (
-                      <div 
-                        key={i} 
+                      <div
+                        key={i}
                         className={`group flex h-14 items-center justify-center rounded-lg border border-card-border bg-dark-gray p-3 text-center transition-colors hover:border-primary/60 ${
                           isLastOdd ? 'col-span-2' : ''
                         }`}
@@ -1298,9 +1312,9 @@ export default function EventPage({ params }: PageProps) {
             {/* Suporte Técnico / Dúvidas */}
             <div className="space-y-2 rounded-xl border border-card-border bg-card p-5 text-center">
               <UserCheck className="h-5 w-5 text-muted mx-auto" />
-              <h4 className="text-xs font-bold text-white uppercase tracking-wider">Dúvidas sobre o Evento?</h4>
+              <h4 className="text-xs font-bold text-white uppercase tracking-wider">{tSidebar('supportHeading')}</h4>
               <p className="text-[10px] text-muted leading-relaxed">
-                Entre em contato com o comitê organizador oficial para esclarecimentos.
+                {tSidebar('supportDescription')}
               </p>
               {(event.instagram || event.website) && (
                 <div className="pt-2 flex flex-col gap-1.5 items-center">
@@ -1311,7 +1325,7 @@ export default function EventPage({ params }: PageProps) {
                       rel="noopener noreferrer"
                       className="text-[10px] font-bold text-primary hover:underline uppercase tracking-wider"
                     >
-                      Instagram Oficial
+                      {tSidebar('instagramLink')}
                     </a>
                   )}
                   {event.website && (
@@ -1321,7 +1335,7 @@ export default function EventPage({ params }: PageProps) {
                       rel="noopener noreferrer"
                       className="text-[10px] font-bold text-primary hover:underline uppercase tracking-wider"
                     >
-                      Visitar Website
+                      {tSidebar('websiteLink')}
                     </a>
                   )}
                 </div>
@@ -1333,10 +1347,10 @@ export default function EventPage({ params }: PageProps) {
         </div>
       </section>
 
-      <RegisterModal 
-        event={event} 
-        isOpen={isRegisterOpen} 
-        onClose={() => setIsRegisterOpen(false)} 
+      <RegisterModal
+        event={event}
+        isOpen={isRegisterOpen}
+        onClose={() => setIsRegisterOpen(false)}
         onSuccess={(registration, athlete, cpf) => {
           setConfirmedVoucher({ registration, athlete, cpf });
         }}

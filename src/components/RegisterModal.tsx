@@ -3,12 +3,14 @@
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { Check, CreditCard, ShieldCheck, Ticket, X, Lock } from 'lucide-react';
 import Script from 'next/script';
-import Link from 'next/link';
-import { Event, Division, Registration, Athlete } from '@/types';
+import { useLocale, useTranslations } from 'next-intl';
+import { Link } from '@/i18n/navigation';
+import { Event, Division, Registration, Athlete, AppLocale } from '@/types';
 import { useApp } from '@/context/AppContext';
 import { normalizeInstagram } from '@/lib/fitnessRacing';
 import { getRegistrationAvailability } from '@/lib/eventStatus';
 import { calculateServiceFee } from '@/lib/serviceFee';
+import { formatMoney } from '@/lib/intl/format';
 
 interface RegisterModalProps {
   event: Event;
@@ -46,7 +48,10 @@ type RegistrationStartResponse = {
 };
 
 type CheckoutConfigResponse = {
+  gateway?: 'mercadopago' | 'stripe';
+  pixSupported?: boolean;
   publicKey?: string;
+  publishableKey?: string;
   serviceFeeEnabled?: boolean;
   serviceFeePercent?: number;
   error?: string;
@@ -74,7 +79,6 @@ const createEmptyParticipant = (): ParticipantForm => ({
 });
 
 const shirtSizeOptions = ['P', 'M', 'G', 'GG'];
-const paymentFailureGuidance = 'Sua inscrição foi registrada, mas não foi possível finalizar o pagamento. Acesse a Área do Atleta, faça login com o e-mail usado na inscrição e conclua o pagamento por lá. Se não lembrar a senha, use a recuperação de senha com esse mesmo e-mail.';
 
 const generateUniqueId = (prefix: string) => {
   return `${prefix}-${Date.now()}`;
@@ -107,6 +111,8 @@ const getCheckoutErrorMessage = async (response: Response, fallback: string) => 
 };
 
 export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterModalProps) {
+  const t = useTranslations('Checkout');
+  const locale = useLocale() as AppLocale;
   const { registerTicket } = useApp();
   const [selectedDivisionId, setSelectedDivisionId] = useState(event.divisions[0]?.id || '');
   const [box, setBox] = useState('');
@@ -137,6 +143,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
   const [athletePassword, setAthletePassword] = useState('');
   const [athletePasswordConfirmation, setAthletePasswordConfirmation] = useState('');
   const [serviceFeeConfig, setServiceFeeConfig] = useState({ enabled: true, percent: 10 });
+  const [pixSupported, setPixSupported] = useState(true);
 
   const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
   if (isOpen !== prevIsOpen) {
@@ -247,6 +254,11 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
             enabled: data.serviceFeeEnabled !== false,
             percent: Number(data.serviceFeePercent || 10)
           });
+          const supportsPix = data.pixSupported !== false && data.gateway !== 'stripe';
+          setPixSupported(supportsPix);
+          if (!supportsPix) {
+            setPaymentMethod('credit_card');
+          }
         }
       })
       .catch(() => undefined);
@@ -325,16 +337,16 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
       const data: CouponValidationResponse = await response.json().catch(() => ({}));
 
       if (!response.ok || !data.code || data.discount === undefined) {
-        throw new Error(data.error || 'Cupom inválido ou inexistente para este evento.');
+        throw new Error(data.error || t('couponInvalid'));
       }
 
       setDiscountApplied(Number(data.discount));
       setAppliedCoupon(data.code);
-      setCouponNotice({ text: `Cupom "${data.code}" aplicado com sucesso!`, tone: 'success' });
+      setCouponNotice({ text: t('couponAppliedSuccess', { code: data.code }), tone: 'success' });
     } catch (err) {
       clearAppliedCoupon();
       setCouponNotice({
-        text: err instanceof Error ? err.message : 'Cupom inválido ou inexistente para este evento.',
+        text: err instanceof Error ? err.message : t('couponInvalid'),
         tone: 'error'
       });
     } finally {
@@ -371,20 +383,20 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
     const payload: RegistrationStartResponse = await response.json().catch(() => ({}));
 
     if (!response.ok || !payload.registrationData || !payload.athleteProfile) {
-      throw new Error(payload.error || 'Erro ao iniciar inscrição do atleta.');
+      throw new Error(payload.error || t('registrationStartError'));
     }
 
     return {
       registrationData: payload.registrationData,
       athleteProfile: payload.athleteProfile
     };
-  }, [athletePassword, athletePasswordConfirmation, paymentMethod, totalPaid]);
+  }, [athletePassword, athletePasswordConfirmation, paymentMethod, totalPaid, t]);
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!acceptedTerms) {
-      alert('Você precisa aceitar os Termos e Políticas de Compra para prosseguir.');
+      alert(t('acceptTermsAlert'));
       return;
     }
 
@@ -396,28 +408,28 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
 
     if (hasMissingRequiredParticipantData || (isTeamCategory && !teamName.trim()) || (isFitnessRacing && !box)) {
       alert(isFitnessRacing
-        ? 'Preencha nome, e-mail, telefone, nascimento, sexo, cidade, estado, box, Instagram e tamanho da camisa.'
-        : 'Por favor, preencha todos os campos obrigatórios.');
+        ? t('missingFieldsRacing')
+        : t('missingFieldsGeneric'));
       return;
     }
 
     if (!primaryParticipant.email || !primaryParticipant.email.includes('@')) {
-      alert('Informe um e-mail válido para criar o painel do atleta.');
+      alert(t('invalidEmail'));
       return;
     }
 
     if (!athletePassword || athletePassword.length < 6) {
-      alert('Crie uma senha de pelo menos 6 caracteres para o painel do atleta.');
+      alert(t('passwordTooShort'));
       return;
     }
 
     if (athletePassword !== athletePasswordConfirmation) {
-      alert('A confirmação de senha não confere.');
+      alert(t('passwordMismatch'));
       return;
     }
 
     if (paymentMethod === 'pix' && !isValidCPF(cpf)) {
-      alert('Por favor, informe um CPF válido para gerar o Pix.');
+      alert(t('invalidCpfPix'));
       return;
     }
 
@@ -531,7 +543,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
         });
 
         if (!response.ok) {
-          throw new Error(await getCheckoutErrorMessage(response, 'Erro ao criar cobrança Pix.'));
+          throw new Error(await getCheckoutErrorMessage(response, t('pixCreateError')));
         }
 
         const data = await response.json();
@@ -558,18 +570,19 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
             registrationData: activeRegistrationData,
             athleteProfile: activeAthleteProfile,
             origin: window.location.origin,
-            accessToken: activeRegistrationData.accessToken
+            accessToken: activeRegistrationData.accessToken,
+            locale
           })
         });
 
         if (!response.ok) {
-          throw new Error(await getCheckoutErrorMessage(response, 'Erro ao gerar link de pagamento via Mercado Pago.'));
+          throw new Error(await getCheckoutErrorMessage(response, t('preferenceCreateError')));
         }
 
         const data = await response.json();
-        const initPoint = data.init_point;
+        const initPoint = data.redirectUrl || data.init_point;
         if (!initPoint) {
-          throw new Error('Link de pagamento inválido retornado pelo Mercado Pago.');
+          throw new Error(t('invalidPaymentLink'));
         }
 
         // Redireciona o usuário para o Mercado Pago na mesma aba
@@ -579,8 +592,8 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
 
     } catch (err) {
       console.error("[Checkout WODArena] Erro no processamento do checkout:", err);
-      const baseMessage = err instanceof Error ? err.message : 'Houve um erro ao processar o seu checkout. Por favor, tente novamente.';
-      alert(paymentAttemptStarted ? `${baseMessage}\n\n${paymentFailureGuidance}` : baseMessage);
+      const baseMessage = err instanceof Error ? err.message : t('genericCheckoutError');
+      alert(paymentAttemptStarted ? `${baseMessage}\n\n${t('paymentFailureGuidance')}` : baseMessage);
       setIsProcessing(false);
     }
   }, [
@@ -609,7 +622,9 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
     acceptedTerms,
     athletePassword,
     athletePasswordConfirmation,
-    startRegistration
+    startRegistration,
+    t,
+    locale
   ]);
 
   if (!isOpen) return null;
@@ -624,21 +639,21 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
           <button
             onClick={onClose}
             className="absolute right-3 top-3 flex h-11 w-11 items-center justify-center rounded-md text-muted-soft transition-colors hover:bg-surface-soft-light hover:text-ink"
-            aria-label="Fechar aviso de inscrição"
+            aria-label={t('closeNoticeAria')}
           >
             <X className="h-5 w-5" aria-hidden="true" />
           </button>
           <Lock className="mx-auto h-10 w-10 text-muted" aria-hidden="true" />
           <h3 id="registration-unavailable-title" className="mt-4 text-lg font-bold text-ink">
-            {isSalesClosed ? 'Vendas encerradas' : 'Inscrições encerradas'}
+            {isSalesClosed ? t('salesClosedTitle') : t('registrationsClosedTitle')}
           </h3>
           <p className="mt-2 text-sm leading-6 text-muted-soft">
             {isSalesClosed
-              ? 'As vendas online deste evento foram encerradas pelo organizador.'
-              : 'Este evento não está mais disponível para novas inscrições.'}
+              ? t('salesClosedDescription')
+              : t('registrationsClosedDescription')}
           </p>
           <button onClick={onClose} className="mt-6 min-h-11 rounded-md bg-primary px-5 py-2 text-xs font-bold uppercase text-ink">
-            Entendi
+            {t('gotIt')}
           </button>
         </div>
       </div>
@@ -654,14 +669,14 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
               <Ticket className="h-4 w-4 text-ink" aria-hidden="true" />
             </div>
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#9a7200]">Checkout WODArena</p>
-              <h3 id="registration-title" className="text-base font-bold text-ink">Confirmar inscrição</h3>
+              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#9a7200]">{t('kicker')}</p>
+              <h3 id="registration-title" className="text-base font-bold text-ink">{t('title')}</h3>
             </div>
           </div>
-          <button 
-            onClick={onClose} 
+          <button
+            onClick={onClose}
             className="flex h-11 w-11 items-center justify-center rounded-md text-muted-soft transition-colors hover:bg-surface-soft-light hover:text-ink"
-            aria-label="Fechar modal de inscrição"
+            aria-label={t('closeModalAria')}
           >
             <X className="h-5 w-5" aria-hidden="true" />
           </button>
@@ -674,9 +689,9 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 border border-primary/20">
                   <Check className="h-6 w-6 text-primary" aria-hidden="true" />
                 </div>
-                <h4 className="text-xl font-black tracking-tight text-white uppercase">Inscrição Confirmada!</h4>
+                <h4 className="text-xl font-black tracking-tight text-white uppercase">{t('successTitle')}</h4>
                 <p className="mx-auto max-w-sm text-xs leading-relaxed text-muted-soft">
-                  Você está garantido na arena. Tire um print do seu ticket abaixo para postar nos seus Stories do Instagram! 🚀
+                  {t('successDescription')}
                 </p>
               </div>
 
@@ -688,7 +703,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                     <>
                       <img 
                         src={event.bannerUrl} 
-                        alt="Banner do Evento" 
+                        alt={t('eventBannerAlt')} 
                         className="absolute inset-0 w-full h-full object-cover"
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-[#16181e] via-[#16181e]/85 to-black/40" />
@@ -702,17 +717,17 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                       {event.logoUrl && (
                         <img 
                           src={event.logoUrl} 
-                          alt="Logo do Evento" 
+                          alt={t('eventLogoAlt')} 
                           className="h-10 w-10 rounded-full border border-neutral-700 bg-[#16181e] p-0.5 object-cover"
                         />
                       )}
                       <div>
-                        <span className="text-[9px] font-black uppercase tracking-wider text-primary">WODArena ticket</span>
+                        <span className="text-[9px] font-black uppercase tracking-wider text-primary">{t('ticketBadge')}</span>
                         <h5 className="text-sm font-black text-white truncate max-w-[220px] uppercase">{event.name}</h5>
                       </div>
                     </div>
                     <div className="rounded bg-primary px-2 py-0.5 text-[9px] font-black tracking-widest text-ink uppercase shadow-sm">
-                      CONFIRMADO
+                      {t('confirmedBadge')}
                     </div>
                   </div>
                 </div>
@@ -728,27 +743,27 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                 <div className="p-5 space-y-5 bg-[#16181e]">
                   <div className="grid grid-cols-2 gap-y-4 gap-x-6">
                     <div>
-                      <span className="text-[9px] font-bold uppercase tracking-widest text-muted-soft">Atleta / Equipe</span>
+                      <span className="text-[9px] font-bold uppercase tracking-widest text-muted-soft">{t('athleteTeamLabel')}</span>
                       <p className="text-sm font-extrabold text-white truncate uppercase">
-                        {isTeamCategory 
-                          ? (teamName || primaryParticipant.name) 
+                        {isTeamCategory
+                          ? (teamName || primaryParticipant.name)
                           : primaryParticipant.name}
                       </p>
                     </div>
                     <div>
-                      <span className="text-[9px] font-bold uppercase tracking-widest text-muted-soft">Divisão / Categoria</span>
+                      <span className="text-[9px] font-bold uppercase tracking-widest text-muted-soft">{t('divisionLabel')}</span>
                       <p className="text-sm font-extrabold text-white truncate uppercase">
-                        {selectedDivision?.name || 'Inscrição Geral'}
+                        {selectedDivision?.name || t('generalRegistrationFallback')}
                       </p>
                     </div>
                     <div>
-                      <span className="text-[9px] font-bold uppercase tracking-widest text-muted-soft">Arena / Local</span>
+                      <span className="text-[9px] font-bold uppercase tracking-widest text-muted-soft">{t('arenaLabel')}</span>
                       <p className="text-[11px] font-medium text-white truncate uppercase">
                         {event.location}
                       </p>
                     </div>
                     <div>
-                      <span className="text-[9px] font-bold uppercase tracking-widest text-muted-soft">Data do Evento</span>
+                      <span className="text-[9px] font-bold uppercase tracking-widest text-muted-soft">{t('eventDateLabel')}</span>
                       <p className="text-[11px] font-medium text-white uppercase">
                         {event.date}
                       </p>
@@ -757,15 +772,15 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
 
                   <div className="border-t border-neutral-800/80 pt-4 flex justify-between items-end">
                     <div>
-                      <span className="text-[9px] font-bold uppercase tracking-widest text-muted-soft">Forma de Pagamento</span>
+                      <span className="text-[9px] font-bold uppercase tracking-widest text-muted-soft">{t('paymentMethodLabel')}</span>
                       <p className="text-xs font-bold text-white uppercase">
-                        {totalPaid === 0 ? 'Inscrição Gratuita' : paymentMethod === 'pix' ? 'Pix (Confirmado)' : 'Cartão de Crédito'}
+                        {totalPaid === 0 ? t('freeRegistration') : paymentMethod === 'pix' ? t('pixConfirmed') : t('creditCard')}
                       </p>
                     </div>
                     <div className="text-right">
-                      <span className="text-[9px] font-bold uppercase tracking-widest text-muted-soft">Valor Pago</span>
+                      <span className="text-[9px] font-bold uppercase tracking-widest text-muted-soft">{t('amountPaidLabel')}</span>
                       <p className="text-base font-black text-primary font-number">
-                        R$ {amountCollectedPreview.toFixed(2)}
+                        {formatMoney(amountCollectedPreview, event.currency ?? 'BRL', locale)}
                       </p>
                     </div>
                   </div>
@@ -786,9 +801,11 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                     </div>
                     <div className="flex items-center justify-between pt-1">
                       <span className="block text-[8px] font-mono tracking-[0.25em] text-neutral-500 uppercase">
-                        SECURE TICKET ID: {sessionStorage.getItem('pending_registration') 
-                          ? JSON.parse(sessionStorage.getItem('pending_registration') || '{}')?.registrationData?.id || 'WODA-REG-OK'
-                          : 'WODA-REG-OK'}
+                        {t('secureTicketId', {
+                          id: sessionStorage.getItem('pending_registration')
+                            ? JSON.parse(sessionStorage.getItem('pending_registration') || '{}')?.registrationData?.id || 'WODA-REG-OK'
+                            : 'WODA-REG-OK'
+                        })}
                       </span>
                       <img src="/mercadopago-logo.png" alt="Mercado Pago" className="h-3.5 w-auto object-contain opacity-40 grayscale invert" />
                     </div>
@@ -802,33 +819,33 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                   onClick={onClose}
                   className="h-12 w-full rounded-md bg-primary font-black uppercase text-ink tracking-wider text-xs transition-colors hover:bg-primary-hover shadow-lg cursor-pointer"
                 >
-                  Voltar aos eventos
+                  {t('backToEvents')}
                 </button>
                 <p className="text-[10px] text-muted-soft italic">
-                  📸 Não esqueça de marcar o instagram oficial **@wodarena** na sua postagem!
+                  {t('instagramReminder')}
                 </p>
               </div>
             </div>
           ) : pixData ? (
-            <div className="space-y-6 py-4" role="region" aria-label="Pagamento Pix">
+            <div className="space-y-6 py-4" role="region" aria-label={t('pixRegionAria')}>
               <div className="text-center space-y-2">
-                <p className="text-xs font-bold uppercase tracking-widest text-[#9a7200]">Inscrição Pré-registrada</p>
-                <h4 className="text-lg font-black text-ink uppercase">Pague com Pix</h4>
-                <p className="text-xs text-muted-soft leading-relaxed">Escaneie o QR Code ou copie o código Pix abaixo no aplicativo do seu banco para confirmar a sua inscrição.</p>
+                <p className="text-xs font-bold uppercase tracking-widest text-[#9a7200]">{t('preRegisteredLabel')}</p>
+                <h4 className="text-lg font-black text-ink uppercase">{t('payWithPixTitle')}</h4>
+                <p className="text-xs text-muted-soft leading-relaxed">{t('pixInstructions')}</p>
               </div>
 
               {/* QR Code */}
               <div className="flex justify-center items-center p-4 bg-white rounded-xl border border-hairline-light max-w-[220px] mx-auto shadow-sm">
-                <img 
-                  src={`data:image/png;base64,${pixData.qr_code_base64}`} 
-                  alt="QR Code Pix"
+                <img
+                  src={`data:image/png;base64,${pixData.qr_code_base64}`}
+                  alt={t('qrCodeAlt')}
                   className="w-full h-auto object-contain"
                 />
               </div>
 
               {/* Código Pix Copia e Cola */}
               <div className="space-y-2">
-                <label className="block text-xs font-bold text-ink">Código Copia e Cola Pix</label>
+                <label className="block text-xs font-bold text-ink">{t('copyPasteLabel')}</label>
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -846,7 +863,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                     }}
                     className="px-4 py-2 bg-primary font-bold text-ink text-xs rounded-md uppercase tracking-wider hover:bg-primary-hover active:scale-95 transition-colors"
                   >
-                    {copiado ? 'Copiado!' : 'Copiar'}
+                    {copiado ? t('copied') : t('copy')}
                   </button>
                 </div>
               </div>
@@ -854,7 +871,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
               {/* Status de Confirmação */}
               <div className="flex items-center justify-center gap-2 rounded-lg border border-primary/20 bg-primary/5 p-4 text-center">
                 <div className="w-2.5 h-2.5 bg-primary rounded-full animate-ping shrink-0"></div>
-                <p className="text-xs font-bold text-ink uppercase tracking-wider">Aguardando pagamento Pix...</p>
+                <p className="text-xs font-bold text-ink uppercase tracking-wider">{t('waitingPayment')}</p>
               </div>
 
               {/* Botões de Ação */}
@@ -866,14 +883,14 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                   }}
                   className="w-full h-11 border border-hairline-light hover:border-muted-soft text-muted-soft text-xs font-bold uppercase rounded-md transition-colors"
                 >
-                  Alterar Forma de Pagamento
+                  {t('changePaymentMethod')}
                 </button>
               </div>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-[#9a7200]">Você está se inscrevendo em</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-[#9a7200]">{t('subscribingTo')}</p>
                 <h4 className="mt-1 text-lg font-bold text-ink">{event.name}</h4>
                 <p className="mt-1 text-xs text-muted-soft">{event.location}</p>
               </div>
@@ -882,7 +899,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
 
               {/* Escolha da Divisão */}
               <div>
-                <label htmlFor="registration-division" className="mb-2 block text-xs font-bold text-ink">Categoria / divisão *</label>
+                <label htmlFor="registration-division" className="mb-2 block text-xs font-bold text-ink">{t('divisionLabelForm')}</label>
                 <select
                   id="registration-division"
                   name="division"
@@ -896,7 +913,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                 >
                   {event.divisions.map((div) => (
                     <option key={div.id} value={div.id}>
-                      {div.name} - R$ {getPrice(div).toFixed(2)}
+                      {div.name} - {formatMoney(getPrice(div), event.currency ?? 'BRL', locale)}
                     </option>
                   ))}
                 </select>
@@ -904,12 +921,12 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
 
               {/* Cupom de Desconto */}
               <div>
-                <label htmlFor="checkout-coupon" className="mb-2 block text-xs font-bold text-ink">Cupom de desconto</label>
+                <label htmlFor="checkout-coupon" className="mb-2 block text-xs font-bold text-ink">{t('couponLabel')}</label>
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <input
                     id="checkout-coupon"
                     type="text"
-                    placeholder="Digite seu cupom..."
+                    placeholder={t('couponPlaceholder')}
                     value={couponCode}
                     onChange={(e) => {
                       setCouponCode(e.target.value);
@@ -925,7 +942,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                     disabled={isApplyingCoupon}
                     className="min-h-11 rounded-md bg-ink px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white transition-colors hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-70 sm:min-h-0"
                   >
-                    {isApplyingCoupon ? 'Aplicando...' : 'Aplicar'}
+                    {isApplyingCoupon ? t('applying') : t('apply')}
                   </button>
                 </div>
                 {couponNotice && (
@@ -938,20 +955,20 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
               {/* Dados do Atleta */}
               <div className="space-y-4">
                 <p className="mt-2 text-[10px] font-bold uppercase tracking-widest text-[#9a7200]">
-                  {isTeamCategory ? `Dados dos ${participantCount} atletas` : 'Dados do participante'}
+                  {isTeamCategory ? t('participantsDataTeam', { count: participantCount }) : t('participantDataSingle')}
                 </p>
-                
+
                 {/* Nome da Equipe (para duplas/trios/equipes) */}
                 {isTeamCategory && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label htmlFor="team-name" className="mb-1 block text-xs font-bold text-ink">Nome da equipe *</label>
+                      <label htmlFor="team-name" className="mb-1 block text-xs font-bold text-ink">{t('teamNameLabel')}</label>
                       <input
                         id="team-name"
                         name="teamName"
                         type="text"
                         required
-                        placeholder="Ex: Equipe Brutus, Dupla WODArena"
+                        placeholder={t('teamNamePlaceholder')}
                         value={teamName}
                         onChange={(e) => setTeamName(e.target.value)}
                         className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none"
@@ -963,18 +980,18 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                 {visibleParticipants.map((participant, index) => (
                   <fieldset key={index} className="space-y-3 rounded-lg border border-hairline-light bg-surface-soft-light p-4">
                     <legend className="px-1 text-[10px] font-bold uppercase tracking-widest text-[#9a7200]">
-                      {isTeamCategory ? `Atleta ${index + 1}${index === 0 ? ' / Capitão' : ''}` : 'Atleta'}
+                      {isTeamCategory ? t('athleteFieldsetLegendTeam', { index: index + 1, captain: index === 0 ? t('captainSuffix') : '' }) : t('athleteFieldsetLegendSingle')}
                     </legend>
 
                     <div>
-                      <label htmlFor={`athlete-${index}-name`} className="mb-1 block text-xs font-bold text-ink">Nome completo *</label>
+                      <label htmlFor={`athlete-${index}-name`} className="mb-1 block text-xs font-bold text-ink">{t('fullNameLabel')}</label>
                       <input
                         id={`athlete-${index}-name`}
                         name={`participants.${index}.name`}
                         autoComplete={index === 0 ? 'name' : 'off'}
                         type="text"
                         required
-                        placeholder="Ex: Lucas Silva"
+                        placeholder={t('fullNamePlaceholder')}
                         value={participant.name}
                         onChange={(e) => updateParticipant(index, 'name', e.target.value)}
                         className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none"
@@ -983,7 +1000,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
-                        <label htmlFor={`athlete-${index}-email`} className="mb-1 block text-xs font-bold text-ink">E-mail *</label>
+                        <label htmlFor={`athlete-${index}-email`} className="mb-1 block text-xs font-bold text-ink">{t('emailLabel')}</label>
                         <input
                           id={`athlete-${index}-email`}
                           name={`participants.${index}.email`}
@@ -991,21 +1008,21 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                           spellCheck="false"
                           type="email"
                           required
-                          placeholder="Ex: lucas@email.com"
+                          placeholder={t('emailPlaceholder')}
                           value={participant.email}
                           onChange={(e) => updateParticipant(index, 'email', e.target.value)}
                           className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none"
                         />
                       </div>
                       <div>
-                        <label htmlFor={`athlete-${index}-phone`} className="mb-1 block text-xs font-bold text-ink">Telefone *</label>
+                        <label htmlFor={`athlete-${index}-phone`} className="mb-1 block text-xs font-bold text-ink">{t('phoneLabel')}</label>
                         <input
                           id={`athlete-${index}-phone`}
                           name={`participants.${index}.phone`}
                           autoComplete={index === 0 ? 'tel' : 'off'}
                           type="tel"
                           required
-                          placeholder="Ex: (11) 99999-9999"
+                          placeholder={t('phonePlaceholder')}
                           value={participant.phone}
                           onChange={(e) => updateParticipant(index, 'phone', e.target.value)}
                           className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none"
@@ -1015,7 +1032,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <fieldset>
-                        <legend className="mb-1 block text-xs font-bold text-ink">Gênero *</legend>
+                        <legend className="mb-1 block text-xs font-bold text-ink">{t('genderLegend')}</legend>
                         <div className="flex gap-2 h-[42px]">
                           <button
                             type="button"
@@ -1026,7 +1043,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                                 : 'border-hairline-light bg-white text-muted-soft hover:border-primary hover:text-ink'
                             }`}
                           >
-                            Masculino
+                            {t('male')}
                           </button>
                           <button
                             type="button"
@@ -1037,25 +1054,25 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                                 : 'border-hairline-light bg-white text-muted-soft hover:border-primary hover:text-ink'
                             }`}
                           >
-                            Feminino
+                            {t('female')}
                           </button>
                         </div>
                       </fieldset>
                       <div>
-                        <label htmlFor={`athlete-${index}-instagram`} className="mb-1 block text-xs font-bold text-ink">Instagram *</label>
+                        <label htmlFor={`athlete-${index}-instagram`} className="mb-1 block text-xs font-bold text-ink">{t('instagramLabel')}</label>
                         <input
                           id={`athlete-${index}-instagram`}
                           name={`participants.${index}.instagram`}
                           type="text"
                           required
-                          placeholder="Ex: @atleta"
+                          placeholder={t('instagramPlaceholder')}
                           value={participant.instagram}
                           onChange={(e) => updateParticipant(index, 'instagram', e.target.value)}
                           className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none"
                         />
                       </div>
                       <div>
-                        <label htmlFor={`athlete-${index}-shirt-size`} className="mb-1 block text-xs font-bold text-ink">Tamanho da camisa *</label>
+                        <label htmlFor={`athlete-${index}-shirt-size`} className="mb-1 block text-xs font-bold text-ink">{t('shirtSizeLabel')}</label>
                         <select
                           id={`athlete-${index}-shirt-size`}
                           name={`participants.${index}.shirtSize`}
@@ -1064,7 +1081,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                           onChange={(e) => updateParticipant(index, 'shirtSize', e.target.value)}
                           className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none"
                         >
-                          <option value="">Selecione...</option>
+                          <option value="">{t('selectPlaceholder')}</option>
                           {shirtSizeOptions.map(size => (
                             <option key={size} value={size}>{size}</option>
                           ))}
@@ -1076,7 +1093,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                       <>
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                           <div>
-                            <label htmlFor={`athlete-${index}-birth-date`} className="mb-1 block text-xs font-bold text-ink">Data de nascimento *</label>
+                            <label htmlFor={`athlete-${index}-birth-date`} className="mb-1 block text-xs font-bold text-ink">{t('birthDateLabel')}</label>
                             <input
                               id={`athlete-${index}-birth-date`}
                               name={`participants.${index}.birthDate`}
@@ -1088,7 +1105,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                             />
                           </div>
                           <div>
-                            <label htmlFor={`athlete-${index}-city`} className="mb-1 block text-xs font-bold text-ink">Cidade *</label>
+                            <label htmlFor={`athlete-${index}-city`} className="mb-1 block text-xs font-bold text-ink">{t('cityLabel')}</label>
                             <input
                               id={`athlete-${index}-city`}
                               name={`participants.${index}.city`}
@@ -1100,14 +1117,14 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                             />
                           </div>
                           <div>
-                            <label htmlFor={`athlete-${index}-state`} className="mb-1 block text-xs font-bold text-ink">Estado *</label>
+                            <label htmlFor={`athlete-${index}-state`} className="mb-1 block text-xs font-bold text-ink">{t('stateLabel')}</label>
                             <input
                               id={`athlete-${index}-state`}
                               name={`participants.${index}.state`}
                               type="text"
                               required
                               maxLength={2}
-                              placeholder="UF"
+                              placeholder={t('stateUfPlaceholder')}
                               value={participant.state}
                               onChange={(e) => updateParticipant(index, 'state', e.target.value.toUpperCase())}
                               className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm uppercase text-ink focus:border-primary focus:outline-none"
@@ -1121,14 +1138,14 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
 
                 {/* Box / Afiliado */}
                 <div>
-                  <label htmlFor="athlete-box" className="mb-1 block text-xs font-bold text-ink">Box / afiliado {isFitnessRacing ? '*' : ''}</label>
+                  <label htmlFor="athlete-box" className="mb-1 block text-xs font-bold text-ink">{t('boxLabel', { required: isFitnessRacing ? '*' : '' })}</label>
                   <input
                     id="athlete-box"
                     name="box"
                     autoComplete="organization"
                     type="text"
                     required={isFitnessRacing}
-                    placeholder="Ex: CrossFit Imperium"
+                    placeholder={t('boxPlaceholder')}
                     value={box}
                     onChange={(e) => setBox(e.target.value)}
                     className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none"
@@ -1138,14 +1155,14 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                 {/* Senha do painel do atleta */}
                 <div className="space-y-3 rounded-lg border border-hairline-light bg-white p-4">
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-[#9a7200]">Acesso do atleta</p>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-[#9a7200]">{t('athleteAccessTitle')}</p>
                     <p className="mt-1 text-xs text-muted-soft">
-                      Use esta senha para acessar suas inscrições e 2ª via em /admin.
+                      {t('athleteAccessDescription')}
                     </p>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label htmlFor="athlete-panel-password" className="mb-1 block text-xs font-bold text-ink">Senha do painel *</label>
+                      <label htmlFor="athlete-panel-password" className="mb-1 block text-xs font-bold text-ink">{t('panelPasswordLabel')}</label>
                       <input
                         id="athlete-panel-password"
                         name="athletePanelPassword"
@@ -1153,14 +1170,14 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                         autoComplete="new-password"
                         required
                         minLength={6}
-                        placeholder="Mínimo 6 caracteres"
+                        placeholder={t('panelPasswordPlaceholder')}
                         value={athletePassword}
                         onChange={(e) => setAthletePassword(e.target.value)}
                         className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none"
                       />
                     </div>
                     <div>
-                      <label htmlFor="athlete-panel-password-confirmation" className="mb-1 block text-xs font-bold text-ink">Confirmar senha *</label>
+                      <label htmlFor="athlete-panel-password-confirmation" className="mb-1 block text-xs font-bold text-ink">{t('confirmPasswordLabel')}</label>
                       <input
                         id="athlete-panel-password-confirmation"
                         name="athletePanelPasswordConfirmation"
@@ -1168,7 +1185,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                         autoComplete="new-password"
                         required
                         minLength={6}
-                        placeholder="Repita a senha"
+                        placeholder={t('confirmPasswordPlaceholder')}
                         value={athletePasswordConfirmation}
                         onChange={(e) => setAthletePasswordConfirmation(e.target.value)}
                         className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none"
@@ -1177,51 +1194,53 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                   </div>
                 </div>
 
-                {/* Seleção do Método de Pagamento */}
-                <div className="space-y-3 pt-2">
-                  <div className="flex items-center justify-between">
-                    <span className="block text-xs font-bold text-ink">Forma de Pagamento</span>
-                    <img src="/mercadopago-logo.png" alt="Mercado Pago" className="h-4.5 w-auto object-contain opacity-80" />
+                {/* Seleção do Método de Pagamento — só exibida quando há mais de uma opção (Pix é exclusivo do Brasil) */}
+                {pixSupported && (
+                  <div className="space-y-3 pt-2">
+                    <div className="flex items-center justify-between">
+                      <span className="block text-xs font-bold text-ink">{t('paymentMethodLabelForm')}</span>
+                      <img src="/mercadopago-logo.png" alt="Mercado Pago" className="h-4.5 w-auto object-contain opacity-80" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('pix')}
+                        className={`flex items-center justify-center gap-2 rounded-md border py-3 text-xs font-bold uppercase transition-colors ${
+                          paymentMethod === 'pix'
+                            ? 'border-primary bg-primary/5 text-ink'
+                            : 'border-hairline-light bg-white text-muted-soft hover:border-muted-soft'
+                        }`}
+                      >
+                        <span className="h-2 w-2 rounded-full bg-primary" />
+                        {t('pixOption')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('credit_card')}
+                        className={`flex items-center justify-center gap-2 rounded-md border py-3 text-xs font-bold uppercase transition-colors ${
+                          paymentMethod === 'credit_card'
+                            ? 'border-primary bg-primary/5 text-ink'
+                            : 'border-hairline-light bg-white text-muted-soft hover:border-muted-soft'
+                        }`}
+                      >
+                        <span className="h-2 w-2 rounded-full bg-muted" />
+                        {t('cardOption')}
+                      </button>
+                    </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod('pix')}
-                      className={`flex items-center justify-center gap-2 rounded-md border py-3 text-xs font-bold uppercase transition-colors ${
-                        paymentMethod === 'pix'
-                          ? 'border-primary bg-primary/5 text-ink'
-                          : 'border-hairline-light bg-white text-muted-soft hover:border-muted-soft'
-                      }`}
-                    >
-                      <span className="h-2 w-2 rounded-full bg-primary" />
-                      Pix (QR Code)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod('credit_card')}
-                      className={`flex items-center justify-center gap-2 rounded-md border py-3 text-xs font-bold uppercase transition-colors ${
-                        paymentMethod === 'credit_card'
-                          ? 'border-primary bg-primary/5 text-ink'
-                          : 'border-hairline-light bg-white text-muted-soft hover:border-muted-soft'
-                      }`}
-                    >
-                      <span className="h-2 w-2 rounded-full bg-muted" />
-                      Cartão / Outros
-                    </button>
-                  </div>
-                </div>
+                )}
 
                 {/* CPF do Pagador (obrigatório para Pix e Cartão) */}
                 {/* CPF do Pagador para Pix */}
-                {paymentMethod === 'pix' && (
+                {paymentMethod === 'pix' && pixSupported && (
                   <div>
-                    <label htmlFor="athlete-cpf" className="mb-1 block text-xs font-bold text-ink">CPF do Pagador *</label>
+                    <label htmlFor="athlete-cpf" className="mb-1 block text-xs font-bold text-ink">{t('cpfPayerLabel')}</label>
                     <input
                       id="athlete-cpf"
                       name="cpf"
                       type="text"
                       required
-                      placeholder="000.000.000-00"
+                      placeholder={t('cpfPlaceholder')}
                       value={cpf}
                       onChange={(e) => {
                         let val = e.target.value.replace(/\D/g, '');
@@ -1245,10 +1264,10 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                   <div className="rounded-lg border border-info/20 bg-info/5 p-4 text-xs space-y-2 text-ink">
                     <p className="font-semibold text-info flex items-center gap-1.5">
                       <Lock className="h-4 w-4" />
-                      Redirecionamento Seguro
+                      {t('secureRedirectTitle')}
                     </p>
                     <p className="leading-5 text-muted-soft">
-                      Você será redirecionado para o ambiente seguro do próprio **Mercado Pago** para concluir seu pagamento no cartão de crédito à vista ou parcelado.
+                      {t('secureRedirectDescription')}
                     </p>
                   </div>
                 )}
@@ -1257,30 +1276,30 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
               {/* Resumo do Pedido e Pagamento */}
               <div className="space-y-3 rounded-lg border border-hairline-light bg-surface-soft-light p-4">
                 <div className="flex justify-between items-center text-sm">
-                  <span className="font-medium text-muted-soft">Inscrição ({selectedDivision?.name})</span>
-                  <span className="font-number font-bold text-ink">R$ {ticketPrice.toFixed(2)}</span>
+                  <span className="font-medium text-muted-soft">{t('orderSummaryRegistration', { division: selectedDivision?.name ?? '' })}</span>
+                  <span className="font-number font-bold text-ink">{formatMoney(ticketPrice, event.currency ?? 'BRL', locale)}</span>
                 </div>
                 {appliedCoupon && discountApplied > 0 && (
                   <div className="flex justify-between items-center text-sm text-[#00875A]">
-                    <span className="font-semibold">Desconto ({appliedCoupon})</span>
-                    <span className="font-number font-bold">- R$ {discountApplied.toFixed(2)}</span>
+                    <span className="font-semibold">{t('discountLabel', { code: appliedCoupon })}</span>
+                    <span className="font-number font-bold">- {formatMoney(discountApplied, event.currency ?? 'BRL', locale)}</span>
                   </div>
                 )}
                 {serviceFeePreview > 0 && (
                   <div className="flex justify-between items-center text-sm text-muted-soft">
-                    <span className="font-semibold">Taxa de serviço ({serviceFeeConfig.percent}%)</span>
-                    <span className="font-number font-bold">R$ {serviceFeePreview.toFixed(2)}</span>
+                    <span className="font-semibold">{t('serviceFeeLabel', { percent: serviceFeeConfig.percent })}</span>
+                    <span className="font-number font-bold">{formatMoney(serviceFeePreview, event.currency ?? 'BRL', locale)}</span>
                   </div>
                 )}
                 <div className="flex items-center justify-between border-t border-hairline-light pt-2 text-base">
-                  <span className="font-extrabold uppercase tracking-wider text-ink">Total</span>
-                  <span className="font-number font-black text-ink">R$ {amountCollectedPreview.toFixed(2)}</span>
+                  <span className="font-extrabold uppercase tracking-wider text-ink">{t('totalLabel')}</span>
+                  <span className="font-number font-black text-ink">{formatMoney(amountCollectedPreview, event.currency ?? 'BRL', locale)}</span>
                 </div>
                 <div className="flex items-start gap-2 border-t border-hairline-light pt-3 text-[10px] text-muted-soft leading-normal">
                   <ShieldCheck className="h-4 w-4 text-[#9a7200] shrink-0 mt-0.5" aria-hidden="true" />
                   <div className="flex-1">
-                    <p className="font-bold text-ink">Pagamento processado pelo Mercado Pago</p>
-                    <p className="mt-0.5">Transação 100% criptografada e segura. A WODArena garante a integridade de sua inscrição.</p>
+                    <p className="font-bold text-ink">{t('paymentProcessedTitle')}</p>
+                    <p className="mt-0.5">{t('paymentProcessedDescription')}</p>
                   </div>
                   <img src="/mercadopago-logo.png" alt="Mercado Pago" className="h-4.5 w-auto object-contain shrink-0 ml-auto" />
                 </div>
@@ -1296,15 +1315,18 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                   className="mt-0.5 h-4 w-4 shrink-0 rounded border-hairline-light text-primary focus:ring-primary focus:ring-offset-0 focus:ring-1"
                 />
                 <label htmlFor="accept-terms" className="text-xs leading-relaxed text-muted-soft select-none">
-                  Li e concordo com os{' '}
-                  <Link href="/termos" target="_blank" className="font-bold text-ink underline transition-colors hover:text-[#9a7200]">
-                    Termos e Políticas de Compra
-                  </Link>{' '}
-                  do evento e autorizo o uso de meus dados cadastrais e de imagem em conformidade com as{' '}
-                  <Link href="/termos#privacidade" target="_blank" className="font-bold text-ink underline transition-colors hover:text-[#9a7200]">
-                    Políticas de Privacidade
-                  </Link>
-                  .
+                  {t.rich('acceptTermsNotice', {
+                    terms: (chunks) => (
+                      <Link href="/termos" target="_blank" className="font-bold text-ink underline transition-colors hover:text-[#9a7200]">
+                        {chunks}
+                      </Link>
+                    ),
+                    privacy: (chunks) => (
+                      <Link href="/termos#privacidade" target="_blank" className="font-bold text-ink underline transition-colors hover:text-[#9a7200]">
+                        {chunks}
+                      </Link>
+                    )
+                  })}
                 </label>
               </div>
 
@@ -1316,12 +1338,12 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                 {isProcessing ? (
                   <>
                     <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
-                    <span>Processando Pagamento...</span>
+                    <span>{t('processingPayment')}</span>
                   </>
                 ) : (
                   <>
                     <CreditCard className="h-5 w-5" />
-                    <span>Confirmar e Pagar</span>
+                    <span>{t('confirmAndPay')}</span>
                   </>
                 )}
               </button>

@@ -2,10 +2,12 @@
 
 import Image from 'next/image';
 import React, { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 
 const HERO_VIDEO_POSTER = '/hero-vertical-poster.jpg';
 
 export function SectionOperations() {
+  const t = useTranslations('SectionOperations');
   const [reducedMotion, setReducedMotion] = useState(true);
 
   useEffect(() => {
@@ -22,25 +24,8 @@ export function SectionOperations() {
     };
   }, []);
 
-  const features = [
-    'Inscrições Online',
-    'Controle de Categorias',
-    'Cronograma de Baterias',
-    'Lançamento de Scores',
-    'Leaderboard em Tempo Real',
-    'Rankings Automáticos',
-    'Contestação de Resultados',
-    'Gestão de Equipes'
-  ];
-
-  const sportsTags = [
-    'Functional Fitness',
-    'Fitness Race',
-    'Competições Individuais',
-    'Competições por Equipes',
-    'Ligas Estaduais',
-    'Federações'
-  ];
+  const features = t.raw('features') as string[];
+  const sportsTags = t.raw('sportsTags') as string[];
 
   return (
     <section className="relative overflow-hidden border-b border-card-border bg-background py-11 lg:py-14">
@@ -48,14 +33,14 @@ export function SectionOperations() {
         {/* Área Hero de Operações */}
         <div className="flex flex-col gap-3 pb-8 sm:gap-4 sm:pb-12">
           <h1 className="home-broadcast-title max-w-2xl text-3xl font-black uppercase leading-[0.92] tracking-[-0.04em] text-foreground sm:text-5xl lg:text-6xl">
-            Gestão completa<br />para eventos de<br />alto rendimento
+            {t('heroTitleLine1')}<br />{t('heroTitleLine2')}<br />{t('heroTitleLine3')}
           </h1>
           <p className="home-broadcast-support max-w-md text-sm leading-relaxed text-foreground sm:text-base">
-            Do planejamento à publicação dos resultados, o WODArena centraliza toda a operação em uma única plataforma.
+            {t('heroSupport')}
           </p>
           <div className="home-broadcast-tags mt-2 flex flex-col items-start gap-3 sm:mt-3">
             <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-foreground">
-              Eventos suportados
+              {t('supportedEventsHeading')}
             </h2>
             <div className="flex flex-wrap gap-2">
               {sportsTags.map((tag, index) => (
@@ -76,7 +61,7 @@ export function SectionOperations() {
           {reducedMotion ? (
             <Image
               src={HERO_VIDEO_POSTER}
-              alt="Atletas competindo em um evento WODArena"
+              alt={t('heroVideoAlt')}
               fill
               sizes="(min-width: 1280px) 1216px, 100vw"
               className="object-cover"
@@ -86,7 +71,7 @@ export function SectionOperations() {
             <video
               className="h-full w-full object-cover"
               poster={HERO_VIDEO_POSTER}
-              aria-label="Vídeo de atletas competindo em um evento WODArena"
+              aria-label={t('heroVideoAriaLabel')}
               autoPlay
               loop
               muted
@@ -116,18 +101,18 @@ export function SectionOperations() {
         <div className="home-broadcast-panel grid gap-4 md:grid-cols-[1fr_2fr] mt-8 lg:mt-12 items-stretch" style={{ '--motion-delay': '680ms' } as React.CSSProperties}>
           <div className="rounded-2xl bg-primary p-6 sm:p-8 flex flex-col justify-center min-h-[8.75rem] sm:min-h-[10.625rem] text-ink">
             <strong className="text-5xl sm:text-6xl lg:text-7xl font-black tracking-[-0.08em] leading-none">
-              100%
+              {t('impactStat')}
             </strong>
             <span className="mt-3 text-xs sm:text-sm font-black uppercase tracking-[0.06em] leading-tight">
-              da operação centralizada em um único sistema
+              {t('impactStatLabel')}
             </span>
           </div>
           <div className="rounded-2xl border border-card-border bg-card p-6 sm:p-8 flex flex-col justify-center">
             <h3 className="text-xl sm:text-2xl lg:text-3xl font-black uppercase tracking-[-0.05em] text-white leading-tight">
-              Uma plataforma para gerenciar toda a jornada do evento.
+              {t('impactTitle')}
             </h3>
             <p className="mt-3 text-xs sm:text-sm leading-relaxed text-foreground">
-              Organize inscrições, acompanhe atletas, controle baterias, publique scores e entregue uma experiência profissional para gestores, árbitros, atletas e público.
+              {t('impactDescription')}
             </p>
           </div>
         </div>
