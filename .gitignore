@@ -29,6 +29,9 @@ Thumbs.db
 .next
 *.tsbuildinfo
 
+# Supabase CLI (cache local, nao versionar)
+supabase/.temp/
+
 # AIOX Local (AIOX)
 .aiox-core/local/
 .claude/settings.local.json
