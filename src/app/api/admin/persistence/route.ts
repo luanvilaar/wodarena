@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { ManagerAccessError, assertManagerOperationalAccess, managerAccessErrorResponse } from '@/lib/serverManagerAccess';
 import { createManagerRegistration, RegistrationAccessError } from '@/lib/serverCheckout';
 import { checkRateLimit, createSupabaseAdmin, hashPassword, requireSession, safeErrorMessage, SessionUser } from '@/lib/serverSecurity';
+import { getEventStatus } from '@/lib/eventStatus';
 
 type DbClient = ReturnType<typeof createSupabaseAdmin>;
 
@@ -374,6 +375,18 @@ export async function POST(request: Request) {
         }
 
         const eventId = typeof payload.eventId === 'string' && payload.eventId.length > 0 ? payload.eventId : null;
+        if (eventId) {
+          const { data: event, error: eventError } = await supabaseAdmin
+            .from('events')
+            .select('id, status, date, registration_deadline')
+            .eq('id', eventId)
+            .maybeSingle();
+
+          if (eventError) throw eventError;
+          if (!event || (event.status !== 'live' && event.status !== 'upcoming') || getEventStatus(event) === 'finished') {
+            return NextResponse.json({ error: 'Apenas eventos ativos podem ser destacados na home.' }, { status: 400 });
+          }
+        }
         const { error } = await supabaseAdmin.rpc('admin_set_featured_home_event', { p_event_id: eventId });
         if (error) throw error;
         return NextResponse.json({ success: true });

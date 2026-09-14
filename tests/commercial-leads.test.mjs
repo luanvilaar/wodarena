@@ -96,7 +96,7 @@ test('homepage renders the commercial campaign and inline form with privacy cons
 });
 
 test('owner panel exposes a dedicated leads tab with email notification status', () => {
-  assert.match(ownerPage, /'dashboard' \| 'managers' \| 'events' \| 'leaderboards' \| 'leads'/);
+  assert.match(ownerPage, /'dashboard' \| 'managers' \| 'events' \| 'banner' \| 'leaderboards' \| 'leads'/);
   assert.match(ownerPage, /Leads Comerciais/);
   assert.match(ownerPage, /fetch\('\/api\/commercial-leads'\)/);
   assert.match(ownerPage, /ownerEmailNotificationStatus/);
