@@ -64,7 +64,7 @@ test('status update route allows refund only on approved decision and sends emai
   assert.match(contestationStatusRoute, /sendContestationStatusEmail/);
   assert.match(resend, /export async function sendContestationStatusEmail/);
   assert.match(resend, /getContestationStatusLabel/);
-  assert.match(resend, /Atualizacao da contestacao/);
+  assert.match(resend, /Atualização da contestação/);
 });
 
 test('admin page renders athlete contestation flow and manager review surface', () => {

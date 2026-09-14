@@ -4,7 +4,7 @@ import { assertManagerSalesAccessForEvent } from '@/lib/serverManagerAccess';
 import { getRequestSession, hashPassword, verifyRegistrationAccessToken } from '@/lib/serverSecurity';
 import { sendRegistrationEmail } from '@/lib/resend';
 import { getRegistrationAvailability } from '@/lib/eventStatus';
-import { Registration, Athlete, Event } from '@/types';
+import { Registration, Athlete, Event, AppLocale } from '@/types';
 
 type RegistrationInput = Record<string, unknown>;
 type AthleteInput = Record<string, unknown>;
@@ -414,7 +414,9 @@ export const loadRegistrationCheckoutSnapshot = async (
     amountCollected: registration.amount_collected !== null && registration.amount_collected !== undefined ? Number(registration.amount_collected) : undefined,
     applicationFeeCharged: registration.application_fee_charged !== null && registration.application_fee_charged !== undefined ? Number(registration.application_fee_charged) : undefined,
     createdAt: registration.created_at,
-    couponCode: registration.coupon_code || undefined
+    couponCode: registration.coupon_code || undefined,
+    locale: registration.locale || undefined,
+    currency: registration.currency || undefined
   };
 
   const athleteProfile = {
@@ -487,7 +489,9 @@ export const triggerRegistrationApprovedEmail = async (
       rules: dbEvent.rules || '',
       instagram: dbEvent.instagram || '',
       website: dbEvent.website || '',
-      eventType: dbEvent.event_type || 'functional_fitness'
+      eventType: dbEvent.event_type || 'functional_fitness',
+      currency: dbEvent.currency || 'BRL',
+      defaultLocale: (dbEvent.default_locale as AppLocale) || 'pt-br'
     };
 
     const registration: Registration = {
@@ -508,7 +512,9 @@ export const triggerRegistrationApprovedEmail = async (
       createdAt: String(snapshot.registrationData.createdAt),
       couponCode: snapshot.registrationData.couponCode ? String(snapshot.registrationData.couponCode) : undefined,
       paymentStatus: 'payment_approved',
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
+      locale: (snapshot.registrationData.locale as AppLocale) || undefined,
+      currency: snapshot.registrationData.currency ? String(snapshot.registrationData.currency) as Registration['currency'] : undefined
     };
 
     const normalizeTeamMembers = (value: unknown) => {
@@ -545,7 +551,7 @@ export const triggerRegistrationApprovedEmail = async (
     };
 
     console.log(`[Email Trigger] Disparando e-mail de confirmação para a inscrição ${registrationId}...`);
-    const emailResult = await sendRegistrationEmail(registration, athlete, event, '');
+    const emailResult = await sendRegistrationEmail(registration, athlete, event, '', registration.locale || event.defaultLocale);
     
     if (!emailResult.success) {
       console.error(`[Email Trigger] Falha ao enviar e-mail via Resend:`, emailResult.error);

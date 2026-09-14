@@ -2,6 +2,40 @@ import { NextResponse } from 'next/server';
 import { createHash, randomBytes } from 'node:crypto';
 import { sendPasswordResetEmail } from '@/lib/resend';
 import { checkRateLimit, createSupabaseAdmin, getClientIp } from '@/lib/serverSecurity';
+import { AppLocale } from '@/types';
+
+// Não há coluna de locale em `users` (conta é global, não presa a um evento).
+// Como sinal, usamos a inscrição mais recente do atleta ou o evento mais
+// recente do gestor — mesma informação já usada para localizar o e-mail de
+// confirmação de inscrição.
+const resolveUserLocale = async (
+  supabaseAdmin: ReturnType<typeof createSupabaseAdmin>,
+  user: { id: string; role: string }
+): Promise<AppLocale | undefined> => {
+  if (user.role === 'athlete') {
+    const { data } = await supabaseAdmin
+      .from('registrations')
+      .select('locale')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle<{ locale: AppLocale }>();
+    return data?.locale || undefined;
+  }
+
+  if (user.role === 'manager') {
+    const { data } = await supabaseAdmin
+      .from('events')
+      .select('default_locale')
+      .eq('organizer_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle<{ default_locale: AppLocale }>();
+    return data?.default_locale || undefined;
+  }
+
+  return undefined;
+};
 
 const RESET_EXPIRES_MINUTES = 45;
 
@@ -77,11 +111,13 @@ export async function POST(request: Request) {
     }
 
     const resetUrl = `${getPublicAppUrl()}/admin?reset_token=${token}`;
+    const locale = await resolveUserLocale(supabaseAdmin, user);
     const emailResult = await sendPasswordResetEmail({
       toEmail: normalizedEmail,
       userName: user.name || 'WODArena',
       resetUrl,
-      expiresInMinutes: RESET_EXPIRES_MINUTES
+      expiresInMinutes: RESET_EXPIRES_MINUTES,
+      locale
     });
 
     if (!emailResult.success) {

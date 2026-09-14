@@ -3,7 +3,7 @@ import { mapContestationFromDb } from '@/lib/contestations';
 import { sendContestationStatusEmail } from '@/lib/resend';
 import { ManagerAccessError, assertManagerOperationalAccess, managerAccessErrorResponse } from '@/lib/serverManagerAccess';
 import { createSupabaseAdmin, requireSession, safeErrorMessage } from '@/lib/serverSecurity';
-import { ContestationStatus } from '@/types';
+import { AppLocale, ContestationStatus } from '@/types';
 
 const isValidStatus = (status: string): status is ContestationStatus => (
   status === 'under_review' || status === 'approved' || status === 'rejected'
@@ -126,7 +126,7 @@ export async function PATCH(
     const [{ data: registration }, { data: event }, { data: workout }] = await Promise.all([
       supabaseAdmin
         .from('registrations')
-        .select('athlete_email, athlete_name')
+        .select('athlete_email, athlete_name, locale')
         .eq('id', contestation.registrationId)
         .maybeSingle(),
       supabaseAdmin
@@ -153,7 +153,8 @@ export async function PATCH(
         lane: contestation.lane || 'Não se aplica',
         status: contestation.status,
         creditRefunded: contestation.creditRefunded,
-        managerNote: contestation.managerNote
+        managerNote: contestation.managerNote,
+        locale: (registration.locale as AppLocale) || undefined
       });
       emailDelivered = emailResult.success === true;
     }

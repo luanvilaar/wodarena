@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { sendRegistrationEmail } from '@/lib/resend';
-import { Registration, Athlete, Event } from '@/types';
+import { Registration, Athlete, Event, AppLocale } from '@/types';
 import { assertRegistrationAccess, RegistrationAccessError } from '@/lib/serverCheckout';
 import { checkRateLimit, createSupabaseAdmin, getClientIp } from '@/lib/serverSecurity';
 
@@ -68,7 +68,9 @@ export async function POST(request: Request) {
       paymentId: dbReg.payment_id || undefined,
       paymentStatusDetail: dbReg.payment_status_detail || undefined,
       paymentErrorMessage: dbReg.payment_error_message || undefined,
-      updatedAt: dbReg.updated_at || undefined
+      updatedAt: dbReg.updated_at || undefined,
+      locale: (dbReg.locale as AppLocale) || undefined,
+      currency: dbReg.currency || undefined
     };
 
     // 2. Buscar o evento
@@ -106,7 +108,9 @@ export async function POST(request: Request) {
       rules: dbEvent.rules || '',
       instagram: dbEvent.instagram || '',
       website: dbEvent.website || '',
-      eventType: dbEvent.event_type || 'functional_fitness'
+      eventType: dbEvent.event_type || 'functional_fitness',
+      currency: dbEvent.currency || 'BRL',
+      defaultLocale: (dbEvent.default_locale as AppLocale) || 'pt-br'
     };
 
     // 3. Buscar o atleta (para verificar se é equipe e integrantes)
@@ -147,7 +151,7 @@ export async function POST(request: Request) {
     };
 
     // 4. Disparar e-mail via Resend
-    const emailResult = await sendRegistrationEmail(registration, athlete, event, cpf || '');
+    const emailResult = await sendRegistrationEmail(registration, athlete, event, cpf || '', registration.locale || event.defaultLocale);
 
     if (!emailResult.success) {
       console.error(`[Email API Endpoint] Falha no disparo de e-mail:`, emailResult.error);
