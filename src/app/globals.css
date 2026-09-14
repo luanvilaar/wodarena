@@ -289,12 +289,6 @@ input[type=number] {
     animation-delay: 270ms;
   }
 
-  .home-broadcast-countdown,
-  .home-broadcast-commercial-card {
-    animation: home-broadcast-panel 460ms var(--motion-broadcast-ease) both;
-    animation-delay: var(--motion-delay, 360ms);
-  }
-
   .home-broadcast-modal-overlay {
     animation: home-broadcast-modal-overlay 150ms ease-out both;
   }

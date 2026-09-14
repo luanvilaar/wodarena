@@ -13,7 +13,6 @@ const adminPage = read('../src/app/admin/page.tsx');
 const ownerPage = read('../src/app/owner/page.tsx');
 const adminPersistence = read('../src/app/api/admin/persistence/route.ts');
 const featuredBanner = read('../src/components/home/FeaturedEventBanner.tsx');
-const mobileFeaturedBanner = featuredBanner.match(/\{\/\* Banner Versão Mobile \*\/\}[\s\S]*?\{\/\* Banner Versão Desktop \*\/\}/)?.[0] ?? '';
 
 test('featured event flag is versioned and initializes the approved July 2026 event', () => {
   assert.match(migration, /ADD COLUMN IF NOT EXISTS is_featured BOOLEAN NOT NULL DEFAULT FALSE/);
@@ -65,28 +64,30 @@ test('featured home event persistence is owner-only and bypasses generic event u
   assert.match(adminPersistence, /Use a acao setFeaturedHomeEvent/);
 });
 
-test('home banner prioritizes active highlighted events and keeps finished events excluded', () => {
-  assert.match(featuredBanner, /const eligibleEvents = events\.filter/);
+test('home banner carousel prioritizes highlighted events and keeps finished events excluded', () => {
+  // Elegibilidade: eventos ativos, não encerrados, ordenados cronologicamente.
+  assert.match(featuredBanner, /const eligibleEvents = useMemo\(\(\) => events/);
   assert.match(featuredBanner, /getEventStatus\(event\) !== 'finished'/);
-  assert.match(featuredBanner, /const featuredEvent = eligibleEvents\.find\(\(event\) => event\.isFeatured\) \?\? eligibleEvents\[0\]/);
+  // Destaques do owner (isFeatured) vêm antes do resto na fila de slides.
+  assert.match(featuredBanner, /const featured = eligibleEvents\.filter\(\(event\) => event\.isFeatured\);/);
+  assert.match(featuredBanner, /const rest = eligibleEvents\.filter\(\(event\) => !event\.isFeatured\);/);
+  assert.match(featuredBanner, /return \[\.\.\.featured, \.\.\.rest\]\.slice\(0, MAX_EVENT_SLIDES\);/);
 });
 
-test('home banner mobile layout keeps event content readable and action hierarchy clear', () => {
-  // A arte fica em faixa própria na proporção de upload (5:2) e o texto em painel sólido,
-  // então a legibilidade não depende mais de máscara sobre a imagem.
-  assert.match(mobileFeaturedBanner, /aspect-\[5\/2\]/);
-  // A seção deixou de abrir a home (o hero video agora vem primeiro), então a arte do banner
-  // não é mais o candidato a LCP e carrega lazy em vez de priority.
-  assert.doesNotMatch(mobileFeaturedBanner, /\bpriority\b/);
-  assert.match(mobileFeaturedBanner, /loading="lazy"/);
-  assert.match(mobileFeaturedBanner, /linear-gradient\(180deg/);
-  assert.doesNotMatch(mobileFeaturedBanner, /bg-cover/);
-  assert.doesNotMatch(mobileFeaturedBanner, /radial-gradient\(circle at 76% 14%/);
-  assert.match(mobileFeaturedBanner, /rounded-md border border-card-border bg-card px-3 py-2/);
-  assert.match(mobileFeaturedBanner, /rounded-md border border-card-border bg-dark-gray px-3 py-2/);
-  assert.match(mobileFeaturedBanner, /mt-1 flex flex-wrap items-center gap-x-3 gap-y-1/);
-  assert.doesNotMatch(mobileFeaturedBanner, /backdrop-blur-md/);
-  assert.match(mobileFeaturedBanner, /disabled=\{!registrationsAvailable\}/);
-  assert.match(mobileFeaturedBanner, /aria-label=\{registrationsAvailable \? `Abrir inscricao para \$\{featuredEvent\.name\}` : 'Vendas encerradas'\}/);
-  assert.match(mobileFeaturedBanner, /h-10 items-center justify-center rounded-md px-4 text-xs font-bold uppercase text-white\/80 transition-colors hover:text-primary/);
+test('home banner carousel opens with the commercial slide, one unified layout for every screen size', () => {
+  // Um único componente responsivo — não há mais markup duplicado de mobile/desktop.
+  assert.doesNotMatch(featuredBanner, /Banner Versão Mobile/);
+  assert.doesNotMatch(featuredBanner, /Banner Versão Desktop/);
+  assert.match(featuredBanner, /const slides: BannerSlide\[\] = useMemo\(\(\) => \[\s*\{ kind: 'commercial' \},/);
+  // A arte do banner não é mais o candidato a LCP: carrega lazy, sem priority.
+  assert.doesNotMatch(featuredBanner, /\bpriority\b/);
+  assert.match(featuredBanner, /loading="lazy"/);
+  assert.match(featuredBanner, /className="object-cover"/);
+  // Vendas encerradas: rótulo de estado + ação para ver o evento, não um botão desabilitado.
+  assert.match(featuredBanner, /t\('salesClosedBadge'\)/);
+  assert.match(featuredBanner, /t\('viewFullEvent'\)/);
+  // Carrossel acessível: pausa em hover/foco, navegação por teclado, respeita reduced-motion.
+  assert.match(featuredBanner, /onMouseEnter=\{\(\) => setIsPaused\(true\)\}/);
+  assert.match(featuredBanner, /prefers-reduced-motion: reduce/);
+  assert.match(featuredBanner, /aria-roledescription="carousel"/);
 });

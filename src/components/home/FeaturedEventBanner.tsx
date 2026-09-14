@@ -1,369 +1,256 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
+import Image from 'next/image';
+import { Link } from '@/i18n/navigation';
 import { useApp } from '@/context/AppContext';
 import { RegisterModal } from '@/components/RegisterModal';
-import { MapPin, ArrowRight, Lock } from 'lucide-react';
-import Image from 'next/image';
-import Link from 'next/link';
-import { compareEventsByDateAsc, getEventStatus, getRegistrationAvailability, parseEventDate } from '@/lib/eventStatus';
+import { BrandLogo } from '@/components/BrandLogo';
+import { ArrowRight, Lock } from 'lucide-react';
+import { compareEventsByDateAsc, getEventStatus, getRegistrationAvailability } from '@/lib/eventStatus';
+import { Event } from '@/types';
 
-type CountdownState = {
-  days: number;
-  hours: number;
-  minutes: number;
-  seconds: number;
+const MAX_EVENT_SLIDES = 4;
+const AUTOPLAY_INTERVAL_MS = 6000;
+const SWIPE_THRESHOLD_PX = 40;
+const FALLBACK_SLIDE_IMAGE = '/hero-vertical-poster.jpg';
+
+type CommercialSlide = { kind: 'commercial' };
+type EventSlideData = { kind: 'event'; event: Event };
+type BannerSlide = CommercialSlide | EventSlideData;
+
+// Divide um texto no último termo para dar destaque em cor primária ao
+// último termo, mesmo tratamento visual usado em todos os tipos de slide.
+const splitLastWord = (text: string) => {
+  const parts = text.trim().split(' ');
+  return {
+    main: parts.slice(0, -1).join(' '),
+    highlight: parts.slice(-1).join('')
+  };
 };
 
 export function FeaturedEventBanner({ openLeadModal }: { openLeadModal: () => void }) {
+  const t = useTranslations('FeaturedEventBanner');
   const { events } = useApp();
-  const [isRegisterOpen, setIsRegisterOpen] = useState(false);
-  const [countdown, setCountdown] = useState<CountdownState>({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
+  const [registeringEvent, setRegisteringEvent] = useState<Event | null>(null);
+  const touchStartXRef = useRef<number | null>(null);
 
-  // Sem destaque definido pelo owner, o fallback é o próximo evento a acontecer.
-  const eligibleEvents = events.filter((event) => (
-    (event.status === 'live' || event.status === 'upcoming')
-    && getEventStatus(event) !== 'finished'
-  )).sort(compareEventsByDateAsc);
-  const featuredEvent = eligibleEvents.find((event) => event.isFeatured) ?? eligibleEvents[0];
+  // Eventos elegíveis: ativos, não encerrados, em ordem cronológica — os
+  // marcados como destaque pelo owner vêm primeiro, o resto completa a fila.
+  const eligibleEvents = useMemo(() => events
+    .filter((event) => (event.status === 'live' || event.status === 'upcoming') && getEventStatus(event) !== 'finished')
+    .sort(compareEventsByDateAsc), [events]);
 
+  const orderedEvents = useMemo(() => {
+    const featured = eligibleEvents.filter((event) => event.isFeatured);
+    const rest = eligibleEvents.filter((event) => !event.isFeatured);
+    return [...featured, ...rest].slice(0, MAX_EVENT_SLIDES);
+  }, [eligibleEvents]);
+
+  // Slide comercial sempre vem primeiro, seguido pelos eventos elegíveis.
+  const slides: BannerSlide[] = useMemo(() => [
+    { kind: 'commercial' },
+    ...orderedEvents.map((event) => ({ kind: 'event' as const, event }))
+  ], [orderedEvents]);
+
+  const safeIndex = activeIndex < slides.length ? activeIndex : 0;
+
+  const goToSlide = (index: number) => {
+    setActiveIndex(((index % slides.length) + slides.length) % slides.length);
+  };
+  const goNext = () => goToSlide(safeIndex + 1);
+  const goPrev = () => goToSlide(safeIndex - 1);
+
+  // Auto-avanço: pausa no hover/foco e respeita quem pediu menos animação.
   useEffect(() => {
-    if (!featuredEvent) return;
-
-    const calculateTimeLeft = () => {
-      const eventDate = parseEventDate(featuredEvent.date);
-      if (!eventDate) return { days: 0, hours: 0, minutes: 0, seconds: 0 };
-      const difference = eventDate.getTime() - Date.now();
-      
-      if (isNaN(difference) || difference <= 0) {
-        return { days: 0, hours: 0, minutes: 0, seconds: 0 };
-      }
-
-      return {
-        days: Math.floor(difference / (1000 * 60 * 60 * 24)),
-        hours: Math.floor((difference / (1000 * 60 * 60)) % 24),
-        minutes: Math.floor((difference / 1000 / 60) % 60),
-        seconds: Math.floor((difference / 1000) % 60)
-      };
-    };
+    if (slides.length <= 1 || isPaused) return;
+    if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
     const timer = setInterval(() => {
-      setCountdown(calculateTimeLeft());
-    }, 1000);
+      setActiveIndex((current) => (current + 1) % slides.length);
+    }, AUTOPLAY_INTERVAL_MS);
 
-    const firstTick = setTimeout(() => {
-      setCountdown(calculateTimeLeft());
-    }, 0);
+    return () => clearInterval(timer);
+  }, [slides.length, isPaused]);
 
-    return () => {
-      clearInterval(timer);
-      clearTimeout(firstTick);
-    };
-  }, [featuredEvent]);
+  const handleTouchStart = (event: React.TouchEvent) => {
+    touchStartXRef.current = event.touches[0]?.clientX ?? null;
+  };
+  const handleTouchEnd = (event: React.TouchEvent) => {
+    if (touchStartXRef.current === null) return;
+    const deltaX = (event.changedTouches[0]?.clientX ?? 0) - touchStartXRef.current;
+    if (Math.abs(deltaX) > SWIPE_THRESHOLD_PX) {
+      if (deltaX > 0) goPrev(); else goNext();
+    }
+    touchStartXRef.current = null;
+  };
 
-  if (!featuredEvent) {
-    return (
-      <section 
-        className="home-broadcast-featured-backdrop relative overflow-hidden min-h-[460px] sm:min-h-[600px] border-b border-card-border bg-cover bg-center flex flex-col justify-end"
-        style={{ backgroundImage: `url('/hero-vertical-poster.jpg')` }}
-      >
-        {/* Máscara de gradientes */}
-        <div className="absolute inset-0 z-0 pointer-events-none"
-          style={{
-            background: `
-              linear-gradient(180deg, 
-                rgba(11, 14, 17, 0.18) 0%, 
-                rgba(11, 14, 17, 0.0) 28%, 
-                rgba(11, 14, 17, 0.72) 62%, 
-                rgba(11, 14, 17, 0.97) 100%
-              ),
-              linear-gradient(90deg, 
-                rgba(11, 14, 17, 0.55) 0%, 
-                rgba(11, 14, 17, 0.0) 52%
-              )
-            `
-          }}
-        />
+  const handleKeyDown = (event: React.KeyboardEvent) => {
+    if (event.key === 'ArrowRight') { event.preventDefault(); goNext(); }
+    if (event.key === 'ArrowLeft') { event.preventDefault(); goPrev(); }
+  };
 
-        <div className="home-broadcast-featured-copy relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 w-full pb-12 sm:pb-16 flex flex-col items-center text-center">
-          <div className="max-w-2xl space-y-6">
-            <span className="inline-flex text-[10px] font-bold uppercase tracking-wider text-primary">Plataforma WODArena</span>
-            <h2 className="home-broadcast-featured-title text-3xl font-black uppercase leading-[0.9] tracking-[-0.06em] text-white sm:text-6xl">
-              CRIE E GERENCIE SEU <span className="text-primary">EVENTO</span>
-            </h2>
-            <p className="text-sm text-muted leading-relaxed max-w-lg mx-auto">
-              Seja um dos primeiros boxes e organizadores a utilizar a plataforma mais moderna de Functional Fitness e Fitness Racing. Gerencie inscrições, scores e leaderboards ao vivo.
-            </p>
-            <button 
-              onClick={openLeadModal}
-              className="home-broadcast-actions inline-flex h-12 items-center gap-2 rounded-md bg-primary px-6 text-sm font-black uppercase text-ink transition-colors hover:bg-primary-hover active:bg-primary-hover shadow-lg shadow-primary/15"
-              style={{ '--motion-delay': '420ms' } as React.CSSProperties}
-            >
-              Quero utilizar o WODArena
-            </button>
-          </div>
-        </div>
-      </section>
-    );
-  }
-
-  // Categorias ativas
-  const registrationAvailability = getRegistrationAvailability(featuredEvent);
-  const registrationsAvailable = registrationAvailability.isAvailable;
-  const activeDivisions = featuredEvent.divisions?.filter(d => d.isActive) ?? [];
-
-  // Formata o subtítulo das divisões (ex: "Individual + Duplas")
-  const hasIndividual = activeDivisions.some(d => d.type === 'individual');
-  const hasTeams = activeDivisions.some(d => d.type !== 'individual');
-  const divisionsSummary = [
-    hasIndividual ? 'Individual' : '',
-    hasTeams ? 'Duplas & Equipes' : ''
-  ].filter(Boolean).join(' + ') || 'Todas as Categorias';
-
-  // Formatador padronizado de número para countdown
-  const formatNum = (num: number) => String(num).padStart(2, '0');
-
-  // Separar nome do evento para dar cor amarela ao último termo
-  const nameParts = featuredEvent.name.split(' ');
-  const nameMain = nameParts.slice(0, -1).join(' ');
-  const nameHighlight = nameParts.slice(-1).join('');
+  const commercialTitle = splitLastWord(t('organizeCardTitle'));
 
   return (
     <>
-      {/* Banner Versão Mobile */}
-      <section className="md:hidden border-b border-card-border bg-background">
-        {/* Arte do evento na proporção original (5:2 — 1600 × 640), sem corte lateral */}
-        <div className="home-broadcast-featured-media relative aspect-[5/2] w-full overflow-hidden bg-dark-gray">
-          <Image
-            src={featuredEvent.bannerUrl || '/hero-vertical-poster.jpg'}
-            alt={`${featuredEvent.name} banner`}
-            fill
-            unoptimized
-            loading="lazy"
-            sizes="100vw"
-            className="object-cover"
-          />
-          {/* Costura entre a arte e o painel de conteúdo */}
-          <div className="absolute inset-x-0 bottom-0 h-16 pointer-events-none"
-            style={{
-              background: `
-                linear-gradient(180deg,
-                  rgba(11, 14, 17, 0.0) 0%,
-                  rgba(11, 14, 17, 0.75) 62%,
-                  rgba(11, 14, 17, 1.0) 100%
-                )
-              `
-            }}
-          />
-        </div>
-
-        <div className="w-full px-4 pb-8 pt-4">
-          <div className="home-broadcast-featured-copy space-y-3.5">
-            
-            {/* Status e badges */}
-            <div className="home-broadcast-panel flex flex-wrap items-center gap-1.5" style={{ '--motion-delay': '260ms' } as React.CSSProperties}>
-              <span className={`inline-flex items-center gap-1 rounded-full border bg-dark-gray/85 px-2.5 py-1 text-[9px] font-bold uppercase tracking-normal ${
-                registrationsAvailable ? 'border-trading-up/30 text-trading-up' : 'border-card-border text-muted'
-              }`}>
-                {registrationsAvailable ? <span className="h-1.5 w-1.5 rounded-full bg-trading-up animate-pulse" /> : <Lock className="h-3 w-3" />}
-                {registrationsAvailable ? 'Inscrições abertas' : 'Vendas encerradas'}
-              </span>
-              <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-dark-gray/85 px-2.5 py-1 text-[9px] font-bold uppercase tracking-normal text-primary">
-                {featuredEvent.eventType === 'fitness_racing' ? 'Fitness Racing' : featuredEvent.eventType === 'functional_fitness_qualifier' ? 'Functional Fitness Qualifier' : 'Functional Fitness'}
-              </span>
-            </div>
-
-            {/* Título do Evento */}
-            <h2 className="home-broadcast-featured-title max-w-[19rem] text-4xl font-black uppercase leading-[0.92] tracking-normal text-white text-balance">
-              {nameMain}{' '}
-              <span className="text-primary">{nameHighlight}</span>
-            </h2>
-
-            {/* Informações essenciais */}
-            <div className="home-broadcast-panel flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-card-border bg-card px-3 py-2 text-[11px] font-bold text-white" style={{ '--motion-delay': '340ms' } as React.CSSProperties}>
-              <span>{featuredEvent.date}</span>
-              <span className="h-1 w-1 rounded-full bg-muted-soft" aria-hidden="true" />
-              <span>{featuredEvent.city || featuredEvent.location}, {featuredEvent.state || 'BR'}</span>
-              <span className="h-1 w-1 rounded-full bg-muted-soft" aria-hidden="true" />
-              <span>{divisionsSummary}</span>
-            </div>
-
-            {/* Countdown Compacto */}
-            <div className="home-broadcast-countdown rounded-md border border-card-border bg-dark-gray px-3 py-2 text-[11px] font-bold uppercase text-white">
-              <span className="block text-[10px] font-black tracking-normal text-muted">Restam</span>
-              <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-                <span><strong className="font-number text-sm font-black">{formatNum(countdown.days)}</strong>D</span>
-                <span><strong className="font-number text-sm font-black">{formatNum(countdown.hours)}</strong>H</span>
-                <span><strong className="font-number text-sm font-black">{formatNum(countdown.minutes)}</strong>M</span>
-                <span><strong className="font-number text-sm font-black">{formatNum(countdown.seconds)}</strong>S</span>
-              </div>
-            </div>
-
-            {/* Botões de Ação */}
-            <div className="home-broadcast-actions flex flex-col gap-2.5 pt-2" style={{ '--motion-delay': '430ms' } as React.CSSProperties}>
-              <button
-                disabled={!registrationsAvailable}
-                onClick={() => registrationsAvailable && setIsRegisterOpen(true)}
-                aria-label={registrationsAvailable ? `Abrir inscricao para ${featuredEvent.name}` : 'Vendas encerradas'}
-                className={`w-full flex h-12 items-center justify-center gap-2 rounded-md px-6 text-sm font-black uppercase transition-colors ${
-                  registrationsAvailable ? 'bg-primary text-ink hover:bg-primary-hover active:bg-primary-hover' : 'cursor-not-allowed border border-card-border bg-dark-gray text-muted'
-                }`}
-              >
-                {registrationsAvailable ? 'Inscreva-se agora' : 'Vendas encerradas'}
-                {registrationsAvailable ? <ArrowRight className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
-              </button>
-              <Link 
-                href={`/event/${featuredEvent.id}`}
-                className="w-full flex h-10 items-center justify-center rounded-md px-4 text-xs font-bold uppercase text-white/80 transition-colors hover:text-primary"
-              >
-                Ver evento completo
-              </Link>
-            </div>
-
-          </div>
-        </div>
-      </section>
-
-      {/* Banner Versão Desktop */}
-      <section 
-        className="home-broadcast-featured-backdrop hidden md:flex relative overflow-hidden min-h-[600px] border-b border-card-border bg-cover bg-center flex-col justify-end"
-        style={{ backgroundImage: `url(${featuredEvent.bannerUrl || '/hero-vertical-poster.jpg'})` }}
+      <section
+        className="home-broadcast-featured-backdrop relative h-[420px] w-full overflow-hidden border-b border-card-border bg-dark-gray sm:h-[500px] lg:h-[560px]"
+        role="region"
+        aria-roledescription="carousel"
+        aria-label={t('carouselAriaLabel')}
+        tabIndex={0}
+        onMouseEnter={() => setIsPaused(true)}
+        onMouseLeave={() => setIsPaused(false)}
+        onFocus={() => setIsPaused(true)}
+        onBlur={() => setIsPaused(false)}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        onKeyDown={handleKeyDown}
       >
-        {/* Máscara de gradientes */}
-        <div className="absolute inset-0 z-0 pointer-events-none"
-          style={{
-            background: `
-              linear-gradient(180deg, 
-                rgba(11, 14, 17, 0.18) 0%, 
-                rgba(11, 14, 17, 0.0) 28%, 
-                rgba(11, 14, 17, 0.72) 62%, 
-                rgba(11, 14, 17, 0.97) 100%
-              ),
-              linear-gradient(90deg, 
-                rgba(11, 14, 17, 0.55) 0%, 
-                rgba(11, 14, 17, 0.0) 52%
-              )
-            `
-          }}
-        />
+        {slides.map((slide, index) => {
+          const isActive = index === safeIndex;
+          const isEventSlide = slide.kind === 'event';
+          const event = isEventSlide ? slide.event : null;
+          const imageUrl = event?.bannerUrl || FALLBACK_SLIDE_IMAGE;
+          const logoUrl = event?.logoUrl;
+          const { main: titleMain, highlight: titleHighlight } = isEventSlide
+            ? splitLastWord(event!.name)
+            : commercialTitle;
+          const registrationAvailability = event ? getRegistrationAvailability(event) : null;
+          const registrationsAvailable = registrationAvailability?.isAvailable ?? false;
 
-        <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 w-full pb-12 sm:pb-16">
-          <div className="grid gap-8 lg:grid-cols-[1.25fr_0.75fr] lg:items-end w-full">
-            {/* Lado Esquerdo: Evento em Destaque */}
-            <div className="home-broadcast-featured-copy space-y-6">
-              <div className="inline-flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-trading-up shadow-[0_0_8px_rgba(14,203,129,0.7)] animate-pulse" />
-                <span className="text-xs font-black uppercase tracking-[0.18em] text-trading-up">
-                  Evento em destaque
-                </span>
-              </div>
+          return (
+            <div
+              key={isEventSlide ? event!.id : 'commercial'}
+              aria-hidden={!isActive}
+              className={`home-broadcast-featured-media absolute inset-0 transition-opacity duration-700 ease-out ${
+                isActive ? 'opacity-100' : 'pointer-events-none opacity-0'
+              }`}
+            >
+              <Image
+                src={imageUrl}
+                alt=""
+                fill
+                unoptimized
+                loading="lazy"
+                sizes="100vw"
+                className="object-cover"
+              />
+              <div
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                  background: `
+                    linear-gradient(180deg,
+                      rgba(11, 14, 17, 0.05) 0%,
+                      rgba(11, 14, 17, 0.0) 32%,
+                      rgba(11, 14, 17, 0.78) 68%,
+                      rgba(11, 14, 17, 0.96) 100%
+                    ),
+                    linear-gradient(90deg,
+                      rgba(11, 14, 17, 0.55) 0%,
+                      rgba(11, 14, 17, 0.0) 55%
+                    )
+                  `
+                }}
+              />
 
-              <div className="home-broadcast-panel flex flex-wrap gap-2" style={{ '--motion-delay': '300ms' } as React.CSSProperties}>
-                <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-wider backdrop-blur-md ${
-                  registrationsAvailable ? 'border-trading-up/30 bg-trading-up/15 text-trading-up' : 'border-card-border bg-dark-gray/70 text-muted'
-                }`}>
-                  {registrationsAvailable ? <span className="h-1.5 w-1.5 rounded-full bg-trading-up animate-pulse" /> : <Lock className="h-3 w-3" />}
-                  {registrationsAvailable ? 'Inscrições abertas' : 'Vendas encerradas'}
-                </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/12 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-primary backdrop-blur-md">
-                  {featuredEvent.eventType === 'fitness_racing' ? 'Fitness Racing' : featuredEvent.eventType === 'functional_fitness_qualifier' ? 'Functional Fitness Qualifier' : 'Functional Fitness'}
-                </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-card-border bg-dark-gray/70 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-muted backdrop-blur-md">
-                  <MapPin className="h-3 w-3" />
-                  {featuredEvent.city || featuredEvent.location}, {featuredEvent.state || 'BR'}
-                </span>
-              </div>
+              <div className="home-broadcast-featured-copy relative z-10 flex h-full max-w-7xl flex-col justify-end px-4 pb-14 sm:px-6 sm:pb-16 lg:px-8 mx-auto">
+                <div className="max-w-xl space-y-5">
+                  <h2 className="home-broadcast-featured-title text-3xl font-black uppercase leading-[0.95] tracking-[-0.04em] text-white sm:text-5xl lg:text-6xl text-balance">
+                    {titleMain}{' '}
+                    <span className="text-primary">{titleHighlight}</span>
+                  </h2>
 
-              <h2 className="home-broadcast-featured-title text-4xl font-black uppercase leading-[0.9] tracking-[-0.06em] text-white sm:text-6xl lg:text-7xl">
-                {nameMain}{' '}
-                <span className="text-primary">{nameHighlight}</span>
-              </h2>
-
-              <div className="home-broadcast-panel flex flex-wrap items-center text-sm font-bold text-white/70 gap-2 sm:gap-4" style={{ '--motion-delay': '360ms' } as React.CSSProperties}>
-                <span>{featuredEvent.date}</span>
-                <span className="h-1.5 w-1.5 rounded-full bg-white/30 hidden sm:inline" />
-                <span>{featuredEvent.location}</span>
-                <span className="h-1.5 w-1.5 rounded-full bg-white/30 hidden sm:inline" />
-                <span>{divisionsSummary}</span>
-              </div>
-
-              {/* Painel de Countdown em Glassmorphism */}
-              <div className="home-broadcast-countdown inline-flex gap-4 sm:gap-6 items-center p-4 sm:p-5 rounded-2xl border border-card-border bg-[#0b0e11]/65 backdrop-blur-md w-fit">
-                {/* Countdown */}
-                <div className="flex gap-4 sm:gap-6 justify-between sm:justify-start items-center">
-                  <div className="flex flex-col items-center">
-                    <span className="text-2xl sm:text-3xl font-black text-white leading-none tracking-tight font-number">
-                      {formatNum(countdown.days)}
-                    </span>
-                    <span className="text-[9px] font-bold uppercase tracking-widest text-muted mt-1 font-mono">Dias</span>
+                  <div className="home-broadcast-actions flex flex-wrap items-center gap-3">
+                    {!isEventSlide ? (
+                      <button
+                        type="button"
+                        tabIndex={isActive ? 0 : -1}
+                        onClick={openLeadModal}
+                        aria-label={t('ctaUseWodarena')}
+                        className="inline-flex h-11 items-center gap-2 rounded-md bg-primary px-6 text-sm font-black uppercase text-ink transition-colors hover:bg-primary-hover active:bg-primary-hover"
+                      >
+                        {t('ctaUseWodarena')}
+                      </button>
+                    ) : registrationsAvailable ? (
+                      <button
+                        type="button"
+                        tabIndex={isActive ? 0 : -1}
+                        onClick={() => setRegisteringEvent(event)}
+                        aria-label={t('registerNowAria', { name: event!.name })}
+                        className="inline-flex h-11 items-center gap-2 rounded-md bg-primary px-6 text-sm font-black uppercase text-ink transition-colors hover:bg-primary-hover active:bg-primary-hover"
+                      >
+                        {t('registerNow')}
+                        <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    ) : (
+                      <>
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-card-border bg-dark-gray/70 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-muted backdrop-blur-md">
+                          <Lock className="h-3 w-3" aria-hidden="true" />
+                          {t('salesClosedBadge')}
+                        </span>
+                        <Link
+                          href={`/event/${event!.id}`}
+                          tabIndex={isActive ? 0 : -1}
+                          className="inline-flex h-11 items-center gap-2 rounded-md border border-card-border bg-card/75 px-6 text-sm font-bold text-white backdrop-blur-md transition-colors hover:bg-elevated/75"
+                        >
+                          {t('viewFullEvent')}
+                        </Link>
+                      </>
+                    )}
                   </div>
-                  <div className="flex flex-col items-center">
-                    <span className="text-2xl sm:text-3xl font-black text-white leading-none tracking-tight font-number">
-                      {formatNum(countdown.hours)}
-                    </span>
-                    <span className="text-[9px] font-bold uppercase tracking-widest text-muted mt-1 font-mono">Horas</span>
-                  </div>
-                  <div className="flex flex-col items-center">
-                    <span className="text-2xl sm:text-3xl font-black text-white leading-none tracking-tight font-number">
-                      {formatNum(countdown.minutes)}
-                    </span>
-                    <span className="text-[9px] font-bold uppercase tracking-widest text-muted mt-1 font-mono">Minutos</span>
-                  </div>
-                  <div className="flex flex-col items-center">
-                    <span className="text-2xl sm:text-3xl font-black text-white leading-none tracking-tight font-number">
-                      {formatNum(countdown.seconds)}
-                    </span>
-                    <span className="text-[9px] font-bold uppercase tracking-widest text-muted mt-1 font-mono">Segundos</span>
-                  </div>
+
+                  {slides.length > 1 && (
+                    <div className="home-broadcast-panel flex items-center gap-1.5">
+                      {slides.map((otherSlide, otherIndex) => (
+                        <button
+                          key={otherSlide.kind === 'event' ? otherSlide.event.id : 'commercial'}
+                          type="button"
+                          tabIndex={isActive ? 0 : -1}
+                          onClick={() => goToSlide(otherIndex)}
+                          aria-label={t('slideAriaLabel', { index: otherIndex + 1, total: slides.length })}
+                          aria-current={otherIndex === safeIndex}
+                          className={`h-1 rounded-full transition-all duration-300 ${
+                            otherIndex === safeIndex ? 'w-8 bg-primary' : 'w-4 bg-white/30 hover:bg-white/50'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {/* Ações do Evento */}
-              <div className="home-broadcast-actions flex flex-wrap gap-3" style={{ '--motion-delay': '440ms' } as React.CSSProperties}>
-                <button
-                  disabled={!registrationsAvailable}
-                  onClick={() => registrationsAvailable && setIsRegisterOpen(true)}
-                  className={`inline-flex h-12 items-center gap-2 rounded-md px-6 text-sm font-black uppercase transition-colors ${
-                    registrationsAvailable ? 'bg-primary text-ink hover:bg-primary-hover active:bg-primary-hover' : 'cursor-not-allowed border border-card-border bg-dark-gray text-muted'
-                  }`}
-                >
-                  {registrationsAvailable ? 'Inscreva-se agora' : 'Vendas encerradas'}
-                  {registrationsAvailable ? <ArrowRight className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
-                </button>
-                <Link 
-                  href={`/event/${featuredEvent.id}`}
-                  className="inline-flex h-12 items-center rounded-md border border-card-border bg-card/75 hover:bg-elevated/75 px-6 text-sm font-bold text-white transition-colors backdrop-blur-md"
-                >
-                  Ver evento completo
-                </Link>
+              {/* Selo circular: logo do evento, com fallback para a marca WODArena */}
+              <div className="absolute bottom-5 right-4 z-10 flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border border-card-border bg-[#0b0e11]/85 backdrop-blur-md sm:bottom-6 sm:right-6 sm:h-16 sm:w-16">
+                {logoUrl ? (
+                  <Image
+                    src={logoUrl}
+                    alt=""
+                    width={64}
+                    height={64}
+                    unoptimized
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <BrandLogo variant="mark" className="h-8 w-8 sm:h-9 sm:w-9" />
+                )}
               </div>
             </div>
-
-            {/* Lado Direito: Card de Captação Comercial (Dividindo Espaço) */}
-            <div className="home-broadcast-commercial-card rounded-2xl border border-card-border bg-[#0b0e11]/80 p-6 backdrop-blur-md space-y-4 lg:mb-1" style={{ '--motion-delay': '500ms' } as React.CSSProperties}>
-              <div className="space-y-1.5">
-                <span className="inline-flex text-[9px] font-black uppercase tracking-[0.15em] text-primary">Plataforma WODArena</span>
-                <h3 className="text-lg font-black uppercase text-white leading-tight">Organize seu evento</h3>
-              </div>
-              <p className="text-xs text-muted leading-relaxed">
-                Gerencie inscrições, crie cronogramas de baterias inteligentes, publique resultados e ofereça leaderboards em tempo real.
-              </p>
-              <button 
-                onClick={openLeadModal}
-                className="w-full flex h-11 items-center justify-center gap-2 rounded-md bg-primary px-4 text-xs font-bold uppercase text-ink transition-colors hover:bg-primary-hover active:bg-primary-hover"
-              >
-                Quero utilizar o WODArena
-              </button>
-            </div>
-          </div>
-        </div>
+          );
+        })}
       </section>
 
-      <RegisterModal 
-        event={featuredEvent} 
-        isOpen={isRegisterOpen} 
-        onClose={() => setIsRegisterOpen(false)} 
-      />
+      {registeringEvent && (
+        <RegisterModal
+          event={registeringEvent}
+          isOpen
+          onClose={() => setRegisteringEvent(null)}
+        />
+      )}
     </>
   );
 }
