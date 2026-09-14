@@ -16,6 +16,7 @@ import {
 } from '@/lib/serverCheckout';
 import { checkRateLimit, createSupabaseAdmin, getClientIp } from '@/lib/serverSecurity';
 import { calculateServiceFee } from '@/lib/serviceFee';
+import { CheckoutGatewayError, resolveEventPaymentContext } from '@/lib/checkoutGateway';
 
 const supabaseAdmin = createSupabaseAdmin();
 
@@ -86,7 +87,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { registrationData, token, payment_method_id, installments, cpf, deviceId, accessToken } = body;
 
-    if (!registrationData?.id || !token || !payment_method_id || !cpf) {
+    if (!registrationData?.id || !token || !payment_method_id) {
       return NextResponse.json({ error: 'Parâmetros inválidos.' }, { status: 400 });
     }
 
@@ -97,11 +98,6 @@ export async function POST(request: Request) {
     });
     if (rateLimited) return rateLimited;
 
-    const cleanCpf = cpf.replace(/\D/g, '');
-    if (cleanCpf.length !== 11) {
-      return NextResponse.json({ error: 'CPF inválido. Deve conter 11 dígitos.' }, { status: 400 });
-    }
-
     await assertRegistrationAccess(supabaseAdmin, request, {
       registrationId: registrationData.id,
       eventId: registrationData.eventId,
@@ -111,6 +107,23 @@ export async function POST(request: Request) {
     const checkoutSnapshot = await loadRegistrationCheckoutSnapshot(supabaseAdmin, registrationData.id);
     const { registrationData: safeRegistrationData, athleteProfile, transactionAmount } = checkoutSnapshot;
     await assertEventRegistrationAvailable(supabaseAdmin, checkoutSnapshot.eventId);
+
+    // Este endpoint fala o protocolo de tokenização de cartão do Mercado Pago
+    // (token/payment_method_id/installments) — eventos em EUR/GBP usam Stripe
+    // Checkout via /api/checkout/preference, não este fluxo transparente.
+    const paymentContext = await resolveEventPaymentContext(supabaseAdmin, checkoutSnapshot.eventId);
+    if (paymentContext.gateway !== 'mercadopago') {
+      return NextResponse.json({ error: 'Este método de pagamento não está disponível para este evento.', code: 'gateway_method_unavailable' }, { status: 409 });
+    }
+
+    if (!cpf) {
+      return NextResponse.json({ error: 'Parâmetros inválidos.' }, { status: 400 });
+    }
+    const cleanCpf = cpf.replace(/\D/g, '');
+    if (cleanCpf.length !== 11) {
+      return NextResponse.json({ error: 'CPF inválido. Deve conter 11 dígitos.' }, { status: 400 });
+    }
+
     await assertManagerSalesAccessForEvent(supabaseAdmin, checkoutSnapshot.eventId);
     const checkoutConfig = await resolveMercadoPagoCheckoutConfig(checkoutSnapshot.eventId);
     const serviceFee = calculateServiceFee(
@@ -221,6 +234,9 @@ export async function POST(request: Request) {
       return managerAccessErrorResponse(err);
     }
     if (err instanceof RegistrationAccessError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
+    if (err instanceof CheckoutGatewayError) {
       return NextResponse.json({ error: err.message }, { status: err.status });
     }
     if (err instanceof MercadoPagoConfigError) {

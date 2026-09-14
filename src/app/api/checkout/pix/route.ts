@@ -15,6 +15,8 @@ import {
 } from '@/lib/serverCheckout';
 import { checkRateLimit, createSupabaseAdmin, getClientIp } from '@/lib/serverSecurity';
 import { calculateServiceFee } from '@/lib/serviceFee';
+import { CheckoutGatewayError, resolveEventPaymentContext } from '@/lib/checkoutGateway';
+import { isPixSupported } from '@/lib/paymentGateway';
 
 const supabaseAdmin = createSupabaseAdmin();
 
@@ -44,6 +46,15 @@ export async function POST(request: Request) {
     const { registrationData: safeRegistrationData, athleteProfile, transactionAmount } = checkoutSnapshot;
     await assertEventRegistrationAvailable(supabaseAdmin, checkoutSnapshot.eventId);
     await assertManagerSalesAccessForEvent(supabaseAdmin, checkoutSnapshot.eventId);
+
+    // Pix é um trilho exclusivo do sistema bancário brasileiro — eventos em
+    // EUR/GBP (Stripe) nunca oferecem esta opção na UI, mas a rota recusa
+    // explicitamente aqui também, caso seja chamada diretamente.
+    const paymentContext = await resolveEventPaymentContext(supabaseAdmin, checkoutSnapshot.eventId);
+    if (!isPixSupported(paymentContext.currency)) {
+      return NextResponse.json({ error: 'Pix não está disponível para eventos fora do Brasil.', code: 'gateway_method_unavailable' }, { status: 409 });
+    }
+
     const checkoutConfig = await resolveMercadoPagoCheckoutConfig(checkoutSnapshot.eventId);
     const serviceFee = calculateServiceFee(
       transactionAmount,
@@ -152,6 +163,9 @@ export async function POST(request: Request) {
       return managerAccessErrorResponse(err);
     }
     if (err instanceof RegistrationAccessError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
+    if (err instanceof CheckoutGatewayError) {
       return NextResponse.json({ error: err.message }, { status: err.status });
     }
     if (err instanceof MercadoPagoConfigError) {

@@ -26,14 +26,14 @@ Documentação dos headers de segurança configurados em [`next.config.ts`](../.
 | Diretiva | Valor | Por quê |
 |---|---|---|
 | `default-src` | `'self'` | Base restritiva (fallback de tudo) |
-| `script-src` | `'self' 'unsafe-inline' https://sdk.mercadopago.com https://*.mercadopago.com https://*.mlstatic.com` | `'unsafe-inline'`: scripts de bootstrap/hydration do Next.js. Domínios MP: SDK de pagamento (`sdk.mercadopago.com/js/v2`). `'unsafe-eval'` é adicionado **apenas em desenvolvimento** (React Refresh) |
+| `script-src` | `'self' 'unsafe-inline' https://sdk.mercadopago.com https://*.mercadopago.com https://*.mlstatic.com https://js.stripe.com` | `'unsafe-inline'`: scripts de bootstrap/hydration do Next.js. Domínios MP: SDK de pagamento (`sdk.mercadopago.com/js/v2`). `js.stripe.com`: SDK Stripe.js/Elements (eventos em EUR/GBP). `'unsafe-eval'` é adicionado **apenas em desenvolvimento** (React Refresh) |
 | `style-src` | `'self' 'unsafe-inline'` | Next.js/Tailwind injetam estilos inline; `<style>` em RegistrationVoucher |
 | `img-src` | `'self' data: blob: https:` | `data:` (QR PIX base64), `blob:` (downloads), `https:` (logos/banners de eventos são **URLs externas arbitrárias** — default Unsplash) |
 | `font-src` | `'self' data:` | Fontes auto-hospedadas pelo `next/font` (sem CDN externo) |
-| `connect-src` | `'self' {supabase https} {supabase wss} https://api.mercadopago.com https://*.mercadopago.com https://*.mlstatic.com` | XHR/fetch/WebSocket: Supabase (auth, REST, storage, realtime) e tokenização de cartão MP |
-| `frame-src` | `'self' https://*.mercadopago.com https://*.mlstatic.com` | Iframes do SDK MP (Secure Fields / Bricks) |
+| `connect-src` | `'self' {supabase https} {supabase wss} https://api.mercadopago.com https://*.mercadopago.com https://*.mlstatic.com https://api.stripe.com` | XHR/fetch/WebSocket: Supabase (auth, REST, storage, realtime), tokenização de cartão MP e API da Stripe (Checkout/Elements/Connect) |
+| `frame-src` | `'self' https://*.mercadopago.com https://*.mlstatic.com https://js.stripe.com https://hooks.stripe.com` | Iframes do SDK MP (Secure Fields / Bricks) e da Stripe (Elements/Checkout hospedado) |
 | `frame-ancestors` | `'self'` | Anti-clickjacking (moderno) |
-| `form-action` | `'self' https://*.mercadopago.com` | Redirect de checkout (`init_point`) |
+| `form-action` | `'self' https://*.mercadopago.com https://checkout.stripe.com` | Redirect de checkout (`init_point` do MP / Checkout Session da Stripe) |
 | `base-uri` | `'self'` | Bloqueia injeção de `<base>` |
 | `object-src` | `'none'` | Bloqueia `<object>`/`<embed>`/plugins |
 | `worker-src` | `'self' blob:` | Web Workers a partir de blobs |
@@ -51,6 +51,10 @@ Documentação dos headers de segurança configurados em [`next.config.ts`](../.
 | `https://*.mercadopago.com` | script-src, connect-src, frame-src, form-action | API, iframes e redirect do Mercado Pago |
 | `https://api.mercadopago.com` | connect-src | Tokenização de cartão / métodos de pagamento |
 | `https://*.mlstatic.com` | script-src, connect-src, frame-src, img-src(https) | Assets estáticos do Mercado Pago/Mercado Livre |
+| `https://js.stripe.com` | script-src, frame-src | SDK Stripe.js/Elements e iframes (eventos em EUR/GBP) |
+| `https://api.stripe.com` | connect-src | API da Stripe (PaymentIntents, Checkout Sessions, Connect) |
+| `https://hooks.stripe.com` | frame-src | Iframes de verificação/3DS da Stripe |
+| `https://checkout.stripe.com` | form-action | Redirect para a Checkout Session hospedada da Stripe |
 | `https:` (genérico) | img-src | Logos/banners de eventos com URL externa arbitrária |
 
 ---

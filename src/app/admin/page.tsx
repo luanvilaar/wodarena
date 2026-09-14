@@ -156,6 +156,17 @@ export default function AdminPage() {
       return { text: 'Conta do Mercado Pago conectada com sucesso!', tone: 'success' };
     }
 
+    const stripeStatus = params.get('stripe_status');
+    if (stripeStatus === 'connected') {
+      return { text: 'Conta Stripe conectada com sucesso! Sua conta já pode receber pagamentos.', tone: 'success' };
+    }
+    if (stripeStatus === 'pending') {
+      return { text: 'Onboarding da Stripe recebido, mas ainda pendente de verificação. Você pode precisar completar mais dados no painel da Stripe.', tone: 'error' };
+    }
+    if (stripeStatus && stripeStatus !== 'connected' && stripeStatus !== 'pending') {
+      return { text: 'Não foi possível sincronizar a conexão com a Stripe. Tente novamente.', tone: 'error' };
+    }
+
     if (!errorParam) return null;
 
     let msg = 'Falha ao conectar conta do Mercado Pago.';
@@ -194,8 +205,9 @@ export default function AdminPage() {
 
     const code = params.get('code');
     const state = params.get('state');
+    const stripeStatus = params.get('stripe_status');
 
-    return code && state ? 'payments' : 'dashboard';
+    return (code && state) || stripeStatus ? 'payments' : 'dashboard';
   };
   const [activeTab, setActiveTab] = useState<AdminTab>(resolveInitialAdminTab);
 
@@ -203,6 +215,11 @@ export default function AdminPage() {
   const [mpAccount, setMpAccount] = useState<{ id: string; mercadopago_user_id: string; status: string; public_key?: string; connectionType?: 'oauth' | 'manual' | 'oauth_unverified' | 'platform_account'; requiresOAuthReconnect?: boolean } | null>(null);
   const [loadingMp, setLoadingMp] = useState(false);
   const oauthCallbackProcessed = useRef(false);
+
+  // Estados para integração do Stripe Connect (eventos EUR/GBP)
+  const [stripeAccount, setStripeAccount] = useState<{ stripe_account_id: string; country: string; default_currency: string; charges_enabled: boolean; payouts_enabled: boolean; details_submitted: boolean; status: string } | null>(null);
+  const [loadingStripe, setLoadingStripe] = useState(false);
+  const [connectingStripeCountry, setConnectingStripeCountry] = useState<'PT' | 'GB' | null>(null);
 
   // Estados para re-tentativa de pagamento por Pix
   const [payingPixRegistration, setPayingPixRegistration] = useState<{ reg: Registration; event: Event; athlete: Athlete } | null>(null);
@@ -303,9 +320,10 @@ export default function AdminPage() {
       const params = new URLSearchParams(window.location.search);
       const success = params.get('success');
       const errorParam = params.get('error');
+      const stripeStatus = params.get('stripe_status');
 
-      if (success === 'mp_connected' || errorParam) {
-        window.history.replaceState({}, '', window.location.pathname);
+      if (success === 'mp_connected' || errorParam || stripeStatus) {
+        window.history.replaceState({}, '', `${window.location.pathname}?tab=payments`);
       }
     }
   }, []);
@@ -400,6 +418,80 @@ export default function AdminPage() {
     }
   }, [activeTab, currentUser]);
 
+  useEffect(() => {
+    const fetchStripeAccount = async () => {
+      if (!currentUser) return;
+      setLoadingStripe(true);
+      try {
+        const response = await fetch('/api/admin/stripe');
+        if (!response.ok) {
+          throw new Error('Erro ao buscar conta Stripe.');
+        }
+        const { account: data } = await response.json();
+        setStripeAccount(data && data.status !== 'disconnected' ? data : null);
+      } catch (err) {
+        console.error('Erro ao buscar conta da Stripe:', err);
+      } finally {
+        setLoadingStripe(false);
+      }
+    };
+
+    if (activeTab === 'payments' && currentUser) {
+      fetchStripeAccount();
+    }
+  }, [activeTab, currentUser]);
+
+  const handleConnectStripe = async (country: 'PT' | 'GB') => {
+    setConnectingStripeCountry(country);
+    setAdminNotice(null);
+    try {
+      const response = await fetch(`/api/admin/stripe?action=onboarding_url&country=${country}`);
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Erro ao obter URL de conexão com a Stripe.');
+      }
+      const { url } = await response.json();
+      if (!url) {
+        throw new Error('URL de onboarding inválida retornada pelo servidor.');
+      }
+      window.location.href = url;
+    } catch (err) {
+      console.error('Erro ao conectar com a Stripe:', err);
+      setAdminNotice({
+        text: err instanceof Error ? err.message : 'Não foi possível iniciar a conexão com a Stripe.',
+        tone: 'error'
+      });
+      setConnectingStripeCountry(null);
+    }
+  };
+
+  const handleDisconnectStripe = async () => {
+    if (!currentUser) return;
+    if (!confirm('Deseja realmente desconectar sua conta Stripe? As inscrições online para eventos em EUR/GBP serão suspensas.')) return;
+    setLoadingStripe(true);
+    try {
+      const response = await fetch('/api/admin/stripe', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({})
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || 'Erro ao desconectar conta Stripe no servidor.');
+      }
+
+      setStripeAccount(null);
+      setAdminNotice({ text: 'Conta Stripe desconectada com sucesso.', tone: 'success' });
+    } catch (err) {
+      console.error('Erro ao desconectar Stripe:', err);
+      setAdminNotice({ text: err instanceof Error ? err.message : 'Erro ao desconectar conta Stripe.', tone: 'error' });
+    } finally {
+      setLoadingStripe(false);
+    }
+  };
 
   const handleDisconnectMp = async () => {
     if (!currentUser) return;
@@ -9629,6 +9721,110 @@ export default function AdminPage() {
                           </div>
                         </div>
 
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="border-t border-card-border pt-6">
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary font-sans">Eventos internacionais</p>
+                  <h3 className="mt-2 text-2xl font-bold tracking-tight text-white uppercase">
+                    Stripe Connect
+                  </h3>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-muted font-sans">
+                    Necessário apenas para eventos com moeda EUR ou GBP. Eventos em BRL continuam usando o Mercado Pago acima.
+                  </p>
+                </div>
+
+                {loadingStripe ? (
+                  <div className="flex justify-center items-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {stripeAccount && stripeAccount.charges_enabled && (
+                      <div className="rounded-lg border border-primary/20 bg-primary/5 p-5">
+                        <div className="flex items-start gap-4">
+                          <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg text-primary">
+                            <CreditCard className="h-6 w-6" aria-hidden="true" />
+                          </div>
+                          <div className="space-y-1 flex-grow">
+                            <p className="text-xs font-bold uppercase text-primary font-sans">Status: Conectado</p>
+                            <p className="text-sm font-semibold text-white">
+                              Sua conta Stripe está integrada e pronta para receber pagamentos.
+                            </p>
+                            <div className="pt-2 text-xs text-muted space-y-1">
+                              <p><strong>País:</strong> {stripeAccount.country}</p>
+                              <p><strong>Moeda:</strong> {stripeAccount.default_currency?.toUpperCase()}</p>
+                              <p><strong>ID da Conta:</strong> {stripeAccount.stripe_account_id}</p>
+                            </div>
+                            <div className="pt-3">
+                              <button
+                                type="button"
+                                onClick={handleDisconnectStripe}
+                                className="flex min-h-10 items-center justify-center rounded-md bg-red-600 hover:bg-red-700 text-white px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors font-sans"
+                              >
+                                Desconectar Conta
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {stripeAccount && !stripeAccount.charges_enabled && (
+                      <div className="rounded-lg border border-amber-400/30 bg-amber-400/10 p-6 space-y-4">
+                        <div>
+                          <h4 className="text-sm font-bold text-amber-200 uppercase tracking-wider font-sans">Onboarding pendente</h4>
+                          <p className="mt-2 text-xs leading-5 text-amber-100/80">
+                            Sua conta Stripe ({stripeAccount.country}) foi criada, mas o onboarding ainda não foi concluído. Finalize o cadastro no formulário da Stripe para começar a receber pagamentos.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleConnectStripe(stripeAccount.country as 'PT' | 'GB')}
+                          disabled={connectingStripeCountry !== null}
+                          className="w-full flex min-h-12 items-center justify-center gap-3 rounded-md bg-sky-500 hover:bg-sky-600 disabled:opacity-50 text-white px-6 py-3 text-xs font-bold uppercase tracking-wider transition-colors font-sans"
+                        >
+                          {connectingStripeCountry ? 'Redirecionando...' : <><CreditCard className="h-4 w-4" /> Continuar onboarding</>}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleDisconnectStripe}
+                          className="w-full flex min-h-10 items-center justify-center rounded-md border border-red-500/40 text-red-300 hover:bg-red-500/10 px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors font-sans"
+                        >
+                          Desconectar Conta
+                        </button>
+                      </div>
+                    )}
+
+                    {!stripeAccount && (
+                      <div className="rounded-lg border border-primary/20 bg-primary/5 p-6 space-y-4">
+                        <div className="border-b border-primary/10 pb-3">
+                          <h4 className="text-sm font-bold text-white uppercase tracking-wider font-sans">Conectar conta Stripe</h4>
+                          <p className="text-[11px] text-muted leading-relaxed mt-1">
+                            Escolha o país da sua conta bancária. Uma conta Stripe Express é fixa ao país escolhido na criação.
+                          </p>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => handleConnectStripe('PT')}
+                            disabled={connectingStripeCountry !== null}
+                            className="w-full flex min-h-12 items-center justify-center gap-3 rounded-md bg-sky-500 hover:bg-sky-600 disabled:opacity-50 text-white px-6 py-3 text-xs font-bold uppercase tracking-wider transition-colors font-sans"
+                          >
+                            {connectingStripeCountry === 'PT' ? 'Redirecionando...' : <><CreditCard className="h-4 w-4" /> Portugal (EUR)</>}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleConnectStripe('GB')}
+                            disabled={connectingStripeCountry !== null}
+                            className="w-full flex min-h-12 items-center justify-center gap-3 rounded-md bg-sky-500 hover:bg-sky-600 disabled:opacity-50 text-white px-6 py-3 text-xs font-bold uppercase tracking-wider transition-colors font-sans"
+                          >
+                            {connectingStripeCountry === 'GB' ? 'Redirecionando...' : <><CreditCard className="h-4 w-4" /> Reino Unido (GBP)</>}
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>

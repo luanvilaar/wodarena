@@ -1,4 +1,7 @@
 import type { NextConfig } from "next";
+import createNextIntlPlugin from "next-intl/plugin";
+
+const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 
 const isDev = process.env.NODE_ENV !== "production";
 
@@ -27,21 +30,22 @@ const cspDirectives: string[] = [
   "default-src 'self'",
   // 'unsafe-inline' é necessário para os scripts inline de bootstrap/hydration do Next.js.
   // 'unsafe-eval' apenas em desenvolvimento (React Refresh usa eval); nunca em produção.
-  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} https://sdk.mercadopago.com https://*.mercadopago.com https://*.mlstatic.com`,
+  // js.stripe.com: SDK Stripe.js/Elements para eventos em EUR/GBP.
+  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} https://sdk.mercadopago.com https://*.mercadopago.com https://*.mlstatic.com https://js.stripe.com`,
   // Next.js e Tailwind injetam estilos inline; baixo risco de XSS.
   "style-src 'self' 'unsafe-inline'",
   // data: (QR Code PIX em base64), blob: (downloads), https: (logos/banners de eventos são URLs externas arbitrárias).
   "img-src 'self' data: blob: https:",
   // Fontes auto-hospedadas pelo next/font (sem CDN externo).
   "font-src 'self' data:",
-  // Supabase (REST/auth/storage + realtime via wss) e APIs do Mercado Pago (tokenização de cartão).
-  `connect-src 'self' ${supabaseHttp} ${supabaseWss} https://api.mercadopago.com https://*.mercadopago.com https://*.mlstatic.com`,
-  // Iframes do SDK Mercado Pago (Secure Fields / Bricks).
-  "frame-src 'self' https://*.mercadopago.com https://*.mlstatic.com https://www.youtube-nocookie.com",
+  // Supabase (REST/auth/storage + realtime via wss), Mercado Pago (tokenização de cartão) e Stripe (Checkout/Elements/Connect).
+  `connect-src 'self' ${supabaseHttp} ${supabaseWss} https://api.mercadopago.com https://*.mercadopago.com https://*.mlstatic.com https://api.stripe.com`,
+  // Iframes do SDK Mercado Pago (Secure Fields / Bricks) e do Stripe (Elements/Checkout hospedado).
+  "frame-src 'self' https://*.mercadopago.com https://*.mlstatic.com https://www.youtube-nocookie.com https://js.stripe.com https://hooks.stripe.com",
   // Anti-clickjacking (substituto moderno do X-Frame-Options).
   "frame-ancestors 'self'",
-  // Permite o redirect de checkout (init_point) para o Mercado Pago.
-  "form-action 'self' https://*.mercadopago.com",
+  // Permite o redirect de checkout (init_point do Mercado Pago / Checkout Session da Stripe).
+  "form-action 'self' https://*.mercadopago.com https://checkout.stripe.com",
   "base-uri 'self'",
   "object-src 'none'",
   "worker-src 'self' blob:",
@@ -101,4 +105,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withNextIntl(nextConfig);
