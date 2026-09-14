@@ -8,7 +8,7 @@ import { BrandLogo } from '@/components/BrandLogo';
 import { compareEventsByDateAsc, compareEventsByDateDesc, getEventStatus } from '@/lib/eventStatus';
 import { getManagerAccessStatus, getManagerAccessStatusLabel } from '@/lib/managerAccess';
 import { CommercialLead, Event } from '@/types';
-import { getCommercialLeadEmailStatusLabel, getCommercialLeadStatusLabel } from '@/lib/commercialLeads';
+import { getCommercialLeadCountryLabel, getCommercialLeadEmailStatusLabel, getCommercialLeadStatusLabel } from '@/lib/commercialLeads';
 import {
   Shield, LayoutDashboard, Users, Trophy, DollarSign,
   UserPlus, Calendar, Medal, LogOut, KeyRound, Building, ShieldCheck, ShieldAlert, Clock3, Star
@@ -994,7 +994,8 @@ export default function OwnerPage() {
                           </div>
                           <dl className="mt-4 space-y-3 border-t border-card-border pt-3 text-xs">
                             <div><dt className="text-[10px] uppercase tracking-wider text-muted">Evento</dt><dd className="mt-1 font-medium text-white">{lead.eventName}</dd></div>
-                            <div className="grid grid-cols-2 gap-3"><div><dt className="text-[10px] uppercase tracking-wider text-muted">Local</dt><dd className="mt-1 text-white">{lead.city} / {lead.state}</dd></div><div><dt className="text-[10px] uppercase tracking-wider text-muted">Origem</dt><dd className="mt-1 text-white">{lead.source}</dd></div></div>
+                            <div className="grid grid-cols-2 gap-3"><div><dt className="text-[10px] uppercase tracking-wider text-muted">Local</dt><dd className="mt-1 text-white">{lead.city} / {lead.state}</dd></div><div><dt className="text-[10px] uppercase tracking-wider text-muted">País</dt><dd className="mt-1 text-white">{getCommercialLeadCountryLabel(lead.country, lead.countryOther)}</dd></div></div>
+                            <div><dt className="text-[10px] uppercase tracking-wider text-muted">Origem</dt><dd className="mt-1 text-white">{lead.source}</dd></div>
                             <div><dt className="text-[10px] uppercase tracking-wider text-muted">Notificação</dt><dd className="mt-1"><span className={`inline-flex rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-wider ${lead.ownerEmailNotificationStatus === 'sent' ? 'border-primary/20 bg-primary/10 text-primary' : lead.ownerEmailNotificationStatus === 'failed' ? 'border-red-500/30 bg-red-950/20 text-red-300' : 'border-card-border bg-dark-gray text-muted'}`}>{getCommercialLeadEmailStatusLabel(lead.ownerEmailNotificationStatus)}</span></dd></div>
                             <div className="grid grid-cols-2 gap-3"><div><dt className="text-[10px] uppercase tracking-wider text-muted">Cadastro</dt><dd className="mt-1 text-white">{formatDateTime(lead.submittedAt)}</dd></div><div><dt className="text-[10px] uppercase tracking-wider text-muted">Aceite</dt><dd className="mt-1 text-white">{formatDateTime(lead.acceptedAt)}</dd></div></div>
                             {lead.ownerEmailError && lead.ownerEmailNotificationStatus === 'failed' && <div><dt className="text-[10px] uppercase tracking-wider text-muted">Erro de notificação</dt><dd className="mt-1 text-red-300">{lead.ownerEmailError}</dd></div>}
@@ -1010,6 +1011,7 @@ export default function OwnerPage() {
                             <th className="px-3 py-3">Gestor</th>
                             <th className="px-3 py-3">Evento</th>
                             <th className="px-3 py-3">Cidade / UF</th>
+                            <th className="px-3 py-3">País</th>
                             <th className="px-3 py-3">Origem</th>
                             <th className="px-3 py-3">Status</th>
                             <th className="px-3 py-3">Notificacao</th>
@@ -1029,6 +1031,9 @@ export default function OwnerPage() {
                               </td>
                               <td className="px-3 py-3 align-top text-muted">
                                 {lead.city} / {lead.state}
+                              </td>
+                              <td className="px-3 py-3 align-top text-muted">
+                                {getCommercialLeadCountryLabel(lead.country, lead.countryOther)}
                               </td>
                               <td className="px-3 py-3 align-top text-muted">
                                 {lead.source}
@@ -1090,7 +1095,7 @@ export default function OwnerPage() {
                         Banner da home
                       </div>
                       <p className="max-w-2xl text-xs leading-5 text-muted">
-                        Selecione qual evento ativo sera priorizado no banner principal. Eventos encerrados ficam fora da lista de candidatos.
+                        Selecione qual evento ativo abre o carrossel do banner principal. Os demais eventos ativos completam os proximos slides automaticamente, por ordem de data. Eventos encerrados ficam fora da lista de candidatos.
                       </p>
                       <p className="text-[11px] text-muted-soft">
                         Atual: <span className="font-bold text-white">{featuredHomeEvent?.name || 'Selecao automatica'}</span>

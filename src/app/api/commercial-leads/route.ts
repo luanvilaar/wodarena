@@ -3,12 +3,14 @@ import {
   COMMERCIAL_LEAD_SOURCE,
   COMMERCIAL_LEAD_SUCCESS_MESSAGE,
   COMMERCIAL_LEAD_TERMS_VERSION,
+  getCommercialLeadCountryLabel,
   mapCommercialLeadFromDb,
   normalizeLeadPhone,
   sanitizeLeadText
 } from '@/lib/commercialLeads';
 import { sendCommercialLeadOwnerEmail } from '@/lib/resend';
 import { checkRateLimit, createSupabaseAdmin, getClientIp, requireSession } from '@/lib/serverSecurity';
+import { CommercialLeadCountry } from '@/types';
 
 const createCommercialLeadId = () => `lead-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 const CANONICAL_COMMERCIAL_LEADS_OWNER_EMAIL = 'l.vilaar@gmail.com';
@@ -103,6 +105,8 @@ export async function POST(request: Request) {
       eventName?: string;
       city?: string;
       state?: string;
+      country?: string;
+      countryOther?: string;
       acceptedTerms?: boolean;
     };
 
@@ -110,24 +114,37 @@ export async function POST(request: Request) {
     const phone = sanitizeLeadText(String(body.phone || ''));
     const eventName = sanitizeLeadText(String(body.eventName || ''));
     const city = sanitizeLeadText(String(body.city || ''));
-    const state = sanitizeLeadText(String(body.state || '')).toUpperCase();
+    const country = sanitizeLeadText(String(body.country || '')).toUpperCase();
+    const state = sanitizeLeadText(String(body.state || ''));
+    const stateNormalized = country === 'BR' ? state.toUpperCase() : state;
+    const countryOther = country === 'OTHER' ? sanitizeLeadText(String(body.countryOther || '')) : undefined;
     const acceptedTerms = body.acceptedTerms === true;
     const phoneNormalized = normalizeLeadPhone(phone);
 
-    if (!managerName || !phone || !eventName || !city || !state) {
-      return NextResponse.json({ error: 'Nome do gestor, telefone, nome do evento, cidade e estado sao obrigatorios.' }, { status: 400 });
+    if (!managerName || !phone || !eventName || !city || !state || !country) {
+      return NextResponse.json({ error: 'Nome do gestor, telefone, nome do evento, cidade, estado/regiao e pais sao obrigatorios.' }, { status: 400 });
     }
 
     if (managerName.length < 3 || eventName.length < 3 || city.length < 2) {
       return NextResponse.json({ error: 'Preencha os campos com informacoes validas.' }, { status: 400 });
     }
 
-    if (phoneNormalized.length < 10 || phoneNormalized.length > 13) {
-      return NextResponse.json({ error: 'Informe um telefone valido com DDD.' }, { status: 400 });
+    // Faixa ampla o suficiente para numeros locais sem codigo de pais (ex.:
+    // telemovel portugues com 9 digitos) ate formato E.164 completo (15).
+    if (phoneNormalized.length < 8 || phoneNormalized.length > 15) {
+      return NextResponse.json({ error: 'Informe um telefone valido.' }, { status: 400 });
     }
 
-    if (!/^[A-Z]{2}$/.test(state)) {
+    if (!['BR', 'PT', 'GB', 'OTHER'].includes(country)) {
+      return NextResponse.json({ error: 'Informe um pais valido.' }, { status: 400 });
+    }
+
+    if (country === 'BR' && !/^[A-Z]{2}$/.test(stateNormalized)) {
       return NextResponse.json({ error: 'Informe um estado valido no formato UF.' }, { status: 400 });
+    }
+
+    if (country === 'OTHER' && !countryOther) {
+      return NextResponse.json({ error: 'Informe o nome do pais.' }, { status: 400 });
     }
 
     if (!acceptedTerms) {
@@ -161,7 +178,9 @@ export async function POST(request: Request) {
       phone_normalized: phoneNormalized,
       event_name: eventName,
       city,
-      state,
+      state: stateNormalized,
+      country,
+      country_other: countryOther || null,
       lead_status: 'new',
       accepted_terms: true,
       accepted_at: now,
@@ -206,7 +225,8 @@ export async function POST(request: Request) {
           phone,
           eventName,
           city,
-          state,
+          state: stateNormalized,
+          country: getCommercialLeadCountryLabel(country as CommercialLeadCountry, countryOther),
           acceptedAt: now,
           submittedAt: now
         });

@@ -1,4 +1,4 @@
-import { CommercialLead, CommercialLeadEmailNotificationStatus, CommercialLeadStatus } from '@/types';
+import { CommercialLead, CommercialLeadCountry, CommercialLeadEmailNotificationStatus, CommercialLeadStatus } from '@/types';
 
 export const COMMERCIAL_LEAD_SOURCE = 'homepage-commercial-interest';
 export const COMMERCIAL_LEAD_TERMS_VERSION = 'wodarena-commercial-lead-v1';
@@ -30,6 +30,13 @@ export const getCommercialLeadEmailStatusLabel = (status: CommercialLeadEmailNot
   return 'Pendente';
 };
 
+export const getCommercialLeadCountryLabel = (country: CommercialLeadCountry, countryOther?: string) => {
+  if (country === 'BR') return 'Brasil';
+  if (country === 'PT') return 'Portugal';
+  if (country === 'GB') return 'Reino Unido';
+  return countryOther || 'Outro pais';
+};
+
 export const mapCommercialLeadFromDb = (row: CommercialLeadDbRow): CommercialLead => ({
   id: String(row.id),
   managerName: String(row.manager_name || ''),
@@ -38,6 +45,8 @@ export const mapCommercialLeadFromDb = (row: CommercialLeadDbRow): CommercialLea
   eventName: String(row.event_name || ''),
   city: String(row.city || ''),
   state: String(row.state || ''),
+  country: (row.country as CommercialLeadCountry) || 'BR',
+  countryOther: optionalString(row.country_other),
   leadStatus: String(row.lead_status || 'new') as CommercialLeadStatus,
   acceptedTerms: row.accepted_terms === true,
   acceptedAt: String(row.accepted_at || row.submitted_at || ''),
