@@ -114,9 +114,14 @@ test('home entrance motion follows the Arena Broadcast package with reduced-moti
   assert.match(sectionOperations, /home-broadcast-title/);
   assert.match(sectionOperations, /home-broadcast-video/);
   assert.match(sectionOperations, /home-broadcast-chip/);
-  assert.match(featuredBanner, /home-broadcast-featured-media|home-broadcast-featured-backdrop/);
-  assert.match(featuredBanner, /home-broadcast-featured-title/);
-  assert.match(featuredBanner, /home-broadcast-actions/);
+  // O carrossel do hero tem pacote de movimento proprio (wa-hero-*). Ele saiu
+  // do namespace home-broadcast-* porque aquelas regras usam fill-mode "both",
+  // que fixa opacity: 1 e impedia a troca de slides, e porque reduced-motion
+  // forca opacity: 1 !important em todo [class*="home-broadcast-"].
+  assert.doesNotMatch(featuredBanner, /home-broadcast-/);
+  assert.match(globals, /@keyframes wa-hero-copy-in/);
+  assert.match(globals, /@media \(prefers-reduced-motion: no-preference\)[\s\S]*\.wa-hero__copy/);
+  assert.match(featuredBanner, /className="wa-hero/);
   assert.match(homePage, /home-broadcast-event-card/);
   assert.match(homePage, /Math\.min\(index, 5\)/);
 });
@@ -153,7 +158,10 @@ test('hero master and optimized derivatives keep the intended codecs and file we
   assert.ok(poster.size < 300_000, 'poster should stay under 300 KB');
 });
 
-test('featured banner image is no longer marked priority now that it does not open the home', () => {
-  assert.doesNotMatch(featuredBanner, /\bpriority\b/);
-  assert.match(featuredBanner, /loading="lazy"/);
+test('featured banner opens the home, so its first artwork is the prioritized LCP candidate', () => {
+  // O banner voltou a ser o primeiro bloco visivel da home: a arte do slide
+  // inicial e o elemento LCP real e nao pode entrar por lazy loading. As
+  // demais artes continuam sob demanda.
+  assert.match(featuredBanner, /priority=\{isFirstSlide\}/);
+  assert.match(featuredBanner, /loading=\{isFirstSlide \? undefined : 'lazy'\}/);
 });

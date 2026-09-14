@@ -220,6 +220,70 @@ input[type=number] {
   }
 }
 
+/* Carrossel do hero da home. Vive fora do namespace home-broadcast-* de
+   proposito: aquelas regras aplicam animation com fill-mode "both", que fixa
+   opacity: 1 no nivel de cascata de animacoes e anula a troca de slides. */
+.wa-hero__scrim {
+  pointer-events: none;
+  /* Mobile: a coluna de texto ocupa a largura toda, entao a faixa de leitura
+     so pode vir do eixo vertical. O terco superior fica limpo para a arte. */
+  background: linear-gradient(
+    180deg,
+    rgba(11, 14, 17, 0.34) 0%,
+    rgba(11, 14, 17, 0.16) 18%,
+    rgba(11, 14, 17, 0.82) 40%,
+    rgba(11, 14, 17, 0.95) 66%,
+    rgba(11, 14, 17, 0.98) 100%
+  );
+}
+
+@media (min-width: 640px) {
+  /* A partir de sm o texto ocupa so a coluna esquerda: alivia o escurecimento
+     vertical e devolve area limpa a arte do organizador. */
+  .wa-hero__scrim {
+    background:
+      linear-gradient(
+        180deg,
+        rgba(11, 14, 17, 0.24) 0%,
+        rgba(11, 14, 17, 0.06) 26%,
+        rgba(11, 14, 17, 0.58) 64%,
+        rgba(11, 14, 17, 0.96) 100%
+      ),
+      linear-gradient(
+        90deg,
+        rgba(11, 14, 17, 0.92) 0%,
+        rgba(11, 14, 17, 0.6) 32%,
+        rgba(11, 14, 17, 0) 66%
+      );
+  }
+}
+
+/* O gradiente sozinho nao cobre toda arte possivel: o organizador envia o
+   banner que quiser. A sombra garante o contraste do texto sem precisar
+   escurecer a imagem inteira. Nao se aplica aos botoes, que tem fundo proprio. */
+.wa-hero__text {
+  text-shadow: 0 2px 16px rgba(11, 14, 17, 0.72);
+}
+
+@keyframes wa-hero-copy-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* backwards, nunca "both": a animacao so pinta o estado inicial durante o
+     delay e devolve o controle ao valor natural quando termina. */
+  .wa-hero__copy {
+    animation: wa-hero-copy-in 420ms var(--motion-broadcast-ease) backwards;
+  }
+}
+
 @keyframes home-broadcast-modal-overlay {
   from {
     opacity: 0;
@@ -271,22 +335,6 @@ input[type=number] {
   .home-broadcast-video {
     animation: home-broadcast-video 760ms var(--motion-broadcast-ease) both;
     animation-delay: 260ms;
-  }
-
-  .home-broadcast-featured-media,
-  .home-broadcast-featured-backdrop {
-    animation: home-broadcast-video 620ms var(--motion-broadcast-ease) both;
-    animation-delay: 120ms;
-  }
-
-  .home-broadcast-featured-copy {
-    animation: home-broadcast-rise 520ms var(--motion-broadcast-ease) both;
-    animation-delay: 210ms;
-  }
-
-  .home-broadcast-featured-title {
-    animation: home-broadcast-title 640ms var(--motion-broadcast-ease) both;
-    animation-delay: 270ms;
   }
 
   .home-broadcast-modal-overlay {

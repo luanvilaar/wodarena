@@ -148,7 +148,7 @@ test('manual ticketing closure has one public signal and blocks only new checkou
   assert.match(eventCard, /getRegistrationAvailability\(event\)/);
   assert.match(eventCard, /t\('salesClosedBadge'\)/);
   assert.match(ptBrMessages, /"salesClosedBadge": "Vendas Encerradas"/);
-  assert.match(featuredBanner, /const registrationAvailability = event \? getRegistrationAvailability\(event\) : null;/);
+  assert.match(featuredBanner, /const activeAvailability = activeEvent \? getRegistrationAvailability\(activeEvent\) : null;/);
   assert.match(featuredBanner, /t\('salesClosedBadge'\)/);
   assert.match(ptBrMessages, /"salesClosedBadge": "Vendas encerradas"/);
   assert.match(eventPage, /const registrationAvailability = getRegistrationAvailability\(event\)/);
