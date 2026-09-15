@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
-import { Link } from '@/i18n/navigation';
+import { Link, useRouter } from '@/i18n/navigation';
 import { useApp } from '@/context/AppContext';
 import { EventCard } from '@/components/EventCard';
 import { SectionOperations } from '@/components/home/SectionOperations';
@@ -61,6 +62,8 @@ export function HomeView() {
   const locale = useLocale() as AppLocale;
   const defaultLeadCountry = DEFAULT_COUNTRY_BY_LOCALE[locale] || 'BR';
   const { events } = useApp();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | EventStatus>('all');
   const [leadFormOpen, setLeadFormOpen] = useState(false);
@@ -68,6 +71,18 @@ export function HomeView() {
   const [leadSubmitting, setLeadSubmitting] = useState(false);
   const [leadErrorMessage, setLeadErrorMessage] = useState('');
   const [leadSuccessMessage, setLeadSuccessMessage] = useState('');
+
+  // CTAs fora da home (ex.: "Organize seu evento" no rodapé, presente em
+  // todas as páginas) chegam aqui via "/?organizar=1" — abre o modal de lead
+  // e limpa o parâmetro da URL para não reabrir num refresh ou "voltar".
+  useEffect(() => {
+    if (searchParams.get('organizar') !== '1') return;
+    const timer = setTimeout(() => {
+      setLeadFormOpen(true);
+      router.replace('/', { scroll: false });
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [searchParams, router]);
 
   const statusTabs: { id: 'all' | EventStatus; label: string }[] = [
     { id: 'all', label: t('filters.all') },

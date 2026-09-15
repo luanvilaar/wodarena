@@ -11,6 +11,7 @@
   --primary-on-light: #9a7200;
   --muted: #929aa5;
   --muted-soft: #707a8a;
+  --muted-soft-on-light: #5b6472;
   --dark-gray: #181a20;
   --elevated: #2b3139;
   --canvas-light: #ffffff;
@@ -36,6 +37,7 @@
   --color-primary-on-light: var(--primary-on-light);
   --color-muted: var(--muted);
   --color-muted-soft: var(--muted-soft);
+  --color-muted-soft-on-light: var(--muted-soft-on-light);
   --color-dark-gray: var(--dark-gray);
   --color-elevated: var(--elevated);
   --color-canvas-light: var(--canvas-light);
