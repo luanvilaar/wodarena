@@ -14,7 +14,7 @@ import { Event } from '@/types';
 const MAX_EVENT_SLIDES = 4;
 const AUTOPLAY_INTERVAL_MS = 6000;
 const SWIPE_THRESHOLD_PX = 40;
-const FALLBACK_SLIDE_IMAGE = '/hero-vertical-poster.jpg';
+const FALLBACK_SLIDE_IMAGE = '/hero-organize-banner.jpg';
 
 const PRIMARY_CTA_CLASS =
   'inline-flex h-11 items-center gap-2 rounded-md bg-primary px-6 text-sm font-black uppercase text-ink transition-colors hover:bg-primary-hover active:bg-primary-hover';
