@@ -362,3 +362,35 @@ input[type=number] {
     transform: none !important;
   }
 }
+
+@keyframes splash-pulse {
+  0%,
+  100% {
+    transform: scale(0.93);
+    opacity: 0.82;
+  }
+  50% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes splash-bar-slide {
+  from {
+    left: -40%;
+  }
+  to {
+    left: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .splash-mark {
+    animation: splash-pulse 2000ms ease-in-out infinite;
+    transform-origin: 50% 50%;
+  }
+
+  .splash-bar-fill {
+    animation: splash-bar-slide 1500ms cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
+}

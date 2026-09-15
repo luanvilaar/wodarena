@@ -10,7 +10,7 @@ const publicPayload = read('../src/lib/bootstrapPayload.ts');
 const privateRoute = read('../src/app/api/app/bootstrap/route.ts');
 const publicEventRoute = read('../src/app/api/app/bootstrap/public/event/[id]/route.ts');
 const loadingWrapper = read('../src/components/AppLoadingWrapper.tsx');
-const loadingOverlay = read('../src/components/LoadingOverlay.tsx');
+const splashScreen = read('../src/components/SplashScreen.tsx');
 const eventPage = read('../src/app/[locale]/event/[id]/EventView.tsx');
 const leaderboard = read('../src/components/Leaderboard.tsx');
 const envExample = read('../.env.example');
@@ -87,12 +87,16 @@ test('private bootstrap applies role scope before returning rows', () => {
   assert.match(privateRoute, /readBootstrapQuery/);
 });
 
-test('shell remains visible and exposes recoverable bootstrap errors', () => {
+test('shell stays mounted under the splash and exposes recoverable bootstrap errors', () => {
+  // children continuam montados por baixo do splash (React nunca desmonta a
+  // arvore durante o boot) — so a camada visual acima e que cobre a tela.
   assert.match(loadingWrapper, /\{children\}/);
   assert.match(loadingWrapper, /bootstrapStatus === 'error' \|\| bootstrapStatus === 'degraded'/);
   assert.match(loadingWrapper, /onClick=\{retryBootstrap\}/);
-  assert.match(loadingOverlay, /role="status"/);
-  assert.doesNotMatch(loadingOverlay, /fixed inset-0/);
+  assert.match(splashScreen, /role="status"/);
+  // O splash de boot cobre a tela inteira de proposito (tela de logo + barra),
+  // diferente do antigo indicador nao-bloqueante em forma de pill.
+  assert.match(splashScreen, /fixed inset-0/);
   assert.doesNotMatch(appContext, /INITIAL_(EVENTS|ATHLETES|SCORES|USERS)/);
 });
 

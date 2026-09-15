@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { useApp } from '@/context/AppContext';
-import { LoadingOverlay } from './LoadingOverlay';
+import { SplashScreen } from './SplashScreen';
 
 interface AppLoadingWrapperProps {
   children: React.ReactNode;
@@ -13,7 +13,7 @@ export function AppLoadingWrapper({ children }: AppLoadingWrapperProps) {
 
   return (
     <>
-      {isLoading && <LoadingOverlay />}
+      <SplashScreen active={isLoading} />
       {(bootstrapStatus === 'error' || bootstrapStatus === 'degraded') && (
         <div
           className="fixed inset-x-4 top-20 z-[9998] mx-auto flex max-w-xl items-center justify-between gap-4 rounded-lg border border-red-500/30 bg-[#17191d]/95 px-4 py-3 text-sm text-white shadow-2xl backdrop-blur-md"
