@@ -500,7 +500,11 @@ export function EventView({ eventId }: { eventId: string }) {
 
   const lifecycle = getEventStatus(event);
   const registrationAvailability = getRegistrationAvailability(event);
-  const registrationsAvailable = event.status === 'upcoming'
+  // Qualifiers online ficam "live" durante toda a janela de submissão — período em que
+  // as inscrições continuam abertas. Para os demais tipos, "live" indica que o evento
+  // presencial já começou e as vendas devem travar mesmo com isTicketingActive ligado.
+  const isQualifierEvent = event.eventType === 'functional_fitness_qualifier';
+  const registrationsAvailable = (isQualifierEvent || event.status === 'upcoming')
     && registrationAvailability.isAvailable;
 
   // Copiar link para compartilhar
@@ -671,7 +675,7 @@ export function EventView({ eventId }: { eventId: string }) {
                 <span>{shareFeedback ? t('copied') : t('share')}</span>
               </button>
 
-              {event.status === 'upcoming' && (
+              {(event.status === 'upcoming' || isQualifierEvent) && (
                 <button
                   disabled={!registrationsAvailable}
                   onClick={() => {
@@ -689,7 +693,7 @@ export function EventView({ eventId }: { eventId: string }) {
               )}
             </div>
 
-            {registrationAvailability.reason === 'sales_closed' && event.status === 'upcoming' && (
+            {registrationAvailability.reason === 'sales_closed' && (event.status === 'upcoming' || isQualifierEvent) && (
               <p role="status" className="text-center text-xs font-semibold text-gray-300 md:text-right">
                 {t('salesClosedNotice')}
               </p>
