@@ -14,9 +14,10 @@ import PixPaymentModal from '@/components/PixPaymentModal';
 import { QualifierAthleteSubmissions } from '@/components/QualifierAthleteSubmissions';
 import { QualifierAthleteContestation } from '@/components/QualifierAthleteContestation';
 import { QualifierManagerPanel } from '@/components/QualifierManagerPanel';
+import { DashboardOverview } from '@/components/admin/DashboardOverview';
 import {
   LayoutDashboard, Calendar, Trophy,
-  ClipboardCheck, LogIn, LogOut, DollarSign, Users, Ticket, Settings,
+  ClipboardCheck, LogIn, LogOut, Ticket, Settings,
   Upload, X, Trash2, Plus, ShieldAlert, Pencil, Copy, GripVertical, ArrowDown, ArrowUp, Library, ReceiptText, Mail, CreditCard,
   Lock, QrCode, FileSpreadsheet, ChevronDown, Loader2
 } from 'lucide-react';
@@ -52,6 +53,7 @@ import { getEventStatus as getEventLifecycle, compareEventsByDateAsc, compareEve
 import { CONTESTATION_CREDITS_LIMIT, getContestationStatusLabel } from '@/lib/contestations';
 import { FITNESS_RACING_AGE_GROUPS, FITNESS_RACING_STATION_LIBRARY, buildFitnessRacingCourse, getAgeGroupFromDate } from '@/lib/fitnessRacing';
 import { buildDivisionOrderMap, getDivisionOrderPosition, moveDivisionId, shiftDivisionId } from '@/lib/divisionOrder';
+import { buildManagerFinanceSummary } from '@/lib/managerFinance';
 import { getTeamDisplayName } from '@/lib/teamDisplay';
 import { fortalezaDateTimeLocalToUtc, normalizeQualifierSubmissionWindow, utcToFortalezaDateTimeLocal } from '@/lib/submissionWindow';
 import { SCORE_TIE_BREAKER_SPLIT_KEY, shouldUseTimeTieBreaker } from '@/lib/scoring';
@@ -1040,14 +1042,9 @@ export default function AdminPage() {
     const eventIds = managerEvents.map(e => e.id);
     const activeEventsCount = managerEvents.filter(e => e.status === 'live').length;
     const finishedEventsCount = managerEvents.filter(e => e.status === 'finished').length;
-    const upcomingEventsCount = managerEvents.filter(e => e.status === 'upcoming').length;
 
     const managerRegs = registrations.filter(r => eventIds.includes(r.eventId));
     const approvedRegs = managerRegs.filter(r => r.paymentStatus === 'payment_approved');
-    const grossRevenue = approvedRegs.reduce((sum, r) => sum + r.totalPaid, 0);
-    const netRevenue = grossRevenue * 0.9;
-    const platformFee = grossRevenue * 0.1;
-    const totalTicketsSold = approvedRegs.reduce((sum, r) => sum + r.quantity, 0);
 
     const approvedAthleteIds = new Set(
       approvedRegs.map(r => r.athleteId).filter(Boolean)
@@ -1066,41 +1063,24 @@ export default function AdminPage() {
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .slice(0, 5);
 
-    // Eventos mais acessados (simulado de forma reativa: acessos = inscritos * 3.5 + 42)
-    const eventsByAccess = [...managerEvents].map(e => {
-      const regCount = approvedRegs.filter(r => r.eventId === e.id).reduce((sum, r) => sum + r.quantity, 0);
-      return {
-        event: e,
-        accesses: Math.floor(regCount * 3.5 + 42)
-      };
-    }).sort((a, b) => b.accesses - a.accesses).slice(0, 3);
-
-    // Eventos com mais inscritos
-    const eventsByRegistrations = [...managerEvents].map(e => {
-      const regCount = approvedRegs.filter(r => r.eventId === e.id).reduce((sum, r) => sum + r.quantity, 0);
-      return {
-        event: e,
-        registrationsCount: regCount
-      };
-    }).sort((a, b) => b.registrationsCount - a.registrationsCount).slice(0, 3);
-
     return {
       totalEventsCount: managerEvents.length,
       activeEventsCount,
       finishedEventsCount,
-      upcomingEventsCount,
       totalAthletes: managerAthletes.length,
       totalTeams,
-      totalTicketsSold,
-      grossRevenue,
-      netRevenue,
-      platformFee,
       upcomingEvents,
-      latestRegistrations,
-      eventsByAccess,
-      eventsByRegistrations
+      latestRegistrations
     };
   }, [managerEvents, athletes, registrations]);
+
+  // Faturamento por evento. A regra da taxa — cobrada do atleta por fora do
+  // ingresso, portanto sem desconto sobre o que o gestor recebe — mora em
+  // managerFinance.ts para ficar testável fora da árvore de componentes.
+  const managerFinance = useMemo(
+    () => buildManagerFinanceSummary(managerEvents, registrations),
+    [managerEvents, registrations]
+  );
 
   // Lógica de Login
   const handleLogin = async (e: React.FormEvent) => {
@@ -1650,6 +1630,15 @@ export default function AdminPage() {
     } else {
       setHeatWorkoutId('');
     }
+  };
+
+  // Abre o painel de gerenciamento de um evento. Usado tanto pelos cartões de
+  // "Meus Eventos" quanto pelos atalhos do dashboard.
+  const handleOpenEventManagement = (evt: Event) => {
+    setActiveTab('my-events');
+    setSelectedEventToManage(evt);
+    initEventEditForm(evt);
+    setActiveEventTab('info');
   };
 
   // Salvar informações gerais atualizadas do evento
@@ -8816,203 +8805,14 @@ export default function AdminPage() {
 
             {/* ABA: Dashboard */}
             {activeTab === 'dashboard' && (
-              <div className="space-y-6 bg-background text-white">
-                <div className="border-b border-card-border pb-4">
-                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary font-sans">Painel de Controle</p>
-                  <h3 className="mt-1 text-2xl font-bold tracking-tight text-white uppercase">
-                    Resumo das Operações
-                  </h3>
-                </div>
-
-                {/* Grid de Métricas Principais (7 Cards) */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {/* Receita Estimada */}
-                  <div className="bg-card border border-card-border rounded-xl p-5 flex items-center justify-between hover:border-primary/30 transition-colors">
-                    <div className="space-y-1">
-                      <p className="text-[10px] uppercase font-bold text-primary tracking-wider font-sans">Receita Líquida (90%)</p>
-                      <h4 className="text-2xl font-bold font-number text-primary">{currencyFormatter.format(dashboardStats.netRevenue)}</h4>
-                      <p className="text-[9px] text-muted">
-                        Bruto: {currencyFormatter.format(dashboardStats.grossRevenue)}
-                      </p>
-                    </div>
-                    <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg text-primary">
-                      <DollarSign className="h-5 w-5" aria-hidden="true" />
-                    </div>
-                  </div>
-
-                  {/* Inscrições / Ingressos */}
-                  <div className="bg-card border border-card-border rounded-xl p-5 flex items-center justify-between hover:border-card-border/80 transition-colors">
-                    <div className="space-y-1">
-                      <p className="text-[10px] uppercase font-bold text-muted tracking-wider font-sans">Inscrições Realizadas</p>
-                      <h4 className="text-2xl font-bold font-number text-white">{dashboardStats.totalTicketsSold}</h4>
-                      <p className="text-[9px] text-muted">Vagas preenchidas</p>
-                    </div>
-                    <div className="rounded-lg border border-card-border bg-dark-gray p-3 text-muted">
-                      <Ticket className="h-5 w-5" aria-hidden="true" />
-                    </div>
-                  </div>
-
-                  {/* Total de Atletas */}
-                  <div className="bg-card border border-card-border rounded-xl p-5 flex items-center justify-between hover:border-card-border/80 transition-colors">
-                    <div className="space-y-1">
-                      <p className="text-[10px] uppercase font-bold text-muted tracking-wider font-sans">Total de Atletas</p>
-                      <h4 className="text-2xl font-bold font-number text-white">{dashboardStats.totalAthletes}</h4>
-                      <p className="text-[9px] text-muted font-sans">Competidores individuais</p>
-                    </div>
-                    <div className="rounded-lg border border-card-border bg-dark-gray p-3 text-muted">
-                      <Users className="h-5 w-5" aria-hidden="true" />
-                    </div>
-                  </div>
-
-                  {/* Total de Equipes */}
-                  <div className="bg-card border border-card-border rounded-xl p-5 flex items-center justify-between hover:border-card-border/80 transition-colors">
-                    <div className="space-y-1">
-                      <p className="text-[10px] uppercase font-bold text-muted tracking-wider font-sans">Total de Equipes</p>
-                      <h4 className="text-2xl font-bold font-number text-white">{dashboardStats.totalTeams}</h4>
-                      <p className="text-[9px] text-muted font-sans">Duplas, Trios e Quartetos</p>
-                    </div>
-                    <div className="rounded-lg border border-card-border bg-dark-gray p-3 text-muted">
-                      <Trophy className="h-5 w-5" aria-hidden="true" />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Status dos Eventos (3 cards menores em linha) */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  {/* Eventos Criados */}
-                  <div className="bg-card border border-card-border rounded-xl p-4 flex items-center justify-between hover:border-card-border/80 transition-colors">
-                    <div>
-                      <p className="text-[10px] uppercase font-bold text-muted tracking-wider font-sans">Total de Eventos</p>
-                      <h4 className="text-xl font-bold text-white mt-1">{dashboardStats.totalEventsCount}</h4>
-                    </div>
-                    <span className="text-[10px] bg-dark-gray px-2 py-1 rounded text-muted font-bold border border-card-border font-sans">Geral</span>
-                  </div>
-
-                  {/* Eventos Ativos */}
-                  <div className="bg-card border border-card-border rounded-xl p-4 flex items-center justify-between hover:border-trading-up/30 transition-colors">
-                    <div>
-                      <p className="text-[10px] uppercase font-bold text-muted tracking-wider font-sans">Eventos Ativos (Ao Vivo)</p>
-                      <h4 className="text-xl font-bold text-trading-up mt-1">{dashboardStats.activeEventsCount}</h4>
-                    </div>
-                    <span className="text-[10px] bg-trading-up/10 px-2 py-1 rounded text-trading-up font-bold border border-trading-up/25 animate-pulse font-sans">Ao Vivo</span>
-                  </div>
-
-                  {/* Eventos Finalizados */}
-                  <div className="bg-card border border-card-border rounded-xl p-4 flex items-center justify-between hover:border-card-border/80 transition-colors">
-                    <div>
-                      <p className="text-[10px] uppercase font-bold text-muted tracking-wider font-sans">Eventos Finalizados</p>
-                      <h4 className="text-xl font-bold text-muted mt-1">{dashboardStats.finishedEventsCount}</h4>
-                    </div>
-                    <span className="text-[10px] bg-dark-gray px-2 py-1 rounded text-muted font-bold border border-card-border font-sans">Concluídos</span>
-                  </div>
-                </div>
-
-                {/* Grid Duplo para Análises */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Últimas Inscrições */}
-                  <div className="bg-card border border-card-border rounded-xl p-5 space-y-4">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-white border-b border-card-border pb-2 flex items-center gap-1.5 font-sans">
-                      <ClipboardCheck className="h-4 w-4 text-primary" />
-                      <span>Últimas Inscrições Recentes</span>
-                    </h4>
-                    {dashboardStats.latestRegistrations.length === 0 ? (
-                      <p className="text-xs text-muted text-center py-4">Nenhuma inscrição registrada ainda.</p>
-                    ) : (
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
-                          <thead>
-                            <tr className="border-b border-card-border/50 text-[10px] font-bold text-muted uppercase tracking-wider font-sans">
-                              <th className="py-2">Nome</th>
-                              <th className="py-2">Preço</th>
-                              <th className="py-2">Data</th>
-                              <th className="py-2 text-right">Status</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-card-border/30 text-xs font-normal">
-                            {dashboardStats.latestRegistrations.map(reg => {
-                              const statusMeta = getPaymentStatusMeta(reg.paymentStatus);
-                              return (
-                                <tr key={reg.id} className="hover:bg-dark-gray/30 transition-colors">
-                                  <td className="py-2.5 font-semibold text-white">{reg.athleteName}</td>
-                                  <td className="py-2.5 font-number text-primary">{currencyFormatter.format(reg.totalPaid)}</td>
-                                  <td className="py-2.5 text-muted">{new Date(reg.createdAt).toLocaleDateString('pt-BR')}</td>
-                                  <td className="py-2.5 text-right">
-                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase font-sans ${getPaymentStatusClassName(statusMeta.tone)}`}>
-                                      {statusMeta.label}
-                                    </span>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Próximos Eventos */}
-                  <div className="bg-card border border-card-border rounded-xl p-5 space-y-4">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-white border-b border-card-border pb-2 flex items-center gap-1.5 font-sans">
-                      <Calendar className="h-4 w-4 text-primary" />
-                      <span>Próximas Competições</span>
-                    </h4>
-                    {dashboardStats.upcomingEvents.length === 0 ? (
-                      <p className="text-xs text-muted text-center py-4">Nenhum evento agendado para breve.</p>
-                    ) : (
-                      <div className="space-y-3">
-                        {dashboardStats.upcomingEvents.map(e => (
-                          <div key={e.id} className="flex items-center justify-between p-2 rounded-lg bg-dark-gray/30 border border-card-border/50 hover:border-primary/20 transition-colors">
-                            <div>
-                              <h5 className="text-xs font-bold text-white uppercase">{e.name}</h5>
-                              <p className="text-[10px] text-muted">{e.location} · {e.date}</p>
-                            </div>
-                            <span className="text-[9px] font-bold bg-primary/20 text-primary px-2 py-0.5 rounded border border-primary/30 uppercase font-sans">Em Breve</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Grid Duplo: Engajamento & Desempenho */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Eventos com Mais Inscritos */}
-                  <div className="bg-card border border-card-border rounded-xl p-5 space-y-4">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-white border-b border-card-border pb-2 flex items-center gap-1.5 font-sans">
-                      <Users className="h-4 w-4 text-primary" />
-                      <span>Competições por Volume de Inscritos</span>
-                    </h4>
-                    <div className="space-y-3">
-                      {dashboardStats.eventsByRegistrations.map(({ event, registrationsCount }) => (
-                        <div key={event.id} className="flex items-center justify-between p-2.5 rounded-lg bg-dark-gray/25 border border-card-border/40 hover:border-primary/20 transition-colors">
-                          <span className="text-xs font-bold text-white uppercase">{event.name}</span>
-                          <span className="text-xs font-number font-bold text-primary flex items-center gap-1">
-                            {registrationsCount} <span className="text-[10px] text-muted font-normal uppercase">atletas</span>
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Eventos Mais Acessados (Simulados/Visualizações) */}
-                  <div className="bg-card border border-card-border rounded-xl p-5 space-y-4">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-white border-b border-card-border pb-2 flex items-center gap-1.5 font-sans">
-                      <LayoutDashboard className="h-4 w-4 text-primary" />
-                      <span>Compromisso e Cliques (Mais Acessados)</span>
-                    </h4>
-                    <div className="space-y-3">
-                      {dashboardStats.eventsByAccess.map(({ event, accesses }) => (
-                        <div key={event.id} className="flex items-center justify-between p-2.5 rounded-lg bg-dark-gray/25 border border-card-border/40 hover:border-primary/20 transition-colors">
-                          <span className="text-xs font-bold text-white uppercase">{event.name}</span>
-                          <span className="text-xs font-number font-bold text-primary flex items-center gap-1">
-                            {accesses} <span className="text-[10px] text-muted font-normal uppercase">acessos</span>
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <DashboardOverview
+                stats={dashboardStats}
+                finance={managerFinance}
+                onSelectEvent={handleOpenEventManagement}
+                onCreateEvent={() => setActiveTab('event')}
+                getPaymentStatusMeta={getPaymentStatusMeta}
+                getPaymentStatusClassName={getPaymentStatusClassName}
+              />
             )}
 
             {/* ABA: Meus Eventos */}
@@ -9097,11 +8897,7 @@ export default function AdminPage() {
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    setSelectedEventToManage(evt);
-                                    initEventEditForm(evt);
-                                    setActiveEventTab('info');
-                                  }}
+                                  onClick={() => handleOpenEventManagement(evt)}
                                   className="inline-flex min-h-9 items-center justify-center rounded bg-primary hover:bg-primary-hover px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-ink transition-colors font-sans"
                                 >
                                   Gerenciar Evento
