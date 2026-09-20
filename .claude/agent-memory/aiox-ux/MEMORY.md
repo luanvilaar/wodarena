@@ -1,1 +1,1 @@
-- [Design System](project_design-system.md) — Binance-inspired DS; tokens in globals.css, reference in desinger-novo.md; 2 standing conformance gaps (fonts not loaded, red CTA)
+- [Design System](project_design-system.md) — tokens, piso de qualidade UI (sem shadow/gradiente), direção da aba Horário, gaps de conformidade

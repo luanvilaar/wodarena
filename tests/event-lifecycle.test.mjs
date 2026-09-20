@@ -125,7 +125,7 @@ test('public surfaces consistently hide registration for derived finished events
   assert.match(homePage, /statusFilter === 'finished' && lifecycle === 'finished'/);
   assert.match(homePage, /statusFilter === 'upcoming' && event\.status === 'upcoming' && lifecycle !== 'finished'/);
   assert.match(featuredBanner, /getEventStatus\(event\) !== 'finished'/);
-  assert.match(eventPage, /const registrationsAvailable = event\.status === 'upcoming'/);
+  assert.match(eventPage, /const registrationsAvailable = \(isQualifierEvent \|\| event\.status === 'upcoming'\)/);
   assert.match(eventPage, /disabled=\{!registrationsAvailable\}/);
 });
 

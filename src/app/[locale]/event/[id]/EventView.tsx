@@ -400,6 +400,30 @@ export function EventView({ eventId }: { eventId: string }) {
 
     return blocks;
   }, [scheduleHeatGroups, scheduleItems, scheduleHeatFallbackTitle]);
+  // Agrupa os blocos (já cronológicos) por dia para a navegação e os cabeçalhos de dia do
+  // painel. Uma prova que atravessa a virada do dia fica ancorada no dia da sua primeira
+  // bateria — o cabeçalho da prova (groupDateHeading, mais abaixo) já declara as duas datas
+  // nesse caso, então a informação não se perde.
+  const scheduleDays = React.useMemo(() => {
+    const order: string[] = [];
+    const blocksByDay = new Map<string, ScheduleBlock[]>();
+
+    scheduleBlocks.forEach((block) => {
+      const dateKey = (block.type === 'general' ? block.item.date : block.group.items[0]?.date) || 'sem-data';
+      if (!blocksByDay.has(dateKey)) {
+        blocksByDay.set(dateKey, []);
+        order.push(dateKey);
+      }
+      blocksByDay.get(dateKey)!.push(block);
+    });
+
+    return order.map((dateKey) => ({
+      dateKey,
+      label: dateKey === 'sem-data' ? scheduleDateFallback : formatScheduleDate(dateKey, locale, scheduleDateFallback),
+      slug: dateKey.replace(/[^a-zA-Z0-9]/g, '-') || 'sem-data',
+      blocks: blocksByDay.get(dateKey)!
+    }));
+  }, [scheduleBlocks, locale, scheduleDateFallback]);
   const scheduleSummary = React.useMemo(() => {
     const heatCount = scheduleHeatGroups.reduce((total, group) => total + group.heatCount, 0);
     const participantCount = scheduleHeatGroups.reduce((total, group) => total + group.participantCount, 0);
@@ -848,7 +872,7 @@ export function EventView({ eventId }: { eventId: string }) {
                 </div>
 
                 {scheduleItems.length > 0 ? (
-                  <div className="space-y-5">
+                  <div className="space-y-6">
                     {scheduleHeatGroups.length > 0 && (
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-md border border-card-border/60 bg-dark-gray/30 px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-muted">
                         <span><strong className="font-number text-white">{scheduleSummary.groupCount}</strong> {tSchedule('provesLabel')}</span>
@@ -861,161 +885,280 @@ export function EventView({ eventId }: { eventId: string }) {
                       </div>
                     )}
 
-                    {scheduleBlocks.map((block) => {
-                      if (block.type === 'general') {
-                        const item = block.item;
-                        return (
-                          <article key={block.id} className="rounded-lg border border-card-border/70 bg-dark-gray/20 p-4">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="rounded border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-primary">
-                                {getScheduleKindLabel(item.kind)}
-                              </span>
-                              <span className="rounded border border-card-border bg-dark-gray px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-muted">
-                                {getScheduleModeLabel(item.mode)}
-                              </span>
-                              <span className="text-[10px] font-black uppercase tracking-wider text-white">
-                                {formatScheduleDate(item.date, locale, scheduleDateFallback)} {tSchedule('atLabel')} {item.time}
-                              </span>
-                            </div>
-                            <h4 className="mt-2 text-sm font-extrabold text-white">{item.title}</h4>
-                            <p className="mt-1 text-xs leading-relaxed text-muted">{item.description}</p>
-                            {item.location && (
-                              <p className="mt-1 text-xs text-muted">{tSchedule('locationLabel', { location: item.location })}</p>
-                            )}
-                          </article>
-                        );
-                      }
+                    {scheduleDays.length > 1 && (
+                      <nav aria-label={tSchedule('daySelectorLabel')} className="flex flex-wrap gap-2">
+                        {scheduleDays.map((day) => (
+                          <a
+                            key={day.dateKey}
+                            href={`#schedule-day-${day.slug}`}
+                            className="rounded-md border border-card-border bg-dark-gray/40 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-muted transition-colors hover:border-primary/40 hover:text-white"
+                          >
+                            {day.label}
+                          </a>
+                        ))}
+                      </nav>
+                    )}
 
-                      const group = block.group;
-                      const groupIndex = scheduleHeatGroups.findIndex(candidate => candidate.id === group.id);
-                      // group.items já vem ordenado cronologicamente por buildScheduleHeatGroups.
-                      const groupItemsByTime = group.items;
-                      const groupFirstDateLabel = formatScheduleDate(groupItemsByTime[0]?.date, locale, scheduleDateFallback);
-                      const groupLastDateLabel = formatScheduleDate(groupItemsByTime[groupItemsByTime.length - 1]?.date, locale, scheduleDateFallback);
-                      // Prova que atravessa a virada do dia: o cabeçalho declara as duas datas em vez de
-                      // afirmar (incorretamente) que tudo acontece na data da primeira bateria cadastrada.
-                      const groupDateHeading = groupFirstDateLabel !== groupLastDateLabel
-                        ? `${groupFirstDateLabel} ${group.startTime} – ${groupLastDateLabel} ${group.endTime}`
-                        : `${group.dateLabel} · ${group.startTime}–${group.endTime}`;
+                    {scheduleDays.map((day) => (
+                      <div key={day.dateKey} className="space-y-4">
+                        <h4 id={`schedule-day-${day.slug}`} className="scroll-mt-32 text-sm font-black uppercase tracking-wider text-white">
+                          {day.label}
+                        </h4>
 
-                      return (
-                        <section key={block.id} className="min-w-0 overflow-hidden rounded-lg border border-card-border/70">
-                          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b border-card-border/70 bg-dark-gray/40 px-4 py-2.5">
-                            <div className="flex min-w-0 items-baseline gap-2">
-                              <span className="shrink-0 text-[10px] font-black uppercase tracking-wider text-primary">
-                                {tSchedule('proveNumber', { index: groupIndex + 1 })}
-                              </span>
-                              <h4 className="truncate text-xs font-bold uppercase tracking-wider text-white">
-                                {group.title}
-                              </h4>
-                            </div>
-                            <span className="shrink-0 font-number text-[10px] font-bold text-muted">
-                              {groupDateHeading}
-                            </span>
-                          </div>
+                        {day.blocks.map((block) => {
+                          if (block.type === 'general') {
+                            const item = block.item;
+                            return (
+                              <article key={block.id} className="rounded-lg border border-card-border/70 bg-dark-gray/20 p-4">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="rounded border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-primary">
+                                    {getScheduleKindLabel(item.kind)}
+                                  </span>
+                                  <span className="rounded border border-card-border bg-dark-gray px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-muted">
+                                    {getScheduleModeLabel(item.mode)}
+                                  </span>
+                                  <span className="text-[10px] font-black uppercase tracking-wider text-white">
+                                    {formatScheduleDate(item.date, locale, scheduleDateFallback)} {tSchedule('atLabel')} {item.time}
+                                  </span>
+                                </div>
+                                <h4 className="mt-2 text-sm font-extrabold text-white">{item.title}</h4>
+                                <p className="mt-1 text-xs leading-relaxed text-muted">{item.description}</p>
+                                {item.location && (
+                                  <p className="mt-1 text-xs text-muted">{tSchedule('locationLabel', { location: item.location })}</p>
+                                )}
+                              </article>
+                            );
+                          }
 
-                          <div className="divide-y divide-card-border/50" role="list">
-                            {group.items.map((item) => {
-                              const heatParticipants = resolveHeatParticipantSlots(item.athleteIds, athletes);
-                              const heatSlotLabel = getHeatSlotLabel(event.eventType);
-                              const isPublicEventLoading = publicEventDataStatus[eventId] === 'loading'
-                                || (publicEventDataStatus[eventId] === undefined && !hasPublicEventAthletes);
-                              const isExpanded = expandedHeatIds.has(item.id);
-                              const panelId = `heat-participants-${item.id}`;
-                              const status = heatStatusById.get(item.id) ?? 'upcoming';
-                              const statusMeta = HEAT_STATUS_META[status];
-                              const itemDateLabel = formatScheduleDate(item.date, locale, scheduleDateFallback);
-                              const showItemDate = itemDateLabel !== groupFirstDateLabel;
+                          const group = block.group;
+                          const groupIndex = scheduleHeatGroups.findIndex(candidate => candidate.id === group.id);
+                          // group.items já vem ordenado cronologicamente por buildScheduleHeatGroups.
+                          const groupItemsByTime = group.items;
+                          const groupFirstDateLabel = formatScheduleDate(groupItemsByTime[0]?.date, locale, scheduleDateFallback);
+                          const groupLastDateLabel = formatScheduleDate(groupItemsByTime[groupItemsByTime.length - 1]?.date, locale, scheduleDateFallback);
+                          // Prova que atravessa a virada do dia: o cabeçalho declara as duas datas em vez de
+                          // afirmar (incorretamente) que tudo acontece na data da primeira bateria cadastrada.
+                          // Sem virada de dia, o dia já está anunciado pelo cabeçalho acima — só a janela de horário.
+                          const groupWindowLabel = groupFirstDateLabel !== groupLastDateLabel
+                            ? `${groupFirstDateLabel} ${group.startTime} – ${groupLastDateLabel} ${group.endTime}`
+                            : tSchedule('windowLabel', { range: `${group.startTime}–${group.endTime}` });
 
-                              return (
-                                <div key={item.id} role="listitem">
-                                  <button
-                                    type="button"
-                                    aria-expanded={isExpanded}
-                                    aria-controls={panelId}
-                                    onClick={() => toggleHeatDetails(item.id)}
-                                    className="flex w-full min-w-0 flex-col gap-2 px-4 py-3 text-left transition-colors hover:bg-primary/5 sm:flex-row sm:items-center sm:gap-3"
-                                  >
-                                    <span className="flex min-w-0 items-center gap-2 sm:w-[38%] sm:shrink-0">
-                                      <span className={`h-2 w-2 shrink-0 rounded-full ${statusMeta.dotClass}`} aria-hidden="true" />
-                                      <span className="sr-only">{tSchedule(statusMeta.labelKey)}. </span>
-                                      {statusMeta.badgeKey && (
-                                        <span className={`shrink-0 text-[10px] font-black uppercase tracking-wider ${status === 'live' ? 'text-trading-up' : status === 'done' ? 'text-muted' : 'text-primary'}`} aria-hidden="true">
-                                          {tSchedule(statusMeta.badgeKey)}
+                          const groupStatuses = group.items.map(item => heatStatusById.get(item.id) ?? 'upcoming');
+                          const groupHasLive = groupStatuses.includes('live');
+                          const groupAllDone = groupStatuses.length > 0 && groupStatuses.every(itemStatus => itemStatus === 'done');
+
+                          const heatRows = group.items.map((item) => {
+                            const heatParticipants = resolveHeatParticipantSlots(item.athleteIds, athletes);
+                            const heatSlotLabel = getHeatSlotLabel(event.eventType);
+                            const isPublicEventLoading = publicEventDataStatus[eventId] === 'loading'
+                              || (publicEventDataStatus[eventId] === undefined && !hasPublicEventAthletes);
+                            const isExpanded = expandedHeatIds.has(item.id);
+                            const panelId = `heat-participants-${item.id}`;
+                            const status = heatStatusById.get(item.id) ?? 'upcoming';
+                            const statusMeta = HEAT_STATUS_META[status];
+                            const itemDateLabel = formatScheduleDate(item.date, locale, scheduleDateFallback);
+                            const showItemDate = itemDateLabel !== groupFirstDateLabel;
+                            const heatLabel = item.heatNumber ? tSchedule('heatNumber', { number: item.heatNumber }) : item.title;
+                            const athletesCountLabel = tSchedule('athletesCount', { count: heatParticipants.totalCount > 0 ? `${heatParticipants.resolvedCount}/${heatParticipants.totalCount}` : '0' });
+
+                            return { item, heatParticipants, heatSlotLabel, isPublicEventLoading, isExpanded, panelId, status, statusMeta, itemDateLabel, showItemDate, heatLabel, athletesCountLabel };
+                          });
+
+                          const renderExpandedPanel = (row: typeof heatRows[number]) => (
+                            <>
+                              {row.heatParticipants.resolvedParticipants.length > 0 ? (
+                                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                  {row.heatParticipants.resolvedParticipants.map(({ athlete, athleteId, displayIndex }) => {
+                                    const safeBox = athlete.box && athlete.box !== 'undefined' ? athlete.box : '';
+                                    return (
+                                      <div
+                                        key={`${row.item.id}-${athleteId}-${displayIndex}`}
+                                        className="flex min-w-0 items-center gap-2 rounded border border-card-border/60 bg-black/40 px-2.5 py-2 text-[10px] text-white transition-colors hover:border-primary/30"
+                                      >
+                                        <span className="shrink-0 rounded border border-primary/20 bg-primary/10 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-primary">
+                                          {row.heatSlotLabel} {displayIndex}
                                         </span>
-                                      )}
-                                      <span title={item.title} className="truncate text-xs font-extrabold uppercase text-white">{item.title}</span>
-                                      {showItemDate && (
-                                        <span className="shrink-0 text-[9px] font-bold uppercase text-muted">{itemDateLabel}</span>
-                                      )}
-                                    </span>
-
-                                    <span className="flex flex-1 flex-wrap items-baseline gap-x-4 gap-y-1 font-number text-[11px] font-medium text-muted">
-                                      <span className="whitespace-nowrap">{tSchedule('warmup')} <b className="font-semibold text-white">{item.warmupTime || '-'}</b></span>
-                                      <span className="whitespace-nowrap">{tSchedule('queue')} <b className="font-semibold text-white">{item.checkinTime || '-'}</b></span>
-                                      <span className="whitespace-nowrap text-[12px] text-primary/80">{tSchedule('start')} <b className="text-base font-extrabold text-primary">{item.time || '-'}</b></span>
-                                      <span className="whitespace-nowrap">{tSchedule('end')} <b className="font-semibold text-white">{item.endTime || '-'}</b></span>
-                                    </span>
-
-                                    <span className="flex shrink-0 items-center justify-between gap-2 sm:justify-end">
-                                      <span className="rounded border border-card-border bg-dark-gray px-2 py-1 font-number text-[10px] font-bold text-muted">
-                                        {tSchedule('athletesCount', { count: heatParticipants.totalCount > 0 ? `${heatParticipants.resolvedCount}/${heatParticipants.totalCount}` : '0' })}
-                                      </span>
-                                      <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-muted-soft transition-transform ${isExpanded ? 'rotate-180' : ''}`} aria-hidden="true" />
-                                    </span>
-                                  </button>
-
-                                  <div id={panelId} hidden={!isExpanded} className="space-y-2 bg-black/20 px-4 pb-4 pt-1 sm:pl-9">
-                                    {heatParticipants.resolvedParticipants.length > 0 ? (
-                                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                                        {heatParticipants.resolvedParticipants.map(({ athlete, athleteId, displayIndex }) => {
-                                          const safeBox = athlete.box && athlete.box !== 'undefined' ? athlete.box : '';
-                                          return (
-                                            <div
-                                              key={`${item.id}-${athleteId}-${displayIndex}`}
-                                              className="flex min-w-0 items-center gap-2 rounded border border-card-border/60 bg-black/40 px-2.5 py-2 text-[10px] text-white transition-colors hover:border-primary/30"
-                                            >
-                                              <span className="shrink-0 rounded border border-primary/20 bg-primary/10 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-primary">
-                                                {heatSlotLabel} {displayIndex}
-                                              </span>
-                                              {athlete.isTeam && (
-                                                <span className="shrink-0 rounded bg-primary/20 px-1 text-[8px] font-black text-primary">EQ</span>
-                                              )}
-                                              <div className="min-w-0 flex-1">
-                                                <p className="truncate font-bold uppercase tracking-wider">{athlete.name}</p>
-                                                <p className="truncate text-[9px] font-medium text-muted-soft">
-                                                  {getDivisionName(athlete.divisionId)}{safeBox ? ` - ${safeBox}` : ''}
-                                                </p>
-                                              </div>
-                                            </div>
-                                          );
-                                        })}
+                                        {athlete.isTeam && (
+                                          <span className="shrink-0 rounded bg-primary/20 px-1 text-[8px] font-black text-primary">EQ</span>
+                                        )}
+                                        <div className="min-w-0 flex-1">
+                                          <p className="truncate font-bold uppercase tracking-wider">{athlete.name}</p>
+                                          <p className="truncate text-[9px] font-medium text-muted-soft">
+                                            {getDivisionName(athlete.divisionId)}{safeBox ? ` - ${safeBox}` : ''}
+                                          </p>
+                                        </div>
                                       </div>
-                                    ) : heatParticipants.totalCount > 0 ? (
-                                      <p className="rounded border border-card-border/50 bg-black/20 px-3 py-2 text-[10px] font-semibold text-muted-soft">
-                                        {isPublicEventLoading
-                                          ? tSchedule('loadingParticipants')
-                                          : tSchedule('unresolvedParticipants')}
-                                      </p>
-                                    ) : (
-                                      <p className="rounded border border-card-border/50 bg-black/20 px-3 py-2 text-[10px] font-semibold text-muted-soft">
-                                        {tSchedule('noParticipants')}
-                                      </p>
-                                    )}
+                                    );
+                                  })}
+                                </div>
+                              ) : row.heatParticipants.totalCount > 0 ? (
+                                <p className="rounded border border-card-border/50 bg-black/20 px-3 py-2 text-[10px] font-semibold text-muted-soft">
+                                  {row.isPublicEventLoading
+                                    ? tSchedule('loadingParticipants')
+                                    : tSchedule('unresolvedParticipants')}
+                                </p>
+                              ) : (
+                                <p className="rounded border border-card-border/50 bg-black/20 px-3 py-2 text-[10px] font-semibold text-muted-soft">
+                                  {tSchedule('noParticipants')}
+                                </p>
+                              )}
 
-                                    {heatParticipants.unresolvedCount > 0 && heatParticipants.resolvedCount > 0 && (
-                                      <p className="text-[9px] font-semibold text-muted-soft">
-                                        {tSchedule('unresolvedCount', { count: heatParticipants.unresolvedCount })}
-                                      </p>
-                                    )}
+                              {row.heatParticipants.unresolvedCount > 0 && row.heatParticipants.resolvedCount > 0 && (
+                                <p className="mt-2 text-[9px] font-semibold text-muted-soft">
+                                  {tSchedule('unresolvedCount', { count: row.heatParticipants.unresolvedCount })}
+                                </p>
+                              )}
+                            </>
+                          );
+
+                          return (
+                            <section key={block.id} className="min-w-0 rounded-lg border border-card-border/70">
+                              <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 border-b border-card-border/70 bg-dark-gray/40 px-4 py-3">
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className="shrink-0 text-[10px] font-black uppercase tracking-wider text-primary">
+                                      {tSchedule('proveNumber', { index: groupIndex + 1 })}
+                                    </span>
+                                    <h4 className="truncate text-xs font-bold uppercase tracking-wider text-white">
+                                      {group.title}
+                                    </h4>
+                                  </div>
+                                  <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-bold uppercase tracking-wider text-muted">
+                                    <span><strong className="font-number text-white">{group.heatCount}</strong> {tSchedule('heatsLabel')}</span>
+                                    <span className="h-1 w-1 shrink-0 rounded-full bg-muted-soft" aria-hidden="true" />
+                                    <span><strong className="font-number text-white">{group.participantCount}</strong> {tSchedule('athletesLabel')}</span>
+                                    <span className="h-1 w-1 shrink-0 rounded-full bg-muted-soft" aria-hidden="true" />
+                                    <span className="font-number text-muted">{groupWindowLabel}</span>
                                   </div>
                                 </div>
-                              );
-                            })}
-                          </div>
-                        </section>
-                      );
-                    })}
+
+                                {groupHasLive ? (
+                                  <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-trading-up/30 bg-trading-up/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-trading-up">
+                                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-trading-up motion-safe:animate-pulse" aria-hidden="true" />
+                                    {tSchedule('heatStatusLiveBadge')}
+                                  </span>
+                                ) : groupAllDone ? (
+                                  <span className="shrink-0 rounded-full border border-card-border bg-dark-gray px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-muted">
+                                    {tSchedule('heatStatusDoneBadge')}
+                                  </span>
+                                ) : null}
+                              </div>
+
+                              {/* Abaixo de lg a tabela de 7 colunas fica ilegível: vira lista de cartões. */}
+                              <div className="space-y-2 p-3 lg:hidden">
+                                {heatRows.map((row) => {
+                                  const { item, isExpanded, panelId, status, statusMeta, itemDateLabel, showItemDate, heatLabel, athletesCountLabel } = row;
+                                  const mobilePanelId = `${panelId}-mobile`;
+                                  return (
+                                  <div key={item.id} className="rounded-md border border-card-border/60 bg-dark-gray/20">
+                                    <button
+                                      type="button"
+                                      aria-expanded={isExpanded}
+                                      aria-controls={mobilePanelId}
+                                      onClick={() => toggleHeatDetails(item.id)}
+                                      className="flex w-full min-w-0 flex-col gap-2 px-3 py-2.5 text-left transition-colors hover:bg-primary/5"
+                                    >
+                                      <span className="flex items-center justify-between gap-2">
+                                        <span className="flex min-w-0 items-center gap-2">
+                                          <span className={`h-2 w-2 shrink-0 rounded-full ${statusMeta.dotClass}`} aria-hidden="true" />
+                                          <span className="sr-only">{tSchedule(statusMeta.labelKey)}. </span>
+                                          <span className="truncate text-xs font-extrabold uppercase text-white">{heatLabel}</span>
+                                          {showItemDate && (
+                                            <span className="shrink-0 text-[9px] font-bold uppercase text-muted">{itemDateLabel}</span>
+                                          )}
+                                        </span>
+                                        <span className="flex shrink-0 items-center gap-2">
+                                          {statusMeta.badgeKey && (
+                                            <span className={`text-[9px] font-black uppercase tracking-wider ${status === 'live' ? 'text-trading-up' : status === 'done' ? 'text-muted' : 'text-primary'}`} aria-hidden="true">
+                                              {tSchedule(statusMeta.badgeKey)}
+                                            </span>
+                                          )}
+                                          <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-muted-soft transition-transform ${isExpanded ? 'rotate-180' : ''}`} aria-hidden="true" />
+                                        </span>
+                                      </span>
+                                      <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1 font-number text-[11px] font-medium text-muted">
+                                        <span className="whitespace-nowrap">{tSchedule('warmup')} <b className="font-semibold text-white">{item.warmupTime || '-'}</b></span>
+                                        <span className="whitespace-nowrap">{tSchedule('queue')} <b className="font-semibold text-white">{item.checkinTime || '-'}</b></span>
+                                        <span className="whitespace-nowrap text-primary/80">{tSchedule('start')} <b className="font-extrabold text-primary">{item.time || '-'}</b></span>
+                                        <span className="whitespace-nowrap">{tSchedule('end')} <b className="font-semibold text-white">{item.endTime || '-'}</b></span>
+                                        <span className="whitespace-nowrap">{athletesCountLabel}</span>
+                                      </span>
+                                    </button>
+                                    <div id={mobilePanelId} hidden={!isExpanded} className="space-y-2 border-t border-card-border/50 bg-black/20 px-3 pb-3 pt-2">
+                                      {renderExpandedPanel(row)}
+                                    </div>
+                                  </div>
+                                  );
+                                })}
+                              </div>
+
+                              <div className="hidden overflow-x-auto lg:block">
+                                <table className="w-full min-w-[720px] border-collapse text-left">
+                                  <thead>
+                                    <tr className="border-b border-card-border/50 text-[10px] font-bold uppercase tracking-wider text-muted">
+                                      <th scope="col" className="py-2 pl-4 pr-3">{tSchedule('heatColumnHeader')}</th>
+                                      <th scope="col" className="px-3 py-2">{tSchedule('warmup')}</th>
+                                      <th scope="col" className="px-3 py-2">{tSchedule('queue')}</th>
+                                      <th scope="col" className="px-3 py-2">{tSchedule('start')}</th>
+                                      <th scope="col" className="px-3 py-2">{tSchedule('end')}</th>
+                                      <th scope="col" className="px-3 py-2">{tSchedule('athletesLabel')}</th>
+                                      <th scope="col" className="py-2 pl-3 pr-4 text-right">{tSchedule('statusColumnHeader')}</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-card-border/40">
+                                    {heatRows.map((row) => {
+                                      const { item, isExpanded, panelId, status, statusMeta, itemDateLabel, showItemDate, heatLabel, athletesCountLabel } = row;
+                                      return (
+                                      <React.Fragment key={item.id}>
+                                        <tr className="text-xs transition-colors hover:bg-dark-gray/30">
+                                          <td className="py-2.5 pl-4 pr-3">
+                                            <button
+                                              type="button"
+                                              aria-expanded={isExpanded}
+                                              aria-controls={panelId}
+                                              onClick={() => toggleHeatDetails(item.id)}
+                                              className="flex min-w-0 items-center gap-2 text-left transition-colors hover:text-primary"
+                                            >
+                                              <span className={`h-2 w-2 shrink-0 rounded-full ${statusMeta.dotClass}`} aria-hidden="true" />
+                                              <span className="sr-only">{tSchedule(statusMeta.labelKey)}. </span>
+                                              <span className="truncate font-extrabold uppercase text-white" title={heatLabel}>{heatLabel}</span>
+                                              {showItemDate && (
+                                                <span className="shrink-0 text-[9px] font-bold uppercase text-muted">{itemDateLabel}</span>
+                                              )}
+                                              <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-muted-soft transition-transform ${isExpanded ? 'rotate-180' : ''}`} aria-hidden="true" />
+                                            </button>
+                                          </td>
+                                          <td className="px-3 py-2.5 font-number text-muted">{item.warmupTime || '-'}</td>
+                                          <td className="px-3 py-2.5 font-number text-muted">{item.checkinTime || '-'}</td>
+                                          <td className="px-3 py-2.5 font-number font-extrabold text-primary">{item.time || '-'}</td>
+                                          <td className="px-3 py-2.5 font-number text-muted">{item.endTime || '-'}</td>
+                                          <td className="px-3 py-2.5 font-number text-white">{athletesCountLabel}</td>
+                                          <td className="py-2.5 pl-3 pr-4 text-right">
+                                            {statusMeta.badgeKey ? (
+                                              <span className={`text-[10px] font-black uppercase tracking-wider ${status === 'live' ? 'text-trading-up' : status === 'done' ? 'text-muted' : 'text-primary'}`}>
+                                                {tSchedule(statusMeta.badgeKey)}
+                                              </span>
+                                            ) : (
+                                              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-soft">{tSchedule(statusMeta.labelKey)}</span>
+                                            )}
+                                          </td>
+                                        </tr>
+                                        <tr hidden={!isExpanded}>
+                                          <td id={panelId} colSpan={7} className="space-y-2 border-b border-card-border/40 bg-black/20 px-4 pb-4 pt-2">
+                                            {renderExpandedPanel(row)}
+                                          </td>
+                                        </tr>
+                                      </React.Fragment>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </section>
+                          );
+                        })}
+                      </div>
+                    ))}
                   </div>
                 ) : (
                     <>
