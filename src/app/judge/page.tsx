@@ -159,6 +159,7 @@ export default function JudgePage() {
     if (item.status === 'penalized') return item.penaltyPercent ? `Penalizado ${item.penaltyPercent}%` : 'Penalizado';
     if (item.status === 'validated') return 'Validado';
     if (item.status === 'rejected') return 'Rejeitado';
+    if (item.status === 'awaiting_resubmission') return 'Aguardando reenvio';
     return item.status;
   };
 

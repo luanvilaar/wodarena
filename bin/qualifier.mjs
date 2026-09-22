@@ -81,8 +81,11 @@ const printHelp = () => {
   npm run qualifier:cli -- submission create --event EVENT_ID --registration REG_ID --workout WORKOUT_ID --result "08:14" --video YOUTUBE_URL [--note "..."]
   npm run qualifier:cli -- submission replace --event EVENT_ID --registration REG_ID --workout WORKOUT_ID --result "08:14" --video YOUTUBE_URL --expected-version N [--note "..."]
   npm run qualifier:cli -- submission show --id SUBMISSION_ID | --registration REG_ID
-  npm run qualifier:cli -- queue list --event EVENT_ID [--status pending_review|validated|penalized|rejected]
+  npm run qualifier:cli -- queue list --event EVENT_ID [--status pending_review|validated|penalized|rejected|awaiting_resubmission]
   npm run qualifier:cli -- review apply --actor REVIEWER_ID --submission SUBMISSION_ID --expected-version N --decision validated|penalized|rejected|manual_adjustment [--manual-result "..."] [--justification "..."]
+  npm run qualifier:cli -- review request-resubmission --actor ACTOR_ID --submission SUBMISSION_ID [--expected-reviewed-at ISO] --justification "..."
+    (manager dono do evento ou owner; exclui o resultado revisado e libera o atleta para reenviar dentro do prazo.
+     Sem --expected-reviewed-at, usa o reviewed_at atual da submissao.)
   npm run qualifier:cli -- review history --submission SUBMISSION_ID
   npm run qualifier:cli -- ranking --event EVENT_ID [--division DIVISION_ID]`);
 };
@@ -188,6 +191,26 @@ const review = async (supabase, command, args) => {
     const { data, error } = await supabase.from('score_submission_reviews').select('*').eq('submission_id', args.submission).order('reviewed_at', { ascending: true });
     if (error) throw error;
     console.log(JSON.stringify(data || [], null, 2));
+    return;
+  }
+  if (command === 'request-resubmission') {
+    requireArgs(args, ['actor', 'submission', 'justification']);
+    // reviewed_at e o token de concorrencia do RPC: deve seguir como string crua
+    // do banco (sem new Date), senao os microssegundos se perdem e o RPC acusa conflito.
+    let expectedReviewedAt = args['expected-reviewed-at'] || null;
+    if (!expectedReviewedAt) {
+      const { data: current, error: currentError } = await supabase.from('score_submissions').select('reviewed_at').eq('id', args.submission).maybeSingle();
+      if (currentError || !current) throw currentError || new Error('Submissao nao encontrada.');
+      expectedReviewedAt = current.reviewed_at;
+    }
+    const { data, error } = await supabase.rpc('qualifier_request_resubmission', {
+      p_submission_id: args.submission,
+      p_actor_id: args.actor,
+      p_expected_reviewed_at: expectedReviewedAt,
+      p_justification: String(args.justification).trim()
+    });
+    if (error) throw error;
+    console.log(JSON.stringify({ success: true, result: data }, null, 2));
     return;
   }
   if (command !== 'apply') throw new Error(`Comando review desconhecido: ${command}`);

@@ -1,2 +1,3 @@
 - [Repo público — regras de disclosure](project_public_repo_disclosure.md) — wodarena é PUBLIC no GitHub; varrer secrets e disclosure de vulns em todo pré-push
+- [Override de score qualifier pelo gestor](project_qualifier_manager_override.md) — design NEEDS_WORK e gate da implementação FAIL (2026-09-22); o que conferir no re-gate
 - [:focus-visible fora de @layer](project_focus_visible_unlayered.md) — classes focus-visible:* dos componentes são código morto no app inteiro; correção adiada de propósito

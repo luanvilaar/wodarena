@@ -54,6 +54,7 @@ export const mapScoreSubmissionReviewFromDb = (row: DbRow): ScoreSubmissionRevie
 
 export const qualifierErrorStatus = (message: string) => {
   if (message.includes('window_') || message.includes('version_conflict') || message.includes('already_reviewed') || message.includes('already_pending') || message.includes('conflict_of_interest')) return 409;
+  if (message.includes('qualifier_submission_not_reviewed') || message.includes('qualifier_review_state_conflict') || message.includes('qualifier_open_contestation_exists') || message.includes('awaiting_resubmission')) return 409;
   if (message.includes('not_found')) return 404;
   if (message.includes('not_allowed') || message.includes('not_assigned') || message.includes('access_expired') || message.includes('not_eligible')) return 403;
   return 400;

@@ -177,7 +177,7 @@ export async function POST(request: Request) {
         || submission.registration_id !== registrationId
         || submission.workout_id !== workoutId
         || submission.user_id !== actor.id
-        || submission.status === 'pending_review') {
+        || ['pending_review', 'awaiting_resubmission'].includes(submission.status)) {
         return NextResponse.json({ error: 'Submissão finalizada não encontrada para contestação.' }, { status: 404 });
       }
     }

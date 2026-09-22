@@ -7,8 +7,13 @@ const decisionLabel: Record<ScoreSubmission['status'], string> = {
   pending_review: 'Em análise',
   validated: 'Validado',
   penalized: 'Penalizado',
-  rejected: 'Resultado rejeitado'
+  rejected: 'Resultado rejeitado',
+  awaiting_resubmission: 'Aguardando reenvio do atleta'
 };
+
+// Só decisões finais podem ser contestadas. Submissões em análise ou aguardando
+// reenvio (resultado removido pelo organizador) ficam fora da lista.
+const CONTESTABLE_STATUSES: ScoreSubmission['status'][] = ['validated', 'penalized', 'rejected'];
 
 export function QualifierAthleteContestation({ events, registrations }: { events: Event[]; registrations: Registration[] }) {
   const [submissions, setSubmissions] = useState<ScoreSubmission[]>([]);
@@ -37,7 +42,7 @@ export function QualifierAthleteContestation({ events, registrations }: { events
     const event = events.find(item => item.id === submission.eventId);
     return registration?.paymentStatus === 'payment_approved'
       && event?.eventType === 'functional_fitness_qualifier'
-      && submission.status !== 'pending_review';
+      && CONTESTABLE_STATUSES.includes(submission.status);
   }), [events, registrationsById, submissions]);
   const selectedSubmission = eligibleSubmissions.find(item => item.id === submissionId) || eligibleSubmissions[0];
 

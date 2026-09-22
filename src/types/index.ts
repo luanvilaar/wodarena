@@ -237,8 +237,8 @@ export interface Contestation {
   resolvedAt?: string;
 }
 
-export type ScoreSubmissionStatus = 'pending_review' | 'validated' | 'penalized' | 'rejected';
-export type ScoreSubmissionDecision = 'validated' | 'penalized' | 'rejected' | 'manual_adjustment' | 'reopened';
+export type ScoreSubmissionStatus = 'pending_review' | 'validated' | 'penalized' | 'rejected' | 'awaiting_resubmission';
+export type ScoreSubmissionDecision = 'validated' | 'penalized' | 'rejected' | 'manual_adjustment' | 'reopened' | 'resubmission_requested';
 
 export interface ScoreSubmission {
   id: string;

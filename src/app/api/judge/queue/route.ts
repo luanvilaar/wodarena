@@ -25,7 +25,7 @@ export async function GET(request: Request) {
       .select(SUBMISSION_SELECT)
       .in('event_id', eventIds)
       .order('submitted_at', { ascending: true });
-    if (status && ['pending_review', 'validated', 'penalized', 'rejected'].includes(status)) {
+    if (status && ['pending_review', 'validated', 'penalized', 'rejected', 'awaiting_resubmission'].includes(status)) {
       submissionsQuery = submissionsQuery.eq('status', status);
     }
     const [submissionsResult, registrationsResult, workoutsResult, eventsResult] = await Promise.all([

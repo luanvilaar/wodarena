@@ -1,0 +1,1 @@
+- [Qualifier result edit/delete design](project_qualifier_result_edit_delete.md) — 2026-09-22 decision: new awaiting_resubmission status + RPC, not reuse of reopen; closed window blocks

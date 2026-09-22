@@ -14,6 +14,7 @@ import PixPaymentModal from '@/components/PixPaymentModal';
 import { QualifierAthleteSubmissions } from '@/components/QualifierAthleteSubmissions';
 import { QualifierAthleteContestation } from '@/components/QualifierAthleteContestation';
 import { QualifierManagerPanel } from '@/components/QualifierManagerPanel';
+import { QualifierResultsManager } from '@/components/QualifierResultsManager';
 import { DashboardOverview } from '@/components/admin/DashboardOverview';
 import {
   LayoutDashboard, Calendar, Trophy,
@@ -9054,7 +9055,7 @@ export default function AdminPage() {
                         selectedEventToManage.eventType === 'fitness_racing'
                           ? renderAbaFitnessRaceScores()
                           : selectedEventToManage.eventType === 'functional_fitness_qualifier'
-                            ? <div className="rounded-xl border border-primary/20 bg-primary/5 p-5 text-sm text-muted">Os scores deste Qualifier são definidos somente pela revisão das submissões. Use a aba “Submissões e Judges”.</div>
+                            ? <QualifierResultsManager event={selectedEventToManage} />
                             : renderAbaScores()
                       )}
                       {activeEventTab === 'leaderboard' && renderAbaLeaderboard()}
