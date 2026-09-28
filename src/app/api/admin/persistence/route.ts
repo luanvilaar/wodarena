@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { ManagerAccessError, assertManagerOperationalAccess, managerAccessErrorResponse } from '@/lib/serverManagerAccess';
-import { createManagerRegistration, RegistrationAccessError } from '@/lib/serverCheckout';
+import { applyCouponUsageForApprovedRegistration, createManagerRegistration, RegistrationAccessError } from '@/lib/serverCheckout';
 import { checkRateLimit, createSupabaseAdmin, hashPassword, requireSession, safeErrorMessage, SessionUser } from '@/lib/serverSecurity';
 import { getEventStatus } from '@/lib/eventStatus';
 
@@ -689,6 +689,65 @@ export async function POST(request: Request) {
           }
           throw error;
         }
+      }
+
+      case 'confirmManualPayment': {
+        const { registrationId, eventId } = payload as {
+          registrationId: string;
+          eventId: string;
+        };
+
+        await ensureEventOwner(supabaseAdmin, actor, eventId);
+
+        const { data: existingRegistration, error: existingError } = await supabaseAdmin
+          .from('registrations')
+          .select('id, event_id, payment_status, payment_method')
+          .eq('id', registrationId)
+          .eq('event_id', eventId)
+          .maybeSingle();
+
+        if (existingError || !existingRegistration) {
+          return NextResponse.json({ error: 'Inscrição não encontrada para este evento.' }, { status: 404 });
+        }
+
+        if (existingRegistration.payment_method !== 'manual') {
+          return NextResponse.json({ error: 'Esta ação só está disponível para inscrições criadas pela bilheteria (pagamento manual).' }, { status: 400 });
+        }
+
+        if (existingRegistration.payment_status !== 'payment_pending') {
+          return NextResponse.json({ error: 'Esta inscrição não está com pagamento pendente.' }, { status: 400 });
+        }
+
+        const now = new Date().toISOString();
+        const { data: updatedRegistration, error: updateError } = await supabaseAdmin
+          .from('registrations')
+          .update({
+            payment_status: 'payment_approved',
+            payment_status_detail: 'manager_confirmed_manual_payment',
+            updated_at: now
+          })
+          .eq('id', registrationId)
+          .eq('event_id', eventId)
+          .eq('payment_status', 'payment_pending')
+          .eq('payment_method', 'manual')
+          .select('*')
+          .maybeSingle();
+
+        if (updateError) {
+          console.error('[Admin Persistence API] Erro ao confirmar pagamento manual:', updateError);
+          return NextResponse.json({ error: 'Erro ao confirmar o pagamento manual.' }, { status: 500 });
+        }
+
+        if (!updatedRegistration) {
+          return NextResponse.json({ error: 'O status desta inscrição mudou enquanto você confirmava — recarregue a lista antes de tentar de novo.' }, { status: 409 });
+        }
+
+        await applyCouponUsageForApprovedRegistration(supabaseAdmin, registrationId);
+
+        return NextResponse.json({
+          success: true,
+          registration: mapRegistrationForClient(updatedRegistration)
+        });
       }
 
       case 'cancelRegistration': {

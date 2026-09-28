@@ -127,7 +127,7 @@ export default function AdminPage() {
     events, athletes, scores, registrations, contestations, coupons, currentUser,
     login, logout, addEvent, addDivision, updateDivision, reorderDivisions,
     addWorkout, deleteEvent, deleteDivision, deleteWorkout, submitScore, submitScoresBulk, updateEvent, getLeaderboard, createManualRegistration, saveCourseLayout, updateWorkout,
-    refreshRegistrations, updateRegistrationDetails, cancelRegistration, markRegistrationRefunded, addCoupon, updateCoupon, toggleCouponActive, changePassword, updateAthleteProfile
+    refreshRegistrations, updateRegistrationDetails, cancelRegistration, markRegistrationRefunded, confirmManualPayment, addCoupon, updateCoupon, toggleCouponActive, changePassword, updateAthleteProfile
   } = useApp();
 
   // 1. Estados de Login (vinculado ao currentUser do contexto)
@@ -842,6 +842,7 @@ export default function AdminPage() {
   const [selectedRegistrationVoucher, setSelectedRegistrationVoucher] = useState<{ registration: Registration; athlete: Athlete; event: Event } | null>(null);
   const [resendingRegistrationId, setResendingRegistrationId] = useState<string | null>(null);
   const [syncingRegistrationId, setSyncingRegistrationId] = useState<string | null>(null);
+  const [confirmingManualPaymentId, setConfirmingManualPaymentId] = useState<string | null>(null);
   const [cancellingRegistrationId, setCancellingRegistrationId] = useState<string | null>(null);
   const [refundingRegistrationId, setRefundingRegistrationId] = useState<string | null>(null);
   const [eventPendingDeletion, setEventPendingDeletion] = useState<Event | null>(null);
@@ -1292,7 +1293,7 @@ export default function AdminPage() {
       });
 
       setAdminNotice({
-        text: `Inscrição manual de "${finalAthleteName}" em "${div.name}" registrada com sucesso!`,
+        text: `Inscrição manual de "${finalAthleteName}" em "${div.name}" registrada com sucesso!${finalPrice > 0 ? ' Pagamento pendente até confirmação.' : ''}`,
         tone: 'success'
       });
 
@@ -2436,6 +2437,30 @@ export default function AdminPage() {
       });
     } finally {
       setSyncingRegistrationId(null);
+    }
+  };
+
+  const handleConfirmManualPayment = async (registration: Registration) => {
+    const confirmed = window.confirm(
+      `Confirmar que o pagamento de ${currencyFormatter.format(registration.totalPaid)} de "${registration.athleteName}" foi recebido presencialmente?\n\nEssa ação aprova a inscrição e a libera para o leaderboard.`
+    );
+    if (!confirmed) return;
+
+    setConfirmingManualPaymentId(registration.id);
+    setAdminNotice(null);
+    try {
+      await confirmManualPayment(registration.id, registration.eventId);
+      setAdminNotice({
+        text: `Pagamento de "${registration.athleteName}" confirmado. Inscrição aprovada.`,
+        tone: 'success'
+      });
+    } catch (err) {
+      setAdminNotice({
+        text: err instanceof Error ? err.message : 'Falha ao confirmar pagamento manual.',
+        tone: 'error'
+      });
+    } finally {
+      setConfirmingManualPaymentId(null);
     }
   };
 
@@ -7109,6 +7134,7 @@ export default function AdminPage() {
               const selectedCat = divisions.find(d => d.id === bilCatId);
               if (!selectedCat) return null;
               const isTeamCat = selectedCat.type !== 'individual';
+              const bilFinalPrice = Math.max(0, selectedCat.price - bilDiscountApplied);
 
               return (
                 <div className="space-y-4 border-t border-card-border pt-4">
@@ -7362,13 +7388,19 @@ export default function AdminPage() {
                           </span>
                         )}
                         <p className="text-xl font-bold font-number text-primary">
-                          {currencyFormatter.format(Math.max(0, selectedCat.price - bilDiscountApplied))}
+                          {currencyFormatter.format(bilFinalPrice)}
                         </p>
                       </div>
                     </div>
-                    <span className="text-[10px] font-bold bg-trading-up/10 text-trading-up px-2.5 py-1 rounded border border-trading-up/25 uppercase font-sans tracking-wide">
-                      Aprovado na Bilheteria
-                    </span>
+                    {bilFinalPrice === 0 ? (
+                      <span className="text-[10px] font-bold bg-trading-up/10 text-trading-up px-2.5 py-1 rounded border border-trading-up/25 uppercase font-sans tracking-wide">
+                        Aprovado na Bilheteria
+                      </span>
+                    ) : (
+                      <span className={`text-[10px] font-bold px-2.5 py-1 rounded border uppercase font-sans tracking-wide ${getPaymentStatusClassName('warning')}`}>
+                        Fica Pendente até Confirmar Pagamento
+                      </span>
+                    )}
                   </div>
                 </div>
               );
@@ -7471,11 +7503,14 @@ export default function AdminPage() {
                   const instagramLabel = athleteInfo?.instagram
                     ? (athleteInfo.instagram.startsWith('@') ? athleteInfo.instagram : `@${athleteInfo.instagram}`)
                     : '-';
-                  const canSync = reg.paymentStatus === 'payment_pending'
+                  const canSync = reg.paymentMethod !== 'manual' && (
+                    reg.paymentStatus === 'payment_pending'
                     || reg.paymentStatus === 'payment_in_review'
-                    || reg.paymentStatus === 'payment_failed';
+                    || reg.paymentStatus === 'payment_failed'
+                  );
                   const canCancel = reg.paymentStatus !== 'payment_cancelled' && reg.paymentStatus !== 'payment_failed';
                   const canMarkRefunded = reg.paymentStatus === 'payment_cancelled' && reg.refundStatus !== 'manual_refunded';
+                  const canConfirmManualPayment = reg.paymentMethod === 'manual' && reg.paymentStatus === 'payment_pending';
 
                   return (
                     <div
@@ -7605,6 +7640,17 @@ export default function AdminPage() {
                               <Mail className="h-3.5 w-3.5" aria-hidden="true" />
                               {resendingRegistrationId === reg.id ? 'Enviando...' : 'Enviar 2a via'}
                             </button>
+                            {canConfirmManualPayment && (
+                              <button
+                                type="button"
+                                onClick={() => handleConfirmManualPayment(reg)}
+                                disabled={confirmingManualPaymentId === reg.id}
+                                className="inline-flex min-h-8 items-center justify-center gap-1.5 rounded border border-trading-up/25 bg-trading-up/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-trading-up transition-colors hover:bg-trading-up/20 disabled:cursor-not-allowed disabled:opacity-60"
+                                aria-label={`Confirmar pagamento recebido de ${displayName}`}
+                              >
+                                {confirmingManualPaymentId === reg.id ? 'Confirmando...' : 'Confirmar pagamento recebido'}
+                              </button>
+                            )}
                             {canSync && (
                               <button
                                 type="button"

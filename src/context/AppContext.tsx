@@ -103,6 +103,7 @@ interface AppContextType {
   updateRegistrationDetails: (registrationId: string, eventId: string, data: RegistrationEditInput) => Promise<void>;
   cancelRegistration: (registrationId: string, eventId: string, data: RegistrationCancellationInput) => Promise<void>;
   markRegistrationRefunded: (registrationId: string, eventId: string, data: RegistrationRefundInput) => Promise<void>;
+  confirmManualPayment: (registrationId: string, eventId: string) => Promise<void>;
   refreshRegistrations: () => Promise<Registration[]>;
   submitScore: (score: Score) => void;
   submitScoresBulk: (newScores: Score[]) => Promise<void>;
@@ -1688,6 +1689,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     syncCancelledRegistrationState(registrationId, result.registration as Registration | undefined);
   };
 
+  const confirmManualPayment = async (registrationId: string, eventId: string) => {
+    const result = await adminPersist('confirmManualPayment', { registrationId, eventId });
+    if (result.registration) {
+      setRegistrations(prev => prev.map(r => (r.id === registrationId ? { ...r, ...(result.registration as Registration) } : r)));
+    }
+  };
+
   // Cadastrar Cupom de Desconto
   const addCoupon = async (couponData: Omit<Coupon, 'id' | 'usageCount' | 'createdAt' | 'isActive'>) => {
     const event = events.find(e => e.id === couponData.eventId);
@@ -2007,25 +2015,45 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const event = events.find(e => e.id === eventId);
     if (!event) return [];
 
-    // 1. Filtrar atletas usando leaderboard_entries (Fase 2 - dados já sincronizados por trigger)
-    // leaderboard_entries contém apenas atletas com payment_status = 'payment_approved'.
+    // Fonte de verdade de elegibilidade: registrations.paymentStatus === 'payment_approved'.
     //
-    // IMPORTANTE: leaderboard_entries é populada por um trigger que dispara apenas em
-    // AFTER UPDATE de registrations (e por um backfill único na migration). Inscrições
-    // criadas já aprovadas (ex.: cadastro manual via bilheteria) ou adicionadas após a
-    // migration podem não ter entrada correspondente. Para que scores lançados nunca
-    // desapareçam do leaderboard público por causa de uma lacuna de sincronização,
-    // aplicamos um fallback: se NÃO houver nenhuma entrada para este evento/divisão,
-    // usamos todos os atletas da divisão (comportamento pré-Fase 2).
-    const leaderboardAthleteIds = new Set(
-      leaderboardEntries
-        .filter(le => le.event_id === eventId && le.division_id === divisionId)
-        .map(le => le.athlete_id)
-    );
-    const hasLeaderboardEntries = leaderboardAthleteIds.size > 0;
-    const divisionAthletes = athletes.filter(
-      a => a.divisionId === divisionId && (!hasLeaderboardEntries || leaderboardAthleteIds.has(a.id))
-    );
+    // 'registrations' só é uma fonte COMPLETA para este evento quando o usuário atual é
+    // o owner da plataforma OU o manager dono deste evento específico — nesses casos o
+    // bootstrap privado traz todas as inscrições do evento, e checamos o status de
+    // pagamento diretamente por athleteId, sem depender de leaderboard_entries (cache
+    // sincronizado por trigger, sujeito a lacunas como inscrições de bilheteria).
+    //
+    // Para qualquer outro usuário, 'registrations' é incompleto ou vazio: o atleta logado
+    // recebe apenas as próprias inscrições (filtro por user_id no bootstrap privado), e o
+    // visitante anônimo não recebe nenhuma (ver buildPublicEventBootstrapPayload em
+    // src/lib/bootstrapPayload.ts). Nesses casos usamos exclusivamente leaderboard_entries.
+    // NÃO existe fallback para "mostrar todos os atletas da divisão": uma divisão sem
+    // entradas sincronizadas deve aparecer vazia, nunca expor inscrições pendentes.
+    const canTrustRegistrationsForEvent =
+      !!currentUser &&
+      (currentUser.role === 'owner' || (currentUser.role === 'manager' && event.organizerId === currentUser.id));
+
+    let divisionAthletes: Athlete[];
+    if (canTrustRegistrationsForEvent) {
+      const approvedAthleteIds = new Set(
+        registrations
+          .filter(r =>
+            r.eventId === eventId &&
+            r.divisionId === divisionId &&
+            r.paymentStatus === 'payment_approved' &&
+            r.athleteId
+          )
+          .map(r => r.athleteId as string)
+      );
+      divisionAthletes = athletes.filter(a => a.divisionId === divisionId && approvedAthleteIds.has(a.id));
+    } else {
+      const leaderboardAthleteIds = new Set(
+        leaderboardEntries
+          .filter(le => le.event_id === eventId && le.division_id === divisionId)
+          .map(le => le.athlete_id)
+      );
+      divisionAthletes = athletes.filter(a => a.divisionId === divisionId && leaderboardAthleteIds.has(a.id));
+    }
 
     // Se for Fitness Racing, o leaderboard é baseado estritamente no tempo do workout TOTAL (Percurso Completo)
     if (event.eventType === 'fitness_racing') {
@@ -2391,6 +2419,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         updateRegistrationDetails,
         cancelRegistration,
         markRegistrationRefunded,
+        confirmManualPayment,
         refreshRegistrations,
         submitScore,
         submitScoresBulk,
