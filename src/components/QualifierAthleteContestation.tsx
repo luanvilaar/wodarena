@@ -82,8 +82,7 @@ export function QualifierAthleteContestation({ events, registrations }: { events
   return (
     <form onSubmit={submit} className="space-y-4 rounded-lg border border-card-border bg-dark-gray/30 p-4">
       <div>
-        <p className="text-xs font-bold uppercase tracking-wider text-primary">Qualifier online</p>
-        <h4 className="mt-1 text-sm font-bold uppercase tracking-wider text-white">Contestar uma decisão de submissão</h4>
+        <h4 className="text-sm font-bold uppercase tracking-wider text-white">Contestar uma decisão de submissão do Qualifier online</h4>
         <p className="mt-1 text-xs leading-5 text-muted">Selecione um resultado já analisado. A contestação pode ser deferida com reabertura explícita para nova revisão.</p>
       </div>
       <label className="block text-xs font-bold uppercase tracking-wider text-muted">Submissão analisada

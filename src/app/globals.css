@@ -126,6 +126,38 @@ table th {
   transform: translateY(0);
 }
 
+/* Área do Atleta (< lg): a navegação inferior é fixa e o rodapé global vem
+   depois do conteúdo da página. A folga fica no body para que o fim do
+   documento (conteúdo + rodapé) nunca termine sob a barra; em lg+ a barra
+   some e a folga também. 4rem cobre os itens de 3.5rem + borda com sobra, e a
+   safe-area soma por cima, igual ao padding da própria barra. */
+@media (width < 64rem) {
+  html:has([data-athlete-bottom-nav]) {
+    --athlete-bottom-nav-clearance: calc(4rem + max(0.5rem, env(safe-area-inset-bottom)));
+    scroll-padding-bottom: var(--athlete-bottom-nav-clearance);
+  }
+
+  html:has([data-athlete-bottom-nav]) body {
+    padding-bottom: var(--athlete-bottom-nav-clearance);
+  }
+}
+
+/* Foco na Área do Atleta. Estas regras ficam fora de @layer, como o
+   :focus-visible global acima, e vencem por especificidade; utilitários do
+   Tailwind (em @layer utilities) perderiam para ele. */
+
+/* Os itens da barra inferior encostam nas bordas da tela: o contorno global
+   (offset +3px) seria cortado no primeiro e no último item. Desenha por dentro. */
+[data-athlete-bottom-nav] button:focus-visible {
+  outline-offset: -4px;
+}
+
+/* O contêiner da seção recebe foco programático ao trocar de aba para o leitor
+   de tela anunciar a seção nova; não é um controle, então não ganha contorno. */
+[data-athlete-section-content]:focus-visible {
+  outline: none;
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;

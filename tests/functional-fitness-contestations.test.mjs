@@ -69,11 +69,10 @@ test('status update route allows refund only on approved decision and sends emai
 
 test('admin page renders athlete contestation flow and manager review surface', () => {
   assert.match(adminPage, /contestations, coupons, currentUser/);
-  assert.match(adminPage, /Contestacao de Provas/);
-  assert.match(adminPage, /Contestar Prova/);
+  assert.match(adminPage, /<h3 className="[^"]*">Contestar prova<\/h3>/);
   assert.match(adminPage, /1\. Selecao da Prova/);
   assert.match(adminPage, /2\. Formulario de Contestacao/);
-  assert.match(adminPage, /Historico das contestacoes/);
+  assert.match(adminPage, /<h3 className="[^"]*">Contestações enviadas<\/h3>/);
   assert.match(adminPage, /Contestacoes/);
   assert.match(adminPage, /Salvar decisao/);
   assert.match(adminPage, /renderAbaContestations/);

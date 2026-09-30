@@ -17,6 +17,8 @@ Also note: the repo's `npm audit` has long-standing CRITICAL/HIGH advisories com
 
 1. `git diff --name-only origin/main..HEAD` shows **no** change to `package.json` / `package-lock.json` (the push introduces no new exposure);
 2. the report names the offending packages and the counts (`critical/high/moderate`) instead of collapsing them into "CONCERNS";
-3. the waiver is handed to the user with the remediation it needs (here: the `next` major upgrade) so they own the decision — an agent does not grant itself an open-ended exemption.
+3. the waiver is handed to the user with the remediation it needs so they own the decision — an agent does not grant itself an open-ended exemption. As of 2026-09-22 `npm audit` reports the fix as **non-major**: `next` 16.3.1 → 16.3.6 (`isSemVerMajor: false`), counts 1 critical / 3 high / 1 moderate. Re-check `fixAvailable` each time rather than repeating an old remediation.
 
 If any of the three fails, the gate stays FAIL and the push waits.
+
+**Dirty working tree is normal here.** The user often has unrelated WIP (skill syncs under `.claude/skills/`, `.cursor/`, `.gemini/`, `.github/`, `next-env.d.ts`) while asking for a scoped commit, so the gate's "working directory clean" check fails by design. Do not stash or touch that WIP. Instead, after committing, confirm `git status --short -uall -- src tests supabase bin package.json package-lock.json` is empty. That proves lint/typecheck/test/build in the main checkout exercise exactly the committed tree.

@@ -1,3 +1,5 @@
 - [Repo público — regras de disclosure](project_public_repo_disclosure.md) — wodarena é PUBLIC no GitHub; varrer secrets e disclosure de vulns em todo pré-push
 - [Override de score qualifier pelo gestor](project_qualifier_manager_override.md) — design NEEDS_WORK e gate da implementação FAIL (2026-09-22); o que conferir no re-gate
 - [:focus-visible fora de @layer](project_focus_visible_unlayered.md) — classes focus-visible:* dos componentes são código morto no app inteiro; correção adiada de propósito
+- [Leaderboard: elegibilidade x sessão de atleta](project_leaderboard_eligibility_athlete_session.md) — invariante role/posse; FAIL→PASS (2026-09-28); gap conhecido no teste
+- [Story 1.34 barra inferior do atleta](project_athlete_bottom_nav_1_34.md) — re-gate CONCERNS não bloqueante (2026-09-30); File List, aparelho real, flicker via replace

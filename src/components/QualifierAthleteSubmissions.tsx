@@ -69,7 +69,7 @@ export function QualifierAthleteSubmissions({ events, registrations }: { events:
 
   return (
     <div className="space-y-5">
-      <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Qualifier online</p><h3 className="mt-1 text-xl font-bold uppercase text-white">Enviar resultados</h3><p className="mt-2 text-sm text-muted">Envie o score e o link do vídeo no YouTube. O vídeo fica visível apenas para você, judges e organização.</p></div>
+      <div><h3 className="text-xl font-bold uppercase text-white">Enviar resultados</h3><p className="mt-2 text-sm text-muted">Envie o score e o link do vídeo no YouTube. O vídeo fica visível apenas para você, judges e organização.</p></div>
       <form onSubmit={submit} className="space-y-4 rounded-xl border border-card-border bg-card p-5 text-white">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <label className="text-xs font-bold uppercase tracking-wider text-muted">Inscrição

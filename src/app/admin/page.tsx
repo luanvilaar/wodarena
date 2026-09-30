@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useSyncExternalStore } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import Script from 'next/script';
@@ -20,7 +20,7 @@ import {
   LayoutDashboard, Calendar, Trophy,
   ClipboardCheck, LogIn, LogOut, Ticket, Settings,
   Upload, X, Trash2, Plus, ShieldAlert, Pencil, Copy, GripVertical, ArrowDown, ArrowUp, Library, ReceiptText, Mail, CreditCard,
-  Lock, QrCode, FileSpreadsheet, ChevronDown, Loader2
+  Lock, QrCode, FileSpreadsheet, ChevronDown, ChevronRight, Loader2, UserRound
 } from 'lucide-react';
 
 const InstagramIcon = ({ className = 'h-3.5 w-3.5' }: { className?: string }) => (
@@ -58,6 +58,15 @@ import { buildManagerFinanceSummary } from '@/lib/managerFinance';
 import { getTeamDisplayName } from '@/lib/teamDisplay';
 import { fortalezaDateTimeLocalToUtc, normalizeQualifierSubmissionWindow, utcToFortalezaDateTimeLocal } from '@/lib/submissionWindow';
 import { SCORE_TIE_BREAKER_SPLIT_KEY, shouldUseTimeTieBreaker } from '@/lib/scoring';
+import {
+  ATHLETE_SECTIONS,
+  getAthleteRegistrationElementId,
+  getAthleteSectionServerSnapshot,
+  getAthleteSectionSnapshot,
+  pushAthleteSection,
+  subscribeToAthleteSection,
+  type AthleteSectionId
+} from '@/lib/athleteSections';
 
 const currencyFormatter = new Intl.NumberFormat('pt-BR', {
   style: 'currency',
@@ -90,6 +99,9 @@ const transactionalLabelClassName = 'mb-1 block text-xs font-bold uppercase trac
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const transactionalCardClassName = 'transactional-surface bg-canvas-light p-6 text-ink text-primary-on-light sm:p-8 lg:p-10';
 const primaryActionClassName = 'flex min-h-11 items-center justify-center rounded-md bg-primary px-6 py-3 text-sm font-bold text-ink transition-colors hover:bg-primary-hover active:bg-primary-hover disabled:cursor-not-allowed disabled:bg-primary-disabled disabled:text-muted';
+// Área do Atleta: quanto do início da seção precisa aparecer acima da barra
+// inferior (ou do fim da tela) para a troca de aba ser percebida sem rolar.
+const ATHLETE_SECTION_MIN_VISIBLE_PX = 160;
 const darkLoginInputClassName = 'h-12 w-full rounded-md border border-card-border bg-background px-4 text-base text-white placeholder:text-muted-soft transition-colors focus:border-info focus:outline-none';
 
 // Converte HH:MM para minutos desde o início do dia
@@ -593,8 +605,57 @@ export default function AdminPage() {
   const [selectedEventToManage, setSelectedEventToManage] = useState<Event | null>(null);
   const [activeEventTab, setActiveEventTab] = useState<'info' | 'categories' | 'wods' | 'schedule' | 'registrations' | 'scores' | 'leaderboard' | 'contestations' | 'submissions'>('info');
 
-  // Área do Atleta: navegação lateral entre seções
-  const [activeAthleteSection, setActiveAthleteSection] = useState<'profile' | 'events' | 'submissions' | 'contestations'>('profile');
+  // Área do Atleta: a seção ativa vem do hash da URL (#inscricoes, #resultados,
+  // #contestar, #perfil). O servidor sempre renderiza "events"; o cliente lê o
+  // hash depois de hidratar. Ver src/lib/athleteSections.ts.
+  const activeAthleteSection = useSyncExternalStore(
+    subscribeToAthleteSection,
+    getAthleteSectionSnapshot,
+    getAthleteSectionServerSnapshot
+  );
+  const athleteContentRef = useRef<HTMLDivElement>(null);
+  // Pedido disparado por uma ação do atleta (barra, sidebar, "Pendentes",
+  // "Pagar agora"): targetId null leva ao início da seção; um id leva ao
+  // cartão de inscrição. Carga inicial e voltar/avançar não geram pedido, então
+  // não roubam foco nem rolam além do que o navegador restaura.
+  const [athleteScrollRequest, setAthleteScrollRequest] = useState<{ targetId: string | null; sequence: number } | null>(null);
+
+  useEffect(() => {
+    if (!athleteScrollRequest) return;
+    const { targetId } = athleteScrollRequest;
+    const target = targetId ? document.getElementById(targetId) : athleteContentRef.current;
+    if (!target) return;
+
+    const behavior: ScrollBehavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth';
+
+    if (targetId) {
+      target.scrollIntoView({ behavior, block: 'start' });
+      target.focus({ preventScroll: true });
+      return;
+    }
+
+    // Rola quando o início da seção está acima da área útil (sob o Navbar
+    // sticky, refletido no scroll-margin) ou tão baixo que a barra inferior
+    // (ou o fim da tela) quase o esconde, como em telas baixas com o banner
+    // de pagamento. Fora disso, quem está no topo mantém o cabeçalho à vista.
+    const { top } = target.getBoundingClientRect();
+    const scrollMarginTop = Number.parseFloat(window.getComputedStyle(target).scrollMarginTop) || 0;
+    const bottomNavRect = document.querySelector('[data-athlete-bottom-nav]')?.getBoundingClientRect();
+    const visibleBottom = bottomNavRect && bottomNavRect.height > 0 ? bottomNavRect.top : window.innerHeight;
+    if (top < scrollMarginTop || top > visibleBottom - ATHLETE_SECTION_MIN_VISIBLE_PX) {
+      target.scrollIntoView({ behavior, block: 'start' });
+    }
+    // Leitores de tela passam a anunciar a seção nova (região nomeada).
+    target.focus({ preventScroll: true });
+  }, [athleteScrollRequest]);
+
+  const navigateToAthleteSection = (section: AthleteSectionId, scrollTargetId: string | null = null) => {
+    // Tocar na seção já ativa não empilha histórico, só leva ao topo dela.
+    if (section !== activeAthleteSection) {
+      pushAthleteSection(section);
+    }
+    setAthleteScrollRequest(previous => ({ targetId: scrollTargetId, sequence: (previous?.sequence ?? 0) + 1 }));
+  };
 
   // Formulário de perfil do atleta — null significa "ainda não editado", usa-se o valor padrão derivado
   const [athleteProfileNameInput, setAthleteProfileNameInput] = useState<string | null>(null);
@@ -2974,7 +3035,15 @@ export default function AdminPage() {
       .filter(reg => reg.userId === currentUser.id || reg.athleteEmail.toLowerCase() === currentUser.email.toLowerCase())
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     const failedPayments = athleteRegistrations.filter(reg => reg.paymentStatus === 'payment_failed');
-    const pendingPayments = athleteRegistrations.filter(reg => reg.paymentStatus === 'payment_pending' || reg.paymentStatus === 'payment_in_review');
+    // Inscrições ainda sem pagamento aprovado: falhou, pendente ou em análise.
+    // Um só conjunto alimenta o selo da navegação, a contagem "Pendentes" e o
+    // botão que leva ao primeiro cartão, para os números nunca divergirem.
+    // Só falha e pendente têm botões de pagar; em análise aguarda o Mercado Pago.
+    const athletePendingRegistrations = athleteRegistrations.filter(reg =>
+      reg.paymentStatus === 'payment_failed' ||
+      reg.paymentStatus === 'payment_pending' ||
+      reg.paymentStatus === 'payment_in_review'
+    );
 
     // Valores padrão do formulário de perfil (derivados em render, sem setState em effect)
     const linkedAthlete = athletes.find(
@@ -3068,36 +3137,49 @@ export default function AdminPage() {
       }
     };
 
-    const athleteSections: { id: 'profile' | 'events' | 'submissions' | 'contestations'; label: string; icon: typeof Settings }[] = [
-      { id: 'profile', label: 'Dados do Perfil', icon: Settings },
-      { id: 'events', label: 'Historico de Eventos', icon: Calendar },
-      { id: 'submissions', label: 'Enviar Resultados', icon: ClipboardCheck },
-      { id: 'contestations', label: 'Contestacoes de Prova', icon: ShieldAlert }
-    ];
+    // Mesmo número no selo da navegação e na faixa "Pendentes".
+    const athletePendingCount = athletePendingRegistrations.length;
+    const athletePendingLabel = athletePendingCount === 1
+      ? '1 inscrição com pagamento pendente'
+      : `${athletePendingCount} inscrições com pagamento pendente`;
+    const athletePendingBadge = athletePendingCount > 9 ? '9+' : String(athletePendingCount);
+    const activeAthleteSectionLabel = ATHLETE_SECTIONS.find(section => section.id === activeAthleteSection)?.label ?? ATHLETE_SECTIONS[0].label;
+    const athleteSectionIcons: Record<AthleteSectionId, typeof Settings> = {
+      events: Ticket,
+      submissions: ClipboardCheck,
+      contestations: ShieldAlert,
+      profile: UserRound
+    };
+    const athleteStatCellClassName = 'flex min-h-14 flex-col items-center justify-center gap-1 px-2 py-2 text-center sm:min-h-12 sm:flex-row sm:items-baseline sm:gap-2';
+    const athleteStatNumberClassName = 'font-number text-lg font-bold leading-none';
+    const athleteStatLabelClassName = 'text-[11px] font-medium leading-tight text-muted sm:text-xs';
+    // Hierarquia do cartão de inscrição: secundária em contorno, terciária discreta.
+    // O contorno usa muted-soft (~3,8:1 sobre o cartão); card-border ficaria em ~1,25:1.
+    const athleteSecondaryActionClassName = 'flex min-h-11 w-full items-center justify-center gap-1.5 rounded-md border border-muted-soft bg-transparent px-4 py-2 text-xs font-bold uppercase tracking-wider text-white transition-colors hover:border-primary motion-reduce:transition-none disabled:opacity-60';
+    const athleteTertiaryActionClassName = 'flex min-h-11 w-full items-center justify-center gap-1.5 rounded-md border border-transparent bg-transparent px-4 py-2 text-xs font-bold uppercase tracking-wider text-muted transition-colors hover:bg-dark-gray hover:text-white motion-reduce:transition-none disabled:opacity-60';
 
     return (
       <div className="min-h-screen bg-background text-white">
-        <section className="bg-card border-b border-card-border py-6">
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <BrandLogo className="h-12 w-12 rounded-sm border border-card-border" priority />
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary font-sans">Área do Atleta</p>
-                <h2 className="text-xl font-bold text-white uppercase tracking-wider">{currentUser.name}</h2>
-                <p className="text-xs text-muted font-medium">{currentUser.email}</p>
-              </div>
+        <section aria-labelledby="athlete-area-title" className="border-b border-card-border bg-card">
+          <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
+            <BrandLogo className="h-10 w-10 shrink-0 rounded-sm border border-card-border" priority />
+            <div className="min-w-0 flex-1">
+              <h2 id="athlete-area-title" className="truncate text-sm font-bold text-white">Área do Atleta</h2>
+              <p className="truncate text-sm text-white" title={currentUser.name}>{currentUser.name}</p>
+              <p className="truncate text-xs text-muted" title={currentUser.email}>{currentUser.email}</p>
             </div>
             <button
+              type="button"
               onClick={logout}
-              className="flex min-h-11 items-center gap-1.5 rounded-md border border-card-border bg-dark-gray px-4 py-2 text-xs font-bold text-muted transition-colors hover:border-muted hover:text-white"
+              className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-md border border-card-border bg-dark-gray px-3 text-xs font-bold text-muted transition-colors hover:border-muted hover:text-white motion-reduce:transition-none sm:px-4"
             >
-              <span>Desconectar</span>
-              <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
+              <LogOut className="h-4 w-4" aria-hidden="true" />
+              <span>Sair</span>
             </button>
           </div>
         </section>
 
-        <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+        <main className="mx-auto max-w-6xl space-y-4 px-4 py-4 sm:space-y-6 sm:px-6 sm:py-8 lg:px-8">
           {adminNotice && (
             <div
               role={adminNotice.tone === 'error' ? 'alert' : 'status'}
@@ -3116,68 +3198,117 @@ export default function AdminPage() {
           )}
 
           {failedPayments.length > 0 && (
-            <div className="rounded-xl border border-trading-down/35 bg-trading-down/10 p-5">
-              <div className="flex items-start gap-3">
-                <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-trading-down" aria-hidden="true" />
-                <div className="space-y-1">
-                  <p className="text-sm font-bold uppercase tracking-wider text-trading-down font-sans">Pagamento não processado</p>
-                  <p className="text-sm leading-6 text-white">
-                    Sua inscrição foi registrada, mas ainda não está confirmada. Verifique os dados do cartão ou tente outra forma de pagamento.
-                  </p>
+            <div className="rounded-xl border border-trading-down/35 bg-trading-down/10 p-4 sm:p-5">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-3">
+                  <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-trading-down" aria-hidden="true" />
+                  <div className="space-y-1">
+                    <p className="text-sm font-bold uppercase tracking-wider text-trading-down font-sans">Pagamento não processado</p>
+                    <p className="text-sm leading-6 text-white">
+                      Sua inscrição foi registrada, mas ainda não está confirmada. Verifique os dados do cartão ou tente outra forma de pagamento.
+                    </p>
+                  </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => navigateToAthleteSection('events', getAthleteRegistrationElementId(failedPayments[0].id))}
+                  className={`${primaryActionClassName} w-full gap-2 motion-reduce:transition-none sm:w-auto sm:shrink-0`}
+                >
+                  <span>Pagar agora</span>
+                  <ArrowDown className="h-4 w-4" aria-hidden="true" />
+                </button>
               </div>
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="rounded-xl border border-card-border bg-card p-5">
-              <p className="text-[10px] uppercase font-bold text-muted tracking-wider font-sans">Inscrições</p>
-              <h3 className="mt-2 text-2xl font-bold font-number text-white">{athleteRegistrations.length}</h3>
+          {/* Resumo da conta: uma faixa só, para não empurrar o conteúdo no mobile */}
+          <div className="grid grid-cols-3 divide-x divide-card-border rounded-xl border border-card-border bg-card">
+            <div className={athleteStatCellClassName}>
+              <span className={`${athleteStatNumberClassName} text-white`}>{athleteRegistrations.length}</span>
+              <span className={athleteStatLabelClassName}>Inscrições</span>
             </div>
-            <div className="rounded-xl border border-card-border bg-card p-5">
-              <p className="text-[10px] uppercase font-bold text-muted tracking-wider font-sans">Pendentes</p>
-              <h3 className="mt-2 text-2xl font-bold font-number text-primary">{pendingPayments.length}</h3>
-            </div>
-            <div className="rounded-xl border border-card-border bg-card p-5">
-              <p className="text-[10px] uppercase font-bold text-muted tracking-wider font-sans">Contestações</p>
-              <h3 className="mt-2 text-2xl font-bold font-number text-trading-down">{athleteContestations.length}</h3>
+            {athletePendingCount > 0 ? (
+              <button
+                type="button"
+                onClick={() => navigateToAthleteSection('events', getAthleteRegistrationElementId(athletePendingRegistrations[0].id))}
+                className={`${athleteStatCellClassName} group transition-colors hover:bg-dark-gray motion-reduce:transition-none`}
+              >
+                <span className={`${athleteStatNumberClassName} text-primary`}>{athletePendingCount}</span>
+                <span className={`${athleteStatLabelClassName} inline-flex items-center gap-0.5 group-hover:text-white`}>
+                  Pendentes
+                  <ChevronRight className="h-3 w-3" aria-hidden="true" />
+                </span>
+                <span className="sr-only">, ir para a primeira inscrição com pagamento pendente</span>
+              </button>
+            ) : (
+              <div className={athleteStatCellClassName}>
+                <span className={`${athleteStatNumberClassName} text-white`}>0</span>
+                <span className={athleteStatLabelClassName}>Pendentes</span>
+              </div>
+            )}
+            <div className={athleteStatCellClassName}>
+              <span className={`${athleteStatNumberClassName} text-white`}>{athleteContestations.length}</span>
+              <span className={athleteStatLabelClassName}>Contestações</span>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-6">
-            {/* Navegação lateral da Área do Atleta */}
-            <aside className="lg:sticky lg:top-6 self-start">
-              <nav className="flex flex-row lg:flex-col gap-2 overflow-x-auto rounded-xl border border-card-border bg-card p-3">
-                {athleteSections.map(section => {
-                  const Icon = section.icon;
-                  const isActive = activeAthleteSection === section.id;
-                  return (
-                    <button
-                      key={section.id}
-                      type="button"
-                      onClick={() => setActiveAthleteSection(section.id)}
-                      className={`flex min-h-11 items-center gap-2 whitespace-nowrap rounded-md px-4 py-2.5 text-xs font-bold uppercase tracking-wider transition-colors font-sans ${
-                        isActive
-                          ? 'bg-primary text-ink'
-                          : 'text-muted hover:bg-dark-gray hover:text-white'
-                      }`}
-                    >
-                      <Icon className="h-4 w-4" aria-hidden="true" />
-                      <span>{section.label}</span>
-                    </button>
-                  );
-                })}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[240px_1fr]">
+            {/* Navegação da Área do Atleta (lg+). Abaixo de lg a navegação é a barra inferior fixa. */}
+            <aside className="hidden self-start lg:sticky lg:top-24 lg:block">
+              <nav aria-label="Seções da Área do Atleta" className="rounded-xl border border-card-border bg-card p-3">
+                <ul className="flex flex-col gap-1">
+                  {ATHLETE_SECTIONS.map(section => {
+                    const Icon = athleteSectionIcons[section.id];
+                    const isActive = activeAthleteSection === section.id;
+                    const showPendingBadge = section.id === 'events' && athletePendingCount > 0;
+                    return (
+                      <li key={section.id}>
+                        <button
+                          type="button"
+                          aria-current={isActive ? 'page' : undefined}
+                          onClick={() => navigateToAthleteSection(section.id)}
+                          className={`flex min-h-11 w-full items-center gap-2 rounded-md px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wider transition-colors motion-reduce:transition-none font-sans ${
+                            isActive
+                              ? 'bg-primary text-ink'
+                              : 'text-muted hover:bg-dark-gray hover:text-white'
+                          }`}
+                        >
+                          <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                          <span className="min-w-0 flex-1">{section.label}</span>
+                          {showPendingBadge && (
+                            <>
+                              <span aria-hidden="true" className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-trading-down px-1 font-number text-[11px] font-bold leading-none tracking-normal text-ink">
+                                {athletePendingBadge}
+                              </span>
+                              <span className="sr-only">, {athletePendingLabel}</span>
+                            </>
+                          )}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
               </nav>
             </aside>
 
-            <div className="space-y-6">
-              {/* Seção: Dados do Perfil */}
+            {/* Recebe o foco quando o atleta troca de seção pela navegação, para o
+                leitor de tela anunciar a seção nova. O nome vem do rótulo da
+                navegação porque o título de "Enviar resultados" mora no componente
+                do qualifier e some no estado vazio. Sem contorno: ver globals.css. */}
+            <div
+              ref={athleteContentRef}
+              tabIndex={-1}
+              role="region"
+              aria-label={activeAthleteSectionLabel}
+              data-athlete-section-content=""
+              className="min-w-0 scroll-mt-20 space-y-6"
+            >
+              {/* Seção: Dados do perfil (profile) */}
               {activeAthleteSection === 'profile' && (
                 <section id="activeAthleteSection-profile" className="rounded-xl border border-card-border bg-card p-5 sm:p-6 space-y-5">
                   <div className="border-b border-card-border pb-4">
-                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary font-sans">Dados do Perfil</p>
-                    <h3 className="mt-1 text-2xl font-bold tracking-tight text-white uppercase">Informacoes da conta</h3>
-                    <p className="mt-1 text-xs text-muted font-medium">Mantenha seu nome e data de nascimento atualizados. Essas informacoes sao usadas em inscricoes e leaderboards.</p>
+                    <h3 className="text-2xl font-bold tracking-tight text-white uppercase">Dados do perfil</h3>
+                    <p className="mt-1 text-xs text-muted font-medium">Mantenha seu nome e data de nascimento atualizados. Essas informações são usadas em inscrições e leaderboards.</p>
                   </div>
 
                   <form onSubmit={handleSaveAthleteProfile} className="space-y-4">
@@ -3232,13 +3363,12 @@ export default function AdminPage() {
                 </section>
               )}
 
-              {/* Seção: Historico de Eventos */}
+              {/* Seção: Inscrições (events) */}
               {activeAthleteSection === 'events' && (
-                <section id="activeAthleteSection-events" className="rounded-xl border border-card-border bg-card p-5 sm:p-6 space-y-5">
+                <section id="activeAthleteSection-events" className="rounded-xl border border-card-border bg-card p-4 sm:p-6 space-y-5">
                   <div className="border-b border-card-border pb-4">
-                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary font-sans">Historico de Eventos</p>
-                    <h3 className="mt-1 text-2xl font-bold tracking-tight text-white uppercase">Minhas inscricoes</h3>
-                    <p className="mt-1 text-xs text-muted font-medium">Registros, resultados e acessos rapidos das suas participacoes.</p>
+                    <h3 className="text-2xl font-bold tracking-tight text-white uppercase">Minhas inscrições</h3>
+                    <p className="mt-1 text-xs text-muted font-medium">Registros, resultados e acessos rápidos das suas participações.</p>
                   </div>
 
                   {athleteRegistrations.length === 0 ? (
@@ -3249,50 +3379,47 @@ export default function AdminPage() {
                         const event = getRegistrationEvent(reg);
                         const division = event?.divisions.find(div => div.id === reg.divisionId);
                         const statusMeta = getPaymentStatusMeta(reg.paymentStatus);
+                        const needsPayment = reg.paymentStatus === 'payment_failed' || reg.paymentStatus === 'payment_pending';
+                        const registrationElementId = getAthleteRegistrationElementId(reg.id);
+                        const registrationTitleId = `${registrationElementId}-title`;
+                        const cardRedirectNoteId = `${registrationElementId}-card-note`;
                         return (
-                          <article key={reg.id} className="rounded-lg border border-card-border bg-dark-gray/30 p-4 space-y-4">
-                            <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-                              <div className="space-y-2">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <h4 className="text-base font-bold uppercase tracking-wider text-white">{event?.name || 'Evento não encontrado'}</h4>
-                                  <span className={`rounded border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${getPaymentStatusClassName(statusMeta.tone)}`}>
+                          <article
+                            key={reg.id}
+                            id={registrationElementId}
+                            tabIndex={-1}
+                            aria-labelledby={registrationTitleId}
+                            className="scroll-mt-20 rounded-lg border border-card-border bg-dark-gray/30 p-4 sm:p-5"
+                          >
+                            {/* Mobile: informação, ações de pagamento e só depois os links do evento,
+                                para Pix/Cartão ficarem logo abaixo do valor. lg: ações na coluna da
+                                direita, links sob a informação (grid-rows auto/1fr absorve a sobra). */}
+                            <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_14rem] lg:grid-rows-[auto_1fr] lg:items-start lg:gap-x-6 lg:gap-y-2">
+                              <div className="min-w-0 space-y-3 lg:col-start-1 lg:row-start-1">
+                                <div className="space-y-1.5">
+                                  <span className={`inline-flex rounded border px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider ${getPaymentStatusClassName(statusMeta.tone)}`}>
                                     {statusMeta.label}
                                   </span>
+                                  <h4 id={registrationTitleId} className="break-words text-base font-bold uppercase tracking-wider text-white">
+                                    {event?.name || 'Evento não encontrado'}
+                                  </h4>
+                                  <p className="break-words text-sm text-muted">
+                                    <span className="sr-only">Categoria: </span>
+                                    {division?.name || reg.ticketType}
+                                  </p>
                                 </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs text-muted">
-                                  <p><span className="font-bold text-white">Atleta:</span> {reg.athleteName}</p>
-                                  <p><span className="font-bold text-white">Categoria:</span> {division?.name || reg.ticketType}</p>
-                                  <p><span className="font-bold text-white">Valor:</span> {currencyFormatter.format(reg.totalPaid)}</p>
-                                  <p><span className="font-bold text-white">Inscrição:</span> {reg.id}</p>
-                                  <p><span className="font-bold text-white">Data:</span> {new Date(reg.createdAt).toLocaleDateString('pt-BR')}</p>
-                                  <p><span className="font-bold text-white">Pagamento:</span> {reg.paymentMethod || 'Não informado'}</p>
-                                </div>
+                                <p className="font-number text-2xl font-bold leading-none text-white">
+                                  <span className="sr-only">Valor: </span>
+                                  {currencyFormatter.format(reg.totalPaid)}
+                                </p>
                                 {reg.paymentStatus === 'payment_failed' && (
                                   <p className="rounded-md border border-trading-down/30 bg-trading-down/10 px-3 py-2 text-xs leading-5 text-trading-down">
                                     {reg.paymentErrorMessage || 'Pagamento não processado. Sua participação depende da regularização do pagamento.'}
                                   </p>
                                 )}
-                                {event && (
-                                  <div className="flex flex-wrap gap-2 pt-1">
-                                    <Link
-                                      href={`/event/${event.id}`}
-                                      className="flex min-h-9 items-center gap-1.5 rounded-md border border-card-border bg-card px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-white transition-colors hover:border-primary"
-                                    >
-                                      <Calendar className="h-3 w-3" aria-hidden="true" />
-                                      <span>Ver detalhes do evento</span>
-                                    </Link>
-                                    <Link
-                                      href={`/event/${event.id}/leaderboard`}
-                                      className="flex min-h-9 items-center gap-1.5 rounded-md border border-card-border bg-card px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-white transition-colors hover:border-primary"
-                                    >
-                                      <Trophy className="h-3 w-3" aria-hidden="true" />
-                                      <span>Ver leaderboard</span>
-                                    </Link>
-                                  </div>
-                                )}
                               </div>
-                              <div className="flex flex-col sm:flex-row lg:flex-col gap-2 lg:min-w-44">
-                                {(reg.paymentStatus === 'payment_failed' || reg.paymentStatus === 'payment_pending') && (
+                              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:items-start lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:grid-cols-1">
+                                {needsPayment && (
                                   <>
                                     <button
                                       type="button"
@@ -3303,50 +3430,92 @@ export default function AdminPage() {
                                           setPayingPixRegistration({ reg, event, athlete });
                                         }
                                       }}
-                                      className="flex min-h-10 items-center justify-center gap-1.5 rounded-md bg-trading-up hover:bg-trading-up/90 px-4 py-2 text-xs font-bold uppercase tracking-wider text-ink transition-colors"
+                                      className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-md bg-trading-up px-4 py-2 text-xs font-bold uppercase tracking-wider text-ink transition-colors hover:bg-trading-up/90 motion-reduce:transition-none"
                                     >
                                       <QrCode className="h-3.5 w-3.5" aria-hidden="true" />
                                       <span>Pagar com Pix</span>
                                     </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleRedirectToCardPreference(reg)}
-                                      disabled={redirectingRegistrationId === reg.id}
-                                      className="flex min-h-10 items-center justify-center gap-1.5 rounded-md bg-primary px-4 py-2 text-xs font-bold uppercase tracking-wider text-ink transition-colors hover:bg-primary-hover disabled:opacity-60"
-                                    >
-                                      {redirectingRegistrationId === reg.id ? (
-                                        <>
-                                          <div className="w-3.5 h-3.5 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
-                                          <span>Redirecionando...</span>
-                                        </>
-                                      ) : (
-                                        <>
-                                          <CreditCard className="h-3.5 w-3.5" aria-hidden="true" />
-                                          <span>Pagar com Cartão</span>
-                                        </>
-                                      )}
-                                    </button>
+                                    <div className="space-y-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRedirectToCardPreference(reg)}
+                                        disabled={redirectingRegistrationId === reg.id}
+                                        aria-describedby={cardRedirectNoteId}
+                                        className={athleteSecondaryActionClassName}
+                                      >
+                                        {redirectingRegistrationId === reg.id ? (
+                                          <>
+                                            <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                                            <span>Redirecionando...</span>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <CreditCard className="h-3.5 w-3.5" aria-hidden="true" />
+                                            <span>Pagar com Cartão</span>
+                                          </>
+                                        )}
+                                      </button>
+                                      <p id={cardRedirectNoteId} className="text-center text-[11px] leading-4 text-muted">
+                                        Abre a página do Mercado Pago
+                                      </p>
+                                    </div>
                                   </>
                                 )}
                                 <button
                                   type="button"
                                   onClick={() => handleOpenAthleteVoucher(reg)}
-                                  className="flex min-h-10 items-center justify-center gap-1.5 rounded-md border border-card-border bg-card px-4 py-2 text-xs font-bold uppercase tracking-wider text-white transition-colors hover:border-primary"
+                                  className={needsPayment ? athleteTertiaryActionClassName : athleteSecondaryActionClassName}
                                 >
                                   <ReceiptText className="h-3.5 w-3.5" aria-hidden="true" />
-                                  <span>Visualizar</span>
+                                  <span>Ver comprovante</span>
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => handleResendRegistrationVoucher(reg)}
                                   disabled={resendingRegistrationId === reg.id}
-                                  className="flex min-h-10 items-center justify-center gap-1.5 rounded-md bg-primary px-4 py-2 text-xs font-bold uppercase tracking-wider text-ink transition-colors hover:bg-primary-hover disabled:opacity-60"
+                                  className={athleteTertiaryActionClassName}
                                 >
                                   <Mail className="h-3.5 w-3.5" aria-hidden="true" />
                                   <span>{resendingRegistrationId === reg.id ? 'Enviando...' : 'Solicitar 2ª via'}</span>
                                 </button>
                               </div>
+                              {event && (
+                                <div className="flex flex-wrap gap-x-5 lg:col-start-1 lg:row-start-2">
+                                  <Link
+                                    href={`/event/${event.id}`}
+                                    className="inline-flex min-h-11 items-center gap-1.5 text-xs font-semibold text-muted underline-offset-4 transition-colors hover:text-white hover:underline motion-reduce:transition-none"
+                                  >
+                                    <Calendar className="h-3.5 w-3.5" aria-hidden="true" />
+                                    <span>Ver detalhes do evento</span>
+                                  </Link>
+                                  <Link
+                                    href={`/event/${event.id}/leaderboard`}
+                                    className="inline-flex min-h-11 items-center gap-1.5 text-xs font-semibold text-muted underline-offset-4 transition-colors hover:text-white hover:underline motion-reduce:transition-none"
+                                  >
+                                    <Trophy className="h-3.5 w-3.5" aria-hidden="true" />
+                                    <span>Ver leaderboard</span>
+                                  </Link>
+                                </div>
+                              )}
                             </div>
+                            <dl className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t border-card-border pt-3 text-[11px] leading-4 text-muted">
+                              <div className="flex gap-1">
+                                <dt className="font-semibold">Data:</dt>
+                                <dd>{new Date(reg.createdAt).toLocaleDateString('pt-BR')}</dd>
+                              </div>
+                              <div className="flex gap-1">
+                                <dt className="font-semibold">Pagamento:</dt>
+                                <dd>{reg.paymentMethod || 'Não informado'}</dd>
+                              </div>
+                              <div className="flex min-w-0 gap-1">
+                                <dt className="shrink-0 font-semibold">Atleta:</dt>
+                                <dd className="min-w-0 break-words">{reg.athleteName}</dd>
+                              </div>
+                              <div className="flex min-w-0 gap-1">
+                                <dt className="shrink-0 font-semibold">Inscrição:</dt>
+                                <dd className="min-w-0 break-all font-number">{reg.id}</dd>
+                              </div>
+                            </dl>
                           </article>
                         );
                       })}
@@ -3361,13 +3530,12 @@ export default function AdminPage() {
                 </section>
               )}
 
-              {/* Seção: Contestacoes de Prova */}
+              {/* Seção: Contestações (contestations) */}
               {activeAthleteSection === 'contestations' && (
                 <section id="activeAthleteSection-contestations" className="space-y-6">
                   <div className="rounded-xl border border-card-border bg-card p-5 sm:p-6 space-y-5">
                     <div className="border-b border-card-border pb-4">
-                      <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary font-sans">Contestacao de Provas</p>
-                      <h3 className="mt-1 text-2xl font-bold tracking-tight text-white uppercase">Contestar Prova</h3>
+                      <h3 className="text-2xl font-bold tracking-tight text-white uppercase">Contestar prova</h3>
                       <p className="mt-1 text-xs text-muted font-medium">Disponível para Functional Fitness e Qualifier com pagamento aprovado. Cada inscrição possui até {CONTESTATION_CREDITS_LIMIT} créditos de contestação.</p>
                     </div>
 
@@ -3476,8 +3644,7 @@ export default function AdminPage() {
 
                   <div className="rounded-xl border border-card-border bg-card p-5 sm:p-6 space-y-4">
                     <div className="border-b border-card-border pb-4">
-                      <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary font-sans">Historico das contestacoes</p>
-                      <h3 className="mt-1 text-xl font-bold tracking-tight text-white uppercase">Contestacoes enviadas</h3>
+                      <h3 className="text-xl font-bold tracking-tight text-white uppercase">Contestações enviadas</h3>
                     </div>
 
                     {athleteContestations.length === 0 ? (
@@ -3517,6 +3684,54 @@ export default function AdminPage() {
             </div>
           </div>
         </main>
+
+        {/* Navegação inferior fixa (< lg), ao alcance do polegar. z-40 fica abaixo
+            dos modais (z-[100]). A folga no fim do documento, que protege conteúdo
+            e rodapé global, está em globals.css (data-athlete-bottom-nav). */}
+        <nav
+          aria-label="Seções da Área do Atleta"
+          data-athlete-bottom-nav=""
+          className="fixed inset-x-0 bottom-0 z-40 border-t border-card-border bg-card pb-[max(0.5rem,env(safe-area-inset-bottom))] lg:hidden"
+        >
+          <ul className="mx-auto grid max-w-lg grid-cols-4">
+            {ATHLETE_SECTIONS.map(section => {
+              const Icon = athleteSectionIcons[section.id];
+              const isActive = activeAthleteSection === section.id;
+              const showPendingBadge = section.id === 'events' && athletePendingCount > 0;
+              return (
+                <li key={section.id} className="min-w-0">
+                  {/* Anel de foco desenhado por dentro (globals.css): os itens encostam nas bordas da tela. */}
+                  <button
+                    type="button"
+                    aria-current={isActive ? 'page' : undefined}
+                    onClick={() => navigateToAthleteSection(section.id)}
+                    className={`flex min-h-14 w-full flex-col items-center justify-center gap-1 px-1 py-1.5 text-[11px] leading-none transition-colors motion-reduce:transition-none ${
+                      isActive ? 'font-bold text-primary' : 'font-medium text-muted hover:text-white'
+                    }`}
+                  >
+                    <span
+                      className={`relative flex h-7 w-14 items-center justify-center rounded-full transition-colors motion-reduce:transition-none ${
+                        isActive ? 'bg-primary/15' : 'bg-transparent'
+                      }`}
+                    >
+                      <Icon className="h-5 w-5" aria-hidden="true" />
+                      {showPendingBadge && (
+                        <span
+                          aria-hidden="true"
+                          className="absolute -top-1 right-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-trading-down px-1 font-number text-[11px] font-bold leading-none text-ink ring-2 ring-card"
+                        >
+                          {athletePendingBadge}
+                        </span>
+                      )}
+                    </span>
+                    <span className="max-w-full truncate">{section.shortLabel}</span>
+                    {showPendingBadge && <span className="sr-only">, {athletePendingLabel}</span>}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
 
         {selectedRegistrationVoucher && (
           <RegistrationVoucher

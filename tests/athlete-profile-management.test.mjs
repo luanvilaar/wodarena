@@ -6,6 +6,7 @@ const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
 const context = read('../src/context/AppContext.tsx');
 const adminPage = read('../src/app/admin/page.tsx');
+const athleteSections = read('../src/lib/athleteSections.ts');
 const route = read('../src/app/api/athlete/profile/route.ts');
 const cli = read('../bin/athlete-profile.mjs');
 const packageJson = read('../package.json');
@@ -28,16 +29,22 @@ test('athlete profile route validates session and updates linked records', () =>
   assert.match(route, /getSessionCookieHeader\(createSessionToken\(nextSessionUser\)\)/);
 });
 
-test('athlete area exposes sidebar sections, profile form and event history', () => {
-  assert.match(adminPage, /activeAthleteSection/);
-  assert.match(adminPage, /Dados do Perfil/);
-  assert.match(adminPage, /Historico de Eventos/);
-  assert.match(adminPage, /Contestacoes de Prova/);
-  assert.match(adminPage, /Salvar perfil/);
-  assert.match(adminPage, /Informacoes da conta/);
-  assert.match(adminPage, /Registros, resultados e acessos rapidos/);
-  assert.match(adminPage, /Ver detalhes do evento/);
-  assert.match(adminPage, /Ver leaderboard/);
+test('athlete area exposes navigation sections, profile form and event history', () => {
+  // Rótulos da navegação: fonte única em src/lib/athleteSections.ts.
+  assert.match(athleteSections, /\{ id: 'events', hash: 'inscricoes', label: 'Inscrições', shortLabel: 'Inscrições' \}/);
+  assert.match(athleteSections, /\{ id: 'contestations', hash: 'contestar', label: 'Contestações', shortLabel: 'Contestar' \}/);
+  assert.match(athleteSections, /\{ id: 'profile', hash: 'perfil', label: 'Dados do perfil', shortLabel: 'Perfil' \}/);
+  assert.match(adminPage, /const activeAthleteSection = useSyncExternalStore\(/);
+
+  // Cabeçalhos reais das seções (JSX renderizado, não comentários).
+  assert.match(adminPage, /\{activeAthleteSection === 'profile' && \(\s*<section id="activeAthleteSection-profile"[\s\S]*?<h3 className="[^"]*">Dados do perfil<\/h3>/);
+  assert.match(adminPage, /Essas informações são usadas em inscrições e leaderboards\.<\/p>/);
+  assert.match(adminPage, /onSubmit=\{handleSaveAthleteProfile\}[\s\S]*?'Salvar perfil'/);
+  assert.match(adminPage, /\{activeAthleteSection === 'events' && \(\s*<section id="activeAthleteSection-events"[\s\S]*?<h3 className="[^"]*">Minhas inscrições<\/h3>/);
+  assert.match(adminPage, />Registros, resultados e acessos rápidos das suas participações\.<\/p>/);
+  assert.match(adminPage, /\{activeAthleteSection === 'contestations' && \(\s*<section id="activeAthleteSection-contestations"[\s\S]*?<h3 className="[^"]*">Contestar prova<\/h3>/);
+  assert.match(adminPage, /<span>Ver detalhes do evento<\/span>/);
+  assert.match(adminPage, /<span>Ver leaderboard<\/span>/);
 });
 
 test('cli entrypoint supports athlete profile read and update flows', () => {
