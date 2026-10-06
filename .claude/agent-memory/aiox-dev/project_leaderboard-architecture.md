@@ -12,6 +12,7 @@ WODArena leaderboard pipeline (Fase 2 architecture):
 - **Aggregator:** `getLeaderboard(eventId, divisionId)` in `src/context/AppContext.tsx` branches on `event.eventType`:
   - `fitness_racing` → ranks strictly by the TOTAL workout time (early return).
   - `functional_fitness` → CrossFit low-point: sums per-WOD placement points, penalty = `divisionAthletes.length + 1` for unscored, tie-breaks by direct confrontation then WOD-1 placement.
+  - "WOD 1" tie-break (Story 1.35, 2026-10-06): uses the first workout of the DIVISION; events whose date ended before the fixed cutoff 2026-10-07 keep the legacy event-wide first workout so published rankings don't change. Business decision approved by the user — do not "simplify" the cutoff away.
 
 **Caveat:** the manual admin "bilheteria" registration (`registerTicket` in AppContext) only mutates local React state — it does NOT persist to the DB, so it never fires the trigger nor creates a `leaderboard_entries` row. Real entries come through the checkout/webhook payment flow. Keep this in mind when a manually-added athlete is missing from the public leaderboard.
 

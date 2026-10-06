@@ -3,3 +3,4 @@
 - [:focus-visible fora de @layer](project_focus_visible_unlayered.md) — classes focus-visible:* dos componentes são código morto no app inteiro; correção adiada de propósito
 - [Leaderboard: elegibilidade x sessão de atleta](project_leaderboard_eligibility_athlete_session.md) — invariante role/posse; FAIL→PASS (2026-09-28); gap conhecido no teste
 - [Story 1.34 barra inferior do atleta](project_athlete_bottom_nav_1_34.md) — re-gate CONCERNS não bloqueante (2026-09-30); File List, aparelho real, flicker via replace
+- [Desempate WOD 1 com corte 07/10/2026](project_wod1_tiebreak_cutoff.md) — Story 1.35 PASS; 3 eventos legados protegidos pelo corte; riscos REL-001/TEST-001
