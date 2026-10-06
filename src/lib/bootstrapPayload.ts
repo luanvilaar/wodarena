@@ -154,9 +154,13 @@ export const buildPublicBootstrapPayload = async (supabaseAdmin: SupabaseClient)
     readBootstrapQuery('divisões públicas', supabaseAdmin
       .from('divisions')
       .select(PUBLIC_DIVISION_SELECT)),
+    // Provas em ordem determinística: sem ORDER BY o Postgres devolve a ordem
+    // física das linhas, que muda a cada UPDATE.
     readBootstrapQuery('workouts públicos', supabaseAdmin
       .from('workouts')
-      .select(PUBLIC_WORKOUT_SELECT)),
+      .select(PUBLIC_WORKOUT_SELECT)
+      .order('order_index', { ascending: true })
+      .order('id', { ascending: true })),
     readBootstrapQuery('contas públicas de pagamento', supabaseAdmin
       .from('mercadopago_accounts')
       .select('user_id, public_key')
@@ -197,7 +201,9 @@ export const buildPublicEventBootstrapPayload = async (
     readBootstrapQuery('workouts do evento', supabaseAdmin
       .from('workouts')
       .select(PUBLIC_WORKOUT_SELECT)
-      .eq('event_id', eventId))
+      .eq('event_id', eventId)
+      .order('order_index', { ascending: true })
+      .order('id', { ascending: true }))
   ]);
 
   if (!event) return null;

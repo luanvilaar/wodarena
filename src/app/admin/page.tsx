@@ -54,6 +54,7 @@ import { getEventStatus as getEventLifecycle, compareEventsByDateAsc, compareEve
 import { CONTESTATION_CREDITS_LIMIT, getContestationStatusLabel } from '@/lib/contestations';
 import { FITNESS_RACING_AGE_GROUPS, FITNESS_RACING_STATION_LIBRARY, buildFitnessRacingCourse, getAgeGroupFromDate } from '@/lib/fitnessRacing';
 import { buildDivisionOrderMap, getDivisionOrderPosition, moveDivisionId, shiftDivisionId } from '@/lib/divisionOrder';
+import { sortWorkouts } from '@/lib/workoutOrder';
 import { buildManagerFinanceSummary } from '@/lib/managerFinance';
 import { getTeamDisplayName } from '@/lib/teamDisplay';
 import { fortalezaDateTimeLocalToUtc, normalizeQualifierSubmissionWindow, utcToFortalezaDateTimeLocal } from '@/lib/submissionWindow';
@@ -1830,7 +1831,7 @@ export default function AdminPage() {
       setSelectedEventToManage(prev => prev ? {
         ...prev,
         divisions: [...prev.divisions, division],
-        workouts: autoWorkout ? [...prev.workouts, autoWorkout] : prev.workouts
+        workouts: autoWorkout ? sortWorkouts([...prev.workouts, autoWorkout]) : prev.workouts
       } : null);
     } catch (err) {
       console.error(err);
@@ -1908,7 +1909,7 @@ export default function AdminPage() {
       setSelectedEventToManage(prev => prev ? {
         ...prev,
         divisions: [...prev.divisions, newDiv],
-        workouts: autoWorkout ? [...prev.workouts, autoWorkout] : prev.workouts
+        workouts: autoWorkout ? sortWorkouts([...prev.workouts, autoWorkout]) : prev.workouts
       } : null);
       setAdminNotice({ text: `Categoria "${division.name}" duplicada.`, tone: 'success' });
     } catch (err) {
@@ -2052,7 +2053,7 @@ export default function AdminPage() {
         await updateWorkout(selectedEventToManage.id, editingWorkoutId, workoutChanges);
         setSelectedEventToManage(prev => prev ? {
           ...prev,
-          workouts: prev.workouts.map(workout => workout.id === editingWorkoutId ? { ...workout, ...workoutChanges } : workout)
+          workouts: sortWorkouts(prev.workouts.map(workout => workout.id === editingWorkoutId ? { ...workout, ...workoutChanges } : workout))
         } : null);
         setAdminNotice({ text: 'Prova atualizada com sucesso.', tone: 'success' });
         resetWorkoutForm();
@@ -2066,7 +2067,7 @@ export default function AdminPage() {
 
       setSelectedEventToManage(prev => prev ? {
         ...prev,
-        workouts: [...prev.workouts, newWod]
+        workouts: sortWorkouts([...prev.workouts, newWod])
       } : null);
     } catch (err) {
       console.error(err);
@@ -5908,9 +5909,7 @@ export default function AdminPage() {
       if (!currentWorkout || !currentWorkout.divisionId) return { isLocked: false, previousWorkout: null };
 
       // Filtrar e ordenar WODs da mesma divisão
-      const divisionWorkouts = workouts
-        .filter(w => w.divisionId === currentWorkout.divisionId)
-        .sort((a, b) => a.orderIndex - b.orderIndex);
+      const divisionWorkouts = sortWorkouts(workouts.filter(w => w.divisionId === currentWorkout.divisionId));
 
       const currentIndex = divisionWorkouts.findIndex(w => w.id === currentWorkout.id);
 
@@ -7153,7 +7152,7 @@ export default function AdminPage() {
             <p className="text-xs text-muted text-center py-8">Nenhuma prova cadastrada neste evento.</p>
           ) : (
             <div className="space-y-4">
-              {[...workouts].sort((a, b) => a.orderIndex - b.orderIndex).map((wod) => {
+              {sortWorkouts(workouts).map((wod) => {
                 const divLinked = divisions.find(d => d.id === wod.divisionId);
                 return (
                   <div key={wod.id} className="border border-card-border/60 bg-dark-gray/20 rounded-xl p-4 flex flex-col sm:flex-row justify-between gap-4">

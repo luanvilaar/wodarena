@@ -86,6 +86,7 @@ export async function GET(request: Request) {
     const eventIds = events.map(event => String(event.id));
     const eventIdFilter = session.role === 'manager' || session.role === 'judge' ? eventIds : [];
 
+    // Provas em ordem determinística (order_index, depois id), como no bootstrap público.
     const [divisions, workouts] = await Promise.all([
       session.role === 'manager' || session.role === 'judge'
         ? scopedRows(eventIdFilter, () => supabaseAdmin
@@ -99,10 +100,14 @@ export async function GET(request: Request) {
         ? scopedRows(eventIdFilter, () => supabaseAdmin
           .from('workouts')
           .select(PUBLIC_WORKOUT_SELECT)
-          .in('event_id', eventIdFilter), 'workouts do gestor')
+          .in('event_id', eventIdFilter)
+          .order('order_index', { ascending: true })
+          .order('id', { ascending: true }), 'workouts do gestor')
         : readBootstrapQuery('workouts autenticados', supabaseAdmin
           .from('workouts')
-          .select(PUBLIC_WORKOUT_SELECT))
+          .select(PUBLIC_WORKOUT_SELECT)
+          .order('order_index', { ascending: true })
+          .order('id', { ascending: true }))
     ]);
 
     const divisionIds = divisions.map(division => String(division.id));

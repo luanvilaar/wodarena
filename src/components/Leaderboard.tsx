@@ -24,6 +24,7 @@ const InstagramIcon = ({ className = 'h-3.5 w-3.5' }: { className?: string }) =>
 );
 import { Event, Athlete, Workout, Score } from '@/types';
 import { getAgeGroupFromDate } from '@/lib/fitnessRacing';
+import { sortWorkouts } from '@/lib/workoutOrder';
 import { getTeamDisplayName } from '@/lib/teamDisplay';
 
 interface LeaderboardProps {
@@ -114,7 +115,7 @@ const OverallPlacementCard = ({ rank, totalPoints }: { rank?: number; totalPoint
 // Molécula: pontuação e colocação obtidas por prova (Functional Fitness)
 const ScorePerWorkoutList = ({ workouts, scores }: { workouts: Workout[]; scores: Record<string, Score> }) => {
   const t = useTranslations('Leaderboard');
-  const ordered = [...workouts].sort((a, b) => a.orderIndex - b.orderIndex);
+  const ordered = sortWorkouts(workouts);
 
   if (ordered.length === 0) {
     return (

@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Event } from '@/types';
 import { getSubmissionWindowState } from '@/lib/submissionWindow';
+import { sortWorkouts } from '@/lib/workoutOrder';
 import {
   QUALIFIER_RESULT_STATES,
   QUALIFIER_RESULT_STATE_LABELS,
@@ -38,7 +39,7 @@ const inputClassName = 'mt-1 w-full rounded-md border border-card-border bg-dark
 
 export function QualifierResultsManager({ event }: { event: Event }) {
   const workouts = useMemo(
-    () => [...(event.workouts || [])].sort((a, b) => a.orderIndex - b.orderIndex),
+    () => sortWorkouts(event.workouts || []),
     [event.workouts]
   );
   const [selectedWorkoutId, setSelectedWorkoutId] = useState('');

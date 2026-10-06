@@ -8,6 +8,8 @@ import { useLocalStorage } from '../hooks/useLocalStorage';
 import { buildFitnessRacingCourse, buildFitnessRacingDefaults, normalizeInstagram } from '@/lib/fitnessRacing';
 import { mapContestationFromDb } from '@/lib/contestations';
 import { getNextDivisionOrderIndex, sortDivisions } from '@/lib/divisionOrder';
+import { FIRST_WORKOUT_TIEBREAK_CUTOFF, getTiebreakFirstWorkout, sortWorkouts } from '@/lib/workoutOrder';
+import { hasEventDatePassed } from '@/lib/eventStatus';
 import { getManagerAccessStatus, normalizeServiceValidUntil } from '@/lib/managerAccess';
 import { rankWorkoutScores } from '@/lib/scoring';
 
@@ -700,7 +702,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 isCoursePublished: d.is_course_published || false
               })));
 
-            const evWods: Workout[] = dbWorkouts
+            // Provas na sequência da aba Provas: o banco não garante ordem e todas as
+            // telas consomem event.workouts direto.
+            const evWods: Workout[] = sortWorkouts(dbWorkouts
               .filter(w => w.event_id === evt.id)
               .map(w => ({
                 id: w.id,
@@ -714,7 +718,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 tieBreaker: w.tie_breaker || '',
                 submissionOpensAt: w.submission_opens_at || undefined,
                 submissionClosesAt: w.submission_closes_at || undefined
-              }));
+              })));
 
             const organizerMp = dbMpAccounts?.find(acc => acc.user_id === evt.organizer_id);
 
@@ -849,7 +853,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (eventWorkoutsChanged) {
           return {
             ...evt,
-            workouts: currentWods
+            workouts: sortWorkouts(currentWods)
           };
         }
         return evt;
@@ -1088,7 +1092,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       website: eventData.website || '',
       eventType: eventData.eventType || 'functional_fitness',
       divisions: defaultFitnessRacing.divisions,
-      workouts: defaultFitnessRacing.workouts,
+      workouts: sortWorkouts(defaultFitnessRacing.workouts),
       scheduleItems: eventData.scheduleItems || [],
       mpPublicKey: eventData.mpPublicKey || '',
     };
@@ -1231,7 +1235,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return {
           ...e,
           divisions: [...e.divisions, newDivision],
-          workouts: autoWorkout ? [...e.workouts, autoWorkout] : e.workouts
+          workouts: autoWorkout ? sortWorkouts([...e.workouts, autoWorkout]) : e.workouts
          };
       }
       return e;
@@ -1473,7 +1477,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (e.id === eventId) {
         return {
           ...e,
-          workouts: [...e.workouts, newWorkout]
+          workouts: sortWorkouts([...e.workouts, newWorkout])
         };
       }
       return e;
@@ -2110,6 +2114,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const divisionWorkouts = event.workouts.filter(w => !w.divisionId || w.divisionId === divisionId);
     const workoutIds = divisionWorkouts.map(w => w.id);
 
+    // Prova do desempate "Colocação no WOD 1": a primeira prova da categoria, calculada
+    // uma única vez e usada tanto na ordenação quanto na atribuição do rank. Eventos
+    // encerrados antes da correção mantêm o critério antigo (primeira prova do evento
+    // inteiro) para não alterar rankings já publicados.
+    const usesLegacyFirstWorkoutTiebreak = hasEventDatePassed(event.date, FIRST_WORKOUT_TIEBREAK_CUTOFF);
+    const firstWorkout = getTiebreakFirstWorkout(event.workouts, divisionWorkouts, usesLegacyFirstWorkoutTiebreak);
+
     const isQualifier = event.eventType === 'functional_fitness_qualifier';
     const nowMs = Date.now();
     // Maior pontuação em jogo na divisão: a última colocação possível.
@@ -2208,7 +2219,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
 
       // Empate persistiu: Critério 2 - Colocação no WOD 1
-      const firstWorkout = [...event.workouts].sort((x, y) => x.orderIndex - y.orderIndex)[0];
       if (firstWorkout) {
         const rA = a.scores[firstWorkout.id]?.rank || 999999;
         const rB = b.scores[firstWorkout.id]?.rank || 999999;
@@ -2230,7 +2240,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           const { aWins, bWins } = getDirectWins(item, prevItem);
           if (aWins === bWins) {
             // WOD 1
-            const firstWorkout = [...event.workouts].sort((x, y) => x.orderIndex - y.orderIndex)[0];
             if (firstWorkout) {
               const rA = item.scores[firstWorkout.id]?.rank || 999999;
               const rB = prevItem.scores[firstWorkout.id]?.rank || 999999;
@@ -2372,7 +2381,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (e.id !== eventId) return e;
       return {
         ...e,
-        workouts: e.workouts.map(w => w.id === workoutId ? { ...w, ...updatedData } : w)
+        // Mudança de ordem, código ou nome reposiciona a prova sem esperar o reload.
+        workouts: sortWorkouts(e.workouts.map(w => w.id === workoutId ? { ...w, ...updatedData } : w))
       };
     }));
 

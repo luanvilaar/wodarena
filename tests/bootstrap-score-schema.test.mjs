@@ -29,10 +29,19 @@ function database() {
       let selected;
       let single = false;
       const filters = [];
+      const orders = [];
+      const compareRows = (a, b) => {
+        for (const { key, ascending } of orders) {
+          if (a[key] === b[key]) continue;
+          return (a[key] < b[key] ? -1 : 1) * (ascending ? 1 : -1);
+        }
+        return 0;
+      };
       const query = {
         select(fields) { selected = fields.split(',').map(field => field.trim()); return query; },
         eq(key, value) { filters.push(row => row[key] === value); return query; },
         in(key, values) { filters.push(row => values.includes(row[key])); return query; },
+        order(key, { ascending = true } = {}) { orders.push({ key, ascending }); return query; },
         maybeSingle() { single = true; return query; },
         then(resolve, reject) {
           const missing = table === 'scores' && selected.find(field => !(field in score));
@@ -40,6 +49,7 @@ function database() {
             code: '42703', message: `column scores.${missing} does not exist`
           } }).then(resolve, reject);
           const data = rows[table].filter(row => filters.every(filter => filter(row)))
+            .sort(compareRows)
             .map(row => Object.fromEntries(selected.filter(field => field in row).map(field => [field, row[field]])));
           return Promise.resolve({ data: single ? data[0] ?? null : data, error: null }).then(resolve, reject);
         }
