@@ -27,6 +27,17 @@ test('does not auto-penalize unscored workouts while the event is in progress', 
   assert.match(appContext, /score && score\.result !== '-' && score\.result !== ''/);
 });
 
+test('ranks qualifier athletes without a result last while the submission window is open', () => {
+  // Prova pendente com janela aberta mostra 0 pontos, mas é o pior resultado possível:
+  // a ordenação compara antes a quantidade de provas pendentes e só depois os pontos.
+  assert.match(appContext, /if \(isQualifier && !closed\) pendingCount \+= 1;/);
+  assert.match(appContext, /const pendingDiff = getPendingDiff\(a, b\);\s*if \(pendingDiff !== 0\) return pendingDiff;\s*if \(a\.totalPoints !== b\.totalPoints\)/);
+  assert.match(appContext, /let isEqual = getPendingDiff\(item, prevItem\) === 0 && item\.totalPoints === prevItem\.totalPoints;/);
+  // Janela encerrada: ausência recebe a maior pontuação em jogo (última colocação da divisão).
+  assert.match(appContext, /const qualifierAbsencePoints = divisionAthletes\.length;/);
+  assert.match(appContext, /const absencePoints = isQualifier && closed \? qualifierAbsencePoints : 0;/);
+});
+
 test('keeps qualifier scores restricted to judge review instead of manual bulk launch', () => {
   assert.match(appContext, /eventType === 'functional_fitness_qualifier'/);
   assert.match(appContext, /Scores de Qualifier são definidos somente após a revisão da submissão pelo judge/);

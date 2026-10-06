@@ -2112,7 +2112,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     const isQualifier = event.eventType === 'functional_fitness_qualifier';
     const nowMs = Date.now();
-    const qualifierAbsencePoints = divisionAthletes.length + 1;
+    // Maior pontuação em jogo na divisão: a última colocação possível.
+    const qualifierAbsencePoints = divisionAthletes.length;
+    // Qualifier: provas sem resultado com a janela ainda aberta, por atleta.
+    const qualifierPendingCount = new Map<string, number>();
 
     // 3. Compilar scores para cada atleta da divisão somando apenas as provas já lançadas.
     //    Provas ainda sem resultado NÃO geram penalidade automática nem score falso: o evento
@@ -2121,6 +2124,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const list: AthleteOverall[] = divisionAthletes.map(athlete => {
       const athleteScores: Record<string, Score> = {};
       let totalPoints = 0;
+      let pendingCount = 0;
 
       workoutIds.forEach(wId => {
         const score = scores.find(s => s.athleteId === athlete.id && s.workoutId === wId);
@@ -2132,8 +2136,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           const closed = Boolean(workout?.submissionClosesAt)
             && new Date(workout?.submissionClosesAt as string).getTime() < nowMs;
           const absencePoints = isQualifier && closed ? qualifierAbsencePoints : 0;
-          // Para qualifier encerrado, ausência recebe a mesma penalidade de última
-          // colocação da rejeição. Antes do encerramento, pendências não pontuam.
+          // Para qualifier encerrado, ausência recebe a maior pontuação em jogo
+          // (última colocação da divisão). Antes do encerramento a prova pendente
+          // mostra 0 pontos, mas conta como o pior resultado possível na ordenação.
+          if (isQualifier && !closed) pendingCount += 1;
           athleteScores[wId] = {
             athleteId: athlete.id,
             workoutId: wId,
@@ -2147,6 +2153,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
       });
 
+      qualifierPendingCount.set(athlete.id, pendingCount);
       return {
         athlete,
         scores: athleteScores,
@@ -2180,8 +2187,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return { aWins, bWins };
     };
 
+    // Qualifier com janela aberta: prova sem resultado é o pior resultado possível,
+    // então quem tem menos provas pendentes fica sempre à frente, antes dos pontos.
+    const getPendingDiff = (a: AthleteOverall, b: AthleteOverall) =>
+      (qualifierPendingCount.get(a.athlete.id) || 0) - (qualifierPendingCount.get(b.athlete.id) || 0);
+
     // 4. Ordenar os atletas pelo total de pontos crescente (Low-Point) e aplicar critérios de desempate
     const sortedList = [...list].sort((a, b) => {
+      const pendingDiff = getPendingDiff(a, b);
+      if (pendingDiff !== 0) return pendingDiff;
+
       if (a.totalPoints !== b.totalPoints) {
         return a.totalPoints - b.totalPoints; // Menos pontos é melhor
       }
@@ -2208,7 +2223,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return sortedList.map((item, index) => {
       if (index > 0) {
         const prevItem = sortedList[index - 1];
-        let isEqual = item.totalPoints === prevItem.totalPoints;
+        let isEqual = getPendingDiff(item, prevItem) === 0 && item.totalPoints === prevItem.totalPoints;
 
         if (isEqual) {
           // Confronto direto
