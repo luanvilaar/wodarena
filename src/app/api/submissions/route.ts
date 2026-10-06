@@ -4,7 +4,7 @@ import { parseScoreForWorkout } from '@/lib/scoring';
 import { checkRateLimit, createSupabaseAdmin, requireSession, safeErrorMessage } from '@/lib/serverSecurity';
 import { normalizeYouTubeVideoUrl } from '@/lib/videoProof';
 
-const SUBMISSION_SELECT = 'id, event_id, workout_id, division_id, registration_id, user_id, athlete_id, submitted_result, submitted_value, video_url, video_id, athlete_note, status, final_result, final_value, penalty_percent, submitted_at, reviewed_at, reviewed_by, current_version, created_at, updated_at';
+const SUBMISSION_SELECT = 'id, event_id, workout_id, division_id, registration_id, user_id, athlete_id, submitted_result, submitted_value, video_url, video_id, athlete_note, entry_source, status, final_result, final_value, penalty_percent, submitted_at, reviewed_at, reviewed_by, current_version, created_at, updated_at';
 
 const readError = (error: unknown) => error && typeof error === 'object' && 'message' in error
   ? String(error.message)

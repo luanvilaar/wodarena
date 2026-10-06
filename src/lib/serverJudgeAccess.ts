@@ -71,6 +71,22 @@ export const assertQualifierEventManagerAccess = async (
   return event;
 };
 
+// Acesso estrito do gestor organizador: ao contrário de
+// assertQualifierEventManagerAccess, NÃO deixa o owner da plataforma passar.
+// Usado nas ações que alteram resultados (lançar, editar, excluir para reenvio).
+export const assertQualifierEventOrganizerAccess = async (
+  supabaseAdmin: SupabaseClient,
+  actor: SessionUser,
+  eventId: string
+) => {
+  const event = await getEvent(supabaseAdmin, eventId);
+  if (actor.role !== 'manager' || event.organizer_id !== actor.id) {
+    throw new JudgeAccessError('Apenas o gestor organizador deste evento pode realizar esta ação.');
+  }
+  await assertOrganizerIsOperational(supabaseAdmin, actor.id);
+  return event;
+};
+
 export const assertQualifierJudgeAccess = async (
   supabaseAdmin: SupabaseClient,
   actor: SessionUser,

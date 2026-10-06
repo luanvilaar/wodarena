@@ -110,13 +110,14 @@ test('advisory lock is taken before touching scores, in every function that can 
   assert.ok(lockIndexReopen > 0 && lockIndexReopen < deleteIndexReopen, 'qualifier_reopen_submission deve travar antes de apagar de scores');
 });
 
-test('request-resubmission route is manager/owner only, scoped to the event and rate limited', () => {
+test('request-resubmission route is exclusive to the event organizer manager (owner and judge excluded), scoped to the event and rate limited', () => {
   assert.ok(existsSync(new URL(resubmissionRoutePath, import.meta.url)));
   assert.match(resubmissionRoute, /export async function POST\(request: Request\)/);
   assert.doesNotMatch(resubmissionRoute, /export async function (GET|PUT|PATCH|DELETE)/);
-  assert.match(resubmissionRoute, /requireSession\(request, \['manager', 'owner'\]\)/);
-  assert.doesNotMatch(resubmissionRoute, /requireSession\(request, \[[^\]]*'judge'/);
-  assert.match(resubmissionRoute, /assertQualifierEventManagerAccess\(supabaseAdmin, auth\.user, String\(submission\.event_id\)\)/);
+  assert.match(resubmissionRoute, /requireSession\(request, \['manager'\]\)/);
+  assert.doesNotMatch(resubmissionRoute, /requireSession\(request, \[[^\]]*'(judge|owner)'/);
+  assert.match(resubmissionRoute, /assertQualifierEventOrganizerAccess\(supabaseAdmin, auth\.user, String\(submission\.event_id\)\)/);
+  assert.doesNotMatch(resubmissionRoute, /assertQualifierEventManagerAccess/);
   assert.match(resubmissionRoute, /checkRateLimit\(\{ key: `qualifier-resubmission:\$\{auth\.user\.id\}`, limit: 10, windowMs: 60_000 \}\)/);
   assert.match(resubmissionRoute, /rpc\('qualifier_request_resubmission'/);
   assert.match(resubmissionRoute, /p_actor_id: auth\.user\.id/);
@@ -129,7 +130,7 @@ test('reviewed_at concurrency token travels as the raw database string, never th
   assert.match(resubmissionRoute, /const expectedReviewedAt = typeof body\.expectedReviewedAt === 'string' \? body\.expectedReviewedAt : null/);
   const resubmissionRouteCode = resubmissionRoute.replace(/^\s*\/\/.*$/gm, '');
   assert.doesNotMatch(resubmissionRouteCode, /new Date\(/);
-  assert.match(resultsManager, /expectedReviewedAt: item\.reviewedAt,/);
+  assert.match(resultsManager, /expectedReviewedAt: submission\.reviewedAt,/);
   assert.doesNotMatch(resultsManager, /expectedReviewedAt: new Date/);
   assert.match(cli, /p_expected_reviewed_at: expectedReviewedAt/);
 });
@@ -176,10 +177,10 @@ test('athlete can resubmit when the organizer removed the previous result', () =
 test('results manager lives in the qualifier scores tab and drives edit/delete through the server routes', () => {
   assert.ok(existsSync(new URL(resultsManagerPath, import.meta.url)));
   assert.match(resultsManager, /export function QualifierResultsManager\(\{ event \}: \{ event: Event \}\)/);
-  assert.match(resultsManager, /fetch\(`\/api\/judge\/queue\?event_id=\$\{encodeURIComponent\(event\.id\)\}`\)/);
-  assert.match(resultsManager, /MANAGED_STATUSES: ScoreSubmission\['status'\]\[\] = \['validated', 'penalized', 'rejected', 'awaiting_resubmission'\]/);
+  // A tela parte da lista de atletas elegíveis por prova (inclui quem não enviou nada).
+  assert.match(resultsManager, /fetch\(`\/api\/qualifier\/results-roster\?event_id=\$\{encodeURIComponent\(event\.id\)\}&workout_id=\$\{encodeURIComponent\(activeWorkoutId\)\}`\)/);
   assert.match(resultsManager, /postJson\('\/api\/judge\/reviews'/);
-  assert.match(resultsManager, /expectedVersion: item\.currentVersion/);
+  assert.match(resultsManager, /expectedVersion: submission\.currentVersion/);
   assert.match(resultsManager, /postJson\('\/api\/judge\/submissions\/request-resubmission'/);
   assert.match(resultsManager, /getSubmissionWindowState\(null, closesAt\) === 'closed'/);
   assert.match(resultsManager, /O atleta poderá reenviar um novo vídeo e resultado do zero\. Esta ação fica registrada\./);
@@ -195,6 +196,7 @@ test('CLI exposes review request-resubmission through the same RPC', () => {
   assert.match(cli, /rpc\('qualifier_request_resubmission'/);
   const help = spawnSync(process.execPath, ['bin/qualifier.mjs', 'help'], { encoding: 'utf8', cwd: new URL('..', import.meta.url) });
   assert.equal(help.status, 0, help.stderr);
-  assert.match(help.stdout, /review request-resubmission --actor ACTOR_ID --submission SUBMISSION_ID \[--expected-reviewed-at ISO\] --justification/);
+  assert.match(help.stdout, /review request-resubmission --actor MANAGER_ID --submission SUBMISSION_ID \[--expected-reviewed-at ISO\] --justification/);
+  assert.match(help.stdout, /somente o manager dono do evento/);
   assert.match(help.stdout, /awaiting_resubmission/);
 });

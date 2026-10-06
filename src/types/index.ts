@@ -238,6 +238,7 @@ export interface Contestation {
 }
 
 export type ScoreSubmissionStatus = 'pending_review' | 'validated' | 'penalized' | 'rejected' | 'awaiting_resubmission';
+export type ScoreSubmissionEntrySource = 'athlete' | 'manager';
 export type ScoreSubmissionDecision = 'validated' | 'penalized' | 'rejected' | 'manual_adjustment' | 'reopened' | 'resubmission_requested';
 
 export interface ScoreSubmission {
@@ -250,9 +251,11 @@ export interface ScoreSubmission {
   athleteId?: string;
   submittedResult: string;
   submittedValue: number;
+  // Vazios quando o resultado foi lançado pela organização (entrySource 'manager'), sem vídeo.
   videoUrl: string;
   videoId: string;
   athleteNote?: string;
+  entrySource: ScoreSubmissionEntrySource;
   status: ScoreSubmissionStatus;
   finalResult?: string;
   finalValue?: number;

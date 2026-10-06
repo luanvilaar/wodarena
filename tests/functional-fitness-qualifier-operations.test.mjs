@@ -52,7 +52,8 @@ test('Qualifier deadline belongs to the workout form and supports Fortaleza roun
 
 test('workouts can be edited without recreating them and nullable fields can be cleared', () => {
   assert.match(adminPage, /const handleEditWorkout = \(workout: Workout\)/);
-  assert.match(adminPage, /await updateWorkout\(selectedEventToManage\.id, editingWorkoutId, workoutData\)/);
+  // A edição envia apenas os campos alterados (workoutChanges), não o formulário inteiro.
+  assert.match(adminPage, /await updateWorkout\(selectedEventToManage\.id, editingWorkoutId, workoutChanges\)/);
   assert.match(adminPage, /Salvar Alterações/);
   assert.match(adminPage, /onClick=\{resetWorkoutForm\}/);
   assert.match(adminPage, /aria-label=\{`Editar prova \$\{wod\.name\}`\}/);

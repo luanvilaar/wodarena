@@ -2,11 +2,21 @@ import { NextResponse } from 'next/server';
 import { mapScoreSubmissionReviewFromDb, qualifierErrorStatus } from '@/lib/qualifierSubmissions';
 import { parseScoreForWorkout } from '@/lib/scoring';
 import { assertQualifierJudgeAccess, JudgeAccessError } from '@/lib/serverJudgeAccess';
+import { notifyAthleteOfQualifierResult, type QualifierResultChange } from '@/lib/qualifierNotifications';
 import { checkRateLimit, createSupabaseAdmin, requireSession, safeErrorMessage } from '@/lib/serverSecurity';
 
 const readError = (error: unknown) => error && typeof error === 'object' && 'message' in error
   ? String(error.message)
   : '';
+
+const REVIEW_ERROR_MESSAGES: Record<string, string> = {
+  qualifier_review_edit_not_allowed: 'Apenas o gestor organizador do evento pode editar resultados já revisados.'
+};
+
+const reviewErrorMessage = (message: string) => {
+  const code = Object.keys(REVIEW_ERROR_MESSAGES).find(key => message.includes(key));
+  return code ? REVIEW_ERROR_MESSAGES[code] : 'Não foi possível aplicar a revisão.';
+};
 
 const getAuthorizedSubmission = async (
   supabaseAdmin: ReturnType<typeof createSupabaseAdmin>,
@@ -15,7 +25,7 @@ const getAuthorizedSubmission = async (
 ) => {
   const { data: submission, error } = await supabaseAdmin
     .from('score_submissions')
-    .select('id, event_id, workout_id, current_version')
+    .select('id, event_id, workout_id, current_version, status')
     .eq('id', submissionId)
     .maybeSingle();
   if (error) throw error;
@@ -70,6 +80,12 @@ export async function POST(request: Request) {
     }
     const supabaseAdmin = createSupabaseAdmin();
     const submission = await getAuthorizedSubmission(supabaseAdmin, submissionId, auth.user);
+    // Revisar uma submissão pendente é de judge/gestor/owner; editar um resultado
+    // já revisado é exclusivo do gestor organizador (o banco também impõe).
+    const isEdit = submission.status !== 'pending_review';
+    if (isEdit && auth.user.role !== 'manager') {
+      return NextResponse.json({ error: REVIEW_ERROR_MESSAGES.qualifier_review_edit_not_allowed }, { status: 403 });
+    }
     let manualResult: { result: string; value: number } | null = null;
     if (decision === 'manual_adjustment') {
       const { data: workout, error } = await supabaseAdmin
@@ -94,7 +110,16 @@ export async function POST(request: Request) {
       p_manual_value: manualResult?.value ?? null
     });
     if (error) {
-      return NextResponse.json({ error: 'Não foi possível aplicar a revisão.' }, { status: qualifierErrorStatus(readError(error)) });
+      const message = readError(error);
+      return NextResponse.json({ error: reviewErrorMessage(message) }, { status: qualifierErrorStatus(message) });
+    }
+    // Edição de um resultado já revisado: o atleta é avisado por e-mail.
+    if (isEdit) {
+      await notifyAthleteOfQualifierResult(supabaseAdmin, {
+        submissionId,
+        change: decision as QualifierResultChange,
+        justification: typeof body.justification === 'string' ? body.justification.trim() : ''
+      });
     }
     return NextResponse.json({ success: true, review: data });
   } catch (error) {

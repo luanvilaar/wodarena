@@ -83,9 +83,12 @@ const printHelp = () => {
   npm run qualifier:cli -- submission show --id SUBMISSION_ID | --registration REG_ID
   npm run qualifier:cli -- queue list --event EVENT_ID [--status pending_review|validated|penalized|rejected|awaiting_resubmission]
   npm run qualifier:cli -- review apply --actor REVIEWER_ID --submission SUBMISSION_ID --expected-version N --decision validated|penalized|rejected|manual_adjustment [--manual-result "..."] [--justification "..."]
-  npm run qualifier:cli -- review request-resubmission --actor ACTOR_ID --submission SUBMISSION_ID [--expected-reviewed-at ISO] --justification "..."
-    (manager dono do evento ou owner; exclui o resultado revisado e libera o atleta para reenviar dentro do prazo.
+  npm run qualifier:cli -- review request-resubmission --actor MANAGER_ID --submission SUBMISSION_ID [--expected-reviewed-at ISO] --justification "..."
+    (somente o manager dono do evento; exclui o resultado revisado e libera o atleta para reenviar dentro do prazo.
      Sem --expected-reviewed-at, usa o reviewed_at atual da submissao.)
+  npm run qualifier:cli -- review manual-result --actor MANAGER_ID --event EVENT_ID --registration REG_ID --workout WORKOUT_ID --result "08:14" --justification "..."
+    (somente o manager dono do evento; lanca o resultado de quem esta sem envio ou aguardando reenvio, sem video,
+     marcado como "Lancado pela organizacao". Funciona mesmo com o prazo de envio encerrado.)
   npm run qualifier:cli -- review history --submission SUBMISSION_ID
   npm run qualifier:cli -- ranking --event EVENT_ID [--division DIVISION_ID]`);
 };
@@ -207,6 +210,24 @@ const review = async (supabase, command, args) => {
       p_submission_id: args.submission,
       p_actor_id: args.actor,
       p_expected_reviewed_at: expectedReviewedAt,
+      p_justification: String(args.justification).trim()
+    });
+    if (error) throw error;
+    console.log(JSON.stringify({ success: true, result: data }, null, 2));
+    return;
+  }
+  if (command === 'manual-result') {
+    requireArgs(args, ['actor', 'event', 'registration', 'workout', 'result', 'justification']);
+    const { data: workout, error: workoutError } = await supabase.from('workouts').select('type').eq('id', args.workout).eq('event_id', args.event).maybeSingle();
+    if (workoutError || !workout) throw workoutError || new Error('Prova nao encontrada neste evento.');
+    const parsed = parseScore(workout.type, args.result);
+    const { data, error } = await supabase.rpc('qualifier_manager_enter_result', {
+      p_event_id: args.event,
+      p_workout_id: args.workout,
+      p_registration_id: args.registration,
+      p_actor_id: args.actor,
+      p_result: parsed.result,
+      p_value: parsed.value,
       p_justification: String(args.justification).trim()
     });
     if (error) throw error;

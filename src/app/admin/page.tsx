@@ -57,6 +57,13 @@ import { buildDivisionOrderMap, getDivisionOrderPosition, moveDivisionId, shiftD
 import { buildManagerFinanceSummary } from '@/lib/managerFinance';
 import { getTeamDisplayName } from '@/lib/teamDisplay';
 import { fortalezaDateTimeLocalToUtc, normalizeQualifierSubmissionWindow, utcToFortalezaDateTimeLocal } from '@/lib/submissionWindow';
+import {
+  canChangeQualifierWorkoutType,
+  getQualifierWorkoutLockViolations,
+  getWorkoutChanges,
+  isQualifierWorkoutLocked,
+  type QualifierWorkoutLock
+} from '@/lib/workoutEdit';
 import { SCORE_TIE_BREAKER_SPLIT_KEY, shouldUseTimeTieBreaker } from '@/lib/scoring';
 import {
   ATHLETE_SECTIONS,
@@ -862,6 +869,7 @@ export default function AdminPage() {
   const [wodSubmissionOpensAt, setWodSubmissionOpensAt] = useState('');
   const [wodSubmissionClosesAt, setWodSubmissionClosesAt] = useState('');
   const [editingWorkoutId, setEditingWorkoutId] = useState('');
+  const [qualifierWorkoutLocks, setQualifierWorkoutLocks] = useState<Record<string, QualifierWorkoutLock>>({});
 
   // Estados para Cronograma
   const [scheduleKind, setScheduleKind] = useState<EventScheduleItemKind>('briefing');
@@ -1021,6 +1029,32 @@ export default function AdminPage() {
       setSelectedEventToManage(freshEvent || null);
     });
   }, [managerEvents, selectedEventToManage]);
+
+  // Provas de Qualifier com submissões têm campos travados: carrega o estado de
+  // bloqueio ao abrir a aba de provas, para o formulário desabilitá-los antes de
+  // o gestor tentar salvar. O servidor continua sendo a autoridade (HTTP 409).
+  const selectedQualifierEventId = selectedEventToManage?.eventType === 'functional_fitness_qualifier' ? selectedEventToManage.id : '';
+  useEffect(() => {
+    if (activeEventTab !== 'wods' || !selectedQualifierEventId) return;
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await fetch('/api/admin/persistence', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'getQualifierWorkoutLocks', payload: { eventId: selectedQualifierEventId } })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!cancelled && response.ok) setQualifierWorkoutLocks(data.locks || {});
+      } catch (error) {
+        console.error('Erro ao carregar bloqueios das provas do Qualifier:', error);
+      }
+    }, 0);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [activeEventTab, selectedQualifierEventId]);
 
   const closeDeleteEventDialog = () => {
     if (isDeletingEvent) return;
@@ -1988,10 +2022,37 @@ export default function AdminPage() {
       };
 
       if (editingWorkoutId) {
-        await updateWorkout(selectedEventToManage.id, editingWorkoutId, workoutData);
+        const originalWorkout = selectedEventToManage.workouts.find(workout => workout.id === editingWorkoutId);
+        if (!originalWorkout) throw new Error('Prova não encontrada para edição.');
+
+        // O formulário trabalha em minutos: se o valor exibido não mudou, preserva o
+        // instante original (que pode ter segundos) em vez de reenviá-lo truncado.
+        const submissionOpensChanged = wodSubmissionOpensAt !== utcToFortalezaDateTimeLocal(originalWorkout.submissionOpensAt);
+        const submissionClosesChanged = wodSubmissionClosesAt !== utcToFortalezaDateTimeLocal(originalWorkout.submissionClosesAt);
+        const workoutChanges = getWorkoutChanges(originalWorkout, {
+          ...workoutData,
+          submissionOpensAt: submissionOpensChanged ? workoutData.submissionOpensAt : originalWorkout.submissionOpensAt,
+          submissionClosesAt: submissionClosesChanged ? workoutData.submissionClosesAt : originalWorkout.submissionClosesAt
+        });
+
+        if (Object.keys(workoutChanges).length === 0) {
+          setAdminNotice({ text: 'Nenhuma alteração para salvar.', tone: 'success' });
+          resetWorkoutForm();
+          return;
+        }
+
+        if (selectedEventToManage.eventType === 'functional_fitness_qualifier') {
+          const violations = getQualifierWorkoutLockViolations(originalWorkout, workoutChanges, qualifierWorkoutLocks[editingWorkoutId]);
+          if (violations.length > 0) {
+            setAdminNotice({ text: violations.map(violation => violation.message).join(' '), tone: 'error' });
+            return;
+          }
+        }
+
+        await updateWorkout(selectedEventToManage.id, editingWorkoutId, workoutChanges);
         setSelectedEventToManage(prev => prev ? {
           ...prev,
-          workouts: prev.workouts.map(workout => workout.id === editingWorkoutId ? { ...workout, ...workoutData } : workout)
+          workouts: prev.workouts.map(workout => workout.id === editingWorkoutId ? { ...workout, ...workoutChanges } : workout)
         } : null);
         setAdminNotice({ text: 'Prova atualizada com sucesso.', tone: 'success' });
         resetWorkoutForm();
@@ -2058,7 +2119,7 @@ export default function AdminPage() {
       setAdminNotice({ text: `Prova "${workoutName}" excluída com sucesso.`, tone: 'success' });
     } catch (err) {
       console.error(err);
-      setAdminNotice({ text: 'Não foi possível excluir a prova.', tone: 'error' });
+      setAdminNotice({ text: err instanceof Error ? err.message : 'Não foi possível excluir a prova.', tone: 'error' });
     }
   };
 
@@ -6881,6 +6942,15 @@ export default function AdminPage() {
     const workouts = selectedEventToManage?.workouts || [];
     const divisions = selectedEventToManage?.divisions || [];
 
+    // Provas de Qualifier que já receberam submissões têm campos travados (ver workoutEdit.ts).
+    const editingWorkout = editingWorkoutId ? workouts.find(workout => workout.id === editingWorkoutId) : undefined;
+    const editingLock = editingWorkout ? qualifierWorkoutLocks[editingWorkout.id] : undefined;
+    const editingLocked = Boolean(editingWorkout) && isQualifierWorkoutLocked(editingLock);
+    const isScoreTypeOptionLocked = (type: WorkoutType) => (
+      editingLocked && Boolean(editingWorkout) && !canChangeQualifierWorkoutType(editingWorkout!.type, type, editingLock).allowed
+    );
+    const scoreTypeLocked = editingLocked && WORKOUT_SCORE_TYPE_OPTIONS.every(option => option.value === editingWorkout?.type || isScoreTypeOptionLocked(option.value));
+
     return (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Formulário lateral */}
@@ -6895,6 +6965,15 @@ export default function AdminPage() {
           </div>
 
           <div className="space-y-4">
+            {editingLocked && (
+              <div role="note" className="rounded-md border border-primary/30 bg-primary/5 p-3 text-[11px] leading-relaxed text-muted-soft">
+                Esta prova já recebeu {editingLock?.submissionCount} {editingLock?.submissionCount === 1 ? 'submissão' : 'submissões'}.
+                A categoria e a abertura do envio estão bloqueadas e o prazo final só pode ser estendido.
+                {scoreTypeLocked
+                  ? ' O tipo de score também está bloqueado: para corrigi-lo, solicite o reenvio dos resultados já revisados (e, se o tipo atual for Tempo, ele não pode ser trocado).'
+                  : ' O tipo de score só pode ser trocado entre os tipos numéricos (AMRAP, Repetições, Peso, Distância e Pontos).'}
+              </div>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="sm:col-span-2">
                 <label htmlFor="wod-code-input" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Cód. WOD *</label>
@@ -6942,11 +7021,12 @@ export default function AdminPage() {
                   id="wod-score-type-input"
                   name="scoreType"
                   value={wodType}
+                  disabled={scoreTypeLocked}
                   onChange={(e) => setWodType(e.target.value as WorkoutType)}
-                  className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"
+                  className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {WORKOUT_SCORE_TYPE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label} - {option.detail}</option>
+                    <option key={option.value} value={option.value} disabled={isScoreTypeOptionLocked(option.value)}>{option.label} - {option.detail}</option>
                   ))}
                 </select>
               </div>
@@ -6968,8 +7048,9 @@ export default function AdminPage() {
               <select
                 id="wod-division-id"
                 value={wodDivisionId}
+                disabled={editingLocked}
                 onChange={(e) => setWodDivisionId(e.target.value)}
-                className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"
+                className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <option value="">Todas as categorias (Geral)</option>
                 {divisions.map((d) => (
@@ -7007,8 +7088,9 @@ export default function AdminPage() {
                     id="wod-submission-opens-at"
                     type="datetime-local"
                     value={wodSubmissionOpensAt}
+                    disabled={editingLocked}
                     onChange={(e) => setWodSubmissionOpensAt(e.target.value)}
-                    className="w-full rounded-md border border-card-border bg-dark-gray px-3 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"
+                    className="w-full rounded-md border border-card-border bg-dark-gray px-3 py-2 text-sm text-white focus:border-primary/50 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
                   />
                 </div>
                 <div>
@@ -7018,6 +7100,7 @@ export default function AdminPage() {
                     type="datetime-local"
                     required
                     value={wodSubmissionClosesAt}
+                    min={editingLocked ? utcToFortalezaDateTimeLocal(editingWorkout?.submissionClosesAt) || undefined : undefined}
                     onChange={(e) => setWodSubmissionClosesAt(e.target.value)}
                     className="w-full rounded-md border border-card-border bg-dark-gray px-3 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"
                   />
@@ -7119,7 +7202,9 @@ export default function AdminPage() {
                         <button
                           type="button"
                           onClick={() => handleDeleteWorkout(wod.id, wod.name)}
-                          className="inline-flex min-h-8 items-center gap-1.5 rounded-md border border-card-border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-red-500 transition-colors hover:border-red-500 hover:text-red-400"
+                          disabled={isQualifierWorkoutLocked(qualifierWorkoutLocks[wod.id])}
+                          title={isQualifierWorkoutLocked(qualifierWorkoutLocks[wod.id]) ? 'Provas que já receberam submissões não podem ser excluídas.' : undefined}
+                          className="inline-flex min-h-8 items-center gap-1.5 rounded-md border border-card-border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-red-500 transition-colors hover:border-red-500 hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-card-border disabled:hover:text-red-500"
                           aria-label={`Excluir prova ${wod.name}`}
                         >
                           <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />

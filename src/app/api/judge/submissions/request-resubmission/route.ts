@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { qualifierErrorStatus } from '@/lib/qualifierSubmissions';
 import { sendQualifierResubmissionRequestedEmail } from '@/lib/resend';
-import { assertQualifierEventManagerAccess, JudgeAccessError } from '@/lib/serverJudgeAccess';
+import { assertQualifierEventOrganizerAccess, JudgeAccessError } from '@/lib/serverJudgeAccess';
 import { checkRateLimit, createSupabaseAdmin, requireSession, safeErrorMessage } from '@/lib/serverSecurity';
 
 type SubmissionRow = {
@@ -19,7 +19,7 @@ const readError = (error: unknown) => error && typeof error === 'object' && 'mes
 // O código cru do banco nunca é devolvido ao cliente.
 const RESUBMISSION_ERROR_MESSAGES: Record<string, string> = {
   qualifier_submission_not_found: 'Submissão não encontrada.',
-  qualifier_request_resubmission_not_allowed: 'Apenas o organizador do evento ou o owner podem excluir este resultado.',
+  qualifier_request_resubmission_not_allowed: 'Apenas o gestor organizador do evento pode excluir este resultado.',
   qualifier_manager_access_expired: 'O período de uso da plataforma para este gestor expirou.',
   qualifier_event_required: 'Esta operação é exclusiva de eventos Functional Fitness Qualifier.',
   qualifier_submission_not_reviewed: 'Só é possível excluir resultados já revisados (validados, penalizados ou rejeitados).',
@@ -81,9 +81,9 @@ const notifyAthlete = async (
 
 export async function POST(request: Request) {
   try {
-    // Exclusão para reenvio é exclusiva do organizador (manager) e do owner.
-    // Judges revisam submissões, mas não podem apagar resultados.
-    const auth = requireSession(request, ['manager', 'owner']);
+    // Exclusão para reenvio é exclusiva do gestor organizador do evento.
+    // Nem o owner nem judges podem apagar resultados.
+    const auth = requireSession(request, ['manager']);
     if (auth.response) return auth.response;
     const rateLimited = checkRateLimit({ key: `qualifier-resubmission:${auth.user.id}`, limit: 10, windowMs: 60_000 });
     if (rateLimited) return rateLimited;
@@ -114,7 +114,7 @@ export async function POST(request: Request) {
       .maybeSingle<SubmissionRow>();
     if (submissionError) throw submissionError;
     if (!submission) throw new JudgeAccessError('Submissão não encontrada.', 404);
-    await assertQualifierEventManagerAccess(supabaseAdmin, auth.user, String(submission.event_id));
+    await assertQualifierEventOrganizerAccess(supabaseAdmin, auth.user, String(submission.event_id));
 
     const { data, error } = await supabaseAdmin.rpc('qualifier_request_resubmission', {
       p_submission_id: submissionId,

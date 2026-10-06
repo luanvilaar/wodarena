@@ -3,6 +3,8 @@ import { ManagerAccessError, assertManagerOperationalAccess, managerAccessErrorR
 import { applyCouponUsageForApprovedRegistration, createManagerRegistration, RegistrationAccessError } from '@/lib/serverCheckout';
 import { checkRateLimit, createSupabaseAdmin, hashPassword, requireSession, safeErrorMessage, SessionUser } from '@/lib/serverSecurity';
 import { getEventStatus } from '@/lib/eventStatus';
+import { getQualifierWorkoutLockViolations, type QualifierWorkoutLock } from '@/lib/workoutEdit';
+import type { WorkoutType } from '@/types';
 
 type DbClient = ReturnType<typeof createSupabaseAdmin>;
 
@@ -168,6 +170,43 @@ const qualifierDeleteErrorResponse = (error: unknown) => {
     }, { status: 503 });
   }
   return null;
+};
+
+const QUALIFIER_WORKOUT_LOCK_MESSAGES: Record<string, string> = {
+  qualifier_workout_has_submissions: 'Esta prova já recebeu submissões e não pode ser excluída.',
+  qualifier_workout_identity_or_window_locked: 'A categoria e a abertura do envio não podem ser alteradas depois que a prova recebeu submissões.',
+  qualifier_workout_deadline_extend_only: 'Depois que a prova recebeu submissões, o prazo final só pode ser estendido para uma data posterior.',
+  qualifier_workout_type_change_not_allowed: 'O tipo de score não pode ser trocado de ou para Tempo depois que a prova recebeu submissões.',
+  qualifier_workout_type_locked_reviewed: 'O tipo de score não pode ser alterado enquanto houver resultados revisados. Solicite o reenvio desses resultados antes de corrigir o tipo.'
+};
+
+// Rede de segurança: o trigger do banco é a autoridade final. Quando uma regra
+// de bloqueio dispara, o gestor recebe o motivo em vez de um 500 genérico.
+const qualifierWorkoutLockErrorResponse = (error: unknown) => {
+  const message = error && typeof error === 'object' ? (error as { message?: unknown }).message : null;
+  if (typeof message !== 'string' || !Object.hasOwn(QUALIFIER_WORKOUT_LOCK_MESSAGES, message)) return null;
+  return NextResponse.json({ error: QUALIFIER_WORKOUT_LOCK_MESSAGES[message], code: message }, { status: 409 });
+};
+
+// Contagens exatas por prova (head+count não sofre o limite de 1000 linhas).
+const loadQualifierWorkoutLocks = async (supabaseAdmin: DbClient, workoutIds: string[]) => {
+  const entries = await Promise.all(workoutIds.map(async (workoutId): Promise<[string, QualifierWorkoutLock]> => {
+    const [submissions, reviewed] = await Promise.all([
+      supabaseAdmin
+        .from('score_submissions')
+        .select('id', { count: 'exact', head: true })
+        .eq('workout_id', workoutId),
+      supabaseAdmin
+        .from('score_submissions')
+        .select('id', { count: 'exact', head: true })
+        .eq('workout_id', workoutId)
+        .in('status', ['validated', 'penalized', 'rejected'])
+    ]);
+    if (submissions.error) throw submissions.error;
+    if (reviewed.error) throw reviewed.error;
+    return [workoutId, { submissionCount: submissions.count ?? 0, reviewedCount: reviewed.count ?? 0 }];
+  }));
+  return Object.fromEntries(entries) as Record<string, QualifierWorkoutLock>;
 };
 
 const parseRefundAmount = (value: unknown, required = false) => {
@@ -495,6 +534,38 @@ export async function POST(request: Request) {
           });
         }
 
+        if (isQualifierEvent(event.event_type)) {
+          const { data: lockedWorkout, error: lockedWorkoutError } = await supabaseAdmin
+            .from('workouts')
+            .select('type, division_id, submission_opens_at, submission_closes_at')
+            .eq('id', payload.workoutId)
+            .maybeSingle();
+          if (lockedWorkoutError || !lockedWorkout) return NextResponse.json({ error: 'Prova não encontrada.' }, { status: 404 });
+          const locks = await loadQualifierWorkoutLocks(supabaseAdmin, [payload.workoutId]);
+          const violations = getQualifierWorkoutLockViolations(
+            {
+              type: lockedWorkout.type as WorkoutType,
+              divisionId: lockedWorkout.division_id || undefined,
+              submissionOpensAt: lockedWorkout.submission_opens_at || undefined,
+              submissionClosesAt: lockedWorkout.submission_closes_at || undefined
+            },
+            {
+              ...('type' in allowedData ? { type: allowedData.type as WorkoutType } : {}),
+              ...('division_id' in allowedData ? { divisionId: (allowedData.division_id as string | null) || undefined } : {}),
+              ...('submission_opens_at' in allowedData ? { submissionOpensAt: (allowedData.submission_opens_at as string | null) || undefined } : {}),
+              ...('submission_closes_at' in allowedData ? { submissionClosesAt: (allowedData.submission_closes_at as string | null) || undefined } : {})
+            },
+            locks[payload.workoutId]
+          );
+          if (violations.length > 0) {
+            return NextResponse.json({
+              error: violations.map(violation => violation.message).join(' '),
+              code: 'qualifier_workout_locked',
+              fields: violations.map(violation => violation.field)
+            }, { status: 409 });
+          }
+        }
+
         if (typeof allowedData.division_id === 'string' && allowedData.division_id) {
           const { data: targetDivision, error: divisionError } = await supabaseAdmin
             .from('divisions')
@@ -511,15 +582,35 @@ export async function POST(request: Request) {
           .from('workouts')
           .update(allowedData)
           .eq('id', payload.workoutId);
-        if (error) throw error;
+        if (error) {
+          const lockResponse = qualifierWorkoutLockErrorResponse(error);
+          if (lockResponse) return lockResponse;
+          throw error;
+        }
         return NextResponse.json({ success: true });
       }
 
       case 'deleteWorkout': {
         await ensureWorkoutOwner(supabaseAdmin, actor, payload.workoutId, payload.eventId);
         const { error } = await supabaseAdmin.from('workouts').delete().eq('id', payload.workoutId);
-        if (error) throw error;
+        if (error) {
+          const lockResponse = qualifierWorkoutLockErrorResponse(error);
+          if (lockResponse) return lockResponse;
+          throw error;
+        }
         return NextResponse.json({ success: true });
+      }
+
+      case 'getQualifierWorkoutLocks': {
+        const event = await ensureEventOwner(supabaseAdmin, actor, payload.eventId);
+        if (!isQualifierEvent(event.event_type)) return NextResponse.json({ locks: {} });
+        const { data: eventWorkouts, error: eventWorkoutsError } = await supabaseAdmin
+          .from('workouts')
+          .select('id')
+          .eq('event_id', payload.eventId);
+        if (eventWorkoutsError) throw eventWorkoutsError;
+        const locks = await loadQualifierWorkoutLocks(supabaseAdmin, (eventWorkouts || []).map(workout => workout.id));
+        return NextResponse.json({ locks });
       }
 
       case 'listJudges': {
