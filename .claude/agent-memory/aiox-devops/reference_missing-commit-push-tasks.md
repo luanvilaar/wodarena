@@ -17,7 +17,7 @@ Also note: the repo's `npm audit` has long-standing CRITICAL/HIGH advisories com
 
 1. `git diff --name-only origin/main..HEAD` shows **no** change to `package.json` / `package-lock.json` (the push introduces no new exposure);
 2. the report names the offending packages and the counts (`critical/high/moderate`) instead of collapsing them into "CONCERNS";
-3. the waiver is handed to the user with the remediation it needs so they own the decision — an agent does not grant itself an open-ended exemption. As of 2026-09-22 `npm audit` reports the fix as **non-major**: `next` 16.3.1 → 16.3.6 (`isSemVerMajor: false`), counts 1 critical / 3 high / 1 moderate. Re-check `fixAvailable` each time rather than repeating an old remediation.
+3. the waiver is handed to the user with the remediation it needs so they own the decision — an agent does not grant itself an open-ended exemption. As of 2026-09-22 `npm audit` reports the fix as **non-major**: `next` 16.3.1 → 16.3.6 (`isSemVerMajor: false`), counts 1 critical / 3 high / 1 moderate. By 2026-10-06 it had grown to 1 critical / 10 high / 1 moderate: `next` (fix 16.3.8, non-major), plus a new HIGH chain through `eslint-config-next` → `@next/eslint-plugin-next`/`fast-glob`/`micromatch`/`braces` (fix flagged semver-major; it's dev tooling only). Re-check `fixAvailable` each time rather than repeating an old remediation.
 
 If any of the three fails, the gate stays FAIL and the push waits.
 
