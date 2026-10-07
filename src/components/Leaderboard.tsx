@@ -73,21 +73,13 @@ const timeToSeconds = (timeStr: string): number => {
   return 0;
 };
 
-// Cores de pódio reutilizadas para o badge numérico de colocação (Functional Fitness)
-const getRankBadgeClasses = (rank?: number): string => {
-  if (rank === 1) return 'border-primary bg-primary text-ink';
-  if (rank === 2) return 'border-slate-300 bg-slate-300 text-ink';
-  if (rank === 3) return 'border-amber-600 bg-amber-600 text-ink';
-  return 'border-transparent bg-transparent text-muted-soft';
-};
-
-// Badge numérico estilizado de colocação, com aria-label (não depende só de cor — WCAG AA)
+// Colocação em texto simples, sem destaque de pódio (mesma leitura da tabela), com aria-label
 const RankBadge = ({ rank }: { rank?: number }) => {
   const t = useTranslations('Leaderboard');
   const hasRank = typeof rank === 'number' && rank > 0;
   return (
     <span
-      className={`inline-flex items-center justify-center min-w-[2.25rem] h-7 px-2 rounded-md border font-mono text-xs font-black ${getRankBadgeClasses(rank)}`}
+      className={`inline-flex items-center font-number text-sm font-bold ${hasRank ? 'text-foreground' : 'text-muted-soft'}`}
       aria-label={hasRank ? t('rankPlaceAria', { rank }) : t('rankNoneAria')}
     >
       {hasRank ? `${rank}º` : '–'}
@@ -309,13 +301,6 @@ type LeaderboardParticipantCellProps = {
   onOpenProfile: () => void;
 };
 
-const getLeaderboardRankClasses = (rank: number) => {
-  if (rank === 1) return 'bg-primary text-ink border-primary';
-  if (rank === 2) return 'bg-slate-300 text-ink border-slate-300';
-  if (rank === 3) return 'bg-amber-600 text-ink border-amber-600';
-  return 'border-transparent text-muted';
-};
-
 const LeaderboardParticipantCell = ({
   athlete,
   rank,
@@ -331,7 +316,7 @@ const LeaderboardParticipantCell = ({
 
   return (
     <div
-      className={`grid items-center ${compact ? 'min-h-16 grid-cols-[1.75rem_1fr] px-2' : 'min-h-[5.5rem] grid-cols-[3.25rem_1fr] px-3 sm:grid-cols-[3.875rem_1fr] sm:px-4'}`}
+      className={`grid items-center ${compact ? 'min-h-14 grid-cols-[1.375rem_1fr] gap-x-2 pl-1 pr-2' : 'min-h-16 grid-cols-[2.5rem_1fr] gap-x-3.5 pl-2 pr-4'}`}
       role="button"
       tabIndex={0}
       onClick={onOpenProfile}
@@ -343,12 +328,11 @@ const LeaderboardParticipantCell = ({
       }}
       aria-label={t('openProfileAria', { name: displayName })}
     >
-      <div className="flex justify-center">
-        <span className={`inline-flex items-center justify-center rounded-full border font-number text-xs font-black ${compact ? 'h-6 w-6' : 'h-7 w-7'} ${getLeaderboardRankClasses(rank)}`}>
-          {rank > 0 ? rank : '–'}
-        </span>
-      </div>
-      <div className={compact ? 'min-w-0 py-2' : 'min-w-0 py-3'}>
+      {/* Colocação como número simples: sem forma nem cor de pódio */}
+      <span className={`text-right font-number font-bold ${compact ? 'text-sm' : 'text-base'} ${rank > 0 ? 'text-foreground' : 'text-muted-soft'}`}>
+        {rank > 0 ? rank : '–'}
+      </span>
+      <div className={compact ? 'min-w-0 py-2' : 'min-w-0 py-2.5'}>
         <div className="flex min-w-0 items-center gap-1.5">
           <span className={`${compact ? 'line-clamp-2 text-[11px] leading-tight' : 'truncate text-xs sm:text-sm'} font-black uppercase tracking-[0.045em] text-white`}>
             {displayName}
@@ -771,7 +755,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
                           </td>
                           <td className="border-b border-card-border p-0 text-center">
                             {score && score.result !== '-' ? (
-                              <div className="grid min-h-16 grid-cols-3 items-center px-1 text-xs font-black text-white">
+                              <div className="grid min-h-14 grid-cols-3 items-center px-1 text-xs font-black text-white">
                                 <span>{score.points ?? 0}</span>
                                 <span className="text-muted">{score.rank ? `${score.rank}º` : '–'}</span>
                                 <WorkoutScoreResult
@@ -782,7 +766,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
                                 />
                               </div>
                             ) : (
-                              <div className="flex min-h-16 items-center justify-center text-xs font-bold text-muted-soft">–</div>
+                              <div className="flex min-h-14 items-center justify-center text-xs font-bold text-muted-soft">–</div>
                             )}
                           </td>
                         </tr>
@@ -914,7 +898,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
                         return (
                           <td key={workout.id} className="border-b border-r border-card-border p-0 text-center last:border-r-0">
                             {score && score.result !== '-' ? (
-                              <div className="grid min-h-[5.5rem] grid-cols-3 items-center px-3 text-sm font-black text-white">
+                              <div className="grid min-h-16 grid-cols-3 items-center px-3 text-sm font-black text-white">
                                 <span>{score.points ?? 0}</span>
                                 <span className="text-muted">{score.rank ? `${score.rank}º` : '–'}</span>
                                 <WorkoutScoreResult
@@ -924,7 +908,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
                                 />
                               </div>
                             ) : (
-                              <div className="flex min-h-[5.5rem] items-center justify-center text-sm font-bold text-muted-soft">–</div>
+                              <div className="flex min-h-16 items-center justify-center text-sm font-bold text-muted-soft">–</div>
                             )}
                           </td>
                         );

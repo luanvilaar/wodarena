@@ -8879,14 +8879,7 @@ export default function AdminPage() {
                       <tr key={ath.id} className="hover:bg-dark-gray/30 transition-colors">
                         <td className="py-3 px-2 text-center font-bold">
                           {finalRank > 0 ? (
-                            <span className={`inline-flex items-center justify-center h-6 w-6 rounded-full font-number ${
-                              finalRank === 1 ? 'bg-yellow-500/20 text-yellow-500 border border-yellow-500/30'
-                              : finalRank === 2 ? 'bg-slate-300/20 text-slate-300 border border-slate-300/30'
-                              : finalRank === 3 ? 'bg-amber-700/20 text-amber-700 border border-amber-700/30'
-                              : 'text-muted'
-                            }`}>
-                              {finalRank}
-                            </span>
+                            <span className="font-number text-sm text-foreground">{finalRank}</span>
                           ) : (
                             <span className="text-muted-soft">-</span>
                           )}
@@ -8984,14 +8977,7 @@ export default function AdminPage() {
                   return (
                     <tr key={ath.id} className="hover:bg-dark-gray/30 transition-colors">
                       <td className="py-3 px-2 text-center font-bold">
-                        <span className={`inline-flex items-center justify-center h-6 w-6 rounded-full font-number ${
-                          finalRank === 1 ? 'bg-yellow-500/20 text-yellow-500 border border-yellow-500/30'
-                          : finalRank === 2 ? 'bg-slate-300/20 text-slate-300 border border-slate-300/30'
-                          : finalRank === 3 ? 'bg-amber-700/20 text-amber-700 border border-amber-700/30'
-                          : 'text-muted'
-                        }`}>
-                          {finalRank}
-                        </span>
+                        <span className="font-number text-sm text-foreground">{finalRank}</span>
                       </td>
                       <td className="py-3 px-2">
                         <div className="flex items-center gap-1.5 flex-wrap">
