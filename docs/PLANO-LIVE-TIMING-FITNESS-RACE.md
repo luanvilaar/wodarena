@@ -1,7 +1,7 @@
 # Plano de Implementação — Live Timing (Fitness Race)
 
 > **Status:** AGUARDANDO APROVAÇÃO — nenhuma alteração em código, banco, autenticação ou infraestrutura foi executada.
-> **Base:** `wodarena_live_timing_implementation_plan.md`
+> **Base:** documento original do plano de live timing, removido do repositório no commit `9184692` (versão completa no histórico git: `git show 9184692^:wodarena_live_timing_implementation_plan.md`).
 > **Data da análise:** 2026-08-27
 > **Método:** AS-IS → TO-BE → DELTA (conforme §40 do documento base)
 

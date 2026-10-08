@@ -1071,6 +1071,11 @@ export async function sendQualifierResubmissionRequestedEmail(params: {
 
 // O endpoint /emails/batch do Resend aceita até 100 e-mails por chamada.
 const RESEND_BATCH_LIMIT = 100;
+// Reenvio individual respeita o rate limit padrão do Resend (2 requisições/s).
+const RESEND_SINGLE_SEND_INTERVAL_MS = 500;
+const RESEND_RATE_LIMIT_RETRY_MAX_MS = 5000;
+
+const waitFor = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
 const buildQualifierWorkoutDeletedHtml = (params: {
   athleteName: string;
@@ -1144,50 +1149,95 @@ export async function sendQualifierWorkoutDeletedEmails(params: {
   const apiKey = getResendApiKey();
   if (!apiKey) {
     console.error('[Resend Qualifier Workout Deleted] RESENDAPI_KEY não configurada no ambiente.');
-    return { sent: 0, failed: params.recipients.length };
+    return { sent: 0, failed: params.recipients.length, failedRecipientIndexes: params.recipients.map((_, index) => index) };
   }
 
   const subject = `Prova removida - ${params.eventName || 'Evento WODArena'}`;
   let sent = 0;
   let failed = 0;
+  // Posições (em params.recipients) de quem não recebeu o aviso, para o gestor avisar manualmente.
+  const failedRecipientIndexes: number[] = [];
 
-  // Um e-mail por atleta (nenhum destinatário vê os outros), enviados em lotes.
-  for (let index = 0; index < params.recipients.length; index += RESEND_BATCH_LIMIT) {
-    const chunk = params.recipients.slice(index, index + RESEND_BATCH_LIMIT);
+  const buildEmail = (recipient: { to: string; athleteName: string }) => ({
+    from: getResendFrom(),
+    to: recipient.to,
+    subject,
+    html: buildQualifierWorkoutDeletedHtml({
+      athleteName: recipient.athleteName,
+      eventName: params.eventName,
+      workoutName: params.workoutName,
+      justification: params.justification
+    }),
+  });
+
+  // Logs trazem só o status HTTP e o tipo do erro: a resposta do Resend pode
+  // repetir o endereço recusado, e e-mail de atleta não vai para log.
+  const postToResend = async (url: string, body: unknown, label: string) => {
     try {
-      const res = await fetch('https://api.resend.com/emails/batch', {
+      const res = await fetch(url, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(chunk.map(recipient => ({
-          from: getResendFrom(),
-          to: recipient.to,
-          subject,
-          html: buildQualifierWorkoutDeletedHtml({
-            athleteName: recipient.athleteName,
-            eventName: params.eventName,
-            workoutName: params.workoutName,
-            justification: params.justification
-          }),
-        }))),
+        body: JSON.stringify(body),
       });
+      if (res.ok) return { ok: true, status: res.status, retryAfterMs: 0 };
 
-      if (!res.ok) {
-        const errorData = await parseResendError(res);
-        console.error('[Resend Qualifier Workout Deleted] Erro na API do Resend:', errorData);
-        failed += chunk.length;
+      const retryAfterSeconds = Number(res.headers.get('retry-after'));
+      const errorData = await parseResendError(res);
+      const errorName = errorData.body && typeof errorData.body === 'object' && 'name' in errorData.body
+        ? String((errorData.body as { name?: unknown }).name || '')
+        : '';
+      console.error(`[Resend Qualifier Workout Deleted] Resend recusou o envio (${label}): HTTP ${errorData.status}${errorName ? ` ${errorName}` : ''}`);
+      return {
+        ok: false,
+        status: res.status,
+        retryAfterMs: Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0 ? retryAfterSeconds * 1000 : 1000
+      };
+    } catch (err) {
+      console.error(`[Resend Qualifier Workout Deleted] Erro crítico ao enviar (${label}):`, err instanceof Error ? err.name : 'erro desconhecido');
+      return { ok: false, status: 0, retryAfterMs: 0 };
+    }
+  };
+
+  // Um e-mail por atleta (nenhum destinatário vê os outros), enviados em lotes.
+  for (let index = 0; index < params.recipients.length; index += RESEND_BATCH_LIMIT) {
+    const chunk = params.recipients.slice(index, index + RESEND_BATCH_LIMIT);
+    const batch = await postToResend('https://api.resend.com/emails/batch', chunk.map(buildEmail), 'lote');
+    if (batch.ok) {
+      sent += chunk.length;
+      continue;
+    }
+
+    // O Resend recusa o lote inteiro quando um item é inválido (ex.: endereço
+    // malformado). Reenvia um a um para isolar quem falhou e avisar os demais.
+    let authRejected = false;
+    for (let offset = 0; offset < chunk.length; offset += 1) {
+      const recipientIndex = index + offset;
+      if (authRejected) {
+        failed += 1;
+        failedRecipientIndexes.push(recipientIndex);
         continue;
       }
-      sent += chunk.length;
-    } catch (err) {
-      console.error('[Resend Qualifier Workout Deleted] Erro crítico ao enviar e-mails:', err);
-      failed += chunk.length;
+      await waitFor(RESEND_SINGLE_SEND_INTERVAL_MS);
+      let single = await postToResend('https://api.resend.com/emails', buildEmail(chunk[offset]), 'individual');
+      if (!single.ok && single.status === 429) {
+        await waitFor(Math.min(single.retryAfterMs, RESEND_RATE_LIMIT_RETRY_MAX_MS));
+        single = await postToResend('https://api.resend.com/emails', buildEmail(chunk[offset]), 'individual, nova tentativa');
+      }
+      if (single.ok) {
+        sent += 1;
+        continue;
+      }
+      failed += 1;
+      failedRecipientIndexes.push(recipientIndex);
+      // Chave recusada: nenhum envio individual vai passar; não insiste.
+      if (single.status === 401 || single.status === 403) authRejected = true;
     }
   }
 
-  return { sent, failed };
+  return { sent, failed, failedRecipientIndexes };
 }
 
 export async function sendQualifierResultUpdatedEmail(params: {

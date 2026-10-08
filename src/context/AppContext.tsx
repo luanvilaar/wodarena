@@ -1450,7 +1450,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return {
         submissionsRemoved: data.submissionsRemoved,
         athletesAffected: Number(data.athletesAffected) || 0,
-        athletesNotified: Number(data.athletesNotified) || 0
+        athletesNotified: Number(data.athletesNotified) || 0,
+        unnotifiedAthleteNames: Array.isArray(data.unnotifiedAthleteNames) ? data.unnotifiedAthleteNames.map(String) : []
       };
     } catch (error) {
       setEvents(previousEvents);

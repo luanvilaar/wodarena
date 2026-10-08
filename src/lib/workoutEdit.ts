@@ -28,6 +28,8 @@ export type QualifierWorkoutDeleteResult = {
   submissionsRemoved: number;
   athletesAffected: number;
   athletesNotified: number;
+  // Nomes (nunca e-mails) de quem não recebeu o aviso, para o gestor avisar manualmente.
+  unnotifiedAthleteNames: string[];
 };
 
 export const QUALIFIER_WORKOUT_DELETE_JUSTIFICATION_MAX_LENGTH = 2000;

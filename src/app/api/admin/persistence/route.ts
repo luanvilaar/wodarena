@@ -259,36 +259,76 @@ type QualifierWorkoutDeleteRpcResult = {
   registrationIds?: string[];
 };
 
+// Um único .in() com milhares de ids estoura a URL e o PostgREST corta o
+// resultado em db-max-rows; as inscrições são buscadas em lotes.
+const REGISTRATION_LOOKUP_CHUNK_SIZE = 100;
+
+type DeletedWorkoutNotification = {
+  athletesNotified: number;
+  // Nomes (nunca e-mails) de quem ficou sem aviso. Atletas cuja inscrição não
+  // pôde ser consultada não têm nome e entram só na diferença de contagem.
+  unnotifiedAthleteNames: string[];
+};
+
 // Best-effort: a exclusão já foi confirmada pelo banco. Falha no e-mail só é
-// registrada em log e nunca desfaz nem falha a requisição.
+// registrada em log (sem e-mails de atleta) e nunca desfaz nem falha a requisição.
 const notifyAthletesOfDeletedWorkout = async (
   supabaseAdmin: DbClient,
   registrationIds: string[],
   details: { eventName: string; workoutName: string; justification: string }
-) => {
-  if (registrationIds.length === 0) return 0;
-  try {
-    const { data: registrations, error } = await supabaseAdmin
-      .from('registrations')
-      .select('athlete_email, athlete_name')
-      .in('id', registrationIds);
-    if (error) throw error;
+): Promise<DeletedWorkoutNotification> => {
+  const unnotifiedAthleteNames: string[] = [];
+  if (registrationIds.length === 0) return { athletesNotified: 0, unnotifiedAthleteNames };
 
-    const recipients = (registrations || [])
-      .filter(registration => typeof registration.athlete_email === 'string' && registration.athlete_email.trim())
-      .map(registration => ({
-        to: String(registration.athlete_email).trim(),
-        athleteName: String(registration.athlete_name || 'Atleta')
-      }));
-    if (recipients.length < registrationIds.length) {
-      console.error('[Admin Persistence API] Inscrições sem e-mail do atleta; aviso de prova excluída não enviado para', registrationIds.length - recipients.length);
+  const recipients: { to: string; athleteName: string }[] = [];
+  let lookupFailed = 0;
+  let missingEmail = 0;
+  for (let index = 0; index < registrationIds.length; index += REGISTRATION_LOOKUP_CHUNK_SIZE) {
+    const chunk = registrationIds.slice(index, index + REGISTRATION_LOOKUP_CHUNK_SIZE);
+    try {
+      const { data: registrations, error } = await supabaseAdmin
+        .from('registrations')
+        .select('id, athlete_email, athlete_name')
+        .in('id', chunk);
+      if (error) throw error;
+
+      const found = new Set<string>();
+      for (const registration of registrations || []) {
+        found.add(String(registration.id));
+        const athleteName = String(registration.athlete_name || '').trim() || 'Atleta';
+        const email = typeof registration.athlete_email === 'string' ? registration.athlete_email.trim() : '';
+        if (email) {
+          recipients.push({ to: email, athleteName });
+        } else {
+          missingEmail += 1;
+          unnotifiedAthleteNames.push(athleteName);
+        }
+      }
+      lookupFailed += chunk.filter(id => !found.has(id)).length;
+    } catch (error) {
+      // Um lote que falha não derruba os demais: esses atletas contam como não avisados.
+      console.error('[Admin Persistence API] Erro ao buscar inscrições para o aviso de prova excluída; atletas sem aviso:', chunk.length, error);
+      lookupFailed += chunk.length;
     }
+  }
+  if (missingEmail > 0) {
+    console.error('[Admin Persistence API] Inscrições sem e-mail do atleta; aviso de prova excluída não enviado para', missingEmail);
+  }
+  if (lookupFailed > 0) {
+    console.error('[Admin Persistence API] Atletas sem aviso de prova excluída por inscrição não consultada ou não encontrada:', lookupFailed);
+  }
+  if (recipients.length === 0) return { athletesNotified: 0, unnotifiedAthleteNames };
 
+  try {
     const result = await sendQualifierWorkoutDeletedEmails({ recipients, ...details });
-    return result.sent;
+    for (const recipientIndex of result.failedRecipientIndexes) {
+      const recipient = recipients[recipientIndex];
+      if (recipient) unnotifiedAthleteNames.push(recipient.athleteName);
+    }
+    return { athletesNotified: result.sent, unnotifiedAthleteNames };
   } catch (error) {
-    console.error('[Admin Persistence API] Erro ao avisar atletas sobre a prova excluída:', error);
-    return 0;
+    console.error('[Admin Persistence API] Erro ao avisar atletas sobre a prova excluída:', error instanceof Error ? error.name : 'erro desconhecido');
+    return { athletesNotified: 0, unnotifiedAthleteNames: [...unnotifiedAthleteNames, ...recipients.map(recipient => recipient.athleteName)] };
   }
 };
 
@@ -338,7 +378,7 @@ const deleteQualifierWorkoutWithSubmissions = async (
 
   const result = (data || {}) as QualifierWorkoutDeleteRpcResult;
   const registrationIds = Array.isArray(result.registrationIds) ? result.registrationIds.map(String) : [];
-  const athletesNotified = await notifyAthletesOfDeletedWorkout(supabaseAdmin, registrationIds, {
+  const { athletesNotified, unnotifiedAthleteNames } = await notifyAthletesOfDeletedWorkout(supabaseAdmin, registrationIds, {
     eventName: String(event.name || 'Evento WODArena'),
     workoutName: result.workoutName || 'Prova',
     justification
@@ -346,7 +386,8 @@ const deleteQualifierWorkoutWithSubmissions = async (
   const deleteResult: QualifierWorkoutDeleteResult = {
     submissionsRemoved: Number(result.submissionsRemoved) || 0,
     athletesAffected: registrationIds.length,
-    athletesNotified
+    athletesNotified,
+    unnotifiedAthleteNames
   };
   return NextResponse.json({ success: true, ...deleteResult });
 };

@@ -2184,11 +2184,20 @@ export default function AdminPage() {
       removeWorkoutFromManagedEvent(workout.id);
       const affected = result?.athletesAffected ?? 0;
       const notified = result?.athletesNotified ?? 0;
+      const unnotifiedNames = result?.unnotifiedAthleteNames ?? [];
+      // Sem nome: a inscrição não pôde ser consultada para o envio.
+      const unidentified = Math.max(0, affected - notified - unnotifiedNames.length);
+      const unnotifiedDetails = [
+        unnotifiedNames.length > 0 ? `Sem aviso: ${unnotifiedNames.join(', ')}.` : '',
+        unidentified > 0
+          ? `${unidentified} ${unidentified === 1 ? 'atleta não identificado' : 'atletas não identificados'} (falha ao consultar as inscrições).`
+          : ''
+      ].filter(Boolean).join(' ');
       const notice = affected === 0
         ? `Prova "${workout.name}" excluída com sucesso.`
         : notified === affected
           ? `Prova "${workout.name}" excluída. ${affected} ${affected === 1 ? 'atleta foi avisado' : 'atletas foram avisados'} por e-mail.`
-          : `Prova "${workout.name}" excluída. ${notified} de ${affected} atletas foram avisados por e-mail; avise os demais manualmente.`;
+          : `Prova "${workout.name}" excluída. ${notified} de ${affected} atletas foram avisados por e-mail; avise os demais manualmente.${unnotifiedDetails ? ` ${unnotifiedDetails}` : ''}`;
       setAdminNotice({ text: notice, tone: 'success' });
       setWorkoutPendingDeletion(null);
       setDeleteWorkoutAcknowledged(false);

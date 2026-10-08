@@ -140,7 +140,9 @@ test('athletes get one e-mail each, sent in Resend batches, with the escaped rea
   const sender = resend.match(/export async function sendQualifierWorkoutDeletedEmails[\s\S]*?\n\}\n/)?.[0] || '';
   assert.match(resend, /const RESEND_BATCH_LIMIT = 100;/);
   assert.match(sender, /https:\/\/api\.resend\.com\/emails\/batch/);
-  assert.match(sender, /chunk\.map\(recipient => \(\{[\s\S]*to: recipient\.to/);
+  assert.match(sender, /const buildEmail = \(recipient: \{ to: string; athleteName: string \}\) => \(\{[\s\S]*?to: recipient\.to/);
+  assert.match(sender, /postToResend\('https:\/\/api\.resend\.com\/emails\/batch', chunk\.map\(buildEmail\), 'lote'\)/);
+  assert.doesNotMatch(sender, /failed \+= chunk\.length/);
   assert.match(resend, /const safeJustification = escapeHtml\(params\.justification \|\| ''\);[\s\S]*<h1>Prova removida<\/h1>/);
   assert.match(resend, /envie um novo vídeo e resultado/);
 });
@@ -173,4 +175,138 @@ test('the qualifier CLI deletes a workout through the same RPC (CLI First)', () 
   assert.match(cli, /requireArgs\(args, \['actor', 'event', 'workout', 'confirm', 'justification'\]\)/);
   assert.match(cli, /rpc\('qualifier_delete_workout', \{[\s\S]*p_confirmation: String\(args\.confirm\)\.trim\(\)/);
   assert.match(cli, /workout delete --actor MANAGER_ID --event EVENT_ID --workout WORKOUT_ID --confirm/);
+});
+
+// Follow-up da revisão QA da Story 1.37: busca das inscrições em lotes e
+// reenvio individual quando o Resend recusa o lote inteiro.
+
+const loadResendSender = async () => {
+  const source = resend
+    .replace(/^import .*$/gm, '')
+    .replace('const RESEND_SINGLE_SEND_INTERVAL_MS = 500;', 'const RESEND_SINGLE_SEND_INTERVAL_MS = 0;')
+    .replace('const RESEND_RATE_LIMIT_RETRY_MAX_MS = 5000;', 'const RESEND_RATE_LIMIT_RETRY_MAX_MS = 0;');
+  const compiled = ts.transpileModule(
+    `const getContestationStatusLabel = (value) => String(value);\nconst toBcp47 = () => 'pt-BR';\n${source}`,
+    { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }
+  ).outputText;
+  return import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
+};
+
+const withResendFetch = async (handler, run) => {
+  const originalFetch = globalThis.fetch;
+  const originalKey = process.env.RESEND_API_KEY;
+  const originalError = console.error;
+  const calls = [];
+  const logs = [];
+  process.env.RESEND_API_KEY = 're_test';
+  console.error = (...args) => { logs.push(args.map(String).join(' ')); };
+  globalThis.fetch = async (url, init) => {
+    const body = JSON.parse(init.body);
+    calls.push({ url, body });
+    return handler(url, body);
+  };
+  try {
+    return await run(calls, logs);
+  } finally {
+    globalThis.fetch = originalFetch;
+    console.error = originalError;
+    if (originalKey === undefined) delete process.env.RESEND_API_KEY;
+    else process.env.RESEND_API_KEY = originalKey;
+  }
+};
+
+const jsonResponse = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+
+test('a batch refused by Resend is resent one by one, isolating the invalid address', async () => {
+  const { sendQualifierWorkoutDeletedEmails } = await loadResendSender();
+  const recipients = [
+    { to: 'ana@example.com', athleteName: 'Ana' },
+    { to: 'invalido', athleteName: 'Bruno' },
+    { to: 'carla@example.com', athleteName: 'Carla' }
+  ];
+
+  await withResendFetch((url, body) => {
+    if (url.endsWith('/emails/batch')) {
+      return jsonResponse(422, { name: 'validation_error', message: 'Invalid `to` field: invalido' });
+    }
+    return body.to === 'invalido'
+      ? jsonResponse(422, { name: 'validation_error', message: 'Invalid `to` field: invalido' })
+      : jsonResponse(200, { id: 'email-id' });
+  }, async (calls, logs) => {
+    const result = await sendQualifierWorkoutDeletedEmails({ recipients, eventName: 'Evento', workoutName: 'Prova 1', justification: 'Motivo' });
+    assert.deepEqual(result, { sent: 2, failed: 1, failedRecipientIndexes: [1] });
+    assert.equal(calls[0].url, 'https://api.resend.com/emails/batch');
+    assert.equal(calls[0].body.length, 3);
+    assert.deepEqual(calls.slice(1).map(call => [call.url, call.body.to]), [
+      ['https://api.resend.com/emails', 'ana@example.com'],
+      ['https://api.resend.com/emails', 'invalido'],
+      ['https://api.resend.com/emails', 'carla@example.com']
+    ]);
+    // E-mails de atleta nunca vão para log, nem quando o Resend os repete no erro.
+    assert.ok(logs.length > 0);
+    for (const line of logs) assert.doesNotMatch(line, /invalido|@example\.com/);
+  });
+});
+
+test('an accepted batch counts every recipient and a refused key stops the individual resend', async () => {
+  const { sendQualifierWorkoutDeletedEmails } = await loadResendSender();
+  const recipients = Array.from({ length: 150 }, (_, index) => ({ to: `atleta${index}@example.com`, athleteName: `Atleta ${index}` }));
+
+  await withResendFetch(() => jsonResponse(200, { data: [] }), async (calls) => {
+    const result = await sendQualifierWorkoutDeletedEmails({ recipients, eventName: 'Evento', workoutName: 'Prova 1', justification: '' });
+    assert.deepEqual(result, { sent: 150, failed: 0, failedRecipientIndexes: [] });
+    assert.deepEqual(calls.map(call => call.body.length), [100, 50]);
+  });
+
+  await withResendFetch(() => jsonResponse(401, { name: 'invalid_api_key' }), async (calls) => {
+    const result = await sendQualifierWorkoutDeletedEmails({ recipients: recipients.slice(0, 3), eventName: 'Evento', workoutName: 'Prova 1', justification: '' });
+    assert.deepEqual(result, { sent: 0, failed: 3, failedRecipientIndexes: [0, 1, 2] });
+    assert.equal(calls.length, 2);
+  });
+});
+
+test('a rate-limited individual resend is retried once', async () => {
+  const { sendQualifierWorkoutDeletedEmails } = await loadResendSender();
+  let individualAttempts = 0;
+  await withResendFetch((url) => {
+    if (url.endsWith('/emails/batch')) return jsonResponse(422, { name: 'validation_error' });
+    individualAttempts += 1;
+    return individualAttempts === 1 ? jsonResponse(429, { name: 'rate_limit_exceeded' }) : jsonResponse(200, { id: 'email-id' });
+  }, async () => {
+    const result = await sendQualifierWorkoutDeletedEmails({
+      recipients: [{ to: 'ana@example.com', athleteName: 'Ana' }],
+      eventName: 'Evento',
+      workoutName: 'Prova 1',
+      justification: ''
+    });
+    assert.deepEqual(result, { sent: 1, failed: 0, failedRecipientIndexes: [] });
+    assert.equal(individualAttempts, 2);
+  });
+});
+
+test('registrations for the deletion notice are fetched in chunks and failures count as not notified', () => {
+  const notify = persistenceRoute.match(/const notifyAthletesOfDeletedWorkout = async \([\s\S]*?\n\};/)?.[0] || '';
+  assert.match(persistenceRoute, /const REGISTRATION_LOOKUP_CHUNK_SIZE = 100;/);
+  assert.match(notify, /for \(let index = 0; index < registrationIds\.length; index \+= REGISTRATION_LOOKUP_CHUNK_SIZE\) \{\n\s+const chunk = registrationIds\.slice\(index, index \+ REGISTRATION_LOOKUP_CHUNK_SIZE\);/);
+  assert.match(notify, /\.select\('id, athlete_email, athlete_name'\)\n\s+\.in\('id', chunk\);/);
+  assert.doesNotMatch(notify, /\.in\('id', registrationIds\)/);
+  // Lote que falha não zera os demais.
+  assert.match(notify, /\} catch \(error\) \{[\s\S]*?lookupFailed \+= chunk\.length;/);
+  assert.match(notify, /lookupFailed \+= chunk\.filter\(id => !found\.has\(id\)\)\.length;/);
+  // Quem não recebeu: só o nome, vindo das posições que o Resend devolveu como falha.
+  assert.match(notify, /result\.failedRecipientIndexes[\s\S]*?unnotifiedAthleteNames\.push\(recipient\.athleteName\)/);
+  assert.doesNotMatch(notify, /console\.error\([^)]*(recipient\.to|athlete_email|email\b)/);
+
+  const helper = persistenceRoute.match(/const deleteQualifierWorkoutWithSubmissions = async \([\s\S]*?\n\};/)?.[0] || '';
+  assert.match(helper, /athletesNotified,\n\s+unnotifiedAthleteNames\n\s+\};/);
+  assert.doesNotMatch(helper, /email/i);
+  assert.match(workoutEditSource, /unnotifiedAthleteNames: string\[\];/);
+  assert.match(appContext, /unnotifiedAthleteNames: Array\.isArray\(data\.unnotifiedAthleteNames\) \? data\.unnotifiedAthleteNames\.map\(String\) : \[\]/);
+});
+
+test('the admin notice names the athletes left without the deletion e-mail', () => {
+  assert.match(adminPage, /const unnotifiedNames = result\?\.unnotifiedAthleteNames \?\? \[\];/);
+  assert.match(adminPage, /Sem aviso: \$\{unnotifiedNames\.join\(', '\)\}\./);
+  assert.match(adminPage, /const unidentified = Math\.max\(0, affected - notified - unnotifiedNames\.length\);/);
+  assert.match(adminPage, /avise os demais manualmente\.\$\{unnotifiedDetails \? ` \$\{unnotifiedDetails\}` : ''\}/);
 });
