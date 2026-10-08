@@ -141,8 +141,10 @@ test('athletes get one e-mail each, sent in Resend batches, with the escaped rea
   assert.match(resend, /const RESEND_BATCH_LIMIT = 100;/);
   assert.match(sender, /https:\/\/api\.resend\.com\/emails\/batch/);
   assert.match(sender, /const buildEmail = \(recipient: \{ to: string; athleteName: string \}\) => \(\{[\s\S]*?to: recipient\.to/);
-  assert.match(sender, /postToResend\('https:\/\/api\.resend\.com\/emails\/batch', chunk\.map\(buildEmail\), 'lote'\)/);
+  assert.match(sender, /await sendGroup\(index, Math\.min\(index \+ RESEND_BATCH_LIMIT, params\.recipients\.length\), 'lote'\)/);
   assert.doesNotMatch(sender, /failed \+= chunk\.length/);
+  // Nada de validação permissiva: o isolamento do inválido é feito por bisseção.
+  assert.doesNotMatch(sender, /x-batch-validation/i);
   assert.match(resend, /const safeJustification = escapeHtml\(params\.justification \|\| ''\);[\s\S]*<h1>Prova removida<\/h1>/);
   assert.match(resend, /envie um novo vídeo e resultado/);
 });
@@ -178,12 +180,16 @@ test('the qualifier CLI deletes a workout through the same RPC (CLI First)', () 
 });
 
 // Follow-up da revisão QA da Story 1.37: busca das inscrições em lotes e
-// reenvio individual quando o Resend recusa o lote inteiro.
+// bisseção do lote recusado pelo Resend para isolar o e-mail inválido.
 
-const loadResendSender = async () => {
+// Os testes rodam o código real; só os intervalos são encurtados no fonte
+// carregado (produção continua com 500 ms entre requisições e até 5 s no 429).
+const loadResendSender = async ({ intervalMs = 0 } = {}) => {
+  assert.match(resend, /const RESEND_REQUEST_INTERVAL_MS = 500;/);
+  assert.match(resend, /const RESEND_RATE_LIMIT_RETRY_MAX_MS = 5000;/);
   const source = resend
     .replace(/^import .*$/gm, '')
-    .replace('const RESEND_SINGLE_SEND_INTERVAL_MS = 500;', 'const RESEND_SINGLE_SEND_INTERVAL_MS = 0;')
+    .replace('const RESEND_REQUEST_INTERVAL_MS = 500;', `const RESEND_REQUEST_INTERVAL_MS = ${intervalMs};`)
     .replace('const RESEND_RATE_LIMIT_RETRY_MAX_MS = 5000;', 'const RESEND_RATE_LIMIT_RETRY_MAX_MS = 0;');
   const compiled = ts.transpileModule(
     `const getContestationStatusLabel = (value) => String(value);\nconst toBcp47 = () => 'pt-BR';\n${source}`,
@@ -202,7 +208,7 @@ const withResendFetch = async (handler, run) => {
   console.error = (...args) => { logs.push(args.map(String).join(' ')); };
   globalThis.fetch = async (url, init) => {
     const body = JSON.parse(init.body);
-    calls.push({ url, body });
+    calls.push({ url, body, at: Date.now() });
     return handler(url, body);
   };
   try {
@@ -217,70 +223,191 @@ const withResendFetch = async (handler, run) => {
 
 const jsonResponse = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
-test('a batch refused by Resend is resent one by one, isolating the invalid address', async () => {
-  const { sendQualifierWorkoutDeletedEmails } = await loadResendSender();
-  const recipients = [
-    { to: 'ana@example.com', athleteName: 'Ana' },
-    { to: 'invalido', athleteName: 'Bruno' },
-    { to: 'carla@example.com', athleteName: 'Carla' }
-  ];
+const athletes = (count, invalidIndexes = []) => Array.from({ length: count }, (_, index) => (
+  invalidIndexes.includes(index)
+    ? { to: `invalido${index}`, athleteName: `Atleta ${index}` }
+    : { to: `atleta${index}@example.com`, athleteName: `Atleta ${index}` }
+));
 
-  await withResendFetch((url, body) => {
-    if (url.endsWith('/emails/batch')) {
-      return jsonResponse(422, { name: 'validation_error', message: 'Invalid `to` field: invalido' });
-    }
-    return body.to === 'invalido'
-      ? jsonResponse(422, { name: 'validation_error', message: 'Invalid `to` field: invalido' })
-      : jsonResponse(200, { id: 'email-id' });
-  }, async (calls, logs) => {
-    const result = await sendQualifierWorkoutDeletedEmails({ recipients, eventName: 'Evento', workoutName: 'Prova 1', justification: 'Motivo' });
-    assert.deepEqual(result, { sent: 2, failed: 1, failedRecipientIndexes: [1] });
-    assert.equal(calls[0].url, 'https://api.resend.com/emails/batch');
-    assert.equal(calls[0].body.length, 3);
-    assert.deepEqual(calls.slice(1).map(call => [call.url, call.body.to]), [
-      ['https://api.resend.com/emails', 'ana@example.com'],
-      ['https://api.resend.com/emails', 'invalido'],
-      ['https://api.resend.com/emails', 'carla@example.com']
-    ]);
+// Simula a validação do Resend: o lote inteiro é recusado se qualquer item for
+// inválido, e a mensagem de erro repete o endereço recusado.
+const validatingResend = (url, body) => {
+  const invalid = body.find(email => !String(email.to).includes('@'));
+  return invalid
+    ? jsonResponse(422, { name: 'validation_error', message: `Invalid \`to\` field: ${invalid.to}` })
+    : jsonResponse(200, { data: body.map((_, index) => ({ id: `email-${index}` })) });
+};
+
+const acceptedAddresses = (calls, responses) => {
+  const accepted = [];
+  for (let index = 0; index < calls.length; index += 1) {
+    if (responses[index]) accepted.push(...calls[index].body.map(email => email.to));
+  }
+  return accepted;
+};
+
+const recordingResend = (handler) => {
+  const responses = [];
+  const wrapped = async (url, body) => {
+    const response = await handler(url, body);
+    responses.push(response.ok);
+    return response;
+  };
+  return { wrapped, responses };
+};
+
+const sendDeletionNotice = (sender, recipients) => sender({ recipients, eventName: 'Evento', workoutName: 'Prova 1', justification: 'Motivo' });
+
+const assertNoAddressInLogs = (logs) => {
+  for (const line of logs) assert.doesNotMatch(line, /invalido|@example\.com/);
+};
+
+test('one invalid address in a batch of 100 is isolated by bisection with far fewer than 100 requests', async () => {
+  const { sendQualifierWorkoutDeletedEmails } = await loadResendSender();
+  const recipients = athletes(100, [37]);
+  const { wrapped, responses } = recordingResend(validatingResend);
+
+  await withResendFetch(wrapped, async (calls, logs) => {
+    const result = await sendDeletionNotice(sendQualifierWorkoutDeletedEmails, recipients);
+    assert.deepEqual(result, { sent: 99, failed: 1, failedRecipientIndexes: [37] });
+    // Tudo via /emails/batch; o primeiro é o lote inteiro.
+    assert.ok(calls.every(call => call.url === 'https://api.resend.com/emails/batch'));
+    assert.equal(calls[0].body.length, 100);
+    // Bisseção: ~2·log2(100) requisições, não uma por atleta.
+    assert.equal(calls.length, 13);
+    assert.ok(calls.length <= 2 * Math.ceil(Math.log2(100)) + 1);
+    // Cada atleta válido recebe exatamente um e-mail.
+    const accepted = acceptedAddresses(calls, responses);
+    assert.equal(accepted.length, 99);
+    assert.equal(new Set(accepted).size, 99);
+    assert.ok(!accepted.includes('invalido37'));
     // E-mails de atleta nunca vão para log, nem quando o Resend os repete no erro.
     assert.ok(logs.length > 0);
-    for (const line of logs) assert.doesNotMatch(line, /invalido|@example\.com/);
+    assertNoAddressInLogs(logs);
   });
 });
 
-test('an accepted batch counts every recipient and a refused key stops the individual resend', async () => {
+test('two invalid addresses far apart are both isolated and everyone else is notified once', async () => {
   const { sendQualifierWorkoutDeletedEmails } = await loadResendSender();
-  const recipients = Array.from({ length: 150 }, (_, index) => ({ to: `atleta${index}@example.com`, athleteName: `Atleta ${index}` }));
+  const recipients = athletes(100, [3, 88]);
+  const { wrapped, responses } = recordingResend(validatingResend);
 
-  await withResendFetch(() => jsonResponse(200, { data: [] }), async (calls) => {
-    const result = await sendQualifierWorkoutDeletedEmails({ recipients, eventName: 'Evento', workoutName: 'Prova 1', justification: '' });
+  await withResendFetch(wrapped, async (calls, logs) => {
+    const result = await sendDeletionNotice(sendQualifierWorkoutDeletedEmails, recipients);
+    assert.deepEqual(result, { sent: 98, failed: 2, failedRecipientIndexes: [3, 88] });
+    assert.ok(calls.length < 30, `requisições: ${calls.length}`);
+    const accepted = acceptedAddresses(calls, responses);
+    assert.equal(accepted.length, 98);
+    assert.equal(new Set(accepted).size, 98);
+    assertNoAddressInLogs(logs);
+  });
+});
+
+test('valid batches go out in one request each: 150 athletes become batches of 100 and 50', async () => {
+  const { sendQualifierWorkoutDeletedEmails } = await loadResendSender();
+
+  await withResendFetch(validatingResend, async (calls) => {
+    const result = await sendDeletionNotice(sendQualifierWorkoutDeletedEmails, athletes(150));
     assert.deepEqual(result, { sent: 150, failed: 0, failedRecipientIndexes: [] });
     assert.deepEqual(calls.map(call => call.body.length), [100, 50]);
   });
 
-  await withResendFetch(() => jsonResponse(401, { name: 'invalid_api_key' }), async (calls) => {
-    const result = await sendQualifierWorkoutDeletedEmails({ recipients: recipients.slice(0, 3), eventName: 'Evento', workoutName: 'Prova 1', justification: '' });
-    assert.deepEqual(result, { sent: 0, failed: 3, failedRecipientIndexes: [0, 1, 2] });
-    assert.equal(calls.length, 2);
+  await withResendFetch(validatingResend, async (calls) => {
+    const result = await sendDeletionNotice(sendQualifierWorkoutDeletedEmails, athletes(1));
+    assert.deepEqual(result, { sent: 1, failed: 0, failedRecipientIndexes: [] });
+    assert.equal(calls.length, 1);
+  });
+
+  // Inválido no segundo lote: o primeiro sai inteiro e a posição devolvida é a de params.recipients.
+  await withResendFetch(validatingResend, async (calls, logs) => {
+    const result = await sendDeletionNotice(sendQualifierWorkoutDeletedEmails, athletes(150, [120]));
+    assert.deepEqual(result, { sent: 149, failed: 1, failedRecipientIndexes: [120] });
+    assert.deepEqual(calls.slice(0, 2).map(call => call.body.length), [100, 50]);
+    assertNoAddressInLogs(logs);
   });
 });
 
-test('a rate-limited individual resend is retried once', async () => {
+test('a rate-limited request is retried once and a repeated 429 does not loop', async () => {
   const { sendQualifierWorkoutDeletedEmails } = await loadResendSender();
-  let individualAttempts = 0;
-  await withResendFetch((url) => {
-    if (url.endsWith('/emails/batch')) return jsonResponse(422, { name: 'validation_error' });
-    individualAttempts += 1;
-    return individualAttempts === 1 ? jsonResponse(429, { name: 'rate_limit_exceeded' }) : jsonResponse(200, { id: 'email-id' });
-  }, async () => {
-    const result = await sendQualifierWorkoutDeletedEmails({
-      recipients: [{ to: 'ana@example.com', athleteName: 'Ana' }],
-      eventName: 'Evento',
-      workoutName: 'Prova 1',
-      justification: ''
-    });
-    assert.deepEqual(result, { sent: 1, failed: 0, failedRecipientIndexes: [] });
-    assert.equal(individualAttempts, 2);
+  let attempts = 0;
+  await withResendFetch((url, body) => {
+    attempts += 1;
+    return attempts === 1 ? jsonResponse(429, { name: 'rate_limit_exceeded' }) : validatingResend(url, body);
+  }, async (calls) => {
+    const result = await sendDeletionNotice(sendQualifierWorkoutDeletedEmails, athletes(100));
+    assert.deepEqual(result, { sent: 100, failed: 0, failedRecipientIndexes: [] });
+    assert.deepEqual(calls.map(call => call.body.length), [100, 100]);
+  });
+
+  // 429 persistente: cada grupo tenta duas vezes e a bisseção termina com todos como falha.
+  await withResendFetch(() => jsonResponse(429, { name: 'rate_limit_exceeded' }), async (calls) => {
+    const result = await sendDeletionNotice(sendQualifierWorkoutDeletedEmails, athletes(3));
+    assert.deepEqual(result, { sent: 0, failed: 3, failedRecipientIndexes: [0, 1, 2] });
+    // Grupos [0,3) [0,1) [1,3) [1,2) [2,3), duas tentativas cada.
+    assert.equal(calls.length, 10);
+  });
+});
+
+test('server and network errors still bisect to the end without looping', async () => {
+  const { sendQualifierWorkoutDeletedEmails } = await loadResendSender();
+
+  await withResendFetch(() => jsonResponse(500, { name: 'internal_server_error' }), async (calls, logs) => {
+    const result = await sendDeletionNotice(sendQualifierWorkoutDeletedEmails, athletes(100));
+    assert.equal(result.sent, 0);
+    assert.equal(result.failed, 100);
+    assert.deepEqual(result.failedRecipientIndexes, Array.from({ length: 100 }, (_, index) => index));
+    assert.equal(calls.length, 2 * 100 - 1);
+    assertNoAddressInLogs(logs);
+  });
+
+  await withResendFetch(() => { throw new TypeError('fetch failed'); }, async (calls, logs) => {
+    const result = await sendDeletionNotice(sendQualifierWorkoutDeletedEmails, athletes(4));
+    assert.deepEqual(result, { sent: 0, failed: 4, failedRecipientIndexes: [0, 1, 2, 3] });
+    assert.equal(calls.length, 2 * 4 - 1);
+    assertNoAddressInLogs(logs);
+  });
+});
+
+test('a refused key stops sending and marks everything pending as failed', async () => {
+  const { sendQualifierWorkoutDeletedEmails } = await loadResendSender();
+
+  // Recusa logo no primeiro lote: o segundo lote nem é enviado.
+  await withResendFetch(() => jsonResponse(401, { name: 'invalid_api_key' }), async (calls) => {
+    const result = await sendDeletionNotice(sendQualifierWorkoutDeletedEmails, athletes(150));
+    assert.equal(result.sent, 0);
+    assert.equal(result.failed, 150);
+    assert.deepEqual(result.failedRecipientIndexes, Array.from({ length: 150 }, (_, index) => index));
+    assert.equal(calls.length, 1);
+  });
+
+  // Recusa no meio da bisseção: a metade já aceita conta como enviada, o resto pendente como falha.
+  let attempts = 0;
+  await withResendFetch((url, body) => {
+    attempts += 1;
+    return attempts === 4 ? jsonResponse(403, { name: 'restricted_api_key' }) : validatingResend(url, body);
+  }, async (calls) => {
+    const result = await sendDeletionNotice(sendQualifierWorkoutDeletedEmails, athletes(100, [60]));
+    // [0,100) recusado → [0,50) aceito → [50,100) recusado → [50,75) 403 → [75,100) sem envio.
+    assert.equal(result.sent, 50);
+    assert.equal(result.failed, 50);
+    assert.deepEqual(result.failedRecipientIndexes, Array.from({ length: 50 }, (_, index) => 50 + index));
+    assert.equal(calls.length, 4);
+  });
+});
+
+test('requests are spaced by the Resend interval, except the first one', async () => {
+  const intervalMs = 40;
+  const { sendQualifierWorkoutDeletedEmails } = await loadResendSender({ intervalMs });
+
+  await withResendFetch(validatingResend, async (calls) => {
+    const startedAt = Date.now();
+    const result = await sendDeletionNotice(sendQualifierWorkoutDeletedEmails, athletes(8, [5]));
+    assert.deepEqual(result, { sent: 7, failed: 1, failedRecipientIndexes: [5] });
+    assert.ok(calls[0].at - startedAt < intervalMs, 'o primeiro lote sai sem espera');
+    for (let index = 1; index < calls.length; index += 1) {
+      // Margem de 5 ms para a granularidade dos timers.
+      assert.ok(calls[index].at - calls[index - 1].at >= intervalMs - 5, `espaçamento ${calls[index].at - calls[index - 1].at} ms`);
+    }
   });
 });
 

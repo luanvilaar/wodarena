@@ -1071,8 +1071,8 @@ export async function sendQualifierResubmissionRequestedEmail(params: {
 
 // O endpoint /emails/batch do Resend aceita até 100 e-mails por chamada.
 const RESEND_BATCH_LIMIT = 100;
-// Reenvio individual respeita o rate limit padrão do Resend (2 requisições/s).
-const RESEND_SINGLE_SEND_INTERVAL_MS = 500;
+// Espaçamento mínimo entre requisições ao Resend (rate limit padrão de 2 requisições/s).
+const RESEND_REQUEST_INTERVAL_MS = 500;
 const RESEND_RATE_LIMIT_RETRY_MAX_MS = 5000;
 
 const waitFor = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
@@ -1201,40 +1201,65 @@ export async function sendQualifierWorkoutDeletedEmails(params: {
     }
   };
 
-  // Um e-mail por atleta (nenhum destinatário vê os outros), enviados em lotes.
-  for (let index = 0; index < params.recipients.length; index += RESEND_BATCH_LIMIT) {
-    const chunk = params.recipients.slice(index, index + RESEND_BATCH_LIMIT);
-    const batch = await postToResend('https://api.resend.com/emails/batch', chunk.map(buildEmail), 'lote');
-    if (batch.ok) {
-      sent += chunk.length;
-      continue;
-    }
-
-    // O Resend recusa o lote inteiro quando um item é inválido (ex.: endereço
-    // malformado). Reenvia um a um para isolar quem falhou e avisar os demais.
-    let authRejected = false;
-    for (let offset = 0; offset < chunk.length; offset += 1) {
-      const recipientIndex = index + offset;
-      if (authRejected) {
-        failed += 1;
-        failedRecipientIndexes.push(recipientIndex);
-        continue;
-      }
-      await waitFor(RESEND_SINGLE_SEND_INTERVAL_MS);
-      let single = await postToResend('https://api.resend.com/emails', buildEmail(chunk[offset]), 'individual');
-      if (!single.ok && single.status === 429) {
-        await waitFor(Math.min(single.retryAfterMs, RESEND_RATE_LIMIT_RETRY_MAX_MS));
-        single = await postToResend('https://api.resend.com/emails', buildEmail(chunk[offset]), 'individual, nova tentativa');
-      }
-      if (single.ok) {
-        sent += 1;
-        continue;
-      }
+  const markFailed = (start: number, end: number) => {
+    for (let recipientIndex = start; recipientIndex < end; recipientIndex += 1) {
       failed += 1;
       failedRecipientIndexes.push(recipientIndex);
-      // Chave recusada: nenhum envio individual vai passar; não insiste.
-      if (single.status === 401 || single.status === 403) authRejected = true;
     }
+  };
+
+  // Toda requisição respeita o espaçamento em relação à anterior (a primeira
+  // sai sem espera) e ganha uma única nova tentativa quando o Resend responde 429.
+  let lastRequestAt = 0;
+  const postBatch = async (start: number, end: number, label: string) => {
+    const emails = params.recipients.slice(start, end).map(buildEmail);
+    const post = async (attemptLabel: string) => {
+      const wait = lastRequestAt + RESEND_REQUEST_INTERVAL_MS - Date.now();
+      if (lastRequestAt > 0 && wait > 0) await waitFor(wait);
+      lastRequestAt = Date.now();
+      return postToResend('https://api.resend.com/emails/batch', emails, attemptLabel);
+    };
+    const result = await post(label);
+    if (result.ok || result.status !== 429) return result;
+    await waitFor(Math.min(result.retryAfterMs, RESEND_RATE_LIMIT_RETRY_MAX_MS));
+    return post(`${label}, nova tentativa`);
+  };
+
+  // O Resend recusa o lote inteiro quando um item é inválido (ex.: endereço
+  // malformado). Em vez de reenviar um a um, divide o grupo recusado ao meio e
+  // reenvia cada metade como lote, até isolar o(s) item(ns) recusado(s): cerca
+  // de 2·log2(n) requisições por inválido. Cada nível encolhe o grupo e um grupo
+  // de 1 recusado é falha definitiva, então a recursão termina mesmo com erros
+  // que não são de validação (5xx, rede): no máximo 2n - 1 requisições por lote.
+  let authRejected = false;
+  const sendGroup = async (start: number, end: number, label: string): Promise<void> => {
+    if (authRejected) {
+      markFailed(start, end);
+      return;
+    }
+    const result = await postBatch(start, end, label);
+    if (result.ok) {
+      sent += end - start;
+      return;
+    }
+    // Chave recusada: nenhum envio vai passar; o restante pendente fica como falha sem insistir.
+    if (result.status === 401 || result.status === 403) {
+      authRejected = true;
+      markFailed(start, end);
+      return;
+    }
+    if (end - start === 1) {
+      markFailed(start, end);
+      return;
+    }
+    const middle = start + Math.floor((end - start) / 2);
+    await sendGroup(start, middle, 'metade de lote recusado');
+    await sendGroup(middle, end, 'metade de lote recusado');
+  };
+
+  // Um e-mail por atleta (nenhum destinatário vê os outros), enviados em lotes.
+  for (let index = 0; index < params.recipients.length; index += RESEND_BATCH_LIMIT) {
+    await sendGroup(index, Math.min(index + RESEND_BATCH_LIMIT, params.recipients.length), 'lote');
   }
 
   return { sent, failed, failedRecipientIndexes };
