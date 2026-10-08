@@ -62,7 +62,10 @@ import {
   canChangeQualifierWorkoutType,
   getQualifierWorkoutLockViolations,
   getWorkoutChanges,
+  getWorkoutDeleteConfirmationText,
+  hasQualifierWorkoutSubmissions,
   isQualifierWorkoutLocked,
+  QUALIFIER_WORKOUT_DELETE_JUSTIFICATION_MAX_LENGTH,
   type QualifierWorkoutLock
 } from '@/lib/workoutEdit';
 import { SCORE_TIE_BREAKER_SPLIT_KEY, shouldUseTimeTieBreaker } from '@/lib/scoring';
@@ -871,6 +874,9 @@ export default function AdminPage() {
   const [wodSubmissionClosesAt, setWodSubmissionClosesAt] = useState('');
   const [editingWorkoutId, setEditingWorkoutId] = useState('');
   const [qualifierWorkoutLocks, setQualifierWorkoutLocks] = useState<Record<string, QualifierWorkoutLock>>({});
+  // Incrementado quando o servidor recusa uma alteração de prova: recarrega as
+  // travas, que podem ter mudado depois que a aba Provas foi aberta.
+  const [qualifierLocksVersion, setQualifierLocksVersion] = useState(0);
 
   // Estados para Cronograma
   const [scheduleKind, setScheduleKind] = useState<EventScheduleItemKind>('briefing');
@@ -919,6 +925,12 @@ export default function AdminPage() {
   const [deleteEventAcknowledged, setDeleteEventAcknowledged] = useState(false);
   const [deleteEventConfirmation, setDeleteEventConfirmation] = useState('');
   const [isDeletingEvent, setIsDeletingEvent] = useState(false);
+  // Exclusão de prova de Qualifier que já recebeu submissões (confirmação forte).
+  const [workoutPendingDeletion, setWorkoutPendingDeletion] = useState<Workout | null>(null);
+  const [deleteWorkoutAcknowledged, setDeleteWorkoutAcknowledged] = useState(false);
+  const [deleteWorkoutJustification, setDeleteWorkoutJustification] = useState('');
+  const [deleteWorkoutConfirmation, setDeleteWorkoutConfirmation] = useState('');
+  const [isDeletingWorkout, setIsDeletingWorkout] = useState(false);
 
   // Estados locais para filtros de inscrições
   const [regFilterCatId, setRegFilterCatId] = useState('');
@@ -1055,7 +1067,7 @@ export default function AdminPage() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [activeEventTab, selectedQualifierEventId]);
+  }, [activeEventTab, selectedQualifierEventId, qualifierLocksVersion]);
 
   const closeDeleteEventDialog = () => {
     if (isDeletingEvent) return;
@@ -2072,6 +2084,7 @@ export default function AdminPage() {
     } catch (err) {
       console.error(err);
       setAdminNotice({ text: err instanceof Error ? err.message : 'Não foi possível salvar a prova. Tente novamente.', tone: 'error' });
+      setQualifierLocksVersion(version => version + 1);
     }
   };
 
@@ -2100,6 +2113,25 @@ export default function AdminPage() {
     }
   };
 
+  const removeWorkoutFromManagedEvent = (workoutId: string) => {
+    setSelectedEventToManage(prev => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        workouts: prev.workouts.filter(w => w.id !== workoutId)
+      };
+    });
+    setQualifierWorkoutLocks(prev => {
+      if (!Object.hasOwn(prev, workoutId)) return prev;
+      const next = { ...prev };
+      delete next[workoutId];
+      return next;
+    });
+    if (scoreFilterWodId === workoutId) setScoreFilterWodId('');
+    if (leaderboardFilterWodId === workoutId) setLeaderboardFilterWodId('overall');
+    if (editingWorkoutId === workoutId) resetWorkoutForm();
+  };
+
   const handleDeleteWorkout = async (workoutId: string, workoutName: string) => {
     if (!selectedEventToManage) return;
     const confirmed = window.confirm(`Excluir a prova "${workoutName}"? Todos os resultados lançados para ela serão removidos.`);
@@ -2107,20 +2139,67 @@ export default function AdminPage() {
 
     try {
       await deleteWorkout(selectedEventToManage.id, workoutId);
-      setSelectedEventToManage(prev => {
-        if (!prev) return null;
-        return {
-          ...prev,
-          workouts: prev.workouts.filter(w => w.id !== workoutId)
-        };
-      });
-      if (scoreFilterWodId === workoutId) setScoreFilterWodId('');
-      if (leaderboardFilterWodId === workoutId) setLeaderboardFilterWodId('overall');
-      if (editingWorkoutId === workoutId) resetWorkoutForm();
+      removeWorkoutFromManagedEvent(workoutId);
       setAdminNotice({ text: `Prova "${workoutName}" excluída com sucesso.`, tone: 'success' });
     } catch (err) {
       console.error(err);
       setAdminNotice({ text: err instanceof Error ? err.message : 'Não foi possível excluir a prova.', tone: 'error' });
+      setQualifierLocksVersion(version => version + 1);
+    }
+  };
+
+  // Prova de Qualifier com submissões: confirmação forte em modal, porque a
+  // exclusão apaga os resultados e obriga os atletas a enviarem de novo.
+  const requestDeleteWorkout = (workout: Workout) => {
+    if (hasQualifierWorkoutSubmissions(qualifierWorkoutLocks[workout.id])) {
+      setWorkoutPendingDeletion(workout);
+      setDeleteWorkoutAcknowledged(false);
+      setDeleteWorkoutJustification('');
+      setDeleteWorkoutConfirmation('');
+      return;
+    }
+    void handleDeleteWorkout(workout.id, workout.name);
+  };
+
+  const closeDeleteWorkoutDialog = () => {
+    if (isDeletingWorkout) return;
+    setWorkoutPendingDeletion(null);
+    setDeleteWorkoutAcknowledged(false);
+    setDeleteWorkoutJustification('');
+    setDeleteWorkoutConfirmation('');
+  };
+
+  const handleDeleteQualifierWorkout = async () => {
+    if (!selectedEventToManage || !workoutPendingDeletion) return;
+    const workout = workoutPendingDeletion;
+
+    setIsDeletingWorkout(true);
+    setAdminNotice(null);
+
+    try {
+      const result = await deleteWorkout(selectedEventToManage.id, workout.id, {
+        confirmation: deleteWorkoutConfirmation.trim(),
+        justification: deleteWorkoutJustification.trim()
+      });
+      removeWorkoutFromManagedEvent(workout.id);
+      const affected = result?.athletesAffected ?? 0;
+      const notified = result?.athletesNotified ?? 0;
+      const notice = affected === 0
+        ? `Prova "${workout.name}" excluída com sucesso.`
+        : notified === affected
+          ? `Prova "${workout.name}" excluída. ${affected} ${affected === 1 ? 'atleta foi avisado' : 'atletas foram avisados'} por e-mail.`
+          : `Prova "${workout.name}" excluída. ${notified} de ${affected} atletas foram avisados por e-mail; avise os demais manualmente.`;
+      setAdminNotice({ text: notice, tone: 'success' });
+      setWorkoutPendingDeletion(null);
+      setDeleteWorkoutAcknowledged(false);
+      setDeleteWorkoutJustification('');
+      setDeleteWorkoutConfirmation('');
+    } catch (err) {
+      console.error('Erro ao excluir prova:', err);
+      setAdminNotice({ text: err instanceof Error ? err.message : 'Não foi possível excluir a prova.', tone: 'error' });
+      setQualifierLocksVersion(version => version + 1);
+    } finally {
+      setIsDeletingWorkout(false);
     }
   };
 
@@ -6941,7 +7020,8 @@ export default function AdminPage() {
     const workouts = selectedEventToManage?.workouts || [];
     const divisions = selectedEventToManage?.divisions || [];
 
-    // Provas de Qualifier que já receberam submissões têm campos travados (ver workoutEdit.ts).
+    // Provas de Qualifier com resultado em jogo têm campos travados (ver workoutEdit.ts).
+    // Submissões aguardando reenvio não travam a prova.
     const editingWorkout = editingWorkoutId ? workouts.find(workout => workout.id === editingWorkoutId) : undefined;
     const editingLock = editingWorkout ? qualifierWorkoutLocks[editingWorkout.id] : undefined;
     const editingLocked = Boolean(editingWorkout) && isQualifierWorkoutLocked(editingLock);
@@ -6966,8 +7046,8 @@ export default function AdminPage() {
           <div className="space-y-4">
             {editingLocked && (
               <div role="note" className="rounded-md border border-primary/30 bg-primary/5 p-3 text-[11px] leading-relaxed text-muted-soft">
-                Esta prova já recebeu {editingLock?.submissionCount} {editingLock?.submissionCount === 1 ? 'submissão' : 'submissões'}.
-                A categoria e a abertura do envio estão bloqueadas e o prazo final só pode ser estendido.
+                Esta prova tem {editingLock?.activeCount} {editingLock?.activeCount === 1 ? 'resultado ativo' : 'resultados ativos'} (em análise ou já revisados).
+                A categoria e a abertura do envio estão bloqueadas e o prazo final só pode ser estendido. Resultados excluídos para reenvio não contam.
                 {scoreTypeLocked
                   ? ' O tipo de score também está bloqueado: para corrigi-lo, solicite o reenvio dos resultados já revisados (e, se o tipo atual for Tempo, ele não pode ser trocado).'
                   : ' O tipo de score só pode ser trocado entre os tipos numéricos (AMRAP, Repetições, Peso, Distância e Pontos).'}
@@ -7104,6 +7184,11 @@ export default function AdminPage() {
                     className="w-full rounded-md border border-card-border bg-dark-gray px-3 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"
                   />
                   <p className="mt-1 text-[10px] text-muted">Datas e horários configurados no fuso de Fortaleza.</p>
+                  {editingLocked && (
+                    <p className="mt-1 text-[10px] text-primary">
+                      Com resultados ativos, o prazo final só pode ser estendido (mínimo: o prazo atual).
+                    </p>
+                  )}
                 </div>
               </fieldset>
             )}
@@ -7200,10 +7285,8 @@ export default function AdminPage() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleDeleteWorkout(wod.id, wod.name)}
-                          disabled={isQualifierWorkoutLocked(qualifierWorkoutLocks[wod.id])}
-                          title={isQualifierWorkoutLocked(qualifierWorkoutLocks[wod.id]) ? 'Provas que já receberam submissões não podem ser excluídas.' : undefined}
-                          className="inline-flex min-h-8 items-center gap-1.5 rounded-md border border-card-border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-red-500 transition-colors hover:border-red-500 hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-card-border disabled:hover:text-red-500"
+                          onClick={() => requestDeleteWorkout(wod)}
+                          className="inline-flex min-h-8 items-center gap-1.5 rounded-md border border-card-border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-red-500 transition-colors hover:border-red-500 hover:text-red-400"
                           aria-label={`Excluir prova ${wod.name}`}
                         >
                           <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
@@ -10123,6 +10206,134 @@ export default function AdminPage() {
           </div>
         </div>
       )}
+
+      {workoutPendingDeletion && (() => {
+        const submissionCount = qualifierWorkoutLocks[workoutPendingDeletion.id]?.submissionCount ?? 0;
+        const confirmationText = getWorkoutDeleteConfirmationText(workoutPendingDeletion);
+        const confirmationLabel = (workoutPendingDeletion.code || '').trim() ? 'o código' : 'o nome';
+        const justification = deleteWorkoutJustification.trim();
+        const canDeleteWorkout = !isDeletingWorkout
+          && deleteWorkoutAcknowledged
+          && justification.length > 0
+          && justification.length <= QUALIFIER_WORKOUT_DELETE_JUSTIFICATION_MAX_LENGTH
+          && deleteWorkoutConfirmation.trim() === confirmationText;
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/80 p-4 backdrop-blur-sm sm:items-center" role="dialog" aria-modal="true" aria-labelledby="delete-workout-title">
+            <div className="my-8 w-full max-w-lg rounded-xl border border-trading-down/40 bg-card p-6 text-white">
+              <div className="flex items-start justify-between gap-4 border-b border-card-border pb-4">
+                <div className="flex items-start gap-3">
+                  <div className="rounded-lg border border-trading-down/40 bg-trading-down/10 p-2 text-trading-down">
+                    <ShieldAlert className="h-5 w-5" aria-hidden="true" />
+                  </div>
+                  <div>
+                    <h3 id="delete-workout-title" className="text-base font-bold uppercase tracking-wider text-white font-sans">
+                      Excluir prova
+                    </h3>
+                    <p className="mt-1 text-xs text-muted">
+                      Esta ação remove a prova, os resultados e todo o histórico de revisão dela de forma permanente.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeDeleteWorkoutDialog}
+                  disabled={isDeletingWorkout}
+                  className="text-muted transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  aria-label="Fechar confirmação de exclusão da prova"
+                >
+                  <X className="h-5 w-5" aria-hidden="true" />
+                </button>
+              </div>
+
+              <div className="space-y-4 py-5">
+                <div className="rounded-lg border border-card-border bg-background p-4">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-muted font-sans">Prova selecionada</p>
+                  <p className="mt-1 break-words text-sm font-bold uppercase tracking-wider text-white">
+                    {workoutPendingDeletion.code && workoutPendingDeletion.code !== workoutPendingDeletion.name
+                      ? `${workoutPendingDeletion.code} · ${workoutPendingDeletion.name}`
+                      : workoutPendingDeletion.name}
+                  </p>
+                  <p className="mt-1 text-xs text-muted">
+                    {submissionCount} {submissionCount === 1 ? 'atleta tem resultado enviado ou lançado' : 'atletas têm resultado enviado ou lançado'} nesta prova.
+                  </p>
+                </div>
+
+                <div role="alert" className="rounded-lg border border-trading-down/40 bg-trading-down/10 p-4 text-xs leading-relaxed text-white">
+                  <p className="font-bold uppercase tracking-wider text-trading-down font-sans">Tem certeza?</p>
+                  <p className="mt-1">
+                    Todos os resultados desta prova serão perdidos. {submissionCount === 1 ? 'O atleta afetado será avisado' : 'Os atletas afetados serão avisados'} por e-mail e {submissionCount === 1 ? 'terá' : 'terão'} que enviar novamente {submissionCount === 1 ? 'o resultado' : 'os resultados'} quando a prova for publicada outra vez.
+                  </p>
+                </div>
+
+                <label className="flex items-start gap-3 rounded-lg border border-card-border bg-dark-gray/40 p-3 text-xs text-muted">
+                  <input
+                    type="checkbox"
+                    checked={deleteWorkoutAcknowledged}
+                    onChange={(e) => setDeleteWorkoutAcknowledged(e.target.checked)}
+                    disabled={isDeletingWorkout}
+                    className="mt-0.5 h-4 w-4 accent-primary"
+                  />
+                  <span>
+                    Confirmo que entendo que submissões, resultados, links de vídeo, versões, revisões e contestações desta prova serão removidos permanentemente e que os atletas terão que enviar novamente.
+                  </span>
+                </label>
+
+                <div>
+                  <label htmlFor="delete-workout-justification" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans">
+                    Justificativa (enviada aos atletas no e-mail)
+                  </label>
+                  <textarea
+                    id="delete-workout-justification"
+                    rows={3}
+                    maxLength={QUALIFIER_WORKOUT_DELETE_JUSTIFICATION_MAX_LENGTH}
+                    value={deleteWorkoutJustification}
+                    onChange={(e) => setDeleteWorkoutJustification(e.target.value)}
+                    disabled={isDeletingWorkout}
+                    className="w-full rounded-md border border-card-border bg-background px-4 py-2.5 text-sm text-white placeholder:text-muted-soft focus:border-trading-down/70 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                    placeholder="Ex.: prova cadastrada com o tipo de score errado; será publicada novamente."
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="delete-workout-confirmation" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans">
+                    Digite {confirmationLabel} da prova para confirmar
+                  </label>
+                  <input
+                    id="delete-workout-confirmation"
+                    type="text"
+                    value={deleteWorkoutConfirmation}
+                    onChange={(e) => setDeleteWorkoutConfirmation(e.target.value)}
+                    disabled={isDeletingWorkout}
+                    className="w-full rounded-md border border-card-border bg-background px-4 py-2.5 text-sm text-white placeholder:text-muted-soft focus:border-trading-down/70 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                    placeholder={confirmationText}
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col-reverse gap-3 border-t border-card-border pt-4 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={closeDeleteWorkoutDialog}
+                  disabled={isDeletingWorkout}
+                  className="inline-flex min-h-10 items-center justify-center rounded-md border border-card-border bg-dark-gray px-4 py-2 text-xs font-bold uppercase tracking-wider text-muted transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50 font-sans"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteQualifierWorkout}
+                  disabled={!canDeleteWorkout}
+                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-trading-down bg-trading-down px-4 py-2 text-xs font-bold uppercase tracking-wider text-white transition-colors hover:bg-trading-down/80 disabled:cursor-not-allowed disabled:border-card-border disabled:bg-dark-gray disabled:text-muted font-sans"
+                >
+                  <Trash2 className="h-4 w-4" aria-hidden="true" />
+                  {isDeletingWorkout ? 'Excluindo...' : 'Excluir prova definitivamente'}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {editingRegistration && (
         <div

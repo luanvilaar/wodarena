@@ -25,16 +25,30 @@ const current = {
   submissionOpensAt: '2026-09-22T11:00:00+00:00',
   submissionClosesAt: '2026-09-26T02:59:00+00:00'
 };
-const withSubmissions = { submissionCount: 2, reviewedCount: 0 };
-const withReviewed = { submissionCount: 2, reviewedCount: 1 };
+const withSubmissions = { submissionCount: 2, activeCount: 2, reviewedCount: 0 };
+const withReviewed = { submissionCount: 2, activeCount: 2, reviewedCount: 1 };
 const fields = (violations) => violations.map((violation) => violation.field);
 
 test('without submissions nothing is locked', () => {
-  assert.equal(isQualifierWorkoutLocked({ submissionCount: 0, reviewedCount: 0 }), false);
+  assert.equal(isQualifierWorkoutLocked({ submissionCount: 0, activeCount: 0, reviewedCount: 0 }), false);
   assert.equal(isQualifierWorkoutLocked(undefined), false);
   assert.deepEqual(getQualifierWorkoutLockViolations(current, {
     type: 'fortime', divisionId: 'div-1', submissionOpensAt: undefined, submissionClosesAt: '2026-01-01T00:00:00Z'
-  }, { submissionCount: 0, reviewedCount: 0 }), []);
+  }, { submissionCount: 0, activeCount: 0, reviewedCount: 0 }), []);
+});
+
+test('submissions awaiting resubmission do not lock the workout (Story 1.37)', () => {
+  // EVENTO TEST 1: um lançamento manual excluído para reenvio, nenhum resultado em jogo.
+  const onlyAwaiting = { submissionCount: 1, activeCount: 0, reviewedCount: 0 };
+  assert.equal(isQualifierWorkoutLocked(onlyAwaiting), false);
+  const fortime = { ...current, type: 'fortime' };
+  assert.deepEqual(getQualifierWorkoutLockViolations(fortime, {
+    type: 'maxweight',
+    divisionId: 'div-1',
+    submissionOpensAt: '2026-09-23T11:00:00Z',
+    submissionClosesAt: '2026-09-25T02:59:00Z'
+  }, onlyAwaiting), []);
+  assert.equal(canChangeQualifierWorkoutType('fortime', 'amrap', onlyAwaiting).allowed, true);
 });
 
 test('type can be corrected between numeric score types while nothing is reviewed', () => {

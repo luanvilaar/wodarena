@@ -12,6 +12,7 @@ import { FIRST_WORKOUT_TIEBREAK_CUTOFF, getTiebreakFirstWorkout, sortWorkouts } 
 import { hasEventDatePassed } from '@/lib/eventStatus';
 import { getManagerAccessStatus, normalizeServiceValidUntil } from '@/lib/managerAccess';
 import { rankWorkoutScores } from '@/lib/scoring';
+import type { QualifierWorkoutDeleteConfirmation, QualifierWorkoutDeleteResult } from '@/lib/workoutEdit';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type LeaderboardEntry = Record<string, any>;
@@ -99,7 +100,11 @@ interface AppContextType {
   addWorkout: (eventId: string, workout: Omit<Workout, 'id'>) => Promise<Workout>;
   deleteEvent: (eventId: string, confirmation: string) => Promise<void>;
   deleteDivision: (eventId: string, divisionId: string) => Promise<void>;
-  deleteWorkout: (eventId: string, workoutId: string) => Promise<void>;
+  deleteWorkout: (
+    eventId: string,
+    workoutId: string,
+    qualifierConfirmation?: QualifierWorkoutDeleteConfirmation
+  ) => Promise<QualifierWorkoutDeleteResult | null>;
   registerTicket: (registration: RegistrationDraft, athleteProfile?: AthleteProfileDraft) => Registration;
   createManualRegistration: (registration: RegistrationDraft, athleteProfile?: AthleteProfileDraft) => Promise<Registration>;
   updateRegistrationDetails: (registrationId: string, eventId: string, data: RegistrationEditInput) => Promise<void>;
@@ -1403,8 +1408,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Excluir Prova/WOD e limpar resultados vinculados no estado local
-  const deleteWorkout = async (eventId: string, workoutId: string) => {
+  // Excluir Prova/WOD e limpar resultados vinculados no estado local.
+  // Prova de Qualifier com submissões exige a confirmação forte (código da prova +
+  // justificativa); a API devolve quantos atletas foram afetados e avisados.
+  const deleteWorkout = async (
+    eventId: string,
+    workoutId: string,
+    qualifierConfirmation?: QualifierWorkoutDeleteConfirmation
+  ): Promise<QualifierWorkoutDeleteResult | null> => {
     const event = events.find(e => e.id === eventId);
     if (!event || event.organizerId !== currentUser?.id || !event.workouts.some(w => w.id === workoutId)) {
       throw new Error('Prova não encontrada para este gestor.');
@@ -1428,13 +1439,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setScores(prev => prev.filter(s => s.workoutId !== workoutId));
 
     try {
-      await adminPersist('deleteWorkout', { eventId, workoutId });
+      const data = await adminPersist('deleteWorkout', { eventId, workoutId, ...qualifierConfirmation });
       // Baterias publicadas para esta prova ficariam orfas (workoutId inexistente) e
       // continuariam aparecendo publicamente para sempre, ja que event_schedule nao tem
       // FK com workouts — precisam ser removidas do cronograma junto com a prova.
       if (scheduleChanged) {
         await adminPersist('updateEvent', { eventId, data: { event_schedule: cleanedSchedule } });
       }
+      if (typeof data.submissionsRemoved !== 'number') return null;
+      return {
+        submissionsRemoved: data.submissionsRemoved,
+        athletesAffected: Number(data.athletesAffected) || 0,
+        athletesNotified: Number(data.athletesNotified) || 0
+      };
     } catch (error) {
       setEvents(previousEvents);
       setScores(previousScores);

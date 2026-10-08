@@ -3,16 +3,34 @@ import type { Workout, WorkoutType } from '@/types';
 /**
  * Regras de edição de provas de eventos Qualifier depois que já existem
  * submissões. A autoridade final é o trigger `qualifier_protect_workout_after_submission`
- * (migration 20261006120000); este módulo existe para devolver mensagens claras
- * na API e para desabilitar os campos travados no formulário do gestor.
+ * (migrations 20261006120000 e 20261008120000); este módulo existe para devolver
+ * mensagens claras na API e para desabilitar os campos travados no formulário do gestor.
  */
 
 export type QualifierWorkoutLock = {
+  // Todas as submissões da prova, inclusive as que aguardam reenvio: é o que a
+  // exclusão da prova apaga (uma por atleta, UNIQUE registration_id + workout_id).
   submissionCount: number;
-  // Submissões com resultado ativo (validated/penalized/rejected). Revisões já
+  // Submissões com resultado em jogo (qualquer status exceto 'awaiting_resubmission').
+  // Só elas travam a prova: quem aguarda reenvio envia de novo com a prova corrigida.
+  activeCount: number;
+  // Submissões com resultado revisado (validated/penalized/rejected). Revisões já
   // desfeitas por pedido de reenvio não contam: não geram score.
   reviewedCount: number;
 };
+
+export type QualifierWorkoutDeleteConfirmation = {
+  confirmation: string;
+  justification: string;
+};
+
+export type QualifierWorkoutDeleteResult = {
+  submissionsRemoved: number;
+  athletesAffected: number;
+  athletesNotified: number;
+};
+
+export const QUALIFIER_WORKOUT_DELETE_JUSTIFICATION_MAX_LENGTH = 2000;
 
 // Tipos numéricos em que o maior valor vence e o score é lido da mesma forma.
 // 'fortime' fica de fora: converter de/para tempo muda a leitura do resultado.
@@ -30,7 +48,14 @@ const toTime = (value?: string | null) => {
   return Number.isNaN(time) ? null : time;
 };
 
-export const isQualifierWorkoutLocked = (lock?: QualifierWorkoutLock | null) => Boolean(lock && lock.submissionCount > 0);
+export const isQualifierWorkoutLocked = (lock?: QualifierWorkoutLock | null) => Boolean(lock && lock.activeCount > 0);
+
+export const hasQualifierWorkoutSubmissions = (lock?: QualifierWorkoutLock | null) => Boolean(lock && lock.submissionCount > 0);
+
+// Texto que o gestor digita para confirmar a exclusão: o código da prova ou,
+// se ele estiver vazio (default legado ''), o nome. Mesma regra de qualifier_delete_workout.
+export const getWorkoutDeleteConfirmationText = (workout: Pick<Workout, 'code' | 'name'>) =>
+  (workout.code || '').trim() || workout.name.trim();
 
 export const canChangeQualifierWorkoutType = (
   from: WorkoutType,

@@ -3,7 +3,14 @@ import { ManagerAccessError, assertManagerOperationalAccess, managerAccessErrorR
 import { applyCouponUsageForApprovedRegistration, createManagerRegistration, RegistrationAccessError } from '@/lib/serverCheckout';
 import { checkRateLimit, createSupabaseAdmin, hashPassword, requireSession, safeErrorMessage, SessionUser } from '@/lib/serverSecurity';
 import { getEventStatus } from '@/lib/eventStatus';
-import { getQualifierWorkoutLockViolations, type QualifierWorkoutLock } from '@/lib/workoutEdit';
+import { sendQualifierWorkoutDeletedEmails } from '@/lib/resend';
+import {
+  getQualifierWorkoutLockViolations,
+  hasQualifierWorkoutSubmissions,
+  QUALIFIER_WORKOUT_DELETE_JUSTIFICATION_MAX_LENGTH,
+  type QualifierWorkoutDeleteResult,
+  type QualifierWorkoutLock
+} from '@/lib/workoutEdit';
 import type { WorkoutType } from '@/types';
 
 type DbClient = ReturnType<typeof createSupabaseAdmin>;
@@ -191,7 +198,7 @@ const qualifierWorkoutLockErrorResponse = (error: unknown) => {
 // Contagens exatas por prova (head+count não sofre o limite de 1000 linhas).
 const loadQualifierWorkoutLocks = async (supabaseAdmin: DbClient, workoutIds: string[]) => {
   const entries = await Promise.all(workoutIds.map(async (workoutId): Promise<[string, QualifierWorkoutLock]> => {
-    const [submissions, reviewed] = await Promise.all([
+    const [submissions, active, reviewed] = await Promise.all([
       supabaseAdmin
         .from('score_submissions')
         .select('id', { count: 'exact', head: true })
@@ -200,13 +207,148 @@ const loadQualifierWorkoutLocks = async (supabaseAdmin: DbClient, workoutIds: st
         .from('score_submissions')
         .select('id', { count: 'exact', head: true })
         .eq('workout_id', workoutId)
+        .neq('status', 'awaiting_resubmission'),
+      supabaseAdmin
+        .from('score_submissions')
+        .select('id', { count: 'exact', head: true })
+        .eq('workout_id', workoutId)
         .in('status', ['validated', 'penalized', 'rejected'])
     ]);
     if (submissions.error) throw submissions.error;
+    if (active.error) throw active.error;
     if (reviewed.error) throw reviewed.error;
-    return [workoutId, { submissionCount: submissions.count ?? 0, reviewedCount: reviewed.count ?? 0 }];
+    return [workoutId, {
+      submissionCount: submissions.count ?? 0,
+      activeCount: active.count ?? 0,
+      reviewedCount: reviewed.count ?? 0
+    }];
   }));
   return Object.fromEntries(entries) as Record<string, QualifierWorkoutLock>;
+};
+
+const QUALIFIER_WORKOUT_DELETE_ERRORS: Record<string, { error: string; status: number }> = {
+  qualifier_workout_delete_not_allowed: { error: 'Apenas o gestor organizador do evento pode excluir uma prova que já recebeu submissões.', status: 403 },
+  qualifier_workout_delete_confirmation_invalid: { error: 'Digite o código exato da prova para confirmar a exclusão.', status: 400 },
+  qualifier_workout_delete_justification_required: { error: 'Informe a justificativa da exclusão (até 2.000 caracteres).', status: 400 },
+  qualifier_manager_access_expired: { error: 'O acesso deste gestor está expirado. Renove o acesso antes de excluir a prova.', status: 403 },
+  qualifier_workout_not_found: { error: 'Prova não encontrada.', status: 404 },
+  qualifier_event_not_found: { error: 'Evento não encontrado.', status: 404 },
+  qualifier_event_required: { error: 'Esta operação é exclusiva de eventos Functional Fitness Qualifier.', status: 400 }
+};
+
+const qualifierWorkoutDeleteErrorResponse = (error: unknown) => {
+  const details = error && typeof error === 'object' ? error as { code?: unknown; message?: unknown } : null;
+  const code = typeof details?.code === 'string' ? details.code : '';
+  const message = typeof details?.message === 'string' ? details.message : '';
+
+  if (Object.hasOwn(QUALIFIER_WORKOUT_DELETE_ERRORS, message)) {
+    const { error: text, status } = QUALIFIER_WORKOUT_DELETE_ERRORS[message];
+    return NextResponse.json({ error: text, code: message }, { status });
+  }
+  if (code === 'PGRST202') {
+    return NextResponse.json({
+      error: 'A exclusão de prova com submissões ainda não está disponível neste ambiente. Aplique as migrations pendentes antes de tentar novamente.'
+    }, { status: 503 });
+  }
+  return null;
+};
+
+type QualifierWorkoutDeleteRpcResult = {
+  workoutName?: string;
+  submissionsRemoved?: number;
+  registrationIds?: string[];
+};
+
+// Best-effort: a exclusão já foi confirmada pelo banco. Falha no e-mail só é
+// registrada em log e nunca desfaz nem falha a requisição.
+const notifyAthletesOfDeletedWorkout = async (
+  supabaseAdmin: DbClient,
+  registrationIds: string[],
+  details: { eventName: string; workoutName: string; justification: string }
+) => {
+  if (registrationIds.length === 0) return 0;
+  try {
+    const { data: registrations, error } = await supabaseAdmin
+      .from('registrations')
+      .select('athlete_email, athlete_name')
+      .in('id', registrationIds);
+    if (error) throw error;
+
+    const recipients = (registrations || [])
+      .filter(registration => typeof registration.athlete_email === 'string' && registration.athlete_email.trim())
+      .map(registration => ({
+        to: String(registration.athlete_email).trim(),
+        athleteName: String(registration.athlete_name || 'Atleta')
+      }));
+    if (recipients.length < registrationIds.length) {
+      console.error('[Admin Persistence API] Inscrições sem e-mail do atleta; aviso de prova excluída não enviado para', registrationIds.length - recipients.length);
+    }
+
+    const result = await sendQualifierWorkoutDeletedEmails({ recipients, ...details });
+    return result.sent;
+  } catch (error) {
+    console.error('[Admin Persistence API] Erro ao avisar atletas sobre a prova excluída:', error);
+    return 0;
+  }
+};
+
+// Prova de Qualifier com submissões: só o gestor organizador exclui, digitando o
+// código da prova e informando a justificativa (que vai no e-mail aos atletas).
+// qualifier_delete_workout apaga resultados e histórico da prova na mesma
+// transação e registra a auditoria em qualifier_workout_deletions.
+const deleteQualifierWorkoutWithSubmissions = async (
+  supabaseAdmin: DbClient,
+  actor: SessionUser,
+  event: { id: string; name: string; organizer_id: string },
+  workoutId: string,
+  payload: Record<string, unknown>
+) => {
+  if (actor.role !== 'manager' || event.organizer_id !== actor.id) {
+    return NextResponse.json({ error: QUALIFIER_WORKOUT_DELETE_ERRORS.qualifier_workout_delete_not_allowed.error }, { status: 403 });
+  }
+  const confirmation = asTrimmed(payload.confirmation);
+  const justification = asTrimmed(payload.justification);
+  // O painel usou a confirmação simples com o estado de travas desatualizado
+  // (a submissão chegou depois que a aba Provas foi carregada).
+  if (!confirmation && !justification) {
+    return NextResponse.json({
+      error: 'Esta prova já recebeu submissões e exige a confirmação reforçada. Clique em Excluir novamente.',
+      code: 'qualifier_workout_delete_confirmation_required'
+    }, { status: 409 });
+  }
+  if (!confirmation) {
+    return NextResponse.json({ error: QUALIFIER_WORKOUT_DELETE_ERRORS.qualifier_workout_delete_confirmation_invalid.error }, { status: 400 });
+  }
+  if (!justification || justification.length > QUALIFIER_WORKOUT_DELETE_JUSTIFICATION_MAX_LENGTH) {
+    return NextResponse.json({ error: QUALIFIER_WORKOUT_DELETE_ERRORS.qualifier_workout_delete_justification_required.error }, { status: 400 });
+  }
+
+  const { data, error } = await supabaseAdmin.rpc('qualifier_delete_workout', {
+    p_actor_id: actor.id,
+    p_event_id: event.id,
+    p_workout_id: workoutId,
+    p_confirmation: confirmation,
+    p_justification: justification
+  });
+  if (error) {
+    const response = qualifierWorkoutDeleteErrorResponse(error);
+    if (response) return response;
+    throw error;
+  }
+
+  const result = (data || {}) as QualifierWorkoutDeleteRpcResult;
+  const registrationIds = Array.isArray(result.registrationIds) ? result.registrationIds.map(String) : [];
+  const athletesNotified = await notifyAthletesOfDeletedWorkout(supabaseAdmin, registrationIds, {
+    eventName: String(event.name || 'Evento WODArena'),
+    workoutName: result.workoutName || 'Prova',
+    justification
+  });
+  const deleteResult: QualifierWorkoutDeleteResult = {
+    submissionsRemoved: Number(result.submissionsRemoved) || 0,
+    athletesAffected: registrationIds.length,
+    athletesNotified
+  };
+  return NextResponse.json({ success: true, ...deleteResult });
 };
 
 const parseRefundAmount = (value: unknown, required = false) => {
@@ -591,7 +733,14 @@ export async function POST(request: Request) {
       }
 
       case 'deleteWorkout': {
-        await ensureWorkoutOwner(supabaseAdmin, actor, payload.workoutId, payload.eventId);
+        const workout = await ensureWorkoutOwner(supabaseAdmin, actor, payload.workoutId, payload.eventId);
+        const event = await ensureEventOwner(supabaseAdmin, actor, workout.event_id);
+        if (isQualifierEvent(event.event_type)) {
+          const locks = await loadQualifierWorkoutLocks(supabaseAdmin, [payload.workoutId]);
+          if (hasQualifierWorkoutSubmissions(locks[payload.workoutId])) {
+            return deleteQualifierWorkoutWithSubmissions(supabaseAdmin, actor, event, payload.workoutId, payload);
+          }
+        }
         const { error } = await supabaseAdmin.from('workouts').delete().eq('id', payload.workoutId);
         if (error) {
           const lockResponse = qualifierWorkoutLockErrorResponse(error);

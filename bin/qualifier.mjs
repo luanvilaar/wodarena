@@ -90,7 +90,29 @@ const printHelp = () => {
     (somente o manager dono do evento; lanca o resultado de quem esta sem envio ou aguardando reenvio, sem video,
      marcado como "Lancado pela organizacao". Funciona mesmo com o prazo de envio encerrado.)
   npm run qualifier:cli -- review history --submission SUBMISSION_ID
+  npm run qualifier:cli -- workout delete --actor MANAGER_ID --event EVENT_ID --workout WORKOUT_ID --confirm "CODIGO DA PROVA" --justification "..."
+    (somente o manager dono do evento; apaga a prova com todas as submissoes, resultados e historico dela.
+     --confirm e o codigo da prova (ou o nome, se o codigo estiver vazio). O CLI nao envia e-mail aos atletas:
+     use a exclusao pelo painel para o aviso automatico.)
   npm run qualifier:cli -- ranking --event EVENT_ID [--division DIVISION_ID]`);
+};
+
+const workout = async (supabase, command, args) => {
+  if (command !== 'delete') throw new Error(`Comando workout desconhecido: ${command}`);
+  requireArgs(args, ['actor', 'event', 'workout', 'confirm', 'justification']);
+  const { data, error } = await supabase.rpc('qualifier_delete_workout', {
+    p_actor_id: args.actor,
+    p_event_id: args.event,
+    p_workout_id: args.workout,
+    p_confirmation: String(args.confirm).trim(),
+    p_justification: String(args.justification).trim()
+  });
+  if (error) throw error;
+  console.log(JSON.stringify({
+    success: true,
+    result: data,
+    aviso: 'Os atletas destas inscricoes (registrationIds) nao foram avisados por e-mail pelo CLI.'
+  }, null, 2));
 };
 
 const judge = async (supabase, command, args) => {
@@ -288,6 +310,7 @@ const main = async () => {
   if (area === 'submission') return submission(supabase, command, args);
   if (area === 'queue') return queue(supabase, command, args);
   if (area === 'review') return review(supabase, command, args);
+  if (area === 'workout') return workout(supabase, command, args);
   if (area === 'ranking') return ranking(supabase, args);
   throw new Error(`Area desconhecida: ${area}`);
 };
