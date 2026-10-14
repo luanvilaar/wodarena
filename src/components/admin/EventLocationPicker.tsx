@@ -27,6 +27,8 @@ type SearchState =
   | { status: 'results'; candidates: GeocodeCandidate[] }
   | { status: 'error'; message: string };
 
+const IDLE_SEARCH: SearchState = { status: 'idle' };
+
 type EventLocationPickerProps = {
   /** Prefixo dos ids, para o campo aparecer em mais de um formulário. */
   idPrefix: string;
@@ -120,13 +122,19 @@ export function EventLocationPicker({ idPrefix, value, onChange, location, city,
   const preview = previewKey ? parseCoordinatesInput(previewKey) : null;
   const previewCoordinates = preview && preview.ok ? preview.coordinates : null;
 
-  const [search, setSearch] = useState<SearchState>({ status: 'idle' });
+  const [searchEntry, setSearchEntry] = useState<{ signature: string; current: SearchState }>({ signature: '', current: IDLE_SEARCH });
   const searchRequestRef = useRef(0);
+  const query = buildMapSearchText({ location, city, state });
+  // O resultado vale para o endereço e o país da consulta: se qualquer um mudar, a tela volta ao
+  // estado inicial e uma resposta que chegar depois fica oculta (o setSearch de cada pedido leva a
+  // assinatura de quando ele foi feito).
+  const searchSignature = JSON.stringify([query, country ?? '']);
+  const search: SearchState = searchEntry.signature === searchSignature ? searchEntry.current : IDLE_SEARCH;
+  const setSearch = (next: SearchState) => setSearchEntry({ signature: searchSignature, current: next });
   const hasLocation = Boolean(location.trim());
   const isSearching = search.status === 'loading';
 
   const handleSearch = async () => {
-    const query = buildMapSearchText({ location, city, state });
     if (!query || isSearching) return;
     const requestId = searchRequestRef.current + 1;
     searchRequestRef.current = requestId;

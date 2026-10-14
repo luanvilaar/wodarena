@@ -308,6 +308,19 @@ test('picker: a busca chama só a rota interna, envia o país e trata 503, 429, 
   assert.doesNotMatch(picker, /https?:\/\//, 'o painel não chama host externo');
 });
 
+test('picker: o resultado da busca só aparece enquanto endereço e país são os da consulta', () => {
+  // Estado derivado (sem setState em efeito, que o lint do React 19 recusa): cada resultado carrega a
+  // assinatura do endereço+país de quando o pedido foi feito e só é exibido se ela ainda for a atual.
+  assert.match(picker, /const searchSignature = JSON\.stringify\(\[query, country \?\? ''\]\);/);
+  assert.match(picker, /const search: SearchState = searchEntry\.signature === searchSignature \? searchEntry\.current : IDLE_SEARCH;/);
+  assert.match(picker, /const setSearch = \(next: SearchState\) => setSearchEntry\(\{ signature: searchSignature, current: next \}\);/);
+  assert.match(picker, /const isSearching = search\.status === 'loading';/);
+  assert.doesNotMatch(block(picker, /export function EventLocationPicker[\s\S]*/), /useEffect\([^)]*\{[^}]*setSearch/, 'sem setSearch dentro de efeito');
+  // A query vem do render (o handleSearch lê a mesma) e a resposta só vale para o pedido mais recente.
+  assert.equal((picker.match(/const query = buildMapSearchText\(/g) || []).length, 1);
+  assert.equal((picker.match(/if \(requestId !== searchRequestRef\.current\) return;/g) || []).length, 2);
+});
+
 test('CSP: connect-src ganha só o Mapbox, frame-src volta ao que era e o Waze sai; nenhuma outra diretiva muda', () => {
   const directive = (name) => nextConfig.match(new RegExp(`[\`"]${name} ([^\`"]*)[\`"]`))?.[1] || '';
   assert.deepEqual(directive('frame-src').split(/\s+/), [
