@@ -21,7 +21,7 @@
     "@supabase/supabase-js": "^2.107.0",
     "lucide-react": "^1.17.0",
     "mapbox-gl": "^3.33.0",
-    "next": "16.3.1",
+    "next": "16.4.1",
     "next-intl": "^4.14.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",
@@ -33,7 +33,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.3.1",
+    "eslint-config-next": "16.4.1",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
