@@ -34,9 +34,9 @@ test('registration checkout collects athlete panel password before payment', () 
 
 test('registration start endpoint creates athlete user, secret, athlete and pending registration', () => {
   assert.match(startRoute, /role: 'athlete'/);
-  assert.match(startRoute, /from\('users_secrets'\)[\s\S]*upsert/);
+  assert.match(startRoute, /from\('users_secrets'\)\s*\.insert/);
   assert.match(startRoute, /from\('athletes'\)[\s\S]*insert/);
-  assert.match(startRoute, /from\('registrations'\)[\s\S]*upsert/);
+  assert.match(startRoute, /from\('registrations'\)\s*\.insert\(registrationPayload\)/);
   assert.match(startRoute, /payment_status: paymentStatus/);
 });
 

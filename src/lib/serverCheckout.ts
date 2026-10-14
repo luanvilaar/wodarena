@@ -4,6 +4,8 @@ import { assertManagerSalesAccessForEvent } from '@/lib/serverManagerAccess';
 import { getRequestSession, hashPassword, verifyRegistrationAccessToken } from '@/lib/serverSecurity';
 import { sendRegistrationEmail } from '@/lib/resend';
 import { getRegistrationAvailability } from '@/lib/eventStatus';
+import { calculateRegistrationAmounts, getDivisionParticipantCount, normalizeShirtMode, resolveParticipantShirts } from '@/lib/shirtPricing';
+import { createAthleteId, createRegistrationId } from '@/lib/registrationIds';
 import { Registration, Athlete, Event, AppLocale } from '@/types';
 
 type RegistrationInput = Record<string, unknown>;
@@ -49,6 +51,14 @@ const asNumber = (value: unknown, fallback = 0) => {
 
 const normalizeCoupon = (value: unknown) => asString(value).toUpperCase();
 
+// Cópia sem os campos que só o servidor define.
+const omitFields = (source: Record<string, unknown>, fields: readonly string[]) => {
+  const copy = { ...source };
+  for (const field of fields) delete copy[field];
+  return copy;
+};
+
+
 const calculateDiscount = (ticketPrice: number, discountType: string, discountValue: unknown) => (
   discountType === 'percentage'
     ? (ticketPrice * Number(discountValue || 0)) / 100
@@ -64,6 +74,29 @@ export class RegistrationAccessError extends Error {
     this.status = status;
   }
 }
+
+// Preço ausente (nulo, indefinido ou em branco) não é zero: só um 0 explícito
+// torna a inscrição gratuita.
+const asDefinedPrice = (value: unknown): number | null => {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
+export const MISSING_TICKET_PRICE_MESSAGE = 'Esta categoria ainda não tem valor de inscrição definido. Fale com a organização do evento.';
+
+// Mesma regra no snapshot e na validação do cupom: categoria sem valor usa o
+// preço padrão do evento; sem nenhum dos dois, a inscrição é recusada.
+const resolveTicketPrice = (divisionPrice: unknown, eventTicketPrice: unknown) => {
+  const price = asDefinedPrice(divisionPrice) ?? asDefinedPrice(eventTicketPrice);
+  if (price === null) {
+    throw new RegistrationAccessError(MISSING_TICKET_PRICE_MESSAGE, 409);
+  }
+  return price;
+};
 
 type EventRegistrationAvailabilityRow = {
   id: string;
@@ -227,7 +260,7 @@ export const validateCheckoutCoupon = async (
     throw new Error('Este cupom ja atingiu o limite de utilizacao.');
   }
 
-  const ticketPrice = asNumber(division.price, asNumber(event.ticket_price, 0));
+  const ticketPrice = resolveTicketPrice(division.price, event.ticket_price);
   const discount = calculateDiscount(ticketPrice, coupon.discount_type, coupon.discount_value);
   const totalPaid = Math.max(0, ticketPrice - discount);
 
@@ -283,7 +316,7 @@ export const calculateSecureRegistrationSnapshot = async (
 
   const { data: event, error: eventError } = await supabaseAdmin
     .from('events')
-    .select('id, name, status, date, registration_deadline, ticket_price, ticket_slots, is_ticketing_active')
+    .select('id, name, status, date, registration_deadline, ticket_price, ticket_slots, is_ticketing_active, shirt_mode, shirt_addon_price')
     .eq('id', eventId)
     .maybeSingle();
 
@@ -309,6 +342,17 @@ export const calculateSecureRegistrationSnapshot = async (
   if (division.is_active === false) {
     throw new Error('Esta categoria nao esta aceitando inscricoes.');
   }
+
+  // Tamanhos validados pela categoria e pelo modo da camisa do evento; o que for
+  // gravado em athletes sai daqui, nunca direto do navegador.
+  const shirtMode = normalizeShirtMode(event.shirt_mode);
+  const shirts = resolveParticipantShirts({ mode: shirtMode, divisionType: division.type, athleteProfile });
+  if (!shirts.ok) {
+    throw new RegistrationAccessError(shirts.error, 400);
+  }
+  // Equipe ou individual sai da categoria, como os tamanhos: is_team do
+  // navegador divergiria das camisas cobradas.
+  const isTeam = getDivisionParticipantCount(division.type) > 1;
 
   // Capacidade: cada inscrição não cancelada ocupa 1 vaga, na categoria e no
   // evento (mesmo critério usado no painel do gestor para exibir "X/Y vagas").
@@ -341,7 +385,7 @@ export const calculateSecureRegistrationSnapshot = async (
   }
 
   const quantity = Math.max(1, Math.min(4, Math.trunc(asNumber(registrationData.quantity, 1))));
-  const ticketPrice = asNumber(division.price, asNumber(event.ticket_price, 0));
+  const ticketPrice = resolveTicketPrice(division.price, event.ticket_price);
   const couponCode = normalizeCoupon(registrationData.couponCode);
   let discount = 0;
 
@@ -350,14 +394,25 @@ export const calculateSecureRegistrationSnapshot = async (
     discount = couponResult.discount;
   }
 
-  const subtotal = Math.max(0, ticketPrice * quantity);
-  const totalPaid = Math.max(0, subtotal - discount);
-  const transactionAmount = totalPaid > 0 && totalPaid < 1 ? 1 : totalPaid;
-  const registrationId = asString(registrationData.id, `reg-${Date.now()}`);
+  // O cupom incide só sobre a categoria; a camisa entra depois, cheia (D1).
+  const amounts = calculateRegistrationAmounts({
+    ticketPrice,
+    quantity,
+    discount,
+    shirtMode,
+    shirtAddonPrice: asNumber(event.shirt_addon_price, 0),
+    shirtAddonCount: shirts.addonCount
+  });
+  const transactionAmount = amounts.totalPaid;
+  // O servidor é a única fonte dos identificadores e da data de criação: id e
+  // createdAt da inscrição e id do atleta enviados pelo navegador não entram.
+  const clientRegistrationData = omitFields(registrationData, ['id', 'createdAt']);
+  const clientAthleteProfile = omitFields(athleteProfile, ['id']);
+  const registrationId = createRegistrationId();
 
   return {
     registrationData: {
-      ...registrationData,
+      ...clientRegistrationData,
       id: registrationId,
       eventId,
       divisionId,
@@ -365,9 +420,16 @@ export const calculateSecureRegistrationSnapshot = async (
       ticketPrice,
       quantity,
       totalPaid: transactionAmount,
+      shirtAddonCount: shirts.addonCount,
+      shirtAddonAmount: amounts.shirtAddonAmount,
       couponCode: couponCode || undefined
     },
-    athleteProfile,
+    athleteProfile: {
+      ...clientAthleteProfile,
+      isTeam,
+      shirtSize: shirts.shirtSize,
+      teamMembers: shirts.teamMembers
+    },
     transactionAmount,
     eventId,
     registrationId
@@ -413,6 +475,8 @@ export const loadRegistrationCheckoutSnapshot = async (
     serviceFeeAmount: registration.service_fee_amount !== null && registration.service_fee_amount !== undefined ? Number(registration.service_fee_amount) : undefined,
     amountCollected: registration.amount_collected !== null && registration.amount_collected !== undefined ? Number(registration.amount_collected) : undefined,
     applicationFeeCharged: registration.application_fee_charged !== null && registration.application_fee_charged !== undefined ? Number(registration.application_fee_charged) : undefined,
+    shirtAddonCount: Number(registration.shirt_addon_count) || 0,
+    shirtAddonAmount: Number(registration.shirt_addon_amount) || 0,
     createdAt: registration.created_at,
     couponCode: registration.coupon_code || undefined,
     locale: registration.locale || undefined,
@@ -491,7 +555,9 @@ export const triggerRegistrationApprovedEmail = async (
       website: dbEvent.website || '',
       eventType: dbEvent.event_type || 'functional_fitness',
       currency: dbEvent.currency || 'BRL',
-      defaultLocale: (dbEvent.default_locale as AppLocale) || 'pt-br'
+      defaultLocale: (dbEvent.default_locale as AppLocale) || 'pt-br',
+      shirtMode: normalizeShirtMode(dbEvent.shirt_mode),
+      shirtAddonPrice: Number(dbEvent.shirt_addon_price) || 0
     };
 
     const registration: Registration = {
@@ -509,6 +575,8 @@ export const triggerRegistrationApprovedEmail = async (
       ticketPrice: Number(snapshot.registrationData.ticketPrice),
       quantity: Number(snapshot.registrationData.quantity),
       totalPaid: Number(snapshot.registrationData.totalPaid),
+      shirtAddonCount: Number(snapshot.registrationData.shirtAddonCount) || 0,
+      shirtAddonAmount: Number(snapshot.registrationData.shirtAddonAmount) || 0,
       createdAt: String(snapshot.registrationData.createdAt),
       couponCode: snapshot.registrationData.couponCode ? String(snapshot.registrationData.couponCode) : undefined,
       paymentStatus: 'payment_approved',
@@ -581,7 +649,6 @@ export type ManagerRegistrationInput = {
   instagram?: string;
   photoUrl?: string;
   shirtSize?: string;
-  isTeam?: boolean;
   teamMembers?: { name: string; instagram?: string; shirtSize?: string }[];
 };
 
@@ -607,6 +674,8 @@ export const createManagerRegistration = async (
   const athletePhone = asString(input.athletePhone);
   if (!athletePhone) throw new RegistrationAccessError('Informe o telefone de contato.', 400);
 
+  // Os tamanhos entram no mesmo cálculo do checkout público: validam a camisa
+  // e definem o adicional cobrado.
   const secureSnapshot = await calculateSecureRegistrationSnapshot(
     supabaseAdmin,
     {
@@ -615,9 +684,15 @@ export const createManagerRegistration = async (
       couponCode: input.couponCode,
       quantity: 1
     },
-    {}
+    {
+      shirtSize: input.shirtSize,
+      teamMembers: input.teamMembers || []
+    }
   );
   const safeRegistrationData = secureSnapshot.registrationData;
+  const safeIsTeam = Boolean(secureSnapshot.athleteProfile.isTeam);
+  const safeShirtSize = asString(secureSnapshot.athleteProfile.shirtSize) || null;
+  const teamMembersJson = JSON.stringify(secureSnapshot.athleteProfile.teamMembers || []);
 
   const { data: existingUser, error: existingUserError } = await supabaseAdmin
     .from('users')
@@ -683,8 +758,7 @@ export const createManagerRegistration = async (
     throw new RegistrationAccessError('Este e-mail já possui uma inscrição ativa para este evento.', 409);
   }
 
-  let athleteId = `ath-${Date.now()}`;
-  const teamMembersJson = JSON.stringify(input.teamMembers || []);
+  let athleteId = createAthleteId();
   const { data: existingAthlete } = await supabaseAdmin
     .from('athletes')
     .select('id')
@@ -697,7 +771,8 @@ export const createManagerRegistration = async (
     const { error: athleteUpdateError } = await supabaseAdmin
       .from('athletes')
       .update({
-        shirt_size: input.shirtSize || null,
+        shirt_size: safeShirtSize,
+        is_team: safeIsTeam,
         team_members: teamMembersJson
       })
       .eq('id', athleteId);
@@ -719,10 +794,10 @@ export const createManagerRegistration = async (
         state: input.state || null,
         instagram: input.instagram || null,
         photo_url: input.photoUrl || null,
-        shirt_size: input.shirtSize || null,
+        shirt_size: safeShirtSize,
         email,
         phone: athletePhone,
-        is_team: input.isTeam || false,
+        is_team: safeIsTeam,
         team_members: teamMembersJson
       });
     if (athleteError) {
@@ -735,7 +810,7 @@ export const createManagerRegistration = async (
   // de auto-atendimento em /api/registrations/start.
   const paymentStatus = secureSnapshot.transactionAmount === 0 ? 'payment_approved' : 'payment_pending';
   const now = new Date().toISOString();
-  const regId = `reg-${Date.now()}`;
+  const regId = createRegistrationId();
   const registrationPayload = {
     id: regId,
     event_id: input.eventId,
@@ -751,6 +826,8 @@ export const createManagerRegistration = async (
     ticket_price: Number(safeRegistrationData.ticketPrice),
     quantity: 1,
     total_paid: Number(safeRegistrationData.totalPaid),
+    shirt_addon_count: Number(safeRegistrationData.shirtAddonCount || 0),
+    shirt_addon_amount: Number(safeRegistrationData.shirtAddonAmount || 0),
     service_fee_percent: null,
     service_fee_amount: 0,
     amount_collected: Number(safeRegistrationData.totalPaid),

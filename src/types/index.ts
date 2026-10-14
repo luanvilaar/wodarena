@@ -1,3 +1,7 @@
+import type { ShirtMode } from '@/lib/shirtPricing';
+
+export type { ShirtMode };
+
 export type EventStatus = 'upcoming' | 'live' | 'finished';
 export type EventType = 'functional_fitness' | 'fitness_racing' | 'functional_fitness_qualifier';
 export type WorkoutType = 'fortime' | 'amrap' | 'maxweight' | 'reps' | 'points' | 'distance';
@@ -172,6 +176,8 @@ export interface Event {
   timeZone?: string;
   paymentGateway?: PaymentGateway;
   defaultLocale?: AppLocale;
+  shirtMode?: ShirtMode;
+  shirtAddonPrice?: number;
 }
 
 export interface Registration {
@@ -193,6 +199,8 @@ export interface Registration {
   serviceFeeAmount?: number;
   amountCollected?: number;
   applicationFeeCharged?: number;
+  shirtAddonCount?: number;
+  shirtAddonAmount?: number;
   createdAt: string;
   accessToken?: string;
   couponCode?: string;

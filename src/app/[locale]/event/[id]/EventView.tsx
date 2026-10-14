@@ -16,6 +16,7 @@ import type { AppLocale, Registration, Athlete, EventScheduleItem, Workout } fro
 import { getEventStatus, getRegistrationAvailability } from '@/lib/eventStatus';
 import { getHeatSlotLabel, resolveHeatParticipantSlots } from '@/lib/scheduleParticipants';
 import { formatMoney } from '@/lib/intl/format';
+import { normalizeShirtMode } from '@/lib/shirtPricing';
 import { toBcp47 } from '@/i18n/locales';
 
 interface ScheduleHeatGroup {
@@ -530,6 +531,13 @@ export function EventView({ eventId }: { eventId: string }) {
   const isQualifierEvent = event.eventType === 'functional_fitness_qualifier';
   const registrationsAvailable = (isQualifierEvent || event.status === 'upcoming')
     && registrationAvailability.isAvailable;
+
+  // D6: o "a partir de" segue sendo o menor preço de categoria (sem camisa); no
+  // modo opcional o adicional da camisa aparece logo abaixo dele.
+  const shirtAddonPrice = event.shirtAddonPrice ?? 0;
+  const optionalShirtPriceLabel = normalizeShirtMode(event.shirtMode) === 'optional' && shirtAddonPrice > 0
+    ? formatMoney(shirtAddonPrice, event.currency ?? 'BRL', locale)
+    : null;
 
   // Copiar link para compartilhar
   const handleShare = () => {
@@ -1414,6 +1422,14 @@ export function EventView({ eventId }: { eventId: string }) {
                     <span>{tSidebar('priceFrom')}</span>
                     <span className="text-white font-bold text-sm font-mono">{formattedMinPrice}</span>
                   </div>
+                  {optionalShirtPriceLabel && (
+                    <p className="text-xs text-muted">
+                      {tSidebar.rich('optionalShirt', {
+                        amount: optionalShirtPriceLabel,
+                        price: (chunks) => <span className="font-mono font-semibold text-white">{chunks}</span>
+                      })}
+                    </p>
+                  )}
                   <div className="flex justify-between items-center text-xs text-muted">
                     <span>{tSidebar('secureGateway')}</span>
                     <span className="text-white font-semibold flex items-center gap-1">

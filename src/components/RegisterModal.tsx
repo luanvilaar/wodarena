@@ -10,7 +10,15 @@ import { useApp } from '@/context/AppContext';
 import { normalizeInstagram } from '@/lib/fitnessRacing';
 import { getRegistrationAvailability } from '@/lib/eventStatus';
 import { calculateServiceFee } from '@/lib/serviceFee';
-import { formatMoney } from '@/lib/intl/format';
+import { formatMoney, toMinorUnits } from '@/lib/intl/format';
+import {
+  calculateRegistrationAmounts,
+  getDivisionParticipantCount,
+  isShirtSize,
+  normalizeShirtMode,
+  SHIRT_NONE,
+  SHIRT_SIZES
+} from '@/lib/shirtPricing';
 
 interface RegisterModalProps {
   event: Event;
@@ -47,6 +55,15 @@ type RegistrationStartResponse = {
   error?: string;
 };
 
+// Inscrição que o servidor criou com valores diferentes dos exibidos. Um novo
+// envio com os mesmos dados segue com ela: chamar /api/registrations/start de
+// novo seria recusado, porque a rota não aceita o mesmo e-mail duas vezes no evento.
+type ServerUpdatedCheckout = {
+  requestKey: string;
+  registrationData: CheckoutRegistrationData;
+  athleteProfile: Athlete;
+};
+
 type CheckoutConfigResponse = {
   gateway?: 'mercadopago' | 'stripe';
   pixSupported?: boolean;
@@ -57,10 +74,11 @@ type CheckoutConfigResponse = {
   error?: string;
 };
 
+// A rota de cupom também devolve um totalPaid, mas sem a camisa: o checkout usa
+// só o desconto e calcula o total pela mesma regra do servidor.
 type CouponValidationResponse = {
   code?: string;
   discount?: number;
-  totalPaid?: number;
   ticketPrice?: number;
   error?: string;
 };
@@ -77,8 +95,6 @@ const createEmptyParticipant = (): ParticipantForm => ({
   photoUrl: '',
   shirtSize: ''
 });
-
-const shirtSizeOptions = ['P', 'M', 'G', 'GG'];
 
 const generateUniqueId = (prefix: string) => {
   return `${prefix}-${Date.now()}`;
@@ -144,10 +160,14 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
   const [athletePasswordConfirmation, setAthletePasswordConfirmation] = useState('');
   const [serviceFeeConfig, setServiceFeeConfig] = useState({ enabled: true, percent: 10 });
   const [pixSupported, setPixSupported] = useState(true);
+  const [serverUpdatedCheckout, setServerUpdatedCheckout] = useState<ServerUpdatedCheckout | null>(null);
+  const [amountsUpdatedNotice, setAmountsUpdatedNotice] = useState<string | null>(null);
 
   const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
   if (isOpen !== prevIsOpen) {
     setPrevIsOpen(isOpen);
+    setServerUpdatedCheckout(null);
+    setAmountsUpdatedNotice(null);
     setAcceptedTerms(false);
     setIsSuccess(false);
     setPixData(null);
@@ -276,15 +296,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
   };
 
   const selectedDivision = event.divisions.find(d => d.id === selectedDivisionId);
-  const participantCount = useMemo(() => {
-    if (!selectedDivision) return 1;
-    if (selectedDivision.type === 'duo') return 2;
-    if (selectedDivision.type === 'trio') return 3;
-    if (selectedDivision.type === 'team') return 4;
-    if (selectedDivision.type === 'team4') return 4;
-    if (selectedDivision.type === 'team6') return 6;
-    return 1;
-  }, [selectedDivision]);
+  const participantCount = useMemo(() => getDivisionParticipantCount(selectedDivision?.type), [selectedDivision]);
 
   const visibleParticipants = useMemo(
     () => Array.from({ length: participantCount }, (_, index) => participants[index] || createEmptyParticipant()),
@@ -299,8 +311,27 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
   };
 
   const ticketPrice = getPrice(selectedDivision);
-  const baseTotalPaid = Math.max(0, ticketPrice - discountApplied);
-  const totalPaid = baseTotalPaid > 0 && baseTotalPaid < 1.00 ? 1.00 : baseTotalPaid;
+  // Camisa do evento (Story 1.38): o total sai da mesma regra que o servidor usa.
+  // O cupom desconta só a inscrição; cada participante com tamanho paga o
+  // adicional, inclusive com cupom de 100% (D1). Os valores são memoizados
+  // porque o total entra nas dependências dos callbacks de envio.
+  const shirtMode = normalizeShirtMode(event.shirtMode);
+  const isOptionalShirt = shirtMode === 'optional';
+  const shirtAddonPrice = event.shirtAddonPrice ?? 0;
+  const shirtAddonPriceLabel = formatMoney(shirtAddonPrice, event.currency ?? 'BRL', locale);
+  const shirtAddonCount = isOptionalShirt
+    ? visibleParticipants.filter((participant) => isShirtSize(participant.shirtSize)).length
+    : 0;
+  const registrationAmounts = useMemo(() => calculateRegistrationAmounts({
+    ticketPrice,
+    quantity: 1,
+    discount: discountApplied,
+    shirtMode,
+    shirtAddonPrice,
+    shirtAddonCount
+  }), [ticketPrice, discountApplied, shirtMode, shirtAddonPrice, shirtAddonCount]);
+  const totalPaid = registrationAmounts.totalPaid;
+  const showCouponShirtNotice = isOptionalShirt && Boolean(appliedCoupon);
   const {
     serviceFeeAmount: serviceFeePreview,
     amountCollected: amountCollectedPreview
@@ -308,6 +339,12 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
   const isTeamCategory = participantCount > 1;
   const primaryParticipant = visibleParticipants[0] || createEmptyParticipant();
   const isFitnessRacing = event.eventType === 'fitness_racing';
+  // Se o atleta confirmou valores recalculados pelo servidor, o ticket mostra o
+  // que foi gravado: o cálculo local continua com a configuração antiga do evento.
+  const ticketTotalPaid = serverUpdatedCheckout ? Number(serverUpdatedCheckout.registrationData.totalPaid) : totalPaid;
+  const ticketAmountCollected = serverUpdatedCheckout
+    ? Number(serverUpdatedCheckout.registrationData.amountCollected ?? ticketTotalPaid)
+    : amountCollectedPreview;
 
   const clearAppliedCoupon = () => {
     setAppliedCoupon(null);
@@ -365,8 +402,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
 
   const startRegistration = useCallback(async (
     registrationData: CheckoutRegistrationData,
-    athleteProfile: Athlete,
-    initialPaymentStatus?: string
+    athleteProfile: Athlete
   ) => {
     const response = await fetch('/api/registrations/start', {
       method: 'POST',
@@ -376,8 +412,9 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
         athleteProfile,
         password: athletePassword,
         passwordConfirmation: athletePasswordConfirmation,
-        paymentMethod: totalPaid === 0 ? 'free' : paymentMethod,
-        initialPaymentStatus
+        // Só o rótulo gravado na inscrição (as rotas de pagamento o sobrescrevem ao
+        // criar a cobrança). Gratuito ou pago quem decide é o paymentStatus do servidor.
+        paymentMethod: totalPaid === 0 ? 'free' : paymentMethod
       })
     });
     const payload: RegistrationStartResponse = await response.json().catch(() => ({}));
@@ -447,6 +484,8 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
         }))
       : [];
 
+    // Só preenchem o formato do pedido: o servidor gera os ids e, depois do
+    // início, o fluxo usa apenas o id e o accessToken devolvidos por ele.
     const regId = generateUniqueId('reg');
     const athleteId = generateUniqueId('ath');
 
@@ -485,27 +524,58 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
       teamMembers
     };
 
+    // Os ids mudam a cada envio; o resto identifica "os mesmos dados" de um envio
+    // anterior cujo total o servidor recalculou e o atleta já viu no aviso.
+    const requestKey = JSON.stringify({
+      registrationData: { ...registrationData, id: undefined },
+      athleteProfile: { ...athleteProfile, id: undefined },
+      password: athletePassword,
+      passwordConfirmation: athletePasswordConfirmation
+    });
+    const confirmedServerCheckout = serverUpdatedCheckout?.requestKey === requestKey ? serverUpdatedCheckout : null;
+
+    setAmountsUpdatedNotice(null);
     let paymentAttemptStarted = false;
 
     try {
-      const started = await startRegistration(
-        registrationData,
-        athleteProfile,
-        totalPaid === 0 ? 'payment_approved' : 'payment_pending'
-      );
+      const started = confirmedServerCheckout ?? await startRegistration(registrationData, athleteProfile);
       paymentAttemptStarted = true;
+      // Nova inscrição criada: a resposta guardada de um envio anterior não vale
+      // mais e não pode aparecer no ticket de sucesso.
+      if (!confirmedServerCheckout) setServerUpdatedCheckout(null);
       const activeRegistrationData = started.registrationData;
       const activeAthleteProfile = started.athleteProfile;
+      const serverTotalPaid = Number(activeRegistrationData.totalPaid);
+      if (!Number.isFinite(serverTotalPaid)) {
+        throw new Error(t('registrationStartError'));
+      }
+      const isServerApprovedFree = activeRegistrationData.paymentStatus === 'payment_approved' && serverTotalPaid === 0;
 
-      if (totalPaid === 0) {
-        console.log("[Checkout WODArena] Inscrição gratuita (totalPaid === 0). Aprovando imediatamente...");
+      // O servidor recalcula o total com a configuração atual do evento (preço,
+      // cupom, camisa), que pode ter mudado desde que o checkout abriu. Valor
+      // diferente do exibido: nada é cobrado nem confirmado antes de o atleta ver o novo total.
+      const eventCurrency = event.currency ?? 'BRL';
+      if (!confirmedServerCheckout && toMinorUnits(serverTotalPaid, eventCurrency, locale) !== toMinorUnits(totalPaid, eventCurrency, locale)) {
+        setServerUpdatedCheckout({ requestKey, ...started });
+        const updatedAmount = formatMoney(Number(activeRegistrationData.amountCollected ?? serverTotalPaid), eventCurrency, locale);
+        if (!isServerApprovedFree) {
+          setAmountsUpdatedNotice(t('amountsUpdatedNotice', { amount: updatedAmount }));
+          setIsProcessing(false);
+          return;
+        }
+        // Já aprovada com total 0: a inscrição está concluída e não há o que
+        // confirmar; segue para o sucesso (e o e-mail) mostrando o aviso.
+        setAmountsUpdatedNotice(t('amountsUpdatedConfirmedNotice', { amount: updatedAmount }));
+      }
+
+      if (isServerApprovedFree) {
+        console.log("[Checkout WODArena] Inscrição gratuita aprovada pelo servidor.");
         const createdReg = registerTicket(activeRegistrationData, activeAthleteProfile);
         // O uso do cupom é contabilizado no servidor em /api/registrations/start.
 
         const finalReg = createdReg || {
-          ...registrationData,
-          id: registrationData.id || `reg-${Date.now()}`,
-          createdAt: new Date().toISOString()
+          ...activeRegistrationData,
+          createdAt: activeRegistrationData.createdAt || new Date().toISOString()
         };
 
         // Enviar e-mail de confirmação via Resend em background
@@ -592,7 +662,12 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
 
     } catch (err) {
       console.error("[Checkout WODArena] Erro no processamento do checkout:", err);
-      const baseMessage = err instanceof Error ? err.message : t('genericCheckoutError');
+      const errorMessage = err instanceof Error ? err.message : t('genericCheckoutError');
+      // Início recusado depois do aviso de valores atualizados: a inscrição já
+      // existe no servidor, que não aceita o mesmo e-mail de novo no evento.
+      const baseMessage = !paymentAttemptStarted && serverUpdatedCheckout
+        ? `${errorMessage}\n\n${t('registrationAlreadyStartedGuidance')}`
+        : errorMessage;
       alert(paymentAttemptStarted ? `${baseMessage}\n\n${t('paymentFailureGuidance')}` : baseMessage);
       setIsProcessing(false);
     }
@@ -605,9 +680,11 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
     selectedDivision,
     primaryParticipant,
     event.id,
+    event.currency,
     selectedDivisionId,
     ticketPrice,
     totalPaid,
+    serverUpdatedCheckout,
     appliedCoupon,
     paymentMethod,
     cpf,
@@ -695,6 +772,12 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                 </p>
               </div>
 
+              {amountsUpdatedNotice && (
+                <p className="mx-auto max-w-sm rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs font-semibold leading-5 text-ink">
+                  {amountsUpdatedNotice}
+                </p>
+              )}
+
               {/* TICKET DIGITAL PREMIUM */}
               <div className="relative mx-auto w-full rounded-2xl overflow-hidden border border-neutral-800 bg-[#16181e] shadow-2xl text-left">
                 {/* Cabeçalho do Ticket com Banner de Fundo */}
@@ -774,13 +857,13 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                     <div>
                       <span className="text-[9px] font-bold uppercase tracking-widest text-muted-soft">{t('paymentMethodLabel')}</span>
                       <p className="text-xs font-bold text-white uppercase">
-                        {totalPaid === 0 ? t('freeRegistration') : paymentMethod === 'pix' ? t('pixConfirmed') : t('creditCard')}
+                        {ticketTotalPaid === 0 ? t('freeRegistration') : paymentMethod === 'pix' ? t('pixConfirmed') : t('creditCard')}
                       </p>
                     </div>
                     <div className="text-right">
                       <span className="text-[9px] font-bold uppercase tracking-widest text-muted-soft">{t('amountPaidLabel')}</span>
                       <p className="text-base font-black text-primary font-number">
-                        {formatMoney(amountCollectedPreview, event.currency ?? 'BRL', locale)}
+                        {formatMoney(ticketAmountCollected, event.currency ?? 'BRL', locale)}
                       </p>
                     </div>
                   </div>
@@ -928,6 +1011,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                     type="text"
                     placeholder={t('couponPlaceholder')}
                     value={couponCode}
+                    aria-describedby={showCouponShirtNotice ? 'checkout-coupon-shirt-notice' : undefined}
                     onChange={(e) => {
                       setCouponCode(e.target.value);
                       if (appliedCoupon && e.target.value.trim().toUpperCase() !== appliedCoupon) {
@@ -945,11 +1029,20 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                     {isApplyingCoupon ? t('applying') : t('apply')}
                   </button>
                 </div>
-                {couponNotice && (
-                  <p className={`mt-1.5 text-xs font-semibold ${couponNotice.tone === 'success' ? 'text-[#00875A]' : 'text-[#DE350B]'}`}>
-                    {couponNotice.text}
-                  </p>
-                )}
+                {/* Região viva sempre montada: os avisos do cupom aparecem depois de
+                    "Aplicar" e precisam ser anunciados pelo leitor de tela. */}
+                <div aria-live="polite">
+                  {couponNotice && (
+                    <p className={`mt-1.5 text-xs font-semibold ${couponNotice.tone === 'success' ? 'text-[#00875A]' : 'text-[#DE350B]'}`}>
+                      {couponNotice.text}
+                    </p>
+                  )}
+                  {showCouponShirtNotice && (
+                    <p id="checkout-coupon-shirt-notice" className="mt-1.5 text-xs leading-5 text-muted-soft">
+                      {t('couponShirtNotice')}
+                    </p>
+                  )}
+                </div>
               </div>
 
               {/* Dados do Atleta */}
@@ -1082,9 +1175,14 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                           className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none"
                         >
                           <option value="">{t('selectPlaceholder')}</option>
-                          {shirtSizeOptions.map(size => (
-                            <option key={size} value={size}>{size}</option>
+                          {SHIRT_SIZES.map(size => (
+                            <option key={size} value={size}>
+                              {isOptionalShirt ? t('shirtSizeAddonOption', { size, amount: shirtAddonPriceLabel }) : size}
+                            </option>
                           ))}
+                          {isOptionalShirt && (
+                            <option value={SHIRT_NONE}>{t('shirtNoneOption')}</option>
+                          )}
                         </select>
                       </div>
                     </div>
@@ -1279,10 +1377,18 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                   <span className="font-medium text-muted-soft">{t('orderSummaryRegistration', { division: selectedDivision?.name ?? '' })}</span>
                   <span className="font-number font-bold text-ink">{formatMoney(ticketPrice, event.currency ?? 'BRL', locale)}</span>
                 </div>
-                {appliedCoupon && discountApplied > 0 && (
+                {registrationAmounts.shirtAddonAmount > 0 && (
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="font-medium text-muted-soft">{t('orderSummaryShirts', { count: shirtAddonCount, amount: shirtAddonPriceLabel })}</span>
+                    <span className="font-number font-bold text-ink">+ {formatMoney(registrationAmounts.shirtAddonAmount, event.currency ?? 'BRL', locale)}</span>
+                  </div>
+                )}
+                {/* Desconto já limitado ao valor da inscrição: um cupom fixo maior que a
+                    categoria não pode abater a camisa, e o resumo precisa fechar a conta. */}
+                {appliedCoupon && registrationAmounts.discount > 0 && (
                   <div className="flex justify-between items-center text-sm text-[#00875A]">
                     <span className="font-semibold">{t('discountLabel', { code: appliedCoupon })}</span>
-                    <span className="font-number font-bold">- {formatMoney(discountApplied, event.currency ?? 'BRL', locale)}</span>
+                    <span className="font-number font-bold">- {formatMoney(registrationAmounts.discount, event.currency ?? 'BRL', locale)}</span>
                   </div>
                 )}
                 {serviceFeePreview > 0 && (
@@ -1329,6 +1435,12 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                   })}
                 </label>
               </div>
+
+              {amountsUpdatedNotice && (
+                <p role="alert" className="rounded-lg border border-[#DE350B]/30 bg-[#DE350B]/5 p-3 text-xs font-semibold leading-5 text-[#DE350B]">
+                  {amountsUpdatedNotice}
+                </p>
+              )}
 
               <button
                 type="submit"

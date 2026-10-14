@@ -12,6 +12,7 @@ import { FIRST_WORKOUT_TIEBREAK_CUTOFF, getTiebreakFirstWorkout, sortWorkouts } 
 import { hasEventDatePassed } from '@/lib/eventStatus';
 import { getManagerAccessStatus, normalizeServiceValidUntil } from '@/lib/managerAccess';
 import { rankWorkoutScores } from '@/lib/scoring';
+import { normalizeShirtMode } from '@/lib/shirtPricing';
 import type { QualifierWorkoutDeleteConfirmation, QualifierWorkoutDeleteResult } from '@/lib/workoutEdit';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -216,6 +217,8 @@ const mapRegistrationFromDb = (r: RegistrationDbRow): Registration => ({
   serviceFeeAmount: r.service_fee_amount !== null && r.service_fee_amount !== undefined ? Number(r.service_fee_amount) : undefined,
   amountCollected: r.amount_collected !== null && r.amount_collected !== undefined ? Number(r.amount_collected) : undefined,
   applicationFeeCharged: r.application_fee_charged !== null && r.application_fee_charged !== undefined ? Number(r.application_fee_charged) : undefined,
+  shirtAddonCount: Number(r.shirt_addon_count) || 0,
+  shirtAddonAmount: Number(r.shirt_addon_amount) || 0,
   createdAt: String(r.created_at),
   couponCode: optionalString(r.coupon_code),
   paymentStatus: (r.payment_status || 'payment_approved') as Registration['paymentStatus'],
@@ -761,7 +764,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               currency: evt.currency || 'BRL',
               timeZone: evt.time_zone || 'America/Fortaleza',
               paymentGateway: evt.payment_gateway || 'mercadopago',
-              defaultLocale: evt.default_locale || 'pt-br'
+              defaultLocale: evt.default_locale || 'pt-br',
+              shirtMode: normalizeShirtMode(evt.shirt_mode),
+              shirtAddonPrice: Number(evt.shirt_addon_price) || 0
             };
           });
           setEvents(combinedEvents);
@@ -1100,6 +1105,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       workouts: sortWorkouts(defaultFitnessRacing.workouts),
       scheduleItems: eventData.scheduleItems || [],
       mpPublicKey: eventData.mpPublicKey || '',
+      shirtMode: normalizeShirtMode(eventData.shirtMode),
+      shirtAddonPrice: Number(eventData.shirtAddonPrice) || 0,
     };
 
     const eventRow = {
@@ -1125,7 +1132,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       website: newEvent.website,
       event_type: newEvent.eventType,
       event_schedule: newEvent.scheduleItems,
-      mp_public_key: newEvent.mpPublicKey || null
+      mp_public_key: newEvent.mpPublicKey || null,
+      shirt_mode: newEvent.shirtMode,
+      shirt_addon_price: newEvent.shirtAddonPrice
     };
 
     const divisionRows = eventData.eventType === 'fitness_racing'
@@ -2346,6 +2355,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (updatedData.eventType !== undefined) dbPayload.event_type = updatedData.eventType;
     if (updatedData.scheduleItems !== undefined) dbPayload.event_schedule = updatedData.scheduleItems as EventScheduleItem[];
     if (updatedData.mpPublicKey !== undefined) dbPayload.mp_public_key = updatedData.mpPublicKey;
+    if (updatedData.shirtMode !== undefined) dbPayload.shirt_mode = updatedData.shirtMode;
+    if (updatedData.shirtAddonPrice !== undefined) dbPayload.shirt_addon_price = updatedData.shirtAddonPrice;
 
     try {
       await adminPersist('updateEvent', { eventId, data: dbPayload });

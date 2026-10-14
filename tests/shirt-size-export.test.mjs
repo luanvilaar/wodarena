@@ -8,6 +8,7 @@ const types = read('../src/types/index.ts');
 const context = read('../src/context/AppContext.tsx');
 const registerModal = read('../src/components/RegisterModal.tsx');
 const admin = read('../src/app/admin/page.tsx');
+const shirtSummary = read('../src/lib/shirtSummary.ts');
 const startRoute = read('../src/app/api/registrations/start/route.ts');
 const bootstrapRoute = read('../src/app/api/app/bootstrap/route.ts');
 const serverCheckout = read('../src/lib/serverCheckout.ts');
@@ -46,8 +47,12 @@ test('manager panel exports shirt data in an Excel-compatible file', () => {
   assert.match(admin, /application\/vnd\.ms-excel/);
   assert.match(admin, /\.xls`/);
   assert.match(admin, /Tamanho da Camisa/);
-  assert.match(admin, /member\.shirtSize/);
-  assert.match(admin, /athleteInfo\?\.shirtSize/);
+  // Story 1.38: a camisa de cada integrante e a do atleta individual passaram
+  // para o módulo puro shirtSummary.ts, que a planilha usa por inscrição.
+  assert.match(admin, /listRegistrationShirts\(reg, athleteInfo\)\.map\(\(shirt, index\) => \(\{/);
+  assert.match(admin, /camisa: formatShirtChoice\(shirt\.size\)/);
+  assert.match(shirtSummary, /member\?\.shirtSize/);
+  assert.match(shirtSummary, /athlete\.shirtSize/);
   assert.match(admin, /const SHIRT_SIZE_OPTIONS = \['P', 'M', 'G', 'GG'\]/);
   assert.doesNotMatch(admin, /\bPP\b/);
   assert.doesNotMatch(admin, /\bXG\b/);

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { MercadoPagoConfigError, resolveMercadoPagoCheckoutConfig } from '@/lib/mercadopagoServer';
+import { createAthleteId } from '@/lib/registrationIds';
 import { applyCouponUsageForApprovedRegistration, calculateSecureRegistrationSnapshot, RegistrationAccessError } from '@/lib/serverCheckout';
 import { ManagerAccessError, managerAccessErrorResponse } from '@/lib/serverManagerAccess';
 import { checkRateLimit, createRegistrationAccessToken, createSupabaseAdmin, getClientIp, hashPassword, verifyPassword } from '@/lib/serverSecurity';
@@ -56,7 +57,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'A confirmação de senha não confere.' }, { status: 400 });
     }
 
-    const regId = String(safeRegistrationData.id);
+    // Gerado no snapshot: o servidor é a única fonte dos identificadores.
+    const regId = secureSnapshot.registrationId;
     let userId = '';
     let shouldCreateSecret = false;
     let shouldRehashSecret = false;
@@ -179,7 +181,9 @@ export async function POST(request: Request) {
       }
     }
 
-    let athleteId = String(safeAthleteProfile.id || `ath-${Date.now()}`);
+    // Atleta novo recebe id gerado aqui; o já cadastrado (mesmo e-mail e
+    // categoria) continua com o próprio id.
+    let athleteId = createAthleteId();
     const { data: existingAthlete } = await supabaseAdmin
       .from('athletes')
       .select('id')
@@ -232,6 +236,11 @@ export async function POST(request: Request) {
     // payment_status nunca é aceito do cliente: só nasce aprovado quando o
     // valor calculado no servidor (cupom 100% incluso) é zero.
     const paymentStatus = secureSnapshot.transactionAmount === 0 ? 'payment_approved' : 'payment_pending';
+    // O método 'free' também é decisão do servidor: o navegador pode ter calculado
+    // outro total (ex.: o gestor mudou a camisa do evento durante a inscrição).
+    const safePaymentMethod = secureSnapshot.transactionAmount === 0
+      ? 'free'
+      : (paymentMethod === 'free' ? null : paymentMethod || null);
     const now = new Date().toISOString();
     const registrationPayload = {
       id: regId,
@@ -248,27 +257,30 @@ export async function POST(request: Request) {
       ticket_price: Number(safeRegistrationData.ticketPrice),
       quantity: Number(safeRegistrationData.quantity || 1),
       total_paid: Number(safeRegistrationData.totalPaid),
+      shirt_addon_count: Number(safeRegistrationData.shirtAddonCount || 0),
+      shirt_addon_amount: Number(safeRegistrationData.shirtAddonAmount || 0),
       service_fee_percent: serviceFee.serviceFeePercent,
       service_fee_amount: serviceFee.serviceFeeAmount,
       amount_collected: serviceFee.amountCollected,
       application_fee_charged: 0,
-      created_at: safeRegistrationData.createdAt || now,
+      created_at: now,
       coupon_code: safeRegistrationData.couponCode || null,
       payment_status: paymentStatus,
-      payment_method: paymentMethod || null,
+      payment_method: safePaymentMethod,
       updated_at: now
     };
 
+    // Só insere: esta rota cria inscrições e nunca altera uma já existente.
     const { data: dbRegistration, error: regError } = await supabaseAdmin
       .from('registrations')
-      .upsert(registrationPayload, { onConflict: 'id' })
+      .insert(registrationPayload)
       .select('*')
       .single();
 
     if (regError || !dbRegistration) {
       console.error('[Registration Start] Erro ao criar inscrição:', regError);
-      // Violação do índice único (event_id, athlete_email) — duas requisições
-      // concorrentes tentaram inscrever o mesmo e-mail no mesmo evento.
+      // Conflito de chave (id ou uma inscrição ativa do mesmo e-mail no evento):
+      // nada é gravado e a resposta é a da inscrição ativa já existente.
       if (regError?.code === '23505') {
         return NextResponse.json({
           error: 'Este e-mail já possui uma inscrição ativa para este evento.'
@@ -306,7 +318,7 @@ export async function POST(request: Request) {
         athleteEmail: email,
         createdAt: dbRegistration.created_at,
         paymentStatus,
-        paymentMethod: paymentMethod || undefined,
+        paymentMethod: safePaymentMethod || undefined,
         updatedAt: dbRegistration.updated_at,
         serviceFeePercent: serviceFee.serviceFeePercent,
         serviceFeeAmount: serviceFee.serviceFeeAmount,

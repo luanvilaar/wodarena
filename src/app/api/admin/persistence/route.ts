@@ -4,6 +4,7 @@ import { applyCouponUsageForApprovedRegistration, createManagerRegistration, Reg
 import { checkRateLimit, createSupabaseAdmin, hashPassword, requireSession, safeErrorMessage, SessionUser } from '@/lib/serverSecurity';
 import { getEventStatus } from '@/lib/eventStatus';
 import { sendQualifierWorkoutDeletedEmails } from '@/lib/resend';
+import { checkRegistrationShirtEdit, validateShirtConfig } from '@/lib/shirtPricing';
 import {
   getQualifierWorkoutLockViolations,
   hasQualifierWorkoutSubmissions,
@@ -61,7 +62,8 @@ const ensureWorkoutOwner = async (supabaseAdmin: DbClient, actor: SessionUser, w
 const EVENT_UPDATABLE_FIELDS = [
   'name', 'logo_url', 'banner_url', 'status', 'location', 'date', 'description',
   'format', 'ticket_price', 'ticket_slots', 'is_ticketing_active', 'time', 'city',
-  'state', 'rules', 'instagram', 'website', 'event_type', 'event_schedule', 'mp_public_key'
+  'state', 'rules', 'instagram', 'website', 'event_type', 'event_schedule', 'mp_public_key',
+  'shirt_mode', 'shirt_addon_price'
 ] as const;
 
 const DIVISION_UPDATABLE_FIELDS = [
@@ -424,6 +426,8 @@ const mapRegistrationForClient = (registration: Record<string, unknown>) => ({
   ticketPrice: Number(registration.ticket_price),
   quantity: Number(registration.quantity),
   totalPaid: Number(registration.total_paid),
+  shirtAddonCount: Number(registration.shirt_addon_count) || 0,
+  shirtAddonAmount: Number(registration.shirt_addon_amount) || 0,
   createdAt: registration.created_at,
   couponCode: registration.coupon_code || undefined,
   paymentStatus: registration.payment_status || undefined,
@@ -505,6 +509,15 @@ export async function POST(request: Request) {
           }
         }
 
+        if ('shirt_mode' in event || 'shirt_addon_price' in event) {
+          const shirtConfig = validateShirtConfig({ mode: event.shirt_mode, price: event.shirt_addon_price });
+          if (!shirtConfig.ok) {
+            return NextResponse.json({ error: shirtConfig.error }, { status: 400 });
+          }
+          event.shirt_mode = shirtConfig.mode;
+          event.shirt_addon_price = shirtConfig.price;
+        }
+
         delete event.is_featured;
         const { error: eventError } = await supabaseAdmin.from('events').insert(event);
         if (eventError) throw eventError;
@@ -573,6 +586,27 @@ export async function POST(request: Request) {
         }
 
         const allowedData = pickAllowedFields(payload.data, EVENT_UPDATABLE_FIELDS);
+        if ('shirt_mode' in allowedData || 'shirt_addon_price' in allowedData) {
+          // Valida a configuração efetiva: o campo ausente vem do evento atual,
+          // já confirmado como do gestor por ensureEventOwner.
+          const { data: currentShirt, error: currentShirtError } = await supabaseAdmin
+            .from('events')
+            .select('shirt_mode, shirt_addon_price')
+            .eq('id', currentEvent.id)
+            .maybeSingle();
+          if (currentShirtError || !currentShirt) throw currentShirtError || new Error('Evento nao encontrado.');
+
+          const shirtConfig = validateShirtConfig({
+            mode: 'shirt_mode' in allowedData ? allowedData.shirt_mode : currentShirt.shirt_mode,
+            price: 'shirt_addon_price' in allowedData ? allowedData.shirt_addon_price : currentShirt.shirt_addon_price
+          });
+          if (!shirtConfig.ok) {
+            return NextResponse.json({ error: shirtConfig.error }, { status: 400 });
+          }
+          allowedData.shirt_mode = shirtConfig.mode;
+          allowedData.shirt_addon_price = shirtConfig.price;
+        }
+
         const nextEventType = allowedData.event_type || currentEvent.event_type || 'functional_fitness';
         const nextSchedule = allowedData.event_schedule === undefined ? currentEvent.event_schedule : allowedData.event_schedule;
         assertQualifierSchedule(nextEventType, nextSchedule);
@@ -955,7 +989,6 @@ export async function POST(request: Request) {
             instagram: asTrimmed(athleteProfile?.instagram) || undefined,
             photoUrl: asTrimmed(athleteProfile?.photoUrl) || undefined,
             shirtSize: asTrimmed(athleteProfile?.shirtSize) || undefined,
-            isTeam: Boolean(athleteProfile?.isTeam),
             teamMembers: Array.isArray(athleteProfile?.teamMembers) ? athleteProfile.teamMembers as { name: string; instagram?: string; shirtSize?: string }[] : []
           });
 
@@ -1229,6 +1262,33 @@ export async function POST(request: Request) {
           return [];
         };
 
+        // D4: só a troca de tamanho é permitida. Incluir ou retirar a camisa muda
+        // o valor devido; o estado seguinte espelha o que a RPC vai gravar.
+        const { data: currentAthlete, error: currentAthleteError } = registration.athlete_id
+          ? await supabaseAdmin
+            .from('athletes')
+            .select('shirt_size, team_members, is_team')
+            .eq('id', registration.athlete_id)
+            .maybeSingle()
+          : { data: null, error: null };
+        if (currentAthleteError) throw currentAthleteError;
+
+        const shirtEdit = checkRegistrationShirtEdit(
+          {
+            isTeam: currentAthlete?.is_team,
+            shirtSize: currentAthlete?.shirt_size,
+            teamMembers: currentAthlete?.team_members
+          },
+          {
+            isTeam: nextIsTeam ?? currentAthlete?.is_team,
+            shirtSize: nextShirtSize,
+            teamMembers: nextMembers ?? currentAthlete?.team_members
+          }
+        );
+        if (!shirtEdit.ok) {
+          return NextResponse.json({ error: shirtEdit.error }, { status: shirtEdit.status });
+        }
+
         // O valor pago (total_paid) e preservado: relocacao de categoria e
         // correcao de cadastro, nao recobranca. A RPC executa inscricao,
         // atleta vinculado e leaderboard na mesma transacao do banco.
@@ -1291,6 +1351,8 @@ export async function POST(request: Request) {
             ticketPrice: Number(updatedRegistration.ticket_price),
             quantity: Number(updatedRegistration.quantity),
             totalPaid: Number(updatedRegistration.total_paid),
+            shirtAddonCount: Number(updatedRegistration.shirt_addon_count) || 0,
+            shirtAddonAmount: Number(updatedRegistration.shirt_addon_amount) || 0,
             createdAt: updatedRegistration.created_at,
             couponCode: updatedRegistration.coupon_code || undefined,
             paymentStatus: updatedRegistration.payment_status || undefined,

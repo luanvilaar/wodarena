@@ -130,7 +130,7 @@ test('public surfaces consistently hide registration for derived finished events
 });
 
 test('server rejects registrations for derived finished events before persistence', () => {
-  assert.match(serverCheckout, /select\('id, name, status, date, registration_deadline, ticket_price, ticket_slots, is_ticketing_active'\)/);
+  assert.match(serverCheckout, /select\('id, name, status, date, registration_deadline, ticket_price, ticket_slots, is_ticketing_active, shirt_mode, shirt_addon_price'\)/);
   assert.match(serverCheckout, /throw new RegistrationAccessError\('Este evento esta encerrado e nao aceita novas inscricoes\.', 409\)/);
   assert.match(registrationStart, /RegistrationAccessError/);
   assert.match(registrationStart, /status: err\.status/);

@@ -3,6 +3,7 @@ import { sendRegistrationEmail } from '@/lib/resend';
 import { Registration, Athlete, Event, AppLocale } from '@/types';
 import { assertRegistrationAccess, RegistrationAccessError } from '@/lib/serverCheckout';
 import { checkRateLimit, createSupabaseAdmin, getClientIp } from '@/lib/serverSecurity';
+import { normalizeShirtMode } from '@/lib/shirtPricing';
 
 const supabaseAdmin = createSupabaseAdmin();
 
@@ -61,6 +62,10 @@ export async function POST(request: Request) {
       ticketPrice: dbReg.ticket_price,
       quantity: dbReg.quantity,
       totalPaid: dbReg.total_paid,
+      // A linha de camisa do e-mail sai do que a inscrição gravou (adicional e
+      // "Sem camisa"), não do modo atual do evento, que pode ter mudado depois.
+      shirtAddonCount: Number(dbReg.shirt_addon_count) || 0,
+      shirtAddonAmount: Number(dbReg.shirt_addon_amount) || 0,
       createdAt: dbReg.created_at,
       couponCode: dbReg.coupon_code || undefined,
       paymentStatus: dbReg.payment_status || 'payment_approved',
@@ -110,7 +115,9 @@ export async function POST(request: Request) {
       website: dbEvent.website || '',
       eventType: dbEvent.event_type || 'functional_fitness',
       currency: dbEvent.currency || 'BRL',
-      defaultLocale: (dbEvent.default_locale as AppLocale) || 'pt-br'
+      defaultLocale: (dbEvent.default_locale as AppLocale) || 'pt-br',
+      shirtMode: normalizeShirtMode(dbEvent.shirt_mode),
+      shirtAddonPrice: Number(dbEvent.shirt_addon_price) || 0
     };
 
     // 3. Buscar o atleta (para verificar se é equipe e integrantes)

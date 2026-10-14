@@ -2,10 +2,11 @@
 
 import React from 'react';
 import Image from 'next/image';
-import { AlertTriangle, Calendar, CheckCircle2, MapPin, Printer, ShieldCheck, TicketCheck, User, X } from 'lucide-react';
+import { AlertTriangle, Calendar, CheckCircle2, MapPin, Printer, ShieldCheck, Shirt, TicketCheck, User, X } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Registration, Athlete, Event, AppLocale } from '@/types';
 import { formatMoney } from '@/lib/intl/format';
+import { isShirtNone } from '@/lib/shirtPricing';
 import { toBcp47 } from '@/i18n/locales';
 
 interface RegistrationVoucherProps {
@@ -47,10 +48,26 @@ export function RegistrationVoucher({
     minute: '2-digit'
   }).format(createdAtDate);
 
-  const formattedPrice = formatMoney(registration.totalPaid, registration.currency ?? 'BRL', locale);
+  const currency = registration.currency ?? 'BRL';
+  const formattedPrice = formatMoney(registration.totalPaid, currency, locale);
 
-  const teamMembers = athlete.isTeam && athlete.teamMembers && athlete.teamMembers.length > 0
-    ? athlete.teamMembers.map(member => member.name).join(' / ')
+  const teamMemberList = athlete.isTeam ? athlete.teamMembers ?? [] : [];
+  const teamMembers = teamMemberList.map(member => member.name).join(' / ');
+
+  // Camisa por participante, na ordem da inscrição, e o adicional cobrado
+  // (Story 1.38). A linha só aparece quando a camisa foi opcional (adicional pago
+  // ou "Sem camisa"): inscrições de camisa inclusa ficam como antes da story.
+  const shirtSizes = (teamMemberList.length > 0 ? teamMemberList.map(member => member.shirtSize) : [athlete.shirtSize])
+    .map(size => String(size || '').trim());
+  const shirtAddonAmount = registration.shirtAddonAmount ?? 0;
+  const hasOptionalShirtChoice = shirtAddonAmount > 0 || shirtSizes.some(isShirtNone);
+  const shirtSummary = hasOptionalShirtChoice
+    ? [
+        shirtSizes.some(Boolean)
+          ? shirtSizes.map(size => (isShirtNone(size) ? t('shirtNone') : size || '—')).join(' · ')
+          : '',
+        shirtAddonAmount > 0 ? t('shirtAddon', { amount: formatMoney(shirtAddonAmount, currency, locale) }) : ''
+      ].filter(Boolean).join(' · ')
     : '';
 
   const hasBanner = Boolean(event.bannerUrl);
@@ -193,6 +210,9 @@ export function RegistrationVoucher({
             <section className="grid grid-cols-2 gap-px bg-[#2b3139] text-[#eaecef]">
               <VoucherInfo label={t('categoryLabel')} value={registration.ticketType} icon={<TicketCheck className="h-4 w-4" />} />
               <VoucherInfo label={t('amountPaidLabel')} value={formattedPrice} strong />
+              {shirtSummary && (
+                <VoucherInfo label={t('shirtLabel')} value={shirtSummary} icon={<Shirt className="h-4 w-4" />} wide />
+              )}
               <VoucherInfo label={t('dateLabel')} value={event.date} icon={<Calendar className="h-4 w-4" />} />
               <VoucherInfo label={t('locationLabel')} value={event.location} icon={<MapPin className="h-4 w-4" />} />
               <VoucherInfo label={t('boxLabel')} value={registration.box || t('boxFallback')} icon={<User className="h-4 w-4" />} />

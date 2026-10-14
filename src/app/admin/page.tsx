@@ -17,6 +17,13 @@ import { QualifierManagerPanel } from '@/components/QualifierManagerPanel';
 import { QualifierResultsManager } from '@/components/QualifierResultsManager';
 import { DashboardOverview } from '@/components/admin/DashboardOverview';
 import {
+  EventShirtSettings,
+  getDivisionShirtPrices,
+  resolveShirtSettingsForSave,
+  toShirtPriceInput
+} from '@/components/admin/EventShirtSettings';
+import { ShirtSummaryCard } from '@/components/admin/ShirtSummaryCard';
+import {
   LayoutDashboard, Calendar, Trophy,
   ClipboardCheck, LogIn, LogOut, Ticket, Settings,
   Upload, X, Trash2, Plus, ShieldAlert, Pencil, Copy, GripVertical, ArrowDown, ArrowUp, Library, ReceiptText, Mail, CreditCard,
@@ -49,7 +56,27 @@ const RegDetail = ({ label, value, accent = false }: { label: string; value: str
     </p>
   </div>
 );
-import { WorkoutType, CategoryType, EventStatus, Event, Athlete, Division, CourseStage, EventScheduleItemKind, EventScheduleMode, Score, EventScheduleItem, Registration, Contestation, Workout } from '@/types';
+import { WorkoutType, CategoryType, EventStatus, Event, EventCurrency, Athlete, Division, CourseStage, EventScheduleItemKind, EventScheduleMode, Score, EventScheduleItem, Registration, Contestation, Workout } from '@/types';
+import { formatMoney } from '@/lib/intl/format';
+import {
+  SHIRT_NONE,
+  calculateRegistrationAmounts,
+  getDivisionParticipantCount,
+  isShirtNone,
+  isShirtSize,
+  normalizeShirtMode,
+  type ShirtMode
+} from '@/lib/shirtPricing';
+import {
+  buildShirtSummary,
+  createRegistrationAthleteResolver,
+  formatRegistrationShirts,
+  formatShirtChoice,
+  getAthleteTeamMembers,
+  getShirtDeliveryLabel,
+  getShirtSummaryRows,
+  listRegistrationShirts
+} from '@/lib/shirtSummary';
 import { getEventStatus as getEventLifecycle, compareEventsByDateAsc, compareEventsByDateDesc } from '@/lib/eventStatus';
 import { CONTESTATION_CREDITS_LIMIT, getContestationStatusLabel } from '@/lib/contestations';
 import { FITNESS_RACING_AGE_GROUPS, FITNESS_RACING_STATION_LIBRARY, buildFitnessRacingCourse, getAgeGroupFromDate } from '@/lib/fitnessRacing';
@@ -85,6 +112,13 @@ const currencyFormatter = new Intl.NumberFormat('pt-BR', {
 });
 
 const SHIRT_SIZE_OPTIONS = ['P', 'M', 'G', 'GG'];
+// Maior equipe aceita (team6): os formulários reservam uma posição por integrante.
+const MAX_TEAM_MEMBERS = getDivisionParticipantCount('team6');
+type TeamMemberDraft = { name: string; instagram: string; shirtSize: string };
+const createEmptyTeamMembers = (): TeamMemberDraft[] => (
+  Array.from({ length: MAX_TEAM_MEMBERS }, () => ({ name: '', instagram: '', shirtSize: '' }))
+);
+const formatEventMoney = (amount: number, currency?: EventCurrency) => formatMoney(amount, currency || 'BRL', 'pt-br');
 const WORKOUT_SCORE_TYPE_OPTIONS: { value: WorkoutType; label: string; detail: string }[] = [
   { value: 'fortime', label: 'Tempo', detail: 'Menor tempo vence' },
   { value: 'amrap', label: 'AMRAP', detail: 'Mais reps no tempo' },
@@ -709,6 +743,9 @@ export default function AdminPage() {
   const [eventTicketPrice, setEventTicketPrice] = useState<number>(150);
   const [eventTicketSlots, setEventTicketSlots] = useState<number>(100);
   const [eventIsTicketingActive, setEventIsTicketingActive] = useState(true);
+  const [eventShirtMode, setEventShirtMode] = useState<ShirtMode>('included');
+  const [eventShirtAddonPrice, setEventShirtAddonPrice] = useState('');
+  const eventShirtPriceRef = useRef<HTMLInputElement>(null);
 
   // Edição do Evento Selecionado (Aba: Informações Gerais)
   const [editEventName, setEditEventName] = useState('');
@@ -730,6 +767,9 @@ export default function AdminPage() {
   const [editEventTicketSlots, setEditEventTicketSlots] = useState<number>(100);
   const [editEventIsTicketingActive, setEditEventIsTicketingActive] = useState(true);
   const [editEventFormat, setEditEventFormat] = useState<'individual' | 'duo' | 'trio'>('individual');
+  const [editEventShirtMode, setEditEventShirtMode] = useState<ShirtMode>('included');
+  const [editEventShirtAddonPrice, setEditEventShirtAddonPrice] = useState('');
+  const editEventShirtPriceRef = useRef<HTMLInputElement>(null);
 
 
   // Estados Fitness Racing
@@ -950,7 +990,12 @@ export default function AdminPage() {
   const [editRegInstagram, setEditRegInstagram] = useState('');
   const [editRegShirtSize, setEditRegShirtSize] = useState('');
   const [editRegIsTeam, setEditRegIsTeam] = useState(false);
-  const [editRegMembers, setEditRegMembers] = useState<{ name: string; instagram: string; shirtSize: string }[]>([]);
+  const [editRegMembers, setEditRegMembers] = useState<TeamMemberDraft[]>([]);
+  // Camisas gravadas ao abrir a edição: "Sem camisa" fica bloqueado e o valor
+  // legado continua disponível no seletor (D4).
+  const [editRegInitialShirts, setEditRegInitialShirts] = useState<{ main: string; members: string[] }>({ main: '', members: [] });
+  // O aviso geral da página fica atrás do modal; erros da edição aparecem nele.
+  const [editRegError, setEditRegError] = useState('');
 
   // Estados para a Bilheteria (Venda de Inscrições / Inscrição Manual)
   const [isBilheteriaOpen, setIsBilheteriaOpen] = useState(false);
@@ -965,12 +1010,7 @@ export default function AdminPage() {
   const [bilState, setBilState] = useState('');
   const [bilInstagram, setBilInstagram] = useState('');
   const [bilShirtSize, setBilShirtSize] = useState('');
-  const [bilTeamMembers, setBilTeamMembers] = useState<{ name: string; instagram: string; shirtSize: string }[]>([
-    { name: '', instagram: '', shirtSize: '' },
-    { name: '', instagram: '', shirtSize: '' },
-    { name: '', instagram: '', shirtSize: '' },
-    { name: '', instagram: '', shirtSize: '' }
-  ]);
+  const [bilTeamMembers, setBilTeamMembers] = useState<TeamMemberDraft[]>(createEmptyTeamMembers);
 
   // Estados para o Gerenciador de Cupons do Admin
   const [newCouponCode, setNewCouponCode] = useState('');
@@ -984,6 +1024,7 @@ export default function AdminPage() {
   const [bilDiscountApplied, setBilDiscountApplied] = useState(0);
   const [, setBilIsGuest] = useState(false);
   const [bilAppliedCouponCode, setBilAppliedCouponCode] = useState('');
+  const [bilCouponClearedNotice, setBilCouponClearedNotice] = useState(false);
 
   const approvedAthleteIds = (() => {
     if (!selectedEventToManage?.id) return new Set<string>();
@@ -1314,17 +1355,53 @@ export default function AdminPage() {
     setBilState('');
     setBilInstagram('');
     setBilShirtSize('');
-    setBilTeamMembers([
-      { name: '', instagram: '', shirtSize: '' },
-      { name: '', instagram: '', shirtSize: '' },
-      { name: '', instagram: '', shirtSize: '' },
-      { name: '', instagram: '', shirtSize: '' }
-    ]);
+    setBilTeamMembers(createEmptyTeamMembers());
     setBilCouponCodeInput('');
     setBilDiscountApplied(0);
     setBilIsGuest(false);
     setBilAppliedCouponCode('');
+    setBilCouponClearedNotice(false);
     setIsBilheteriaOpen(false);
+  };
+
+  // O desconto do cupom foi calculado sobre o preço da categoria anterior e o
+  // servidor recalcula na nova: limpa o cupom para a prévia não divergir.
+  const handleBilCategoryChange = (divisionId: string) => {
+    setBilCatId(divisionId);
+    if (bilAppliedCouponCode) {
+      setBilAppliedCouponCode('');
+      setBilDiscountApplied(0);
+      setBilIsGuest(false);
+      setBilCouponClearedNotice(true);
+    }
+  };
+
+  // Prévia da venda manual pela mesma regra do servidor, que recalcula tudo ao
+  // confirmar: o cupom desconta só a inscrição e cada camisa escolhida soma o adicional.
+  const getBilheteriaSale = (div: Division) => {
+    const shirtMode = normalizeShirtMode(selectedEventToManage?.shirtMode);
+    const shirtAddonPrice = selectedEventToManage?.shirtAddonPrice ?? 0;
+    const isTeamCategory = div.type !== 'individual';
+    const participantShirts = isTeamCategory
+      ? bilTeamMembers.slice(0, getDivisionParticipantCount(div.type)).map(m => m.shirtSize)
+      : [bilShirtSize];
+    const shirtAddonCount = shirtMode === 'optional' ? participantShirts.filter(isShirtSize).length : 0;
+
+    return {
+      shirtMode,
+      shirtAddonPrice,
+      isTeamCategory,
+      participantShirts,
+      shirtAddonCount,
+      amounts: calculateRegistrationAmounts({
+        ticketPrice: div.price,
+        quantity: 1,
+        discount: bilDiscountApplied,
+        shirtMode,
+        shirtAddonPrice,
+        shirtAddonCount
+      })
+    };
   };
 
   // Submeter inscrição manual / bilheteria
@@ -1343,8 +1420,9 @@ export default function AdminPage() {
       return;
     }
 
-    const isTeamCategory = div.type !== 'individual';
-    const numIntegrantes = div.type === 'duo' ? 2 : div.type === 'trio' ? 3 : (div.type === 'team' || div.type === 'team4') ? 4 : div.type === 'team6' ? 6 : 0;
+    const sale = getBilheteriaSale(div);
+    const { isTeamCategory } = sale;
+    const numIntegrantes = getDivisionParticipantCount(div.type);
 
     if (isTeamCategory) {
       for (let i = 0; i < numIntegrantes; i++) {
@@ -1355,10 +1433,25 @@ export default function AdminPage() {
       }
     }
 
+    // Camisa opcional: cada participante paga o próprio adicional, então a
+    // escolha (tamanho ou "Sem camisa") é obrigatória para todos.
+    if (sale.shirtMode === 'optional') {
+      const missingShirtIndex = sale.participantShirts.findIndex(size => !size);
+      if (missingShirtIndex !== -1) {
+        setAdminNotice({
+          text: isTeamCategory
+            ? `Escolha a camisa do integrante ${missingShirtIndex + 1}: um tamanho ou “Sem camisa”.`
+            : 'Escolha o tamanho da camisa do atleta ou “Sem camisa”.',
+          tone: 'error'
+        });
+        return;
+      }
+    }
+
     const cleanInsta = (str: string) => str.trim().replace(/^@/, '');
 
     let finalAthleteName = bilAthleteName;
-    let teamMembersPayload: { name: string; instagram: string; shirtSize: string }[] = [];
+    let teamMembersPayload: TeamMemberDraft[] = [];
 
     if (isTeamCategory) {
       teamMembersPayload = bilTeamMembers.slice(0, numIntegrantes).map(m => ({
@@ -1370,10 +1463,8 @@ export default function AdminPage() {
       finalAthleteName = `${bilAthleteName.trim()} (${membersNames})`;
     }
 
-    const finalPrice = Math.max(0, div.price - bilDiscountApplied);
-
     try {
-      await createManualRegistration({
+      const createdRegistration = await createManualRegistration({
         eventId: selectedEventToManage.id,
         divisionId: div.id,
         athleteName: finalAthleteName,
@@ -1384,7 +1475,7 @@ export default function AdminPage() {
         ticketType: div.name,
         ticketPrice: div.price,
         quantity: 1,
-        totalPaid: finalPrice,
+        totalPaid: sale.amounts.totalPaid,
         couponCode: bilAppliedCouponCode || undefined
       }, {
         birthDate: bilBirthDate,
@@ -1393,7 +1484,8 @@ export default function AdminPage() {
         state: bilState,
         instagram: cleanInsta(bilInstagram),
         photoUrl: '',
-        shirtSize: bilShirtSize,
+        // Equipe em camisa opcional: o servidor usa a camisa de cada integrante.
+        shirtSize: isTeamCategory && sale.shirtMode === 'optional' ? '' : bilShirtSize,
         email: bilAthleteEmail,
         phone: bilAthletePhone,
         isTeam: isTeamCategory,
@@ -1401,7 +1493,7 @@ export default function AdminPage() {
       });
 
       setAdminNotice({
-        text: `Inscrição manual de "${finalAthleteName}" em "${div.name}" registrada com sucesso!${finalPrice > 0 ? ' Pagamento pendente até confirmação.' : ''}`,
+        text: `Inscrição manual de "${finalAthleteName}" em "${div.name}" registrada com sucesso!${createdRegistration.totalPaid > 0 ? ' Pagamento pendente até confirmação.' : ''}`,
         tone: 'success'
       });
 
@@ -1423,6 +1515,7 @@ export default function AdminPage() {
     const div = selectedEventToManage.divisions.find(d => d.id === bilCatId);
     if (!div) return;
 
+    setBilCouponClearedNotice(false);
     const code = bilCouponCodeInput.trim().toUpperCase();
     if (!code) {
       setBilDiscountApplied(0);
@@ -1481,6 +1574,7 @@ export default function AdminPage() {
       setBilDiscountApplied(div.price);
       setBilAppliedCouponCode(inviteCode);
       setBilIsGuest(true);
+      setBilCouponClearedNotice(false);
       setAdminNotice({ text: `Cupom de convite "${inviteCode}" gerado e aplicado com 100% de desconto!`, tone: 'success' });
     });
   };
@@ -1617,6 +1711,13 @@ export default function AdminPage() {
       return;
     }
 
+    const shirtSettings = resolveShirtSettingsForSave(eventShirtMode, eventShirtAddonPrice);
+    if (!shirtSettings.ok) {
+      setAdminNotice({ text: `Revise a camisa do evento: ${shirtSettings.error}`, tone: 'error' });
+      eventShirtPriceRef.current?.focus();
+      return;
+    }
+
     try {
       await addEvent({
         name: eventName,
@@ -1635,6 +1736,8 @@ export default function AdminPage() {
         ticketPrice: eventTicketPrice,
         ticketSlots: eventTicketSlots,
         isTicketingActive: eventIsTicketingActive,
+        shirtMode: shirtSettings.mode,
+        shirtAddonPrice: shirtSettings.price,
         divisions: [],
         workouts: [],
         eventType,
@@ -1658,11 +1761,19 @@ export default function AdminPage() {
       setEventTicketPrice(150);
       setEventTicketSlots(100);
       setEventIsTicketingActive(true);
+      setEventShirtMode('included');
+      setEventShirtAddonPrice('');
       setEventType('functional_fitness');
       setActiveTab('dashboard');
     } catch (err) {
       console.error(err);
-      setAdminNotice({ text: 'Não foi possível cadastrar o evento. Verifique sua sessão e tente novamente.', tone: 'error' });
+      // A mensagem do servidor (ex.: adicional da camisa inválido) diz o que corrigir.
+      setAdminNotice({
+        text: err instanceof Error && err.message
+          ? `Não foi possível cadastrar o evento: ${err.message}`
+          : 'Não foi possível cadastrar o evento. Verifique sua sessão e tente novamente.',
+        tone: 'error'
+      });
     }
   };
 
@@ -1686,6 +1797,8 @@ export default function AdminPage() {
     setEditEventIsTicketingActive(evt.isTicketingActive ?? true);
     setEditEventFormat(evt.format || 'individual');
     setEditEventType(evt.eventType || 'functional_fitness');
+    setEditEventShirtMode(normalizeShirtMode(evt.shirtMode));
+    setEditEventShirtAddonPrice(toShirtPriceInput(evt.shirtAddonPrice));
     setHeatDivisionFilterId('');
 
 
@@ -1756,6 +1869,17 @@ export default function AdminPage() {
     e.preventDefault();
     if (!selectedEventToManage) return;
 
+    const shirtSettings = resolveShirtSettingsForSave(
+      editEventShirtMode,
+      editEventShirtAddonPrice,
+      selectedEventToManage.shirtAddonPrice ?? 0
+    );
+    if (!shirtSettings.ok) {
+      setAdminNotice({ text: `Revise a camisa do evento: ${shirtSettings.error}`, tone: 'error' });
+      editEventShirtPriceRef.current?.focus();
+      return;
+    }
+
     try {
       await updateEvent(selectedEventToManage.id, {
         name: editEventName,
@@ -1775,7 +1899,9 @@ export default function AdminPage() {
         ticketSlots: editEventTicketSlots,
         isTicketingActive: editEventIsTicketingActive,
         format: editEventFormat,
-        eventType: editEventType
+        eventType: editEventType,
+        shirtMode: shirtSettings.mode,
+        shirtAddonPrice: shirtSettings.price
       });
 
       // Recarregar evento selecionado no estado local
@@ -1800,14 +1926,24 @@ export default function AdminPage() {
           ticketSlots: editEventTicketSlots,
           isTicketingActive: editEventIsTicketingActive,
           format: editEventFormat,
-          eventType: editEventType
+          eventType: editEventType,
+          shirtMode: shirtSettings.mode,
+          shirtAddonPrice: shirtSettings.price
         };
       });
+      // O campo passa a mostrar o valor salvo (arredondado em centavos).
+      setEditEventShirtAddonPrice(toShirtPriceInput(shirtSettings.price));
 
       setAdminNotice({ text: 'Informações do evento atualizadas com sucesso.', tone: 'success' });
     } catch (err) {
       console.error(err);
-      setAdminNotice({ text: 'Não foi possível atualizar as informações.', tone: 'error' });
+      // A mensagem do servidor (ex.: adicional da camisa inválido) diz o que corrigir.
+      setAdminNotice({
+        text: err instanceof Error && err.message
+          ? `Não foi possível atualizar as informações: ${err.message}`
+          : 'Não foi possível atualizar as informações.',
+        tone: 'error'
+      });
     }
   };
 
@@ -2408,10 +2544,16 @@ export default function AdminPage() {
     window.print();
   };
 
+  // Mesma resolução da lista, do resumo e da planilha: pelo athleteId e, sem ele,
+  // pelo nome + categoria. Assim Editar inscrição e o voucher não perdem o atleta
+  // (nem a camisa) quando o nome da inscrição é editado.
+  const resolveRegistrationAthleteRecord = useMemo(
+    () => createRegistrationAthleteResolver(athletes),
+    [athletes]
+  );
+
   const getRegistrationAthlete = (registration: Registration): Athlete => {
-    const athlete = athletes.find(
-      a => a.name.toLowerCase() === registration.athleteName.toLowerCase() && a.divisionId === registration.divisionId
-    );
+    const athlete = resolveRegistrationAthleteRecord(registration);
 
     return athlete || {
       id: `ath-voucher-${registration.id}`,
@@ -2465,21 +2607,27 @@ export default function AdminPage() {
         : ''
     );
     setEditRegInstagram(athlete.instagram || '');
-    setEditRegShirtSize(athlete.shirtSize ? String(athlete.shirtSize) : '');
+    const mainShirt = athlete.shirtSize ? String(athlete.shirtSize) : '';
+    setEditRegShirtSize(mainShirt);
     setEditRegIsTeam(isTeam);
 
-    const members = (athlete.teamMembers || []).map(m => ({
+    const members: TeamMemberDraft[] = (athlete.teamMembers || []).map(m => ({
       name: m.name || '',
       instagram: m.instagram || '',
       shirtSize: m.shirtSize ? String(m.shirtSize) : ''
     }));
-    while (members.length < 4) members.push({ name: '', instagram: '', shirtSize: '' });
-    setEditRegMembers(members.slice(0, 4));
+    setEditRegInitialShirts({ main: mainShirt, members: members.map(m => m.shirtSize) });
+    // Uma posição por integrante da maior equipe: cortar em 4 apagava os
+    // integrantes 5 e 6 e a relocação para equipe maior ficava sem posição.
+    while (members.length < MAX_TEAM_MEMBERS) members.push({ name: '', instagram: '', shirtSize: '' });
+    setEditRegMembers(members);
+    setEditRegError('');
   };
 
   const handleCloseEditRegistration = () => {
     if (isSavingRegistration) return;
     setEditingRegistration(null);
+    setEditRegError('');
   };
 
   const handleSaveRegistrationEdit = async (e: React.FormEvent) => {
@@ -2488,20 +2636,20 @@ export default function AdminPage() {
 
     const division = selectedEventToManage.divisions.find(d => d.id === editRegDivisionId);
     if (!division) {
-      setAdminNotice({ text: 'Selecione uma categoria válida.', tone: 'error' });
+      setEditRegError('Selecione uma categoria válida.');
       return;
     }
 
     const isTeam = division.type !== 'individual';
-    const numIntegrantes = division.type === 'duo' ? 2 : division.type === 'trio' ? 3 : (division.type === 'team' || division.type === 'team4') ? 4 : division.type === 'team6' ? 6 : 0;
+    const numIntegrantes = getDivisionParticipantCount(division.type);
     const trimmedName = editRegName.trim();
 
     if (!trimmedName) {
-      setAdminNotice({ text: isTeam ? 'Informe o nome da equipe.' : 'Informe o nome do atleta.', tone: 'error' });
+      setEditRegError(isTeam ? 'Informe o nome da equipe.' : 'Informe o nome do atleta.');
       return;
     }
 
-    let members: { name: string; instagram: string; shirtSize: string }[] = [];
+    let members: TeamMemberDraft[] = [];
     if (isTeam) {
       members = editRegMembers.slice(0, numIntegrantes).map(m => ({
         name: m.name.trim(),
@@ -2509,9 +2657,26 @@ export default function AdminPage() {
         shirtSize: m.shirtSize
       }));
       if (members.some(m => !m.name)) {
-        setAdminNotice({ text: 'Preencha o nome de todos os integrantes da equipe.', tone: 'error' });
+        setEditRegError('Preencha o nome de todos os integrantes da equipe.');
         return;
       }
+    }
+
+    // D4: o servidor recusa (409) apagar o tamanho já registrado de um participante
+    // e aumentar o número de camisas em branco (ex.: integrante novo numa relocação
+    // para equipe maior). Avisa aqui, com o modal aberto, sem ir ao servidor.
+    const nextShirts = isTeam ? members.map(m => m.shirtSize) : [editRegShirtSize];
+    const hadShirt = (idx: number) => Boolean(isTeam ? editRegInitialShirts.members[idx] : editRegInitialShirts.main);
+    const lostShirtIndex = nextShirts.findIndex((size, idx) => !size && hadShirt(idx));
+    const storedShirts = editRegInitialShirts.members.length > 0 ? editRegInitialShirts.members : [editRegInitialShirts.main];
+    const countBlankShirts = (sizes: string[]) => sizes.filter(size => !size).length;
+    if (lostShirtIndex !== -1 || countBlankShirts(nextShirts) > countBlankShirts(storedShirts)) {
+      const blankIndex = lostShirtIndex !== -1 ? lostShirtIndex : nextShirts.findIndex(size => !size);
+      const participant = isTeam ? `do integrante ${blankIndex + 1}` : 'do atleta';
+      setEditRegError(lostShirtIndex !== -1
+        ? `Escolha o tamanho da camisa ${participant}. O tamanho já registrado não pode ficar em branco.`
+        : `Escolha o tamanho da camisa ${participant}. A inscrição não pode ficar com mais camisas em branco do que já tinha.`);
+      return;
     }
 
     const finalAthleteName = isTeam
@@ -2525,6 +2690,7 @@ export default function AdminPage() {
 
     setIsSavingRegistration(true);
     setAdminNotice(null);
+    setEditRegError('');
     try {
       await updateRegistrationDetails(editingRegistration.id, selectedEventToManage.id, {
         athleteName: finalAthleteName,
@@ -2542,10 +2708,8 @@ export default function AdminPage() {
       setAdminNotice({ text: `Inscrição de "${finalAthleteName}" atualizada com sucesso!`, tone: 'success' });
       setEditingRegistration(null);
     } catch (err) {
-      setAdminNotice({
-        text: err instanceof Error ? err.message : 'Não foi possível atualizar a inscrição.',
-        tone: 'error'
-      });
+      // 400/409 (ex.: trocar entre com e sem camisa) mantêm o modal aberto com o que foi digitado.
+      setEditRegError(err instanceof Error && err.message ? err.message : 'Não foi possível atualizar a inscrição.');
     } finally {
       setIsSavingRegistration(false);
     }
@@ -4267,6 +4431,22 @@ export default function AdminPage() {
           </div>
         </div>
 
+        {selectedEventToManage && (
+          <EventShirtSettings
+            idPrefix="edit-event"
+            mode={editEventShirtMode}
+            price={editEventShirtAddonPrice}
+            onModeChange={setEditEventShirtMode}
+            onPriceChange={setEditEventShirtAddonPrice}
+            priceInputRef={editEventShirtPriceRef}
+            currency={selectedEventToManage.currency}
+            divisions={selectedEventToManage.divisions}
+            existingRegistrations={registrations.filter(r => (
+              r.eventId === selectedEventToManage.id && r.paymentStatus !== 'payment_cancelled'
+            )).length}
+          />
+        )}
+
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <label htmlFor="edit-event-instagram" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Instagram do Evento</label>
@@ -4338,6 +4518,10 @@ export default function AdminPage() {
 
   const renderAbaCategories = () => {
     const divisions = selectedEventToManage?.divisions || [];
+    // Em camisa opcional o preço da categoria é o valor sem camisa.
+    const isShirtOptional = normalizeShirtMode(selectedEventToManage?.shirtMode) === 'optional';
+    const shirtAddonPrice = selectedEventToManage?.shirtAddonPrice ?? 0;
+    const eventCurrency = selectedEventToManage?.currency;
 
     return (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -4426,8 +4610,14 @@ export default function AdminPage() {
                   required
                   value={catPrice}
                   onChange={(e) => setCatPrice(Number(e.target.value))}
+                  aria-describedby={isShirtOptional ? 'cat-price-shirt-hint' : undefined}
                   className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none font-number"
                 />
+                {isShirtOptional && (
+                  <p id="cat-price-shirt-hint" className="mt-1 text-[10px] text-muted">
+                    Valor sem camisa. O adicional da camisa é configurado no evento.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -4651,7 +4841,21 @@ export default function AdminPage() {
                           </span>
                         </td>
                         <td className="py-3 px-2 text-right font-number">{participantTotal}/{div.slotsLimit}</td>
-                        <td className="py-3 px-2 text-right text-primary font-number">{currencyFormatter.format(div.price)}</td>
+                        <td className="py-3 px-2 text-right text-primary font-number">
+                          {isShirtOptional ? (() => {
+                            const shirtPrices = getDivisionShirtPrices(div, shirtAddonPrice);
+                            return (
+                              <span className="inline-flex flex-col items-end gap-1">
+                                <span className="whitespace-nowrap rounded border border-card-border bg-dark-gray px-1.5 py-0.5 text-[10px] font-semibold text-muted-soft">
+                                  sem camisa {formatEventMoney(shirtPrices.withoutShirt, eventCurrency)}
+                                </span>
+                                <span className="whitespace-nowrap rounded border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">
+                                  com camisa {formatEventMoney(shirtPrices.withShirt, eventCurrency)}
+                                </span>
+                              </span>
+                            );
+                          })() : currencyFormatter.format(div.price)}
+                        </td>
                         <td className="py-3 px-2 text-right">
                           <div className="inline-flex items-center gap-1">
                             <button
@@ -7335,21 +7539,26 @@ export default function AdminPage() {
         return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
       });
 
+    // Mesma resolução de atleta na lista, no resumo e na planilha.
+    const resolveRegistrationAthlete = createRegistrationAthleteResolver(athletes);
+    const shirtSummary = buildShirtSummary(filteredRegs, athletes);
+    const isRegListFiltered = Boolean(regFilterCatId || regFilterStatus || regFilterName || regFilterBox);
+    const managedEventShirtMode = normalizeShirtMode(selectedEventToManage?.shirtMode);
+
     const escapeExcelCell = (value: unknown) => String(value ?? '')
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
 
     const handleExportShirtSizes = () => {
       if (!selectedEventToManage) return;
 
       const rows = filteredRegs.flatMap((reg) => {
         const div = divisions.find(d => d.id === reg.divisionId);
-        const athleteInfo = athletes.find(a =>
-          (reg.athleteId && a.id === reg.athleteId) ||
-          (a.name.toLowerCase() === reg.athleteName.toLowerCase() && a.divisionId === reg.divisionId)
-        );
+        const athleteInfo = resolveRegistrationAthlete(reg);
+        const teamMembers = getAthleteTeamMembers(athleteInfo);
         const statusMeta = getPaymentStatusMeta(reg.paymentStatus);
         const baseRow = {
           evento: selectedEventToManage.name,
@@ -7361,27 +7570,21 @@ export default function AdminPage() {
           status: statusMeta.label,
           data: new Date(reg.createdAt).toLocaleDateString('pt-BR')
         };
+        const shirtAddonPaid = formatEventMoney(reg.shirtAddonAmount ?? 0, reg.currency || selectedEventToManage.currency);
 
-        if (athleteInfo?.isTeam && athleteInfo.teamMembers && athleteInfo.teamMembers.length > 0) {
-          return athleteInfo.teamMembers.map((member, index) => ({
-            ...baseRow,
-            tipo: 'Integrante',
-            atleta: member.name,
-            instagram: member.instagram || '',
-            camisa: member.shirtSize || (index === 0 ? athleteInfo.shirtSize || '' : '')
-          }));
-        }
-
-        return [{
+        return listRegistrationShirts(reg, athleteInfo).map((shirt, index) => ({
           ...baseRow,
-          tipo: 'Atleta',
-          atleta: athleteInfo?.name || reg.athleteName,
-          instagram: athleteInfo?.instagram || '',
-          camisa: athleteInfo?.shirtSize || ''
-        }];
+          tipo: teamMembers.length > 0 ? 'Integrante' : 'Atleta',
+          atleta: shirt.name || (teamMembers.length > 0 ? '' : reg.athleteName),
+          instagram: (teamMembers.length > 0 ? teamMembers[index]?.instagram : athleteInfo?.instagram) || '',
+          camisa: formatShirtChoice(shirt.size),
+          // O adicional é da inscrição: só na primeira linha, para a soma da coluna não duplicar.
+          adicional: index === 0 ? shirtAddonPaid : '',
+          entrega: getShirtDeliveryLabel(shirt)
+        }));
       });
 
-      const headers = ['Evento', 'Categoria', 'Inscrição/Equipe', 'Tipo', 'Atleta/Integrante', 'Tamanho da Camisa', 'Instagram', 'Box/Academia', 'E-mail', 'Telefone', 'Status', 'Data'];
+      const headers = ['Evento', 'Categoria', 'Inscrição/Equipe', 'Tipo', 'Atleta/Integrante', 'Tamanho da Camisa', 'Instagram', 'Box/Academia', 'E-mail', 'Telefone', 'Status', 'Data', 'Adicional pago', 'Entrega'];
       const bodyRows = rows.map(row => [
         row.evento,
         row.categoria,
@@ -7394,8 +7597,14 @@ export default function AdminPage() {
         row.email,
         row.telefone,
         row.status,
-        row.data
+        row.data,
+        row.adicional,
+        row.entrega
       ]);
+      const summaryRows = getShirtSummaryRows(shirtSummary);
+      const summaryNote = isRegListFiltered
+        ? 'Conta só inscrições pagas, com os filtros aplicados na lista.'
+        : 'Conta só inscrições pagas.';
 
       const table = `
         <html>
@@ -7405,6 +7614,16 @@ export default function AdminPage() {
               <thead><tr>${headers.map(header => `<th>${escapeExcelCell(header)}</th>`).join('')}</tr></thead>
               <tbody>
                 ${bodyRows.map(row => `<tr>${row.map(cell => `<td>${escapeExcelCell(cell)}</td>`).join('')}</tr>`).join('')}
+              </tbody>
+            </table>
+            <br />
+            <table border="1">
+              <thead>
+                <tr><th colspan="2">${escapeExcelCell('Resumo do pedido')}</th></tr>
+                <tr><td colspan="2">${escapeExcelCell(summaryNote)}</td></tr>
+              </thead>
+              <tbody>
+                ${summaryRows.map(([label, count]) => `<tr><td>${escapeExcelCell(label)}</td><td>${escapeExcelCell(count)}</td></tr>`).join('')}
               </tbody>
             </table>
           </body>
@@ -7471,9 +7690,7 @@ export default function AdminPage() {
                   id="bil-cat-select"
                   required
                   value={bilCatId}
-                  onChange={(e) => {
-                    setBilCatId(e.target.value);
-                  }}
+                  onChange={(e) => handleBilCategoryChange(e.target.value)}
                   className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"
                 >
                   <option value="">Selecione a Categoria...</option>
@@ -7483,6 +7700,12 @@ export default function AdminPage() {
                     </option>
                   ))}
                 </select>
+                {/* Sempre montada para o leitor de tela anunciar a remoção do cupom. */}
+                <div aria-live="polite">
+                  {bilCouponClearedNotice && (
+                    <p className="mt-1.5 text-xs text-muted-soft">Cupom removido: aplique novamente para a nova categoria.</p>
+                  )}
+                </div>
               </div>
 
               {/* Se for categoria individual */}
@@ -7524,8 +7747,23 @@ export default function AdminPage() {
             {bilCatId && (() => {
               const selectedCat = divisions.find(d => d.id === bilCatId);
               if (!selectedCat) return null;
-              const isTeamCat = selectedCat.type !== 'individual';
-              const bilFinalPrice = Math.max(0, selectedCat.price - bilDiscountApplied);
+              const sale = getBilheteriaSale(selectedCat);
+              const isTeamCat = sale.isTeamCategory;
+              const isShirtOptional = sale.shirtMode === 'optional';
+              const eventCurrency = selectedEventToManage?.currency;
+              // Equipe em camisa opcional: a camisa é escolhida por integrante.
+              const showMainShirtField = !(isTeamCat && isShirtOptional);
+              const renderShirtOptions = () => (
+                <>
+                  <option value="">Selecione...</option>
+                  {SHIRT_SIZE_OPTIONS.map(size => (
+                    <option key={size} value={size}>
+                      {isShirtOptional ? `${size} (+ ${formatEventMoney(sale.shirtAddonPrice, eventCurrency)})` : size}
+                    </option>
+                  ))}
+                  {isShirtOptional && <option value={SHIRT_NONE}>Sem camisa (sem adicional)</option>}
+                </>
+              );
 
               return (
                 <div className="space-y-4 border-t border-card-border pt-4">
@@ -7600,7 +7838,7 @@ export default function AdminPage() {
                   </div>
 
                   {/* Informações de contato e pagamento */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className={`grid grid-cols-1 gap-4 ${showMainShirtField ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
                     <div>
                       <label htmlFor="bil-email" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans">E-mail de Contato *</label>
                       <input
@@ -7625,29 +7863,34 @@ export default function AdminPage() {
                         className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"
                       />
                     </div>
-                    <div>
-                      <label htmlFor="bil-shirt-size" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans">Tamanho da Camisa</label>
-                      <select
-                        id="bil-shirt-size"
-                        value={bilShirtSize}
-                        onChange={(e) => setBilShirtSize(e.target.value)}
-                        className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"
-                      >
-                        <option value="">Selecione...</option>
-                        {SHIRT_SIZE_OPTIONS.map(size => (
-                          <option key={size} value={size}>{size}</option>
-                        ))}
-                      </select>
-                    </div>
+                    {showMainShirtField && (
+                      <div>
+                        <label htmlFor="bil-shirt-size" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans">
+                          {isShirtOptional ? 'Tamanho da Camisa *' : 'Tamanho da Camisa'}
+                        </label>
+                        <select
+                          id="bil-shirt-size"
+                          value={bilShirtSize}
+                          onChange={(e) => setBilShirtSize(e.target.value)}
+                          aria-required={isShirtOptional || undefined}
+                          className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"
+                        >
+                          {renderShirtOptions()}
+                        </select>
+                      </div>
+                    )}
                   </div>
 
                   {/* Se for equipe (dupla, trio, equipe) - Campos dos integrantes */}
                   {isTeamCat && (
                     <div className="space-y-4 border-t border-card-border/60 pt-4">
                       <p className="text-xs font-bold uppercase tracking-wider text-primary font-sans">Integrantes da Equipe</p>
+                      {isShirtOptional && (
+                        <p className="text-[11px] text-muted">Cada integrante escolhe a própria camisa e paga o próprio adicional.</p>
+                      )}
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {Array.from({ length: selectedCat.type === 'duo' ? 2 : selectedCat.type === 'trio' ? 3 : (selectedCat.type === 'team' || selectedCat.type === 'team4') ? 4 : selectedCat.type === 'team6' ? 6 : 1 }).map((_, idx) => (
+                        {Array.from({ length: getDivisionParticipantCount(selectedCat.type) }).map((_, idx) => (
                           <div key={idx} className="bg-dark-gray/25 border border-card-border/60 rounded-xl p-3 space-y-3">
                             <p className="text-[10px] font-bold uppercase tracking-wider text-white">Atleta {idx + 1}</p>
                             <div>
@@ -7688,7 +7931,9 @@ export default function AdminPage() {
                               />
                             </div>
                             <div>
-                              <label htmlFor={`bil-member-shirt-${idx}`} className="mb-1 block text-[10px] font-bold uppercase text-muted font-sans">Camisa</label>
+                              <label htmlFor={`bil-member-shirt-${idx}`} className="mb-1 block text-[10px] font-bold uppercase text-muted font-sans">
+                                {isShirtOptional ? 'Camisa *' : 'Camisa'}
+                              </label>
                               <select
                                 id={`bil-member-shirt-${idx}`}
                                 value={bilTeamMembers[idx]?.shirtSize || ''}
@@ -7700,12 +7945,10 @@ export default function AdminPage() {
                                     return next;
                                   });
                                 }}
+                                aria-required={isShirtOptional || undefined}
                                 className="w-full rounded-md border border-card-border bg-dark-gray px-3 py-1.5 text-xs text-white focus:border-primary/50 focus:outline-none"
                               >
-                                <option value="">Selecione...</option>
-                                {SHIRT_SIZE_OPTIONS.map(size => (
-                                  <option key={size} value={size}>{size}</option>
-                                ))}
+                                {renderShirtOptions()}
                               </select>
                             </div>
                           </div>
@@ -7768,30 +8011,51 @@ export default function AdminPage() {
                     )}
                   </div>
 
-                  {/* Detalhes de Pagamento (Visual Informativo) */}
-                  <div className="bg-dark-gray/30 border border-card-border rounded-lg p-4 mt-4 flex items-center justify-between text-sm">
-                    <div>
-                      <p className="text-xs text-muted font-sans uppercase">Total a Pagar (Bilheteria)</p>
-                      <div className="flex items-baseline gap-2">
-                        {bilDiscountApplied > 0 && (
-                          <span className="text-xs line-through text-muted font-number">
-                            {currencyFormatter.format(selectedCat.price)}
-                          </span>
-                        )}
+                  {/* Resumo da venda: prévia pela regra do servidor, que recalcula ao confirmar */}
+                  <div className="mt-4 space-y-3 rounded-lg border border-card-border bg-dark-gray/30 p-4 text-sm">
+                    <p className="text-xs font-bold uppercase tracking-wider text-muted font-sans">Resumo da venda</p>
+                    <dl className="space-y-1.5 text-xs">
+                      <div className="flex items-center justify-between gap-4">
+                        <dt className="text-muted-soft">Inscrição {selectedCat.name}</dt>
+                        <dd className="font-number text-white">{formatEventMoney(sale.amounts.subtotal, eventCurrency)}</dd>
+                      </div>
+                      {sale.shirtAddonCount > 0 && (
+                        <div className="flex items-center justify-between gap-4">
+                          <dt className="text-muted-soft">
+                            {sale.shirtAddonCount === 1 ? 'Camisa' : 'Camisas'} ({sale.shirtAddonCount} × {formatEventMoney(sale.shirtAddonPrice, eventCurrency)})
+                          </dt>
+                          <dd className="font-number text-white">{formatEventMoney(sale.amounts.shirtAddonAmount, eventCurrency)}</dd>
+                        </div>
+                      )}
+                      {sale.amounts.discount > 0 && (
+                        <div className="flex items-center justify-between gap-4">
+                          <dt className="text-muted-soft">Cupom {bilAppliedCouponCode}</dt>
+                          <dd className="font-number text-trading-up">-{formatEventMoney(sale.amounts.discount, eventCurrency)}</dd>
+                        </div>
+                      )}
+                    </dl>
+                    {isShirtOptional && bilAppliedCouponCode && (
+                      <p className="text-[11px] leading-5 text-muted">
+                        O cupom desconta só a inscrição. A camisa é cobrada à parte; para não pagar por ela, escolha “Sem camisa”.
+                      </p>
+                    )}
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-card-border pt-3">
+                      <div>
+                        <p className="text-xs text-muted font-sans uppercase">Total a receber</p>
                         <p className="text-xl font-bold font-number text-primary">
-                          {currencyFormatter.format(bilFinalPrice)}
+                          {formatEventMoney(sale.amounts.totalPaid, eventCurrency)}
                         </p>
                       </div>
+                      {sale.amounts.totalPaid === 0 ? (
+                        <span className="text-[10px] font-bold bg-trading-up/10 text-trading-up px-2.5 py-1 rounded border border-trading-up/25 uppercase font-sans tracking-wide">
+                          Aprovado na Bilheteria
+                        </span>
+                      ) : (
+                        <span className={`text-[10px] font-bold px-2.5 py-1 rounded border uppercase font-sans tracking-wide ${getPaymentStatusClassName('warning')}`}>
+                          Fica Pendente até Confirmar Pagamento
+                        </span>
+                      )}
                     </div>
-                    {bilFinalPrice === 0 ? (
-                      <span className="text-[10px] font-bold bg-trading-up/10 text-trading-up px-2.5 py-1 rounded border border-trading-up/25 uppercase font-sans tracking-wide">
-                        Aprovado na Bilheteria
-                      </span>
-                    ) : (
-                      <span className={`text-[10px] font-bold px-2.5 py-1 rounded border uppercase font-sans tracking-wide ${getPaymentStatusClassName('warning')}`}>
-                        Fica Pendente até Confirmar Pagamento
-                      </span>
-                    )}
                   </div>
                 </div>
               );
@@ -7875,6 +8139,10 @@ export default function AdminPage() {
               </div>
             </div>
 
+            {filteredRegs.length > 0 && (
+              <ShirtSummaryCard summary={shirtSummary} shirtMode={managedEventShirtMode} isFiltered={isRegListFiltered} />
+            )}
+
             {filteredRegs.length === 0 ? (
               <p className="text-xs text-muted text-center py-8">Nenhuma inscrição corresponde aos filtros.</p>
             ) : (
@@ -7882,14 +8150,20 @@ export default function AdminPage() {
                 {filteredRegs.map((reg) => {
                   const div = divisions.find(d => d.id === reg.divisionId);
                   const statusMeta = getPaymentStatusMeta(reg.paymentStatus);
-                  const athleteInfo = athletes.find(
-                    a => a.name.toLowerCase() === reg.athleteName.toLowerCase() && a.divisionId === reg.divisionId
-                  );
+                  const athleteInfo = resolveRegistrationAthlete(reg);
                   const isExpanded = expandedRegistrationId === reg.id;
-                  const teamMembers = athleteInfo?.isTeam ? (athleteInfo.teamMembers || []) : [];
-                  const shirtSizeLabel = athleteInfo?.isTeam && teamMembers.length
-                    ? teamMembers.map(m => m.shirtSize || '-').join(' / ')
-                    : (athleteInfo?.shirtSize ? String(athleteInfo.shirtSize) : '-');
+                  const teamMembers = getAthleteTeamMembers(athleteInfo);
+                  // Camisa por participante, na ordem; "Sem camisa" no lugar de NONE.
+                  const registrationShirts = listRegistrationShirts(reg, athleteInfo);
+                  const shirtChoicesLabel = registrationShirts.some(shirt => shirt.size)
+                    ? formatRegistrationShirts(registrationShirts)
+                    : '';
+                  const hasShirtToProduce = registrationShirts.some(shirt => shirt.hasShirt);
+                  const shirtAddonAmount = reg.shirtAddonAmount ?? 0;
+                  const shirtAddonLabel = shirtAddonAmount > 0
+                    ? `+ ${formatEventMoney(shirtAddonAmount, reg.currency || selectedEventToManage?.currency)}`
+                    : '';
+                  const shirtSizeLabel = [shirtChoicesLabel, shirtAddonLabel].filter(Boolean).join(' · ') || '-';
                   const displayName = athleteInfo?.isTeam ? stripTeamSuffix(reg.athleteName) : reg.athleteName;
                   const instagramLabel = athleteInfo?.instagram
                     ? (athleteInfo.instagram.startsWith('@') ? athleteInfo.instagram : `@${athleteInfo.instagram}`)
@@ -7929,6 +8203,26 @@ export default function AdminPage() {
                             {div ? div.name : 'Outro'}
                             {athleteInfo?.isTeam ? ` · ${teamMembers.length} atletas` : ''}
                           </p>
+                          {(shirtChoicesLabel || shirtAddonLabel) && (
+                            <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                              <span className="sr-only">Camisa: </span>
+                              {shirtChoicesLabel && (
+                                <span
+                                  className={`rounded-full border px-2 py-0.5 font-number text-[10px] font-semibold ${
+                                    hasShirtToProduce ? 'border-primary/30 text-primary' : 'border-card-border text-muted-soft'
+                                  }`}
+                                >
+                                  {shirtChoicesLabel}
+                                </span>
+                              )}
+                              {shirtAddonLabel && (
+                                <span className="rounded-full border border-card-border px-2 py-0.5 font-number text-[10px] font-semibold text-muted-soft">
+                                  <span className="sr-only">adicional da camisa </span>
+                                  {shirtAddonLabel}
+                                </span>
+                              )}
+                            </span>
+                          )}
                         </div>
                         <div className="hidden sm:block shrink-0 text-right">
                           <p className="font-number text-sm font-bold text-primary">{currencyFormatter.format(reg.totalPaid)}</p>
@@ -7960,15 +8254,23 @@ export default function AdminPage() {
                             <div className="space-y-2 rounded-lg border border-card-border/50 bg-dark-gray/40 p-3">
                               <p className="text-[9px] font-bold uppercase tracking-wider text-primary font-sans">Integrantes</p>
                               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                                {teamMembers.map((m, idx) => (
-                                  <div key={idx} className="flex items-center justify-between gap-2 text-[11px]">
-                                    <span className="truncate text-white">{m.name}</span>
-                                    <span className="flex shrink-0 items-center gap-2 text-muted-soft">
-                                      {m.instagram && <span>{m.instagram.startsWith('@') ? m.instagram : `@${m.instagram}`}</span>}
-                                      {m.shirtSize && <span className="font-bold uppercase text-primary">{m.shirtSize}</span>}
-                                    </span>
-                                  </div>
-                                ))}
+                                {teamMembers.map((m, idx) => {
+                                  const memberShirtLabel = formatShirtChoice(registrationShirts[idx]?.size);
+                                  return (
+                                    <div key={idx} className="flex items-center justify-between gap-2 text-[11px]">
+                                      <span className="truncate text-white">{m.name}</span>
+                                      <span className="flex shrink-0 items-center gap-2 text-muted-soft">
+                                        {m.instagram && <span>{m.instagram.startsWith('@') ? m.instagram : `@${m.instagram}`}</span>}
+                                        {memberShirtLabel && (
+                                          <span className={`font-bold uppercase ${registrationShirts[idx]?.hasShirt ? 'text-primary' : 'text-muted-soft'}`}>
+                                            <span className="sr-only">Camisa: </span>
+                                            {memberShirtLabel}
+                                          </span>
+                                        )}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
                               </div>
                             </div>
                           )}
@@ -9777,6 +10079,15 @@ export default function AdminPage() {
                     </div>
                   </div>
 
+                  <EventShirtSettings
+                    idPrefix="new-event"
+                    mode={eventShirtMode}
+                    price={eventShirtAddonPrice}
+                    onModeChange={setEventShirtMode}
+                    onPriceChange={setEventShirtAddonPrice}
+                    priceInputRef={eventShirtPriceRef}
+                  />
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label htmlFor="event-instagram" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans">Instagram do Evento</label>
@@ -10355,7 +10666,7 @@ export default function AdminPage() {
             {(() => {
               const selectedDiv = selectedEventToManage?.divisions.find(d => d.id === editRegDivisionId);
               const isTeam = selectedDiv ? selectedDiv.type !== 'individual' : editRegIsTeam;
-              const numIntegrantes = selectedDiv?.type === 'duo' ? 2 : selectedDiv?.type === 'trio' ? 3 : (selectedDiv?.type === 'team' || selectedDiv?.type === 'team4') ? 4 : selectedDiv?.type === 'team6' ? 6 : 0;
+              const numIntegrantes = selectedDiv ? getDivisionParticipantCount(selectedDiv.type) : 0;
               const updateMember = (idx: number, field: 'name' | 'instagram' | 'shirtSize', value: string) => {
                 setEditRegMembers(prev => {
                   const next = [...prev];
@@ -10363,6 +10674,24 @@ export default function AdminPage() {
                   return next;
                 });
               };
+              // D4: com camisa opcional (ou adicional já pago) só o tamanho muda; incluir
+              // ou retirar a camisa muda o valor devido e o servidor recusa (409).
+              const isShirtSizeOnly = normalizeShirtMode(selectedEventToManage?.shirtMode) === 'optional'
+                || (editingRegistration.shirtAddonAmount ?? 0) > 0;
+              const visibleMemberShirts = Array.from({ length: numIntegrantes }, (_, idx) => editRegInitialShirts.members[idx] || '');
+              // Nunca oferece "Sem camisa"; o tamanho legado gravado continua como opção.
+              // "Selecione..." só para quem não tinha tamanho gravado: em qualquer modo
+              // o servidor recusa (409) deixar em branco um tamanho já registrado.
+              const renderEditShirtOptions = (initialShirt: string) => (
+                <>
+                  {!initialShirt && <option value="">Selecione...</option>}
+                  {SHIRT_SIZE_OPTIONS.map(size => (
+                    <option key={size} value={size}>{size}</option>
+                  ))}
+                  {initialShirt && !isShirtSize(initialShirt) && <option value={initialShirt}>{initialShirt}</option>}
+                </>
+              );
+              const lockedShirtSelectClassName = 'w-full rounded-md border border-card-border bg-dark-gray text-white disabled:cursor-not-allowed disabled:opacity-60';
 
               return (
                 <form onSubmit={handleSaveRegistrationEdit}>
@@ -10481,17 +10810,39 @@ export default function AdminPage() {
                         </div>
                         <div>
                           <label htmlFor="edit-reg-shirt" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans">Tamanho da camisa</label>
-                          <select
-                            id="edit-reg-shirt"
-                            value={editRegShirtSize}
-                            onChange={(e) => setEditRegShirtSize(e.target.value)}
-                            className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"
-                          >
-                            <option value="">Selecione...</option>
-                            {SHIRT_SIZE_OPTIONS.map(size => (
-                              <option key={size} value={size}>{size}</option>
-                            ))}
-                          </select>
+                          {isShirtNone(editRegInitialShirts.main) ? (
+                            <>
+                              <select
+                                id="edit-reg-shirt"
+                                value={SHIRT_NONE}
+                                disabled
+                                aria-describedby="edit-reg-shirt-note"
+                                className={`${lockedShirtSelectClassName} px-4 py-2 text-sm`}
+                              >
+                                <option value={SHIRT_NONE}>Sem camisa</option>
+                              </select>
+                              <p id="edit-reg-shirt-note" className="mt-1 text-[10px] leading-4 text-muted">
+                                O atleta optou por não receber camisa. Para incluir uma, é preciso uma nova inscrição, porque o valor muda.
+                              </p>
+                            </>
+                          ) : (
+                            <>
+                              <select
+                                id="edit-reg-shirt"
+                                value={editRegShirtSize}
+                                onChange={(e) => setEditRegShirtSize(e.target.value)}
+                                aria-describedby={isShirtSizeOnly && editRegInitialShirts.main ? 'edit-reg-shirt-note' : undefined}
+                                className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"
+                              >
+                                {renderEditShirtOptions(editRegInitialShirts.main)}
+                              </select>
+                              {isShirtSizeOnly && editRegInitialShirts.main && (
+                                <p id="edit-reg-shirt-note" className="mt-1 text-[10px] leading-4 text-muted">
+                                  Você pode trocar só o tamanho. Para retirar a camisa, cancele e refaça a inscrição.
+                                </p>
+                              )}
+                            </>
+                          )}
                         </div>
                       </div>
                     )}
@@ -10500,6 +10851,16 @@ export default function AdminPage() {
                     {isTeam && numIntegrantes > 0 && (
                       <div className="space-y-3 border-t border-card-border/60 pt-4">
                         <p className="text-xs font-bold uppercase tracking-wider text-primary font-sans">Integrantes da equipe</p>
+                        {visibleMemberShirts.some(isShirtNone) && (
+                          <p id="edit-members-no-shirt-note" className="text-[11px] leading-5 text-muted">
+                            Integrantes com “Sem camisa” optaram por não receber camisa. Para incluir uma, é preciso uma nova inscrição, porque o valor muda.
+                          </p>
+                        )}
+                        {isShirtSizeOnly && visibleMemberShirts.some(size => size && !isShirtNone(size)) && (
+                          <p id="edit-members-size-only-note" className="text-[11px] leading-5 text-muted">
+                            Você pode trocar só o tamanho. Para retirar a camisa, cancele e refaça a inscrição.
+                          </p>
+                        )}
                         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                           {Array.from({ length: numIntegrantes }).map((_, idx) => (
                             <div key={idx} className="space-y-3 rounded-xl border border-card-border/60 bg-dark-gray/25 p-3">
@@ -10529,17 +10890,27 @@ export default function AdminPage() {
                               </div>
                               <div>
                                 <label htmlFor={`edit-member-shirt-${idx}`} className="mb-1 block text-[10px] font-bold uppercase text-muted font-sans">Camisa</label>
-                                <select
-                                  id={`edit-member-shirt-${idx}`}
-                                  value={editRegMembers[idx]?.shirtSize || ''}
-                                  onChange={(e) => updateMember(idx, 'shirtSize', e.target.value)}
-                                  className="w-full rounded-md border border-card-border bg-dark-gray px-3 py-1.5 text-xs text-white focus:border-primary/50 focus:outline-none"
-                                >
-                                  <option value="">Selecione...</option>
-                                  {SHIRT_SIZE_OPTIONS.map(size => (
-                                    <option key={size} value={size}>{size}</option>
-                                  ))}
-                                </select>
+                                {isShirtNone(visibleMemberShirts[idx]) ? (
+                                  <select
+                                    id={`edit-member-shirt-${idx}`}
+                                    value={SHIRT_NONE}
+                                    disabled
+                                    aria-describedby="edit-members-no-shirt-note"
+                                    className={`${lockedShirtSelectClassName} px-3 py-1.5 text-xs`}
+                                  >
+                                    <option value={SHIRT_NONE}>Sem camisa</option>
+                                  </select>
+                                ) : (
+                                  <select
+                                    id={`edit-member-shirt-${idx}`}
+                                    value={editRegMembers[idx]?.shirtSize || ''}
+                                    onChange={(e) => updateMember(idx, 'shirtSize', e.target.value)}
+                                    aria-describedby={isShirtSizeOnly && visibleMemberShirts[idx] ? 'edit-members-size-only-note' : undefined}
+                                    className="w-full rounded-md border border-card-border bg-dark-gray px-3 py-1.5 text-xs text-white focus:border-primary/50 focus:outline-none"
+                                  >
+                                    {renderEditShirtOptions(visibleMemberShirts[idx])}
+                                  </select>
+                                )}
                               </div>
                             </div>
                           ))}
@@ -10547,6 +10918,12 @@ export default function AdminPage() {
                       </div>
                     )}
                   </div>
+
+                  {editRegError && (
+                    <div role="alert" className="mx-5 mb-4 rounded-md border border-trading-down/40 bg-trading-down/10 px-3 py-2 text-xs text-trading-down">
+                      {editRegError}
+                    </div>
+                  )}
 
                   {/* Rodapé */}
                   <div className="flex flex-col-reverse gap-3 border-t border-card-border p-5 sm:flex-row sm:justify-end">

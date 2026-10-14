@@ -1,5 +1,6 @@
 import { Registration, Athlete, Event, ContestationStatus, AppLocale } from '@/types';
 import { getContestationStatusLabel } from '@/lib/contestations';
+import { isShirtNone } from '@/lib/shirtPricing';
 import { toBcp47 } from '@/i18n/locales';
 
 // Locale das inscrições/usuários é opcional em pontos legados do banco; todo
@@ -221,6 +222,11 @@ type RegistrationEmailCopy = {
     totalPaid: string;
     paymentStatus: string;
   };
+  shirt: {
+    label: string;
+    none: string;
+    addon: (amount: string) => string;
+  };
   validation: {
     validatedTitle: string;
     registeredTitle: string;
@@ -274,6 +280,11 @@ const REGISTRATION_EMAIL_COPY: Record<AppLocale, RegistrationEmailCopy> = {
       totalPaid: 'Total Pago',
       paymentStatus: 'Status do Pagamento'
     },
+    shirt: {
+      label: 'Camisa',
+      none: 'Sem camisa',
+      addon: (amount) => `adicional ${amount}`
+    },
     validation: {
       validatedTitle: 'INSCRIÇÃO VALIDADA',
       registeredTitle: 'INSCRIÇÃO REGISTRADA',
@@ -324,6 +335,11 @@ const REGISTRATION_EMAIL_COPY: Record<AppLocale, RegistrationEmailCopy> = {
       cityRegion: 'Cidade / Região',
       totalPaid: 'Total Pago',
       paymentStatus: 'Estado do Pagamento'
+    },
+    shirt: {
+      label: 'T-shirt',
+      none: 'Sem t-shirt',
+      addon: (amount) => `adicional ${amount}`
     },
     validation: {
       validatedTitle: 'INSCRIÇÃO VALIDADA',
@@ -376,6 +392,11 @@ const REGISTRATION_EMAIL_COPY: Record<AppLocale, RegistrationEmailCopy> = {
       totalPaid: 'Total Paid',
       paymentStatus: 'Payment Status'
     },
+    shirt: {
+      label: 'Shirt',
+      none: 'No shirt',
+      addon: (amount) => `extra ${amount}`
+    },
     validation: {
       validatedTitle: 'REGISTRATION VALIDATED',
       registeredTitle: 'REGISTRATION RECORDED',
@@ -420,10 +441,11 @@ export async function sendRegistrationEmail(
     ? `***.${cleanCpf.substring(3, 6)}.${cleanCpf.substring(6, 9)}-**`
     : cpf;
 
-  const totalPaidFormatted = new Intl.NumberFormat(toBcp47(resolvedLocale), {
+  const moneyFormatter = new Intl.NumberFormat(toBcp47(resolvedLocale), {
     style: 'currency',
     currency: event.currency || 'BRL'
-  }).format(registration.totalPaid);
+  });
+  const totalPaidFormatted = moneyFormatter.format(registration.totalPaid);
 
   const paymentStatus = registration.paymentStatus || 'payment_approved';
   const isPaymentApproved = paymentStatus === 'payment_approved';
@@ -438,8 +460,23 @@ export async function sendRegistrationEmail(
           : c.statusLabels.approved;
 
   const isTeam = athlete.isTeam || false;
-  const teamMembersList = isTeam && athlete.teamMembers && athlete.teamMembers.length > 0
-    ? athlete.teamMembers.map(m => m.name).join(', ')
+  const teamMembers = isTeam ? athlete.teamMembers ?? [] : [];
+  const teamMembersList = teamMembers.map(m => m.name).join(', ');
+
+  // Camisa por participante, na ordem da inscrição, e o adicional cobrado
+  // (Story 1.38). A linha só aparece quando a camisa foi opcional (adicional pago
+  // ou "Sem camisa"): e-mails de camisa inclusa ficam como antes da story.
+  const shirtSizes = (teamMembers.length > 0 ? teamMembers.map(m => m.shirtSize) : [athlete.shirtSize])
+    .map(size => String(size || '').trim());
+  const shirtAddonAmount = Number(registration.shirtAddonAmount) || 0;
+  const hasOptionalShirtChoice = shirtAddonAmount > 0 || shirtSizes.some(isShirtNone);
+  const shirtSummary = hasOptionalShirtChoice
+    ? [
+        shirtSizes.some(Boolean)
+          ? shirtSizes.map(size => escapeHtml(isShirtNone(size) ? c.shirt.none : size || '—')).join(' · ')
+          : '',
+        shirtAddonAmount > 0 ? escapeHtml(c.shirt.addon(moneyFormatter.format(shirtAddonAmount))) : ''
+      ].filter(Boolean).join(' · ')
     : '';
 
   // Recursos visuais do evento (banner no topo, logo em selo sobreposto)
@@ -699,6 +736,11 @@ export async function sendRegistrationEmail(
               <tr>
                 <td class="label">${c.fields.cityRegion}</td>
                 <td class="value">${cityStateLabel}</td>
+              </tr>` : ''}
+              ${shirtSummary ? `
+              <tr>
+                <td class="label">${c.shirt.label}</td>
+                <td class="value">${shirtSummary}</td>
               </tr>` : ''}
               <tr>
                 <td class="label">${c.fields.totalPaid}</td>
