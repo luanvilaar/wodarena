@@ -13,6 +13,8 @@ import {
   triggerRegistrationApprovedEmail
 } from '@/lib/serverCheckout';
 import { createSupabaseAdmin, getRequestSession } from '@/lib/serverSecurity';
+import { PAYMENT_INTEGRITY_STATUS_DETAIL } from '@/lib/paymentIntegrity';
+import { reviewPaymentBeforeApproval } from '@/lib/serverPaymentIntegrity';
 
 const supabaseAdmin = createSupabaseAdmin();
 
@@ -165,10 +167,11 @@ export async function GET(request: Request) {
       });
     }
 
-    // Buscar status de pagamento atual antes de atualizar
+    // Buscar status de pagamento atual antes de atualizar (linha inteira: os
+    // valores entram na conferência do pagamento logo abaixo)
     const { data: currentReg } = await supabaseAdmin
       .from('registrations')
-      .select('payment_status')
+      .select('*')
       .eq('id', registrationId)
       .eq('event_id', eventId)
       .maybeSingle();
@@ -177,13 +180,30 @@ export async function GET(request: Request) {
     const amountCollected = Number(paymentData.transaction_amount || 0);
     const applicationFeeCharged = extractApplicationFeeCharged(paymentData);
 
+    // Vale para os três caminhos acima: payment_id da consulta, pagamento
+    // persistido e busca por registration_id.
+    const { holdForReview } = await reviewPaymentBeforeApproval(supabaseAdmin, {
+      source: 'mp-status',
+      eventId,
+      registrationId,
+      registration: currentReg,
+      payment: {
+        id: paymentData.id,
+        status: paymentData.status,
+        amount: paymentData.transaction_amount,
+        currency: paymentData.currency_id,
+        registrationId: paymentData.metadata?.registration_id,
+        gateway: 'mercadopago'
+      }
+    });
+
     await supabaseAdmin
       .from('registrations')
       .update({
-        payment_status: toRegistrationPaymentStatus(paymentData.status),
+        payment_status: holdForReview ? 'payment_in_review' : toRegistrationPaymentStatus(paymentData.status),
         payment_method: paymentData.payment_method_id || null,
         payment_id: String(paymentData.id),
-        payment_status_detail: paymentData.status_detail || null,
+        payment_status_detail: holdForReview ? PAYMENT_INTEGRITY_STATUS_DETAIL : (paymentData.status_detail || null),
         payment_error_message: paymentData.status === 'rejected' ? 'Pagamento não processado.' : null,
         ...(amountCollected > 0 ? { amount_collected: amountCollected } : {}),
         ...(applicationFeeCharged > 0 ? { application_fee_charged: applicationFeeCharged } : {}),
@@ -192,7 +212,7 @@ export async function GET(request: Request) {
       .eq('id', registrationId)
       .eq('event_id', eventId);
 
-    if (paymentData.status === 'approved') {
+    if (!holdForReview && paymentData.status === 'approved') {
       await applyCouponUsageForApprovedRegistration(supabaseAdmin, registrationId);
       if (!wasAlreadyApproved) {
         await triggerRegistrationApprovedEmail(supabaseAdmin, registrationId).catch(err =>

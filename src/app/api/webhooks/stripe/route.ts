@@ -8,6 +8,8 @@ import {
 import { createSupabaseAdmin } from '@/lib/serverSecurity';
 import { extractApplicationFeeCharged, getStripeClient, StripeConfigError } from '@/lib/stripeServer';
 import { fromMinorUnits } from '@/lib/intl/format';
+import { PAYMENT_INTEGRITY_STATUS_DETAIL } from '@/lib/paymentIntegrity';
+import { reviewPaymentBeforeApproval } from '@/lib/serverPaymentIntegrity';
 import type { EventCurrency } from '@/types';
 
 const supabaseAdmin = createSupabaseAdmin();
@@ -41,11 +43,27 @@ const updateRegistrationFromIntent = async (paymentIntent: Stripe.PaymentIntent)
     return;
   }
 
-  const nextPaymentStatus = toRegistrationPaymentStatus(paymentIntent.status);
   const wasApproved = existingRegistration.payment_status === 'payment_approved';
   const currency = (existingRegistration.currency || 'BRL') as EventCurrency;
   const amountCollected = fromMinorUnits(paymentIntent.amount_received || paymentIntent.amount, currency);
   const applicationFeeCharged = fromMinorUnits(extractApplicationFeeCharged(paymentIntent), currency);
+
+  const { holdForReview } = await reviewPaymentBeforeApproval(supabaseAdmin, {
+    source: 'stripe-webhook',
+    eventId,
+    registrationId,
+    registration: existingRegistration,
+    payment: {
+      id: paymentIntent.id,
+      status: paymentIntent.status,
+      // Já na unidade principal (convertido de unidades menores logo acima).
+      amount: amountCollected,
+      currency: paymentIntent.currency,
+      registrationId,
+      gateway: 'stripe'
+    }
+  });
+  const nextPaymentStatus: RegistrationPaymentStatus = holdForReview ? 'payment_in_review' : toRegistrationPaymentStatus(paymentIntent.status);
 
   const { error: updateError } = await supabaseAdmin
     .from('registrations')
@@ -53,7 +71,7 @@ const updateRegistrationFromIntent = async (paymentIntent: Stripe.PaymentIntent)
       payment_status: nextPaymentStatus,
       payment_method: 'credit_card',
       payment_id: paymentIntent.id,
-      payment_status_detail: paymentIntent.last_payment_error?.code || null,
+      payment_status_detail: holdForReview ? PAYMENT_INTEGRITY_STATUS_DETAIL : (paymentIntent.last_payment_error?.code || null),
       payment_error_message: paymentIntent.last_payment_error?.message || null,
       ...(amountCollected > 0 ? { amount_collected: amountCollected } : {}),
       ...(applicationFeeCharged > 0 ? { application_fee_charged: applicationFeeCharged } : {}),

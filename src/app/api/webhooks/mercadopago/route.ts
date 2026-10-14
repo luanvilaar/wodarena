@@ -11,6 +11,8 @@ import {
   extractApplicationFeeCharged,
   resolveMercadoPagoCheckoutConfig
 } from '@/lib/mercadopagoServer';
+import { PAYMENT_INTEGRITY_STATUS_DETAIL } from '@/lib/paymentIntegrity';
+import { reviewPaymentBeforeApproval } from '@/lib/serverPaymentIntegrity';
 
 const supabaseAdmin = createSupabaseAdmin();
 
@@ -124,7 +126,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Inscricao vinculada ao pagamento nao encontrada.' }, { status: 404 });
     }
 
-    const nextPaymentStatus = toRegistrationPaymentStatus(status);
+    const { holdForReview } = await reviewPaymentBeforeApproval(supabaseAdmin, {
+      source: 'mp-webhook',
+      eventId,
+      registrationId: metadataRegistrationId,
+      registration: existingRegistration,
+      payment: {
+        id: paymentData.id,
+        status,
+        amount: paymentData.transaction_amount,
+        currency: paymentData.currency_id,
+        registrationId: metadataRegistrationId,
+        gateway: 'mercadopago'
+      }
+    });
+    const nextPaymentStatus: RegistrationPaymentStatus = holdForReview ? 'payment_in_review' : toRegistrationPaymentStatus(status);
     const wasApproved = existingRegistration.payment_status === 'payment_approved';
     const amountCollected = Number(paymentData.transaction_amount || 0);
     const applicationFeeCharged = extractApplicationFeeCharged(paymentData);
@@ -135,7 +151,7 @@ export async function POST(request: Request) {
         payment_status: nextPaymentStatus,
         payment_method: paymentData.payment_method_id || null,
         payment_id: String(paymentData.id),
-        payment_status_detail: paymentData.status_detail || null,
+        payment_status_detail: holdForReview ? PAYMENT_INTEGRITY_STATUS_DETAIL : (paymentData.status_detail || null),
         payment_error_message: status === 'rejected' ? 'Pagamento nao processado.' : null,
         ...(amountCollected > 0 ? { amount_collected: amountCollected } : {}),
         ...(applicationFeeCharged > 0 ? { application_fee_charged: applicationFeeCharged } : {}),
