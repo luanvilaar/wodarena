@@ -5,3 +5,4 @@
 - [Story 1.34 barra inferior do atleta](project_athlete_bottom_nav_1_34.md) — re-gate CONCERNS não bloqueante (2026-09-30); File List, aparelho real, flicker via replace
 - [Desempate WOD 1 com corte 07/10/2026](project_wod1_tiebreak_cutoff.md) — Story 1.35 PASS; 3 eventos legados protegidos pelo corte; riscos REL-001/TEST-001
 - [Story 1.38 camisa opcional](project_optional_shirt_1_38.md) — gate final CONCERNS (2026-10-14); M-1 e M-2 corrigidos; LOWs abertos e o que conferir no re-gate
+- [Story 1.41 mapa Waze](project_event_map_1_41.md) — gate CONCERNS (2026-10-14); REQ-001 foco invisível no overlay; LOWs e técnicas (Chrome headless, PGlite)

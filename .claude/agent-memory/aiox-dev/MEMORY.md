@@ -1,3 +1,4 @@
 - [Leaderboard Workout Scoping](project_leaderboard-workout-scoping.md) — functional_fitness WODs are global (division_id NULL); filters must keep the `!w.divisionId ||` clause or scoring collapses
 - [Leaderboard Architecture](project_leaderboard-architecture.md) — leaderboard_entries gates visibility; getLeaderboard branches by eventType; manual admin reg doesn't persist to DB
+- [PGlite Migration Validation](project_pglite-migration-validation.md) — stubs (roles, uuid-ossp, storage schema, users FK) needed to replay all migrations locally
 - [Worktree Setup Gotchas](project_worktree-setup-gotchas.md) — agent worktrees lack node_modules and untracked main-checkout files (fresh migrations); symlink/copy before testing
