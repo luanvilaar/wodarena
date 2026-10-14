@@ -23,6 +23,8 @@ import {
   toShirtPriceInput
 } from '@/components/admin/EventShirtSettings';
 import { ShirtSummaryCard } from '@/components/admin/ShirtSummaryCard';
+import { EventLocationPicker, toCoordinatesInput } from '@/components/admin/EventLocationPicker';
+import { parseCoordinatesInput } from '@/lib/eventMap';
 import {
   LayoutDashboard, Calendar, Trophy,
   ClipboardCheck, LogIn, LogOut, Ticket, Settings,
@@ -746,6 +748,9 @@ export default function AdminPage() {
   const [eventShirtMode, setEventShirtMode] = useState<ShirtMode>('included');
   const [eventShirtAddonPrice, setEventShirtAddonPrice] = useState('');
   const eventShirtPriceRef = useRef<HTMLInputElement>(null);
+  // Ponto do local no mapa (Story 1.41): texto "lat, lng"; vazio = sem ponto.
+  const [eventCoordinates, setEventCoordinates] = useState('');
+  const eventCoordinatesRef = useRef<HTMLInputElement>(null);
 
   // Edição do Evento Selecionado (Aba: Informações Gerais)
   const [editEventName, setEditEventName] = useState('');
@@ -770,6 +775,10 @@ export default function AdminPage() {
   const [editEventShirtMode, setEditEventShirtMode] = useState<ShirtMode>('included');
   const [editEventShirtAddonPrice, setEditEventShirtAddonPrice] = useState('');
   const editEventShirtPriceRef = useRef<HTMLInputElement>(null);
+  // O ponto só vai no salvamento quando o gestor mexeu no campo (Story 1.41).
+  const [editEventCoordinates, setEditEventCoordinates] = useState('');
+  const [editEventCoordinatesChanged, setEditEventCoordinatesChanged] = useState(false);
+  const editEventCoordinatesRef = useRef<HTMLInputElement>(null);
 
 
   // Estados Fitness Racing
@@ -1718,6 +1727,13 @@ export default function AdminPage() {
       return;
     }
 
+    const mapPoint = parseCoordinatesInput(eventCoordinates);
+    if (!mapPoint.ok) {
+      setAdminNotice({ text: `Revise as coordenadas do local: ${mapPoint.error}`, tone: 'error' });
+      eventCoordinatesRef.current?.focus();
+      return;
+    }
+
     try {
       await addEvent({
         name: eventName,
@@ -1738,6 +1754,10 @@ export default function AdminPage() {
         isTicketingActive: eventIsTicketingActive,
         shirtMode: shirtSettings.mode,
         shirtAddonPrice: shirtSettings.price,
+        // Só com ponto: evento sem ponto não envia as colunas.
+        ...(mapPoint.coordinates
+          ? { latitude: mapPoint.coordinates.latitude, longitude: mapPoint.coordinates.longitude }
+          : {}),
         divisions: [],
         workouts: [],
         eventType,
@@ -1763,6 +1783,7 @@ export default function AdminPage() {
       setEventIsTicketingActive(true);
       setEventShirtMode('included');
       setEventShirtAddonPrice('');
+      setEventCoordinates('');
       setEventType('functional_fitness');
       setActiveTab('dashboard');
     } catch (err) {
@@ -1799,6 +1820,8 @@ export default function AdminPage() {
     setEditEventType(evt.eventType || 'functional_fitness');
     setEditEventShirtMode(normalizeShirtMode(evt.shirtMode));
     setEditEventShirtAddonPrice(toShirtPriceInput(evt.shirtAddonPrice));
+    setEditEventCoordinates(toCoordinatesInput(evt.latitude, evt.longitude));
+    setEditEventCoordinatesChanged(false);
     setHeatDivisionFilterId('');
 
 
@@ -1880,6 +1903,20 @@ export default function AdminPage() {
       return;
     }
 
+    const mapPoint = parseCoordinatesInput(editEventCoordinates);
+    if (!mapPoint.ok) {
+      setAdminNotice({ text: `Revise as coordenadas do local: ${mapPoint.error}`, tone: 'error' });
+      editEventCoordinatesRef.current?.focus();
+      return;
+    }
+    // Ponto só vai quando o gestor mexeu no campo; campo vazio remove (null nos dois).
+    const mapPointUpdate: Pick<Event, 'latitude' | 'longitude'> = editEventCoordinatesChanged
+      ? {
+        latitude: mapPoint.coordinates ? mapPoint.coordinates.latitude : null,
+        longitude: mapPoint.coordinates ? mapPoint.coordinates.longitude : null
+      }
+      : {};
+
     try {
       await updateEvent(selectedEventToManage.id, {
         name: editEventName,
@@ -1901,7 +1938,8 @@ export default function AdminPage() {
         format: editEventFormat,
         eventType: editEventType,
         shirtMode: shirtSettings.mode,
-        shirtAddonPrice: shirtSettings.price
+        shirtAddonPrice: shirtSettings.price,
+        ...mapPointUpdate
       });
 
       // Recarregar evento selecionado no estado local
@@ -1928,11 +1966,16 @@ export default function AdminPage() {
           format: editEventFormat,
           eventType: editEventType,
           shirtMode: shirtSettings.mode,
-          shirtAddonPrice: shirtSettings.price
+          shirtAddonPrice: shirtSettings.price,
+          ...mapPointUpdate
         };
       });
       // O campo passa a mostrar o valor salvo (arredondado em centavos).
       setEditEventShirtAddonPrice(toShirtPriceInput(shirtSettings.price));
+      if (editEventCoordinatesChanged) {
+        setEditEventCoordinates(toCoordinatesInput(mapPointUpdate.latitude, mapPointUpdate.longitude));
+        setEditEventCoordinatesChanged(false);
+      }
 
       setAdminNotice({ text: 'Informações do evento atualizadas com sucesso.', tone: 'success' });
     } catch (err) {
@@ -4228,6 +4271,20 @@ export default function AdminPage() {
               />
             </div>
           </div>
+
+          <EventLocationPicker
+            idPrefix="edit-event"
+            value={editEventCoordinates}
+            onChange={(value) => {
+              setEditEventCoordinates(value);
+              setEditEventCoordinatesChanged(true);
+            }}
+            location={editEventLocation}
+            city={editEventCity}
+            state={editEventState}
+            country={selectedEventToManage?.countryCode ?? 'BR'}
+            inputRef={editEventCoordinatesRef}
+          />
 
           <div>
             <label htmlFor="edit-event-description" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Descrição do Evento</label>
@@ -9907,6 +9964,17 @@ export default function AdminPage() {
                       />
                     </div>
                   </div>
+
+                  <EventLocationPicker
+                    idPrefix="new-event"
+                    value={eventCoordinates}
+                    onChange={setEventCoordinates}
+                    location={eventLocation}
+                    city={eventCity}
+                    state={eventState}
+                    country="BR"
+                    inputRef={eventCoordinatesRef}
+                  />
 
                   <div>
                     <label htmlFor="event-description" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans">Descrição do Evento</label>

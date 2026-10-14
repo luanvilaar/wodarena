@@ -38,9 +38,11 @@ const cspDirectives: string[] = [
   "img-src 'self' data: blob: https:",
   // Fontes auto-hospedadas pelo next/font (sem CDN externo).
   "font-src 'self' data:",
-  // Supabase (REST/auth/storage + realtime via wss), Mercado Pago (tokenização de cartão) e Stripe (Checkout/Elements/Connect).
-  `connect-src 'self' ${supabaseHttp} ${supabaseWss} https://api.mercadopago.com https://*.mercadopago.com https://*.mlstatic.com https://api.stripe.com`,
-  // Iframes do SDK Mercado Pago (Secure Fields / Bricks) e do Stripe (Elements/Checkout hospedado).
+  // Supabase (REST/auth/storage + realtime via wss), Mercado Pago (tokenização de cartão), Stripe (Checkout/Elements/Connect)
+  // e Mapbox (estilo, tiles e fontes do mapa do local do evento via Mapbox GL JS, e a telemetria que o próprio Mapbox GL JS envia).
+  `connect-src 'self' ${supabaseHttp} ${supabaseWss} https://api.mercadopago.com https://*.mercadopago.com https://*.mlstatic.com https://api.stripe.com https://api.mapbox.com https://events.mapbox.com`,
+  // Iframes do SDK Mercado Pago (Secure Fields / Bricks), do Stripe (Elements/Checkout hospedado)
+  // e do YouTube sem cookies (vídeo de prova).
   "frame-src 'self' https://*.mercadopago.com https://*.mlstatic.com https://www.youtube-nocookie.com https://js.stripe.com https://hooks.stripe.com",
   // Anti-clickjacking (substituto moderno do X-Frame-Options).
   "frame-ancestors 'self'",
@@ -85,6 +87,12 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Token do mapa do Mapbox no navegador (Story 1.42). Usa NEXT_PUBLIC_MAPBOX_TOKEN se existir e, senão,
+  // o MAPBOX_TOKEN que já está no .env (decisão do usuário). O valor vai para o JavaScript da página:
+  // o ideal é um token público restrito por URL em NEXT_PUBLIC_MAPBOX_TOKEN.
+  env: {
+    NEXT_PUBLIC_MAPBOX_TOKEN: process.env.NEXT_PUBLIC_MAPBOX_TOKEN || process.env.MAPBOX_TOKEN || "",
+  },
   // Development uses Turbopack; the production script explicitly uses Webpack.
   turbopack: {},
   webpack(config, { dev, buildId }) {

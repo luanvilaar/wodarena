@@ -210,6 +210,20 @@
       "venueHeading": "Local das Séries",
       "onlineQualifier": "Qualifier online"
     },
+    "map": {
+      "heading": "Local do evento",
+      "directions": "Como chegar",
+      "waze": "Waze",
+      "googleMaps": "Google Maps",
+      "appleMaps": "Apple Maps",
+      "copyAddress": "Copiar morada",
+      "copied": "Copiado",
+      "mapLabel": "Mapa com o local do evento",
+      "markerLabel": "Local do evento",
+      "scrollZoomCtrl": "Use Ctrl + deslocamento para ampliar o mapa",
+      "scrollZoomCmd": "Use ⌘ + deslocamento para ampliar o mapa",
+      "touchPan": "Use dois dedos para mover o mapa"
+    },
     "divisions": {
       "heading": "Categorias e Divisões",
       "male": "Masculino",

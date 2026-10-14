@@ -210,6 +210,20 @@
       "venueHeading": "Heat Venue",
       "onlineQualifier": "Online qualifier"
     },
+    "map": {
+      "heading": "Event location",
+      "directions": "Get directions",
+      "waze": "Waze",
+      "googleMaps": "Google Maps",
+      "appleMaps": "Apple Maps",
+      "copyAddress": "Copy address",
+      "copied": "Copied",
+      "mapLabel": "Map showing the event location",
+      "markerLabel": "Event location",
+      "scrollZoomCtrl": "Use Ctrl + scroll to zoom the map",
+      "scrollZoomCmd": "Use ⌘ + scroll to zoom the map",
+      "touchPan": "Use two fingers to move the map"
+    },
     "divisions": {
       "heading": "Categories and Divisions",
       "male": "Male",

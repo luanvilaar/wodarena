@@ -158,6 +158,15 @@ table th {
   outline: none;
 }
 
+/* O mapa do local do evento (Mapbox) fica num contêiner com overflow hidden:
+   o contorno global (offset +3px) seria cortado no canvas e nos controles.
+   Desenha por dentro. */
+[data-event-map] canvas:focus-visible,
+[data-event-map] .mapboxgl-canvas-container:focus-visible,
+[data-event-map] .mapboxgl-ctrl button:focus-visible {
+  outline-offset: -4px;
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;

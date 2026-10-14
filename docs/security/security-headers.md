@@ -30,8 +30,8 @@ Documentação dos headers de segurança configurados em [`next.config.ts`](../.
 | `style-src` | `'self' 'unsafe-inline'` | Next.js/Tailwind injetam estilos inline; `<style>` em RegistrationVoucher |
 | `img-src` | `'self' data: blob: https:` | `data:` (QR PIX base64), `blob:` (downloads), `https:` (logos/banners de eventos são **URLs externas arbitrárias** — default Unsplash) |
 | `font-src` | `'self' data:` | Fontes auto-hospedadas pelo `next/font` (sem CDN externo) |
-| `connect-src` | `'self' {supabase https} {supabase wss} https://api.mercadopago.com https://*.mercadopago.com https://*.mlstatic.com https://api.stripe.com` | XHR/fetch/WebSocket: Supabase (auth, REST, storage, realtime), tokenização de cartão MP e API da Stripe (Checkout/Elements/Connect) |
-| `frame-src` | `'self' https://*.mercadopago.com https://*.mlstatic.com https://js.stripe.com https://hooks.stripe.com` | Iframes do SDK MP (Secure Fields / Bricks) e da Stripe (Elements/Checkout hospedado) |
+| `connect-src` | `'self' {supabase https} {supabase wss} https://api.mercadopago.com https://*.mercadopago.com https://*.mlstatic.com https://api.stripe.com https://api.mapbox.com https://events.mapbox.com` | XHR/fetch/WebSocket: Supabase (auth, REST, storage, realtime), tokenização de cartão MP, API da Stripe (Checkout/Elements/Connect) e Mapbox (estilo, tiles e fontes do mapa do local do evento, mais a telemetria que o Mapbox GL JS envia) |
+| `frame-src` | `'self' https://*.mercadopago.com https://*.mlstatic.com https://www.youtube-nocookie.com https://js.stripe.com https://hooks.stripe.com` | Iframes do SDK MP (Secure Fields / Bricks), da Stripe (Elements/Checkout hospedado) e do YouTube sem cookies (vídeo de prova) |
 | `frame-ancestors` | `'self'` | Anti-clickjacking (moderno) |
 | `form-action` | `'self' https://*.mercadopago.com https://checkout.stripe.com` | Redirect de checkout (`init_point` do MP / Checkout Session da Stripe) |
 | `base-uri` | `'self'` | Bloqueia injeção de `<base>` |
@@ -55,6 +55,8 @@ Documentação dos headers de segurança configurados em [`next.config.ts`](../.
 | `https://api.stripe.com` | connect-src | API da Stripe (PaymentIntents, Checkout Sessions, Connect) |
 | `https://hooks.stripe.com` | frame-src | Iframes de verificação/3DS da Stripe |
 | `https://checkout.stripe.com` | form-action | Redirect para a Checkout Session hospedada da Stripe |
+| `https://api.mapbox.com` | connect-src | Estilo, tiles e fontes do mapa do local do evento (Mapbox GL JS) |
+| `https://events.mapbox.com` | connect-src | Telemetria do Mapbox GL JS (o mapa funciona sem ela, mas ela é enviada) |
 | `https:` (genérico) | img-src | Logos/banners de eventos com URL externa arbitrária |
 
 ---

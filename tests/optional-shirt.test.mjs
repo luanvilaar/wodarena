@@ -179,9 +179,9 @@ test('respostas de inscrição do painel trazem o adicional da camisa', () => {
 });
 
 test('bootstrap entrega modo e adicional do evento e o adicional da inscrição só no privado', () => {
-  for (const constName of ['PUBLIC_EVENT_SELECT', 'PUBLIC_EVENT_SELECT_LEGACY']) {
-    assert.match(selectList(bootstrapPayload, constName), /, shirt_mode, shirt_addon_price$/, constName);
-  }
+  // Story 1.41: o select principal ganhou o ponto do mapa depois da camisa; o legado segue igual.
+  assert.match(selectList(bootstrapPayload, 'PUBLIC_EVENT_SELECT'), /, shirt_mode, shirt_addon_price, latitude, longitude$/, 'PUBLIC_EVENT_SELECT');
+  assert.match(selectList(bootstrapPayload, 'PUBLIC_EVENT_SELECT_LEGACY'), /, shirt_mode, shirt_addon_price$/, 'PUBLIC_EVENT_SELECT_LEGACY');
   assert.match(selectList(bootstrapRoute, 'PRIVATE_REGISTRATION_SELECT'), /shirt_addon_count, shirt_addon_amount/);
   // AC14: o bootstrap público não ganha dado novo de atleta nem de inscrição.
   assert.doesNotMatch(selectList(bootstrapPayload, 'PUBLIC_ATHLETE_SELECT'), /shirt_size/);

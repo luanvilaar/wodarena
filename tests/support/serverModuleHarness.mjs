@@ -1,7 +1,8 @@
 // Carrega módulos reais do servidor (src/**/*.ts) dentro do node --test.
 // - resolve o alias @/ e imports relativos sem extensão para arquivos de src/;
 // - transpila TypeScript com o pacote typescript (imports só de tipo somem);
-// - troca next/server por um NextResponse mínimo e @supabase/supabase-js por
+// - troca next/dynamic por um componente vazio, next/server por um NextResponse
+//   mínimo e @supabase/supabase-js por
 //   um createClient que devolve o banco em memória ativo (ver fakeSupabase.mjs).
 // Nada de rede, banco real ou .env. Os hooks valem só para o processo do teste
 // que importar este arquivo (o node --test isola cada arquivo de teste).
@@ -22,6 +23,13 @@ export class NextResponse extends Response {
     if (!headers.has('content-type')) headers.set('content-type', 'application/json');
     return new NextResponse(JSON.stringify(body), { ...init, headers });
   }
+}
+`,
+  // next/dynamic: componentes carregados sob demanda no navegador (ex.: o mapa do Mapbox,
+  // Story 1.42) não renderizam nada no servidor, que é o que o teste de marcação enxerga.
+  'next/dynamic': `
+export default function dynamic() {
+  return function DynamicComponentStub() { return null; };
 }
 `,
   '@supabase/supabase-js': `

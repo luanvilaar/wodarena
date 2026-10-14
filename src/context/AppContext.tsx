@@ -13,6 +13,7 @@ import { hasEventDatePassed } from '@/lib/eventStatus';
 import { getManagerAccessStatus, normalizeServiceValidUntil } from '@/lib/managerAccess';
 import { rankWorkoutScores } from '@/lib/scoring';
 import { normalizeShirtMode } from '@/lib/shirtPricing';
+import { validateEventCoordinates } from '@/lib/eventMap';
 import type { QualifierWorkoutDeleteConfirmation, QualifierWorkoutDeleteResult } from '@/lib/workoutEdit';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -285,6 +286,17 @@ const mapUserFromDb = (user: Record<string, unknown>): User => {
     serviceValidUntil,
     managerAccessStatus: role === 'manager' ? getManagerAccessStatus(serviceValidUntil) : undefined
   };
+};
+
+// Ponto do mapa do evento (Story 1.41): só entra quando os dois valores são
+// números válidos; qualquer outro caso vira "sem ponto". Zero é coordenada
+// válida, por isso a ausência é checada com == null, nunca com !valor.
+const readEventMapPoint = (latitude: unknown, longitude: unknown): Pick<Event, 'latitude' | 'longitude'> => {
+  if (latitude == null || longitude == null) return {};
+  const result = validateEventCoordinates({ latitude, longitude });
+  return result.ok && result.coordinates
+    ? { latitude: result.coordinates.latitude, longitude: result.coordinates.longitude }
+    : {};
 };
 
 const adminPersist = async (action: string, payload: Record<string, unknown>) => {
@@ -766,7 +778,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               paymentGateway: evt.payment_gateway || 'mercadopago',
               defaultLocale: evt.default_locale || 'pt-br',
               shirtMode: normalizeShirtMode(evt.shirt_mode),
-              shirtAddonPrice: Number(evt.shirt_addon_price) || 0
+              shirtAddonPrice: Number(evt.shirt_addon_price) || 0,
+              ...readEventMapPoint(evt.latitude, evt.longitude)
             };
           });
           setEvents(combinedEvents);
@@ -1084,6 +1097,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const defaultFitnessRacing = eventData.eventType === 'fitness_racing'
       ? buildFitnessRacingDefaults(newId, eventData.ticketPrice ?? 150.00, eventData.ticketSlots ?? 100)
       : { divisions: eventData.divisions || [], workouts: eventData.workouts || [] };
+    const mapPoint = readEventMapPoint(eventData.latitude, eventData.longitude);
 
     const newEvent: Event = {
       ...eventData,
@@ -1107,6 +1121,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       mpPublicKey: eventData.mpPublicKey || '',
       shirtMode: normalizeShirtMode(eventData.shirtMode),
       shirtAddonPrice: Number(eventData.shirtAddonPrice) || 0,
+      latitude: mapPoint.latitude,
+      longitude: mapPoint.longitude
     };
 
     const eventRow = {
@@ -1134,7 +1150,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       event_schedule: newEvent.scheduleItems,
       mp_public_key: newEvent.mpPublicKey || null,
       shirt_mode: newEvent.shirtMode,
-      shirt_addon_price: newEvent.shirtAddonPrice
+      shirt_addon_price: newEvent.shirtAddonPrice,
+      // As colunas do ponto só vão no insert quando há ponto: criar evento sem
+      // ponto segue funcionando em banco ainda sem a migration (Story 1.41).
+      ...(mapPoint.latitude != null && mapPoint.longitude != null
+        ? { latitude: mapPoint.latitude, longitude: mapPoint.longitude }
+        : {})
     };
 
     const divisionRows = eventData.eventType === 'fitness_racing'
@@ -2357,6 +2378,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (updatedData.mpPublicKey !== undefined) dbPayload.mp_public_key = updatedData.mpPublicKey;
     if (updatedData.shirtMode !== undefined) dbPayload.shirt_mode = updatedData.shirtMode;
     if (updatedData.shirtAddonPrice !== undefined) dbPayload.shirt_addon_price = updatedData.shirtAddonPrice;
+    // Ponto do mapa: repassado quando definido, inclusive null para remover.
+    if (updatedData.latitude !== undefined) dbPayload.latitude = updatedData.latitude;
+    if (updatedData.longitude !== undefined) dbPayload.longitude = updatedData.longitude;
 
     try {
       await adminPersist('updateEvent', { eventId, data: dbPayload });

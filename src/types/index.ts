@@ -178,6 +178,10 @@ export interface Event {
   defaultLocale?: AppLocale;
   shirtMode?: ShirtMode;
   shirtAddonPrice?: number;
+  // Ponto do local no mapa (Story 1.41). O mapper do banco devolve undefined
+  // quando não há ponto; null existe para o updateEvent poder remover o ponto.
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export interface Registration {

@@ -3,6 +3,7 @@ import { ManagerAccessError, assertManagerOperationalAccess, managerAccessErrorR
 import { applyCouponUsageForApprovedRegistration, createManagerRegistration, RegistrationAccessError } from '@/lib/serverCheckout';
 import { checkRateLimit, createSupabaseAdmin, hashPassword, requireSession, safeErrorMessage, SessionUser } from '@/lib/serverSecurity';
 import { getEventStatus } from '@/lib/eventStatus';
+import { validateEventCoordinates } from '@/lib/eventMap';
 import { sendQualifierWorkoutDeletedEmails } from '@/lib/resend';
 import { checkRegistrationShirtEdit, validateShirtConfig } from '@/lib/shirtPricing';
 import {
@@ -63,7 +64,7 @@ const EVENT_UPDATABLE_FIELDS = [
   'name', 'logo_url', 'banner_url', 'status', 'location', 'date', 'description',
   'format', 'ticket_price', 'ticket_slots', 'is_ticketing_active', 'time', 'city',
   'state', 'rules', 'instagram', 'website', 'event_type', 'event_schedule', 'mp_public_key',
-  'shirt_mode', 'shirt_addon_price'
+  'shirt_mode', 'shirt_addon_price', 'latitude', 'longitude'
 ] as const;
 
 const DIVISION_UPDATABLE_FIELDS = [
@@ -87,6 +88,24 @@ const pickAllowedFields = (input: unknown, allowedKeys: readonly string[]) => {
     if (key in source) result[key] = source[key];
   }
   return result;
+};
+
+const COORDINATES_TOGETHER_MESSAGE = 'Envie latitude e longitude juntas: as duas como número, ou as duas como null para remover o ponto do mapa.';
+
+// Ponto do mapa do evento (Story 1.41): os dois campos andam juntos, como no
+// CHECK events_coordinates_both_or_none do banco. Devolve os valores saneados
+// para gravar, ou a mensagem do 400.
+const resolveEventCoordinatesForWrite = (data: Record<string, unknown>) => {
+  if (!('latitude' in data) || !('longitude' in data)) {
+    return { ok: false as const, error: COORDINATES_TOGETHER_MESSAGE };
+  }
+  const result = validateEventCoordinates({ latitude: data.latitude, longitude: data.longitude });
+  if (!result.ok) return result;
+  return {
+    ok: true as const,
+    latitude: result.coordinates ? result.coordinates.latitude : null,
+    longitude: result.coordinates ? result.coordinates.longitude : null
+  };
 };
 
 const asTrimmed = (value: unknown, fallback = '') =>
@@ -518,6 +537,15 @@ export async function POST(request: Request) {
           event.shirt_addon_price = shirtConfig.price;
         }
 
+        if ('latitude' in event || 'longitude' in event) {
+          const coordinates = resolveEventCoordinatesForWrite(event);
+          if (!coordinates.ok) {
+            return NextResponse.json({ error: coordinates.error }, { status: 400 });
+          }
+          event.latitude = coordinates.latitude;
+          event.longitude = coordinates.longitude;
+        }
+
         delete event.is_featured;
         const { error: eventError } = await supabaseAdmin.from('events').insert(event);
         if (eventError) throw eventError;
@@ -605,6 +633,17 @@ export async function POST(request: Request) {
           }
           allowedData.shirt_mode = shirtConfig.mode;
           allowedData.shirt_addon_price = shirtConfig.price;
+        }
+
+        // Ponto do mapa: se um dos dois vier, os dois precisam vir (número e
+        // número, ou null e null para remover). Sem os campos, nada muda.
+        if ('latitude' in allowedData || 'longitude' in allowedData) {
+          const coordinates = resolveEventCoordinatesForWrite(allowedData);
+          if (!coordinates.ok) {
+            return NextResponse.json({ error: coordinates.error }, { status: 400 });
+          }
+          allowedData.latitude = coordinates.latitude;
+          allowedData.longitude = coordinates.longitude;
         }
 
         const nextEventType = allowedData.event_type || currentEvent.event_type || 'functional_fitness';

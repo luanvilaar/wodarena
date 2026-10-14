@@ -7,6 +7,7 @@ import { Link } from '@/i18n/navigation';
 import { useApp } from '@/context/AppContext';
 import { RegisterModal } from '@/components/RegisterModal';
 import { RegistrationVoucher } from '@/components/RegistrationVoucher';
+import { EventLocationCard } from '@/components/EventLocationCard';
 import {
   Calendar, MapPin, Trophy, Share2, Ticket, Clock,
   Dumbbell, AlignLeft, ShieldCheck, ChevronRight, UserCheck, Medal,
@@ -139,6 +140,7 @@ export function EventView({ eventId }: { eventId: string }) {
   const tSchedule = useTranslations('Event.schedule');
   const tDivisions = useTranslations('Event.divisions');
   const tDetails = useTranslations('Event.details');
+  const tMap = useTranslations('Event.map');
   const tWorkouts = useTranslations('Event.workouts');
   const tSidebar = useTranslations('Event.sidebar');
   const locale = useLocale() as AppLocale;
@@ -805,28 +807,55 @@ export function EventView({ eventId }: { eventId: string }) {
 
             {/* Aba 1: Detalhes */}
             {activeTab === 'details' && (
-              <div className="space-y-4 rounded-xl border border-card-border bg-card p-6">
-                <h3 className="text-lg font-black text-white uppercase tracking-wider border-b border-card-border pb-3">
-                  {tDetails('heading')}
-                </h3>
-                <p className="text-sm text-muted leading-relaxed whitespace-pre-wrap font-normal">
-                  {event.description}
-                </p>
-                <div className="pt-4 border-t border-card-border/50 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <h4 className="text-xs font-bold text-primary uppercase tracking-wider">{tDetails('scheduleHeading')}</h4>
-                    <p className="text-sm text-white font-semibold mt-1">{event.date}</p>
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-bold text-primary uppercase tracking-wider">
-                      {event.eventType === 'functional_fitness_qualifier' ? tDetails('modalityHeading') : tDetails('venueHeading')}
-                    </h4>
-                    <p className="text-sm text-white font-semibold mt-1">
-                      {event.eventType === 'functional_fitness_qualifier' ? tDetails('onlineQualifier') : event.location}
-                    </p>
+              <>
+                <div className="space-y-4 rounded-xl border border-card-border bg-card p-6">
+                  <h3 className="text-lg font-black text-white uppercase tracking-wider border-b border-card-border pb-3">
+                    {tDetails('heading')}
+                  </h3>
+                  <p className="text-sm text-muted leading-relaxed whitespace-pre-wrap font-normal">
+                    {event.description}
+                  </p>
+                  <div className="pt-4 border-t border-card-border/50 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <h4 className="text-xs font-bold text-primary uppercase tracking-wider">{tDetails('scheduleHeading')}</h4>
+                      <p className="text-sm text-white font-semibold mt-1">{event.date}</p>
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-primary uppercase tracking-wider">
+                        {event.eventType === 'functional_fitness_qualifier' ? tDetails('modalityHeading') : tDetails('venueHeading')}
+                      </h4>
+                      <p className="text-sm text-white font-semibold mt-1">
+                        {event.eventType === 'functional_fitness_qualifier' ? tDetails('onlineQualifier') : event.location}
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
+
+                {/* Local do evento (Stories 1.41 e 1.42): mapa do Mapbox e "Como chegar"; oculto na qualificatória online */}
+                {!isQualifierEvent && (
+                  <EventLocationCard
+                    location={event.location}
+                    city={event.city}
+                    state={event.state}
+                    latitude={event.latitude}
+                    longitude={event.longitude}
+                    labels={{
+                      heading: tMap('heading'),
+                      directions: tMap('directions'),
+                      waze: tMap('waze'),
+                      googleMaps: tMap('googleMaps'),
+                      appleMaps: tMap('appleMaps'),
+                      copyAddress: tMap('copyAddress'),
+                      copied: tMap('copied'),
+                      mapLabel: tMap('mapLabel'),
+                      markerLabel: tMap('markerLabel'),
+                      scrollZoomCtrl: tMap('scrollZoomCtrl'),
+                      scrollZoomCmd: tMap('scrollZoomCmd'),
+                      touchPan: tMap('touchPan')
+                    }}
+                  />
+                )}
+              </>
             )}
 
             {/* Aba 2: Divisões */}
