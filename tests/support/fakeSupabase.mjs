@@ -1,6 +1,6 @@
 // Cliente Supabase falso, em memória, para testes de comportamento das rotas e
 // helpers do servidor. Implementa só o necessário: from().select/insert/update/
-// upsert com eq/not/maybeSingle/single, contagem com head e rpc. As chaves
+// upsert/delete com eq/in/not/order/maybeSingle/single, contagem com head e rpc. As chaves
 // únicas seguem as do banco (supabase/migrations) e um conflito devolve o mesmo
 // código do Postgres (23505), sem gravar nada.
 
@@ -21,6 +21,16 @@ const UNIQUE_KEYS = {
       name: 'registrations_event_email_active_unique',
       key: (row) => (row.payment_status === 'payment_cancelled' ? null : `${row.event_id}|${lower(row.athlete_email)}`)
     }
+  ],
+  scores: [{ name: 'scores_pkey', key: (row) => `${row.athlete_id}|${row.workout_id}` }],
+  // Súmula presencial (Stories 1.49 a 1.52): uma ativa por atleta e prova; o log com seq e id do aparelho únicos.
+  scoresheets: [
+    { name: 'scoresheets_pkey', key: (row) => row.id },
+    { name: 'scoresheets_one_active_per_athlete', key: (row) => (row.status === 'cancelled' ? null : `${row.workout_id}|${row.athlete_id}`) }
+  ],
+  scoresheet_events: [
+    { name: 'scoresheet_events_pkey', key: (row) => `${row.sheet_id}|${row.seq}` },
+    { name: 'scoresheet_events_sheet_id_client_event_id_key', key: (row) => `${row.sheet_id}|${row.client_event_id}` }
   ]
 };
 
@@ -62,6 +72,7 @@ class FakeQuery {
     this.cardinality = null;
     this.countOnly = false;
     this.conflictColumns = ['id'];
+    this.ordering = [];
   }
 
   select(_columns, options = {}) {
@@ -85,6 +96,16 @@ class FakeQuery {
     return this;
   }
 
+  delete() {
+    this.action = 'delete';
+    return this;
+  }
+
+  order(column, options = {}) {
+    this.ordering.push({ column, ascending: options.ascending !== false });
+    return this;
+  }
+
   upsert(payload, options = {}) {
     this.action = 'upsert';
     this.payload = payload;
@@ -94,6 +115,12 @@ class FakeQuery {
 
   eq(column, value) {
     this.filters.push((row) => row[column] !== null && row[column] !== undefined && row[column] === value);
+    return this;
+  }
+
+  in(column, values) {
+    const accepted = new Set(values);
+    this.filters.push((row) => row[column] !== null && row[column] !== undefined && accepted.has(row[column]));
     return this;
   }
 
@@ -119,7 +146,16 @@ class FakeQuery {
   }
 
   matchingRows() {
-    return this.database.rows(this.table).filter((row) => this.filters.every((filter) => filter(row)));
+    const rows = this.database.rows(this.table).filter((row) => this.filters.every((filter) => filter(row)));
+    if (this.action !== 'select' || this.ordering.length === 0) return rows;
+    return [...rows].sort((a, b) => {
+      for (const { column, ascending } of this.ordering) {
+        if (a[column] === b[column]) continue;
+        const direction = ascending ? 1 : -1;
+        return (a[column] > b[column] ? 1 : -1) * direction;
+      }
+      return 0;
+    });
   }
 
   shape(rows) {
@@ -178,6 +214,13 @@ class FakeQuery {
         written.push(candidate);
       }
       return this.returning ? this.shape(written) : { data: null, error: null };
+    }
+
+    if (this.action === 'delete') {
+      const tableRows = database.rows(table);
+      const removed = this.matchingRows();
+      for (const row of removed) tableRows.splice(tableRows.indexOf(row), 1);
+      return this.returning ? this.shape(removed) : { data: null, error: null };
     }
 
     throw new Error(`fakeSupabase: ação não suportada: ${this.action}`);

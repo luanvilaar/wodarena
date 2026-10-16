@@ -14,6 +14,7 @@ import { getManagerAccessStatus, normalizeServiceValidUntil } from '@/lib/manage
 import { rankWorkoutScores } from '@/lib/scoring';
 import { normalizeShirtMode } from '@/lib/shirtPricing';
 import { validateEventCoordinates } from '@/lib/eventMap';
+import { validateWorkoutStructure, type WorkoutStructure } from '@/lib/workoutStructure';
 import type { QualifierWorkoutDeleteConfirmation, QualifierWorkoutDeleteResult } from '@/lib/workoutEdit';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -80,6 +81,8 @@ interface AppContextType {
   bootstrapStatus: BootstrapStatus;
   bootstrapError: string | null;
   retryBootstrap: () => void;
+  /** Troca os scores de uma prova pelos que o servidor devolveu (súmula da arbitragem, Story 1.51). */
+  replaceWorkoutScores: (workoutId: string, incoming: Score[]) => void;
   publicEventDataStatus: Record<string, PublicEventDataStatus>;
   loadPublicEventData: (eventId: string, options?: LoadPublicEventDataOptions) => Promise<void>;
   events: Event[];
@@ -130,6 +133,14 @@ interface AppContextType {
   updateAthleteProfile: (data: AthleteProfileUpdateInput) => Promise<boolean>;
 }
 
+// A estrutura da prova (Story 1.43) só é mantida se passar na validação do contrato;
+// qualquer outra coisa vira "sem estrutura" e a prova segue só com o texto.
+const readWorkoutStructure = (raw: unknown): WorkoutStructure | undefined => {
+  if (raw === null || raw === undefined) return undefined;
+  const result = validateWorkoutStructure(raw);
+  return result.ok ? result.structure : undefined;
+};
+
 type WorkoutDbUpdate = Partial<{
   name: string;
   description: string;
@@ -139,6 +150,7 @@ type WorkoutDbUpdate = Partial<{
   order_index: number;
   division_id: string | null;
   tie_breaker: string | null;
+  structure: WorkoutStructure | null;
   submission_opens_at: string | null;
   submission_closes_at: string | null;
 }>;
@@ -428,6 +440,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const retryBootstrap = useCallback(() => {
     setBootstrapError(null);
     setRetryNonce(previous => previous + 1);
+  }, []);
+
+  // Resultados publicados pelas súmulas chegam pelo servidor (judges publicam sem
+  // passar por este navegador): a prova inteira é trocada pelo que está gravado.
+  const replaceWorkoutScores = useCallback((workoutId: string, incoming: Score[]) => {
+    setScores(previous => [...previous.filter(score => score.workoutId !== workoutId), ...incoming]);
   }, []);
 
   const fetchBootstrapPayload = useCallback(async (preferPrivate: boolean, signal: AbortSignal): Promise<BootstrapFetchResult> => {
@@ -736,6 +754,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 orderIndex: w.order_index !== undefined && w.order_index !== null ? Number(w.order_index) : 1,
                 divisionId: w.division_id || undefined,
                 tieBreaker: w.tie_breaker || '',
+                structure: readWorkoutStructure(w.structure),
                 submissionOpensAt: w.submission_opens_at || undefined,
                 submissionClosesAt: w.submission_closes_at || undefined
               })));
@@ -1516,6 +1535,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       order_index: newWorkout.orderIndex,
       division_id: newWorkout.divisionId || null,
       tie_breaker: newWorkout.tieBreaker || '',
+      // Sem estrutura a coluna nem vai no payload (a rota segue funcionando em banco sem a migration).
+      ...(newWorkout.structure ? { structure: newWorkout.structure } : {}),
       submission_opens_at: newWorkout.submissionOpensAt || null,
       submission_closes_at: newWorkout.submissionClosesAt || null
       }
@@ -2448,6 +2469,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (updatedData.orderIndex !== undefined) dbData.order_index = updatedData.orderIndex;
     if (Object.hasOwn(updatedData, 'divisionId')) dbData.division_id = updatedData.divisionId || null;
     if (Object.hasOwn(updatedData, 'tieBreaker')) dbData.tie_breaker = updatedData.tieBreaker || null;
+    if (Object.hasOwn(updatedData, 'structure')) dbData.structure = updatedData.structure ?? null;
     if (Object.hasOwn(updatedData, 'submissionOpensAt')) dbData.submission_opens_at = updatedData.submissionOpensAt || null;
     if (Object.hasOwn(updatedData, 'submissionClosesAt')) dbData.submission_closes_at = updatedData.submissionClosesAt || null;
 
@@ -2468,6 +2490,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         bootstrapStatus,
         bootstrapError,
         retryBootstrap,
+        replaceWorkoutScores,
         publicEventDataStatus,
         loadPublicEventData,
         events,

@@ -29,7 +29,13 @@ const PREVIOUS_MIGRATIONS_SHA256 = '81799683ef9615cd23ecc5843954fcfb718d34fcf18f
 
 test('a migration vem depois da Story 1.40 na ordem de nome', () => {
   assert.ok(MIGRATION > '20261014120000_protect_paid_registrations.sql');
-  assert.equal(allMigrations.at(-1), MIGRATION);
+  // Presença e ordem, não "a última": migrations posteriores (ex.: Story 1.43)
+  // não quebram este teste (achado TEST-001 da Story 1.41).
+  const position = allMigrations.indexOf(MIGRATION);
+  const previousStory = allMigrations.indexOf('20261014120000_protect_paid_registrations.sql');
+  assert.ok(position >= 0, 'a migration da Story 1.41 existe');
+  assert.ok(previousStory >= 0, 'a migration da Story 1.40 existe');
+  assert.ok(position > previousStory, 'a migration da Story 1.41 vem depois da 1.40');
 });
 
 test('events ganha latitude e longitude NUMERIC, nullable, sem default e sem backfill', () => {

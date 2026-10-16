@@ -6,6 +6,8 @@ import { getEventStatus } from '@/lib/eventStatus';
 import { validateEventCoordinates } from '@/lib/eventMap';
 import { sendQualifierWorkoutDeletedEmails } from '@/lib/resend';
 import { checkRegistrationShirtEdit, validateShirtConfig } from '@/lib/shirtPricing';
+import { deriveLegacyWorkoutFields, validateWorkoutStructure, type LegacyWorkoutFields } from '@/lib/workoutStructure';
+import { countActiveSheets, reconcileManualScores, recalculateRankingForPairs } from '@/lib/serverScoresheets';
 import {
   getQualifierWorkoutLockViolations,
   hasQualifierWorkoutSubmissions,
@@ -74,7 +76,7 @@ const DIVISION_UPDATABLE_FIELDS = [
 
 const WORKOUT_UPDATABLE_FIELDS = [
   'name', 'description', 'type', 'time_cap', 'code', 'order_index', 'division_id', 'tie_breaker',
-  'submission_opens_at', 'submission_closes_at'
+  'submission_opens_at', 'submission_closes_at', 'structure'
 ] as const;
 
 const COUPON_UPDATABLE_FIELDS = [
@@ -106,6 +108,160 @@ const resolveEventCoordinatesForWrite = (data: Record<string, unknown>) => {
     latitude: result.coordinates ? result.coordinates.latitude : null,
     longitude: result.coordinates ? result.coordinates.longitude : null
   };
+};
+
+const STRUCTURE_FUNCTIONAL_ONLY_MESSAGE = 'A estrutura da prova só vale em eventos de Functional Fitness presencial.';
+const STRUCTURE_CREATE_OR_EDIT_ONLY_MESSAGE = 'A estrutura da prova só entra ao criar ou editar uma prova.';
+
+// Mesmo critério do mapper do cliente: evento sem tipo é Functional Fitness.
+const isFunctionalFitnessEvent = (eventType: unknown) => !eventType || eventType === 'functional_fitness';
+
+// Texto de type/time_cap para comparar: sem espaços nas pontas; null e
+// qualquer coisa que não seja texto nunca batem com o valor derivado.
+const legacyText = (value: unknown) => (typeof value === 'string' ? value.trim() : null);
+
+// Time cap: ausente e null equivalem a vazio ("sem time cap", como a carga
+// máxima sem janela; o painel envia null nesse caso). Outro valor que não seja
+// texto nunca bate com o derivado.
+const legacyTimeCap = (value: unknown) => {
+  if (value === null || value === undefined) return '';
+  return typeof value === 'string' ? value.trim() : null;
+};
+
+// Desempate: ausente, null, vazio ou só espaços são equivalentes; texto não
+// vazio compara sem diferenciar caixa (como shouldUseTimeTieBreaker).
+const legacyTieBreaker = (value: unknown) => {
+  if (value === null || value === undefined) return '';
+  return typeof value === 'string' ? value.trim().toLowerCase() : null;
+};
+
+const LEGACY_TYPE_LABELS: Record<LegacyWorkoutFields['type'], string> = { fortime: 'For Time', amrap: 'AMRAP', maxweight: 'Carga máxima' };
+
+// Campos legados (type, time_cap, tie_breaker) não podem divergir da estrutura
+// da prova (Story 1.43). Só os campos presentes entram na comparação; campo
+// ausente não é divergência. Devolve a mensagem do 400 ou null.
+const findLegacyWorkoutMismatch = (row: Record<string, unknown>, derived: LegacyWorkoutFields) => {
+  if ('type' in row && legacyText(row.type) !== derived.type) {
+    return `O tipo da prova vem da estrutura (${LEGACY_TYPE_LABELS[derived.type]}) e não pode ser alterado separadamente.`;
+  }
+  if ('time_cap' in row && legacyTimeCap(row.time_cap) !== derived.timeCap) {
+    return `O time cap da prova vem da estrutura (${derived.timeCap || 'sem time cap'}) e não pode ser alterado separadamente.`;
+  }
+  if ('tie_breaker' in row && legacyTieBreaker(row.tie_breaker) !== derived.tieBreaker.toLowerCase()) {
+    return `O desempate da prova vem da estrutura (${derived.tieBreaker || 'sem desempate'}) e não pode ser alterado separadamente.`;
+  }
+  return null;
+};
+
+type WorkoutStructureWriteResult = { ok: true } | { ok: false; error: string };
+
+// Estrutura da prova (Story 1.43), validada e normalizada antes de qualquer
+// gravação. Altera a linha no lugar: a estrutura vira a versão normalizada e os
+// campos legados passam a ser os derivados dela. `structure: null` mantém a
+// prova no modo legado (campos legados como vierem); sem `structure` na linha,
+// nada muda. Estrutura não nula só entra em evento Functional Fitness.
+const resolveWorkoutStructureForWrite = (eventType: unknown, row: Record<string, unknown>): WorkoutStructureWriteResult => {
+  if (!('structure' in row) || row.structure === null) return { ok: true };
+  if (!isFunctionalFitnessEvent(eventType)) return { ok: false, error: STRUCTURE_FUNCTIONAL_ONLY_MESSAGE };
+
+  const validation = validateWorkoutStructure(row.structure);
+  if (!validation.ok) return { ok: false, error: validation.error };
+
+  const derived = deriveLegacyWorkoutFields(validation.structure);
+  const mismatch = findLegacyWorkoutMismatch(row, derived);
+  if (mismatch) return { ok: false, error: mismatch };
+
+  row.structure = validation.structure;
+  row.type = derived.type;
+  // Sem time cap (carga máxima sem janela) grava NULL, como as provas sem time cap de sempre.
+  row.time_cap = derived.timeCap || null;
+  row.tie_breaker = derived.tieBreaker;
+  return { ok: true };
+};
+
+const isMissingStructureColumnError = (error: { code?: string; message?: string }) => (
+  (error.code === '42703' || error.code === 'PGRST204') && String(error.message || '').includes('structure')
+);
+
+// Leitura da estrutura que a prova já tem, para a guarda dos campos legados.
+// Tolerante a banco sem a migration: coluna ausente conta como prova sem
+// estrutura. Qualquer outro erro continua sendo erro (500).
+const readStoredWorkoutStructure = async (supabaseAdmin: DbClient, workoutId: string) => {
+  const { data, error } = await supabaseAdmin
+    .from('workouts')
+    .select('structure')
+    .eq('id', workoutId)
+    .maybeSingle();
+  if (error) {
+    if (isMissingStructureColumnError(error)) return null;
+    throw error;
+  }
+  return data?.structure ?? null;
+};
+
+// updateWorkout: com `structure` no payload vale a regra de escrita acima. Sem
+// ele, mas com type/time_cap/tie_breaker, a edição não pode divergir da
+// estrutura que a prova já tem (a leitura só acontece nesse caso, e só em
+// evento Functional Fitness; nos outros tipos a estrutura é inerte).
+const resolveWorkoutStructureForUpdate = async (
+  supabaseAdmin: DbClient,
+  eventType: unknown,
+  workoutId: string,
+  allowedData: Record<string, unknown>
+): Promise<WorkoutStructureWriteResult> => {
+  if ('structure' in allowedData) return resolveWorkoutStructureForWrite(eventType, allowedData);
+
+  const touchesLegacyFields = 'type' in allowedData || 'time_cap' in allowedData || 'tie_breaker' in allowedData;
+  if (!touchesLegacyFields || !isFunctionalFitnessEvent(eventType)) return { ok: true };
+
+  const stored = await readStoredWorkoutStructure(supabaseAdmin, workoutId);
+  if (stored === null) return { ok: true };
+  const validation = validateWorkoutStructure(stored);
+  // Estrutura gravada ilegível: não há o que comparar, a edição segue como hoje.
+  if (!validation.ok) return { ok: true };
+
+  const mismatch = findLegacyWorkoutMismatch(allowedData, deriveLegacyWorkoutFields(validation.structure));
+  return mismatch ? { ok: false, error: mismatch } : { ok: true };
+};
+
+// Caminhos que gravam a linha da prova crua (createEvent em lote, createDivision
+// com autoWorkout e repairWorkouts) não aceitam estrutura: ela só entra por
+// createWorkout/updateWorkout. Devolve o 400 ou null.
+const rejectStructureOnRawWorkoutInsert = (rows: unknown) => {
+  const list = Array.isArray(rows) ? rows : [rows];
+  const hasStructure = list.some((row) => (
+    Boolean(row) && typeof row === 'object' && (row as Record<string, unknown>).structure != null
+  ));
+  return hasStructure
+    ? NextResponse.json({ error: STRUCTURE_CREATE_OR_EDIT_ONLY_MESSAGE }, { status: 400 })
+    : null;
+};
+
+// Trava da estrutura depois do uso (Story 1.52): com súmula aberta, a prova não
+// muda de estrutura (o log aponta para as etapas dela) nem é excluída. Para
+// mudar, o gestor cancela as súmulas na aba Súmulas e Judges. Enviar a mesma estrutura
+// (o painel reenvia o que já está gravado) não é mudança.
+const lockedStructureMessage = (count: number) => (
+  `A estrutura desta prova está travada: ${count} ${count === 1 ? 'súmula já foi aberta' : 'súmulas já foram abertas'}. Para mudar, cancele as súmulas na aba Súmulas e Judges.`
+);
+
+const rejectLockedStructureChange = async (supabaseAdmin: DbClient, workoutId: string, allowedData: Record<string, unknown>) => {
+  if (!('structure' in allowedData)) return null;
+  const count = await countActiveSheets(supabaseAdmin, workoutId);
+  if (count === 0) return null;
+  const stored = await readStoredWorkoutStructure(supabaseAdmin, workoutId);
+  const storedChecked = stored === null ? null : validateWorkoutStructure(stored);
+  const storedNormalized = storedChecked?.ok ? storedChecked.structure : null;
+  if (JSON.stringify(allowedData.structure ?? null) === JSON.stringify(storedNormalized)) return null;
+  return NextResponse.json({ error: lockedStructureMessage(count) }, { status: 409 });
+};
+
+const rejectWorkoutDeleteWithSheets = async (supabaseAdmin: DbClient, workoutId: string) => {
+  const count = await countActiveSheets(supabaseAdmin, workoutId);
+  if (count === 0) return null;
+  return NextResponse.json({
+    error: `Esta prova tem ${count} ${count === 1 ? 'súmula' : 'súmulas'} da arbitragem. Cancele as súmulas na aba Súmulas e Judges antes de excluir a prova.`
+  }, { status: 409 });
 };
 
 const asTrimmed = (value: unknown, fallback = '') =>
@@ -546,6 +702,10 @@ export async function POST(request: Request) {
           event.longitude = coordinates.longitude;
         }
 
+        // Estrutura de prova não entra pelo lote de provas do evento; recusa antes de criar o evento.
+        const structureRejection = rejectStructureOnRawWorkoutInsert(workouts);
+        if (structureRejection) return structureRejection;
+
         delete event.is_featured;
         const { error: eventError } = await supabaseAdmin.from('events').insert(event);
         if (eventError) throw eventError;
@@ -689,6 +849,9 @@ export async function POST(request: Request) {
 
       case 'createDivision': {
         await ensureEventOwner(supabaseAdmin, actor, payload.division.event_id);
+        // Estrutura de prova não entra pela prova automática; recusa antes de gravar a divisão.
+        const structureRejection = rejectStructureOnRawWorkoutInsert(payload.autoWorkout);
+        if (structureRejection) return structureRejection;
         const { error } = await supabaseAdmin.from('divisions').insert(payload.division);
         if (error) throw error;
 
@@ -766,6 +929,8 @@ export async function POST(request: Request) {
       case 'createWorkout': {
         const event = await ensureEventOwner(supabaseAdmin, actor, payload.workout.event_id);
         validateQualifierWorkoutWindow(event.event_type, payload.workout);
+        const structureWrite = resolveWorkoutStructureForWrite(event.event_type, payload.workout);
+        if (!structureWrite.ok) return NextResponse.json({ error: structureWrite.error }, { status: 400 });
         const { error } = await supabaseAdmin.from('workouts').insert(payload.workout);
         if (error) throw error;
         return NextResponse.json({ success: true });
@@ -775,6 +940,10 @@ export async function POST(request: Request) {
         const workout = await ensureWorkoutOwner(supabaseAdmin, actor, payload.workoutId, payload.eventId);
         const allowedData = pickAllowedFields(payload.data, WORKOUT_UPDATABLE_FIELDS);
         const event = await ensureEventOwner(supabaseAdmin, actor, workout.event_id);
+        const structureWrite = await resolveWorkoutStructureForUpdate(supabaseAdmin, event.event_type, payload.workoutId, allowedData);
+        if (!structureWrite.ok) return NextResponse.json({ error: structureWrite.error }, { status: 400 });
+        const structureLock = await rejectLockedStructureChange(supabaseAdmin, payload.workoutId, allowedData);
+        if (structureLock) return structureLock;
         if (isQualifierEvent(event.event_type) && (
           'submission_opens_at' in allowedData || 'submission_closes_at' in allowedData
         )) {
@@ -855,6 +1024,8 @@ export async function POST(request: Request) {
             return deleteQualifierWorkoutWithSubmissions(supabaseAdmin, actor, event, payload.workoutId, payload);
           }
         }
+        const sheetLock = await rejectWorkoutDeleteWithSheets(supabaseAdmin, payload.workoutId);
+        if (sheetLock) return sheetLock;
         const { error } = await supabaseAdmin.from('workouts').delete().eq('id', payload.workoutId);
         if (error) {
           const lockResponse = qualifierWorkoutLockErrorResponse(error);
@@ -878,8 +1049,8 @@ export async function POST(request: Request) {
 
       case 'listJudges': {
         const event = await ensureEventOwner(supabaseAdmin, actor, payload.eventId);
-        if (!isQualifierEvent(event.event_type)) {
-          return NextResponse.json({ error: 'Judges são exclusivos de eventos Functional Fitness Qualifier.' }, { status: 400 });
+        if (!isQualifierEvent(event.event_type) && !isFunctionalFitnessEvent(event.event_type)) {
+          return NextResponse.json({ error: 'Judges são exclusivos de eventos Functional Fitness (presenciais ou Qualifier).' }, { status: 400 });
         }
         const { data: assignments, error: assignmentsError } = await supabaseAdmin
           .from('event_judges')
@@ -901,8 +1072,8 @@ export async function POST(request: Request) {
 
       case 'createJudge': {
         const event = await ensureEventOwner(supabaseAdmin, actor, payload.eventId);
-        if (!isQualifierEvent(event.event_type)) {
-          return NextResponse.json({ error: 'Judges são exclusivos de eventos Functional Fitness Qualifier.' }, { status: 400 });
+        if (!isQualifierEvent(event.event_type) && !isFunctionalFitnessEvent(event.event_type)) {
+          return NextResponse.json({ error: 'Judges são exclusivos de eventos Functional Fitness (presenciais ou Qualifier).' }, { status: 400 });
         }
         const name = asTrimmed(payload.name);
         const email = asTrimmed(payload.email).toLowerCase();
@@ -911,7 +1082,8 @@ export async function POST(request: Request) {
           return NextResponse.json({ error: 'Informe nome, e-mail válido e senha com ao menos 8 caracteres para o judge.' }, { status: 400 });
         }
         const judgeId = createJudgeId();
-        const { data: judge, error: judgeError } = await supabaseAdmin.rpc('qualifier_create_and_assign_judge', {
+        // Presencial (Story 1.49): as funções do Qualifier exigem evento Qualifier.
+        const { data: judge, error: judgeError } = await supabaseAdmin.rpc(isQualifierEvent(event.event_type) ? 'qualifier_create_and_assign_judge' : 'sheet_create_and_assign_judge', {
           p_actor_id: actor.id,
           p_parent_manager_id: event.organizer_id,
           p_event_id: payload.eventId,
@@ -930,10 +1102,10 @@ export async function POST(request: Request) {
 
       case 'assignJudgeToEvent': {
         const event = await ensureEventOwner(supabaseAdmin, actor, payload.eventId);
-        if (!isQualifierEvent(event.event_type)) {
-          return NextResponse.json({ error: 'Judges são exclusivos de eventos Functional Fitness Qualifier.' }, { status: 400 });
+        if (!isQualifierEvent(event.event_type) && !isFunctionalFitnessEvent(event.event_type)) {
+          return NextResponse.json({ error: 'Judges são exclusivos de eventos Functional Fitness (presenciais ou Qualifier).' }, { status: 400 });
         }
-        const { error } = await supabaseAdmin.rpc('qualifier_assign_judge', {
+        const { error } = await supabaseAdmin.rpc(isQualifierEvent(event.event_type) ? 'qualifier_assign_judge' : 'sheet_assign_judge', {
           p_actor_id: actor.id,
           p_event_id: payload.eventId,
           p_judge_id: asTrimmed(payload.judgeId)
@@ -944,10 +1116,10 @@ export async function POST(request: Request) {
 
       case 'removeJudgeFromEvent': {
         const event = await ensureEventOwner(supabaseAdmin, actor, payload.eventId);
-        if (!isQualifierEvent(event.event_type)) {
-          return NextResponse.json({ error: 'Judges são exclusivos de eventos Functional Fitness Qualifier.' }, { status: 400 });
+        if (!isQualifierEvent(event.event_type) && !isFunctionalFitnessEvent(event.event_type)) {
+          return NextResponse.json({ error: 'Judges são exclusivos de eventos Functional Fitness (presenciais ou Qualifier).' }, { status: 400 });
         }
-        const { error } = await supabaseAdmin.rpc('qualifier_remove_judge', {
+        const { error } = await supabaseAdmin.rpc(isQualifierEvent(event.event_type) ? 'qualifier_remove_judge' : 'sheet_remove_judge', {
           p_actor_id: actor.id,
           p_event_id: payload.eventId,
           p_judge_id: asTrimmed(payload.judgeId)
@@ -1471,10 +1643,16 @@ export async function POST(request: Request) {
           return NextResponse.json({ error: 'Scores de Qualifier devem ser definidos exclusivamente pela revisão de submissões.' }, { status: 409 });
         }
 
+        // Lançamento manual por cima de resultado de súmula (Story 1.51): o que muda
+        // deixa de apontar para a súmula e entra no histórico; sem súmula, nada muda.
+        const reconciled = await reconcileManualScores(supabaseAdmin, actor, scores);
         const { error } = await supabaseAdmin
           .from('scores')
-          .upsert(scores, { onConflict: 'athlete_id,workout_id' });
+          .upsert(reconciled.rows, { onConflict: 'athlete_id,workout_id' });
         if (error) throw error;
+        // Com súmula na prova, posição e pontos saem do que está gravado (o painel pode
+        // não ter os resultados que os judges publicaram depois que ele abriu).
+        if (reconciled.touchedPairs.length > 0) await recalculateRankingForPairs(supabaseAdmin, reconciled.touchedPairs);
         return NextResponse.json({ success: true });
       }
 
@@ -1483,6 +1661,8 @@ export async function POST(request: Request) {
         for (const eventId of eventIds) {
           await ensureEventOwner(supabaseAdmin, actor, String(eventId));
         }
+        const structureRejection = rejectStructureOnRawWorkoutInsert(payload.workouts);
+        if (structureRejection) return structureRejection;
         const { error } = await supabaseAdmin.from('workouts').insert(payload.workouts);
         if (error) throw error;
         return NextResponse.json({ success: true });

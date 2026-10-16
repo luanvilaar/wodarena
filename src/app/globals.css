@@ -92,6 +92,38 @@ button:disabled {
   outline-offset: 3px;
 }
 
+/* Quadra em tema claro de alto contraste (Story 1.50, decisão 9 da E3): a área
+   do judge presencial redefine as cores do tema só dentro deste bloco. O
+   amarelo continua nos preenchimentos; em texto e borda ele escurece para ler
+   bem no branco. */
+.court-light {
+  --background: #ffffff;
+  --foreground: #0b0e11;
+  --card: #f3f4f6;
+  --card-border: #b9c0cb;
+  --dark-gray: #ffffff;
+  --elevated: #dde1e7;
+  --muted: #3f4652;
+  --muted-soft: #4f5866;
+  --primary: #f5c518;
+  --primary-hover: #e0b100;
+  --ink: #0b0e11;
+  --trading-up: #0a7d52;
+  --trading-down: #b8243a;
+  --info: #1f5fd1;
+  color-scheme: light;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.court-light .text-primary {
+  color: #7a5c00;
+}
+
+.court-light .border-primary {
+  border-color: #b88f00;
+}
+
 .font-number,
 table td,
 table th {

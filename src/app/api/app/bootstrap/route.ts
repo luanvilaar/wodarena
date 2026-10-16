@@ -12,6 +12,7 @@ import {
 } from '@/lib/bootstrapPayload';
 import { getManagerAccessStatus, normalizeServiceValidUntil } from '@/lib/managerAccess';
 import { getQualifierEventIdsForActor, JudgeAccessError } from '@/lib/serverJudgeAccess';
+import { attachWorkoutStructures, readWorkoutStructures } from '@/lib/serverWorkoutStructures';
 import { createSupabaseAdmin, requireSession, type SessionUser } from '@/lib/serverSecurity';
 
 const PRIVATE_ATHLETE_SELECT = 'id, name, box, country, division_id, birth_date, gender, city, state, instagram, photo_url, email, phone, is_team, team_members, shirt_size';
@@ -87,7 +88,12 @@ export async function GET(request: Request) {
     const eventIdFilter = session.role === 'manager' || session.role === 'judge' ? eventIds : [];
 
     // Provas em ordem determinística (order_index, depois id), como no bootstrap público.
-    const [divisions, workouts] = await Promise.all([
+    // Estrutura da prova (Story 1.45): só gestor e dono, em leitura própria e tolerante a coluna ausente.
+    const structuresPromise = session.role === 'manager' || session.role === 'owner'
+      ? readWorkoutStructures(supabaseAdmin, session.role === 'manager' ? eventIdFilter : null)
+      : Promise.resolve(new Map<string, unknown>());
+
+    const [divisions, workoutRows, workoutStructures] = await Promise.all([
       session.role === 'manager' || session.role === 'judge'
         ? scopedRows(eventIdFilter, () => supabaseAdmin
           .from('divisions')
@@ -107,8 +113,10 @@ export async function GET(request: Request) {
           .from('workouts')
           .select(PUBLIC_WORKOUT_SELECT)
           .order('order_index', { ascending: true })
-          .order('id', { ascending: true }))
+          .order('id', { ascending: true })),
+      structuresPromise
     ]);
+    const workouts = attachWorkoutStructures(workoutRows, workoutStructures);
 
     const divisionIds = divisions.map(division => String(division.id));
     const workoutIds = workouts.map(workout => String(workout.id));

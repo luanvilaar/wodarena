@@ -1,0 +1,732 @@
+<title>Construtor da Súmula Digital v2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@500;600;700&family=Inter:wght@400;500;600;700;800&display=swap">
+<style>
+/* Layout: leitura em uma coluna (diagnóstico, pesquisa, contrato, decisões) com um bloco largo no meio:
+   o construtor proposto, em duas colunas (montagem à esquerda, súmula do judge à direita). */
+:root{
+  --font-body:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --font-num:"IBM Plex Sans","JetBrains Mono",ui-monospace,Menlo,monospace;
+  /* página: escura primeiro, como o painel do WODArena */
+  --bg:#0b0e11; --surface:#14181d; --surface-2:#1e2329; --line:#2b3139;
+  --fg:#eaecef; --muted:#929aa5; --accent:#fcd535; --accent-text:#fcd535; --on-accent:#181a20;
+  --up:#0ecb81; --down:#f6465d; --info:#7db4ff;
+  /* telas do app (maquetes): sempre o tema escuro do painel, em qualquer tema da página */
+  --a-bg:#0b0e11; --a-card:#1e2329; --a-line:#2b3139; --a-gray:#181a20; --a-fg:#eaecef; --a-muted:#929aa5;
+  --a-primary:#fcd535; --a-ink:#181a20; --a-up:#0ecb81; --a-down:#f6465d;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --bg:#f4f5f7; --surface:#ffffff; --surface-2:#eceef2; --line:#d6dae1;
+    --fg:#181a20; --muted:#566070; --accent-text:#7a5c00; --up:#0a7d52; --down:#b8243a; --info:#1f5fd1;
+    color-scheme:light;
+  }
+}
+:root[data-theme="light"]{
+  --bg:#f4f5f7; --surface:#ffffff; --surface-2:#eceef2; --line:#d6dae1;
+  --fg:#181a20; --muted:#566070; --accent-text:#7a5c00; --up:#0a7d52; --down:#b8243a; --info:#1f5fd1;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:15px;line-height:1.55;-webkit-text-size-adjust:100%}
+h1,h2,h3,h4{text-wrap:balance;line-height:1.2;margin:0}
+p{margin:0}
+a{color:var(--accent-text)}
+.wrap{max-width:1120px;margin:0 auto;padding-inline:16px;padding-block:32px 72px;display:grid;gap:56px}
+.num{font-family:var(--font-num);font-variant-numeric:tabular-nums}
+.eyebrow{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--accent-text)}
+h1{font-size:clamp(28px,5vw,40px);font-weight:800;letter-spacing:-.02em}
+h2{font-size:22px;font-weight:800;letter-spacing:-.01em}
+h3{font-size:15px;font-weight:700}
+.lead{max-width:68ch;color:var(--muted);font-size:16px}
+.head{display:grid;gap:14px}
+.pill{display:inline-block;font-size:12px;font-weight:600;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:999px;padding:4px 12px}
+.pills{display:flex;flex-wrap:wrap;gap:8px}
+section{display:grid;gap:16px;min-width:0}
+.sec-lead{max-width:72ch;color:var(--muted)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;min-width:0}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:16px}
+.card h3{margin-bottom:10px}
+.k{font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:12px 0 4px}
+.k:first-of-type{margin-top:0}
+.card ul{margin:0;padding-left:18px;display:grid;gap:4px}
+.card li{color:var(--fg)}
+.small{font-size:13px;color:var(--muted)}
+.facts{display:grid;gap:12px}
+.fact{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:start}
+.fact b.n{font-family:var(--font-num);color:var(--accent-text);min-width:22px}
+.compare{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.compare>div{padding:12px 16px;border-bottom:1px solid var(--line);min-width:0}
+.compare>div:nth-last-child(-n+2){border-bottom:0}
+.compare .hd{background:var(--surface-2);font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.compare>div:nth-child(odd){border-right:1px solid var(--line)}
+.compare>div:not(.hd){background:var(--surface)}
+@media (max-width:640px){.compare{grid-template-columns:1fr}.compare>div:nth-child(odd){border-right:0}.compare>div:nth-last-child(-n+2){border-bottom:1px solid var(--line)}.compare>div:last-child{border-bottom:0}}
+.scroll{overflow-x:auto;max-width:100%}
+table.t{border-collapse:collapse;width:100%;min-width:560px;font-size:13.5px}
+table.t th,table.t td{text-align:left;vertical-align:top;padding:9px 12px;border-bottom:1px solid var(--line)}
+table.t th{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--surface-2)}
+table.t td:first-child{font-weight:600;white-space:nowrap}
+.tag{display:inline-block;font-size:11px;font-weight:700;padding:1px 8px;border-radius:4px;background:var(--surface-2);color:var(--fg);border:1px solid var(--line)}
+.tag.new{color:var(--accent-text);border-color:var(--accent-text)}
+.steps{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.dec{display:grid;gap:10px}
+.dec .row{display:grid;grid-template-columns:auto 1fr;gap:14px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px 16px}
+.dec .row b.n{font-family:var(--font-num);font-size:18px;color:var(--accent-text)}
+.rec{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--up);margin-right:6px}
+.rec.ask{color:var(--info)}
+.src{columns:2 340px;column-gap:24px;font-size:13px;color:var(--muted)}
+.src li{break-inside:avoid;margin-bottom:6px}
+
+/* ---------- maquete do construtor ---------- */
+.mock{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:16px;background:var(--a-bg);border:1px solid var(--a-line);border-radius:10px;padding:16px;color:var(--a-fg);font-size:13.5px}
+@media (max-width:860px){.mock{grid-template-columns:1fr}}
+.mock *{min-width:0}
+.mbar{grid-column:1/-1;display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;align-items:center;border-bottom:1px solid var(--a-line);padding-bottom:12px}
+.mbar b{font-size:13px;letter-spacing:.08em;text-transform:uppercase}
+.mbar span{color:var(--a-muted);font-size:12px}
+.bsec{background:var(--a-card);border:1px solid var(--a-line);border-radius:8px;padding:12px;margin-bottom:12px}
+.bsec h4{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--a-fg);display:flex;gap:8px;align-items:baseline;margin-bottom:10px}
+.bsec h4 i{font-style:normal;font-family:var(--font-num);color:var(--a-primary)}
+.fmts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+@media (max-width:520px){.fmts{grid-template-columns:1fr}}
+.fmt{all:unset;box-sizing:border-box;cursor:pointer;border:1px solid var(--a-line);background:var(--a-gray);border-radius:8px;padding:10px 12px;display:grid;gap:2px;color:var(--a-fg)}
+.fmt b{font-size:13px}
+.fmt span{font-size:11.5px;color:var(--a-muted)}
+.fmt[aria-checked="true"]{border-color:var(--a-primary);background:rgba(252,213,53,.08)}
+.fmt:focus-visible,.mock button:focus-visible,.mock input:focus-visible,.mock select:focus-visible{outline:2px solid var(--a-primary);outline-offset:2px}
+.mock label,.lbl{display:block;font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--a-muted);margin-bottom:4px}
+.mock input,.mock select{width:100%;background:var(--a-gray);border:1px solid var(--a-line);color:var(--a-fg);border-radius:6px;padding:6px 8px;font:inherit;font-size:13px;min-height:34px}
+.mock input.bad{border-color:var(--a-down)}
+.mock input.n,.mock .n{font-family:var(--font-num);font-variant-numeric:tabular-nums}
+.mock input.n{text-align:center}
+.mgrid{display:grid;gap:10px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:420px){.two{grid-template-columns:1fr}}
+.flag{all:unset;box-sizing:border-box;cursor:pointer;width:22px;height:34px;display:grid;place-items:center;border-radius:5px;color:var(--a-muted);border:1px solid transparent}
+.flag:hover{color:var(--a-fg);border-color:var(--a-line)}
+.flag[aria-pressed="true"]{background:var(--a-primary);color:var(--a-ink)}
+.ib{all:unset;box-sizing:border-box;cursor:pointer;min-width:34px;min-height:34px;display:grid;place-items:center;border-radius:6px;border:1px solid var(--a-line);background:var(--a-gray);color:var(--a-fg);font-size:12px;font-weight:700;padding:0 10px}
+.ib:hover{border-color:var(--a-primary)}
+.ib[disabled]{opacity:.4;cursor:not-allowed}
+.ib.pri{border-color:rgba(252,213,53,.6);color:var(--a-primary)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.chips .lbl{margin:0 4px 0 0}
+.rowtools{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;align-items:center}
+.rule{font-size:13px;line-height:1.55;color:var(--a-fg);background:var(--a-gray);border:1px solid var(--a-line);border-radius:6px;padding:10px 12px}
+.rule b{color:var(--a-primary);font-weight:600}
+.checks{display:grid;gap:4px;font-size:12.5px;margin:0;padding:0;list-style:none}
+.checks li{display:flex;gap:8px;align-items:baseline}
+.checks .ok{color:var(--a-up);font-weight:700}
+.checks .no{color:var(--a-down);font-weight:700}
+.checks .muted{color:var(--a-muted)}
+.note{font-size:11.5px;color:var(--a-muted);margin-top:6px}
+.lines{display:grid;gap:6px}
+.lhead,.line{display:grid;gap:6px;align-items:center}
+.lg5{grid-template-columns:104px minmax(0,1fr) 88px 34px 34px}
+.lg4{grid-template-columns:104px minmax(0,1fr) 88px 34px}
+.lgml{grid-template-columns:96px minmax(0,1fr) 104px 124px 34px}
+.lhead span{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--a-muted)}
+.mock .line .f-reps{text-align:center}
+.ldet{grid-column:1/-1;display:grid;grid-template-columns:170px minmax(0,1fr);gap:6px;padding:8px;border:1px dashed var(--a-line);border-radius:6px}
+@media (max-width:560px){
+  .lhead{display:none}
+  .line.lg5,.line.lg4,.line.lgml{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .line .f-name{grid-column:1/-1;order:-1}
+  .ldet{grid-template-columns:1fr}
+}
+.stl{display:grid;gap:8px}
+.stg{display:grid;gap:4px}
+.stg .rd{font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--a-muted)}
+.st{display:grid;grid-template-columns:36px minmax(0,1fr) auto 24px;gap:8px;align-items:center;border:1px solid var(--a-line);border-radius:7px;padding:2px 4px 2px 10px;background:var(--a-gray);font-size:13px}
+.st .n{font-weight:700}
+.st .ld{color:var(--a-muted);font-size:12px}
+.st .flag{height:28px}
+
+/* súmula do judge (ilustrativa, mesmo tema escuro do SheetView atual) */
+.phone{align-self:start;position:sticky;top:12px;border:1px solid var(--a-line);border-radius:22px;background:var(--a-gray);padding:14px;display:grid;gap:10px;max-width:360px;width:100%;margin-inline:auto}
+@media (max-width:860px){.phone{position:static}}
+.ph-h{display:flex;justify-content:space-between;gap:8px;font-size:11.5px;color:var(--a-muted)}
+.ph-h b{color:var(--a-fg)}
+.clock{display:grid;gap:6px}
+.clock .big{font-family:var(--font-num);font-size:30px;font-weight:700;letter-spacing:.02em;font-variant-numeric:tabular-nums}
+.clock .big small{font-size:14px;color:var(--a-muted);font-weight:500}
+.bar{height:6px;border-radius:3px;background:var(--a-line);overflow:hidden}
+.bar>i{display:block;height:100%;background:var(--a-primary);width:0}
+.tile{border:1px solid var(--a-primary);background:rgba(252,213,53,.07);border-radius:12px;padding:14px;display:grid;gap:4px;text-align:center}
+.tile .nm{font-size:16px;font-weight:700}
+.tile .ct{font-family:var(--font-num);font-size:44px;font-weight:700;line-height:1.05}
+.tile .ct small{font-size:18px;color:var(--a-muted);font-weight:500}
+.tile .ld{font-size:12px;color:var(--a-muted)}
+.tile .gh{font-size:11px;color:var(--a-muted)}
+.lst{display:grid;gap:4px}
+.lst .rd{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--a-muted);margin-top:4px}
+.lst .sg{display:flex;justify-content:space-between;gap:8px;align-items:center;border:1px solid var(--a-line);border-radius:7px;padding:6px 10px;font-size:12.5px;color:var(--a-muted)}
+.lst .sg.cur{color:var(--a-fg);border-color:var(--a-line)}
+.lst .sg .mk{color:var(--a-primary);font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.tot{display:flex;justify-content:space-between;font-size:12px;color:var(--a-muted)}
+.tot b{color:var(--a-fg);font-family:var(--font-num)}
+.lift{border:1px solid var(--a-line);border-radius:10px;padding:10px;display:grid;gap:8px}
+.lift .top{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.lift .top b{font-size:14px}
+.lift .best{font-family:var(--font-num);color:var(--a-primary);font-weight:700}
+.tries{display:flex;gap:6px;flex-wrap:wrap}
+.try{all:unset;box-sizing:border-box;cursor:pointer;border:1px solid var(--a-line);border-radius:8px;padding:6px 10px;min-height:44px;display:grid;gap:0;text-align:center;font-size:11px;color:var(--a-muted);min-width:70px}
+.try b{font-family:var(--font-num);font-size:15px;color:var(--a-fg)}
+.try.ok{border-color:var(--a-up);background:rgba(14,203,129,.1)}
+.try.ok em{color:var(--a-up)}
+.try.no{border-color:var(--a-down);background:rgba(246,70,93,.1)}
+.try.no em{color:var(--a-down)}
+.try em{font-style:normal;font-weight:700}
+.try:focus-visible{outline:2px solid var(--a-primary);outline-offset:2px}
+.legend{font-size:12px;color:var(--muted)}
+@media (prefers-reduced-motion:no-preference){.bar>i{transition:width .2s}}
+</style>
+
+<div class="wrap">
+
+<header class="head">
+  <span class="eyebrow">Nova proposta, revisão 2 · aguardando aprovação</span>
+  <h1>Construtor da Súmula Digital</h1>
+  <p class="lead">O construtor da aba Provas saiu diferente do que foi aprovado. Esta página explica por quê, resume como funcionam as provas de For Time, AMRAP e carga máxima no CrossFit e propõe um construtor novo, que você pode mexer abaixo. Nesta revisão, cada linha do construtor tem três campos, na ordem em que o WOD é escrito no quadro do box: <b>repetições</b>, <b>movimento</b> e <b>carga</b>.</p>
+  <div class="pills">
+    <span class="pill">Nada foi alterado em código, banco, autenticação ou infraestrutura</span>
+    <span class="pill">Agente: @architect (Aria)</span>
+  </div>
+</header>
+
+<section aria-labelledby="h-diag">
+  <h2 id="h-diag">O que aconteceu com o design</h2>
+  <p class="sec-lead">O desenho aprovado se perdeu antes de chegar ao código. Os fatos abaixo vêm das próprias stories e do código, não de suposição.</p>
+  <div class="facts card">
+    <div class="fact"><b class="n">1</b><p><b>O artefato aprovado não abre mais.</b> Tentei ler o artefato da proposta v2 por esta conta e ele não é encontrado. A Story 1.44 já registrava que o protótipo D+E "não está no repositório nem entre os artefatos publicados desta conta".</p></div>
+    <div class="fact"><b class="n">2</b><p><b>O editor nasceu do contrato de dados, não de uma tela.</b> A Story 1.45 diz que "o desenho do editor não foi aprovado em tela" e lista 7 decisões automáticas. Cada campo do contrato da 1.43 virou um campo de formulário.</p></div>
+    <div class="fact"><b class="n">3</b><p><b>O editor mora numa coluna de um terço da largura.</b> O formulário de Provas fica em <span class="num">lg:grid-cols-3</span>. Por isso o editor virou uma pilha de cartões, e a prévia da súmula ficou escondida dentro de um bloco recolhido.</p></div>
+    <div class="fact"><b class="n">4</b><p><b>Não houve conferência visual.</b> As Stories 1.44 e 1.45 foram escritas e implementadas na sessão principal, sem @ux nem @po. O QA da 1.44 deixou aberto o item QA-144-3: o visual não foi comparado com o desenho aprovado.</p></div>
+  </div>
+  <div class="compare">
+    <div class="hd">Tela atual (a que você colou)</div><div class="hd">Proposta</div>
+    <div>Os mesmos movimentos aparecem duas vezes: em "Esquema e movimentos" e em "Segmentos". "Gerar segmentos" apaga o que foi editado na lista.</div><div>Uma lista de linhas com três campos: repetições, movimento e carga. O 21-15-9 vai no campo de repetições e o construtor gera os rounds.</div>
+    <div>Uma 21-15-9 com 2 movimentos gera 6 segmentos de 6 campos cada, 36 campos para um WOD simples.</div><div>Duas linhas montam a Fran: "21-15-9 · Thruster · 43" e "21-15-9 · Pull-up". Contagem do judge e padrão do movimento ficam em "mais opções" de cada linha.</div>
+    <div>Palavras internas na tela: "segmento", "Conta cada repetição (toque)", "Só ao terminar (segurar)".</div><div>Palavras do box: movimento, round, marco. A regra do score aparece escrita em uma frase.</div>
+    <div>Desempate num seletor com "1. Deadlift (round 1, 20 reps)".</div><div>O desempate é uma bandeira na lista de etapas geradas, logo abaixo das linhas.</div>
+    <div>Só For Time e AMRAP. Prova de carga máxima não existe no construtor.</div><div>Três formatos: For Time, AMRAP e Carga máxima, cada um com seus campos.</div>
+    <div>Prévia fechada por padrão, em um bloco recolhido.</div><div>Painel largo com a súmula do judge sempre à direita, atualizando enquanto se edita.</div>
+  </div>
+</section>
+
+<section aria-labelledby="h-pesq">
+  <h2 id="h-pesq">Como as provas funcionam no CrossFit</h2>
+  <p class="sec-lead">Resumo do que as competições do CrossFit fazem hoje. Cada evento define as próprias regras, então o construtor precisa tratar essas variações como configuração, não como regra fixa.</p>
+  <div class="cols">
+    <article class="card">
+      <h3>For Time</h3>
+      <div class="k">Estruturas comuns</div>
+      <ul>
+        <li>Descendente: Fran, 21-15-9 de thruster e pull-up.</li>
+        <li>Rounds fixos: "5 rounds for time" de uma lista curta.</li>
+        <li>Chipper: lista longa feita uma vez, em ordem, de cima para baixo.</li>
+        <li>Com marcos: tempo anotado ao fim de cada série ou em um ponto fixo.</li>
+        <li>Nem tudo é repetição: o Open 26.2 pede 80 ft de lunge e 20 snatches na mesma prova.</li>
+      </ul>
+      <div class="k">Como se pontua</div>
+      <ul>
+        <li>Terminou antes do cap: vale o tempo.</li>
+        <li>Não terminou: vale as repetições feitas, sempre atrás de quem terminou (Open e Games), ou o tempo do cap mais 1 s por repetição que faltou (Regionais de 2015 e 2016).</li>
+        <li>O relógio é contínuo; o descanso conta no tempo.</li>
+      </ul>
+      <div class="k">Desempate</div>
+      <ul>
+        <li>Tempo em um marco: fixo (o 60º burpee, Open 2017) ou o último set concluído (Open 26.1 e 26.2; a cada 40 cal no Semifinal 2026).</li>
+        <li>Em tempo decorrido, nunca em tempo restante.</li>
+        <li>Quem termina antes do cap não usa desempate.</li>
+      </ul>
+      <div class="k">O judge registra</div>
+      <p>Repetições por movimento, tempo final e o tempo em cada marco.</p>
+    </article>
+    <article class="card">
+      <h3>AMRAP</h3>
+      <div class="k">Estruturas comuns</div>
+      <ul>
+        <li>Um round repetido: Cindy, 5 pull-ups, 10 push-ups e 15 squats.</li>
+        <li>Ladder: cada round soma repetições ao anterior.</li>
+        <li>Lista finita: se o atleta termina, a prova segue com outra tarefa.</li>
+        <li>Blocos em intervalo: por exemplo 3 AMRAPs de 3 min com 1 min de descanso, somando os scores.</li>
+      </ul>
+      <div class="k">Como se pontua</div>
+      <ul>
+        <li>"Rounds + repetições" (7 + 12) ou total de repetições.</li>
+        <li>Para ranquear, converte-se em total: com 30 repetições por round, 5 + 10 vira 160.</li>
+      </ul>
+      <div class="k">Desempate</div>
+      <ul>
+        <li>Não existe regra única. Cada prova define: tempo do último round ou set concluído, ou o tempo ao fim de cada set (Open 2013, 13.3).</li>
+      </ul>
+      <div class="k">O judge registra</div>
+      <p>A contagem do round em andamento, o fechamento de cada round e a parcial no fim.</p>
+    </article>
+    <article class="card">
+      <h3>Carga máxima</h3>
+      <div class="k">Estruturas comuns</div>
+      <ul>
+        <li>Um 1RM ou 3RM numa janela: Semifinal 2021, 3RM de deadlift em 20 min, tentativas ilimitadas.</li>
+        <li>Dois lifts somados na janela: Games 2025, front squat e hang power clean em 20 min, em qualquer ordem.</li>
+        <li>Sequência com tentativas limitadas: CrossFit Total 2026, agachamento, press e deadlift, até 3 tentativas cada, sem obrigação de usar todas, ordem fixa.</li>
+        <li>Complexo: vários movimentos na mesma tentativa.</li>
+      </ul>
+      <div class="k">Como se pontua</div>
+      <ul>
+        <li>Maior carga válida de cada lift. Com vários lifts, a soma deles.</li>
+        <li>Levantamento só conta se for concluído dentro da janela.</li>
+      </ul>
+      <div class="k">Desempate</div>
+      <ul>
+        <li>Tempo em que o atleta terminou o último lift, com o relógio rodando desde o início (Total 2026 e Games 2025).</li>
+        <li>Às vezes nenhum (Semifinal 2021). Em provas de equipe do Wodapalooza, a carga do primeiro clean válido no minuto inicial.</li>
+      </ul>
+      <div class="k">O judge registra</div>
+      <p>Por tentativa: a carga, se foi válida ou no-rep e quando aconteceu. O melhor valor válido de cada lift entra no score.</p>
+    </article>
+  </div>
+  <p class="small">Dois fatos que mudam o desenho. Primeiro: a penalidade por repetição e o ranking por repetições no cap ordenam os atletas do mesmo jeito quando a penalidade é de 1 s ou mais, então o motor atual já cobre os dois; muda só como o score é exibido. Segundo: o desempate do Open 2026 é "o último set concluído", e o motor atual só aceita um único segmento fixo.</p>
+</section>
+
+<section aria-labelledby="h-prop">
+  <h2 id="h-prop">O construtor proposto</h2>
+  <p class="sec-lead">Maquete interativa. Cada linha tem três campos: <b>repetições</b>, <b>movimento</b> e <b>carga (kg)</b>. Escolha o formato, edite as linhas e veja a súmula do judge mudar ao lado. Em For Time, o campo de repetições aceita 50, 21-15-9 ou 3x10; a lista "Como fica na súmula" mostra as etapas geradas, e a bandeira marca onde o judge anota o tempo do desempate. Em Carga máxima, a carga da linha é a carga inicial, e você pode tocar nas tentativas da súmula para alternar entre válida e no-rep.</p>
+
+
+  <div class="mock" id="mock">
+    <div class="mbar"><b>Nova Prova (WOD) · Súmula digital</b><span>Painel largo dentro da aba Provas, aberto por "Estruturar a súmula"</span></div>
+    <div id="builder"></div>
+    <aside class="phone" id="phone" aria-label="Prévia da súmula do judge" aria-live="polite"></aside>
+  </div>
+  <p class="legend">A súmula à direita é ilustrativa: na implementação ela é o componente SheetView que já existe, alimentado pela mesma estrutura.</p>
+</section>
+
+<section aria-labelledby="h-dados">
+  <h2 id="h-dados">O que muda no contrato de dados</h2>
+  <p class="sec-lead">A estrutura continua em <span class="num">workouts.structure</span> (JSONB). Nenhuma migration é necessária: as provas já estruturadas na versão 1 seguem válidas e o servidor passa a aceitar a versão 2.</p>
+  <div class="scroll card">
+    <table class="t">
+      <thead><tr><th>Item</th><th>Hoje (versão 1)</th><th>Proposta (versão 2)</th><th>Etapa</th></tr></thead>
+      <tbody>
+        <tr><td>Formato</td><td>for_time, amrap</td><td>acrescenta <span class="tag new">max_load</span></td><td>E1f</td></tr>
+        <tr><td>Linha do construtor</td><td>esquema mais lista de segmentos</td><td>repetições (50, 21-15-9 ou 3x10), movimento e carga; o construtor gera os segmentos, e o contrato não muda por isso</td><td>E1d</td></tr>
+        <tr><td>Movimento</td><td>só repetições</td><td>unidade por movimento: repetições, calorias ou metros</td><td>E1e</td></tr>
+        <tr><td>Contagem pelo judge</td><td>"mark" em cada segmento</td><td>uma escolha por movimento (toque ou bloco), valendo para todos os rounds</td><td>E1d</td></tr>
+        <tr><td>Desempate</td><td>um segmento fixo</td><td>acrescenta "tempo do último marco concluído" (padrão do Open 2026), com uma lista de marcos</td><td>E1e</td></tr>
+        <tr><td>Carga máxima</td><td>não existe</td><td>lifts (nome, repetições por tentativa, máximo de tentativas), ordem fixa ou livre, janela opcional, soma ou melhor carga, incremento mínimo</td><td>E1f</td></tr>
+        <tr><td>Eventos da súmula</td><td>rep, fill, set, adj, undo, time</td><td>acrescenta <span class="tag new">attempt</span> (lift, carga, válida ou não, instante); undo e time valem como hoje</td><td>E1f</td></tr>
+        <tr><td>Campos legados</td><td>type, time_cap e tie_breaker derivados</td><td>carga máxima deriva type "maxweight"; a janela vira time_cap; desempate por tempo vira "Tempo"</td><td>E1f</td></tr>
+        <tr><td>Ranking e scores</td><td>tipo "maxweight": maior vence</td><td>sem mudança</td><td>—</td></tr>
+        <tr><td>Banco</td><td>coluna JSONB com CHECK de objeto</td><td>sem migration</td><td>—</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section aria-labelledby="h-etapas">
+  <h2 id="h-etapas">Etapas propostas</h2>
+  <div class="steps">
+    <article class="card">
+      <h3><span class="tag">E1d</span> Reconstruir o construtor</h3>
+      <p class="small">Linhas de repetições, movimento e carga, painel largo com a súmula ao lado, regra escrita em frase e bandeira de desempate nas etapas geradas. Mantém For Time e AMRAP. Não toca o motor, o servidor nem o banco.</p>
+      <div class="k">Quem</div><p class="small">@ux-design-expert salva a maquete aprovada no repositório; @dev implementa; @qa confere contra a maquete.</p>
+    </article>
+    <article class="card">
+      <h3><span class="tag">E1f</span> Carga máxima</h3>
+      <p class="small">Motor com tentativas, editor de lifts e a súmula do judge por tentativa, com o relógio da janela. Prova nova, sem tocar nas existentes.</p>
+      <div class="k">Quem</div><p class="small">@architect fecha o contrato; @dev e @ux entregam; @qa valida o cálculo com vetores numéricos.</p>
+    </article>
+    <article class="card">
+      <h3><span class="tag">E1e</span> Unidades e último marco</h3>
+      <p class="small">Calorias e metros por movimento, desempate pelo último marco concluído e, se aprovado, ladder no AMRAP. Mexe no motor e no validador com a versão 2.</p>
+      <div class="k">Quem</div><p class="small">@architect e @dev; testes de paridade com a versão 1.</p>
+    </article>
+  </div>
+  <p class="small">Ordem recomendada: E1d, depois E1f, depois E1e. A E1d corrige o que está visível agora; a E1f entrega o formato novo que você pediu.</p>
+</section>
+
+<section aria-labelledby="h-dec">
+  <h2 id="h-dec">Decisões para aprovar</h2>
+  <div class="dec">
+    <div class="row"><b class="n">1</b><p><span class="rec">Recomendo</span><b>Painel largo com a súmula ao lado.</b> O construtor abre ocupando a largura da aba Provas, em vez de ficar no formulário lateral. A alternativa é manter o formulário lateral e só reorganizar os campos.</p></div>
+    <div class="row"><b class="n">2</b><p><span class="rec">Recomendo</span><b>Linhas de repetições, movimento e carga</b> no lugar de "Esquema" mais "Segmentos". O campo de repetições aceita um número (50), uma sequência com uma quantidade por round (21-15-9) ou rounds iguais (3x10); um número sozinho se repete em todos os rounds. Um modo avançado por etapa fica para casos raros, como a ordem dos movimentos mudando entre rounds.</p></div>
+    <div class="row"><b class="n">3</b><p><span class="rec">Recomendo</span><b>For Time: manter só a penalidade por repetição</b> (padrão 1 s) e deixar o "ranquear por repetições no cap" para depois. Ele ordena igual, muda apenas a exibição do score ("82 reps" no lugar de "10:08").</p></div>
+    <div class="row"><b class="n">4</b><p><span class="rec">Recomendo</span><b>Incluir "tempo do último marco concluído"</b> como desempate, porque é o padrão do Open 2026 e do Semifinal 2026. Vale também para o AMRAP ("último round completo").</p></div>
+    <div class="row"><b class="n">5</b><p><span class="rec">Recomendo</span><b>Unidade por movimento</b> (repetições, calorias, metros). Sem isso, remada de 1000 m e bike de 30 cal precisam ser escritas como repetições.</p></div>
+    <div class="row"><b class="n">6</b><p><span class="rec">Recomendo</span><b>AMRAP com ladder fora desta rodada.</b> Hoje cada round repete as mesmas repetições. Ladder (somar N repetições por round) entra depois, se você tiver uma prova que precise.</p></div>
+    <div class="row"><b class="n">7</b><p><span class="rec">Recomendo</span><b>Carga máxima no escopo mostrado:</b> até 5 lifts, tentativas 1, 2, 3 ou ilimitadas, janela de tempo opcional, ordem fixa ou livre, score pela soma das melhores cargas ou pela maior carga, desempate por tempo, por menos tentativas ou nenhum. Fora: peso corporal como desempate e "peso total acumulado" (volume).</p></div>
+    <div class="row"><b class="n">8</b><p><span class="rec">Recomendo</span><b>Guardar a maquete aprovada no repositório</b> (pasta de design da súmula, em HTML mais imagem) e fazer cada story de tela citar a maquete nos critérios de aceite, com conferência visual antes do QA.</p></div>
+    <div class="row"><b class="n">9</b><p><span class="rec ask">Pergunta</span><b>Carga por categoria.</b> Uma prova "Geral" vale para todas as categorias, mas a carga costuma mudar (ex.: thruster 43 kg no masculino e 29 kg no feminino). Recomendo manter um campo de carga por linha agora e, quando a carga mudar por categoria, criar a prova por categoria, como o painel já permite em "Categoria Vinculada". Se você preferir uma carga por categoria na mesma linha, isso muda o contrato e entra como etapa própria.</p></div>
+  </div>
+</section>
+
+<section aria-labelledby="h-fontes">
+  <h2 id="h-fontes">Fontes</h2>
+  <ul class="src">
+    <li><a href="https://games.crossfit.com/workouts/regionals/2015">Regionais 2015</a> e <a href="https://games.crossfit.com/workouts/regionals/2016">2016</a>: cap mais 1 s por repetição que faltou.</li>
+    <li><a href="https://games.crossfit.com/workouts/open/2017/3">Open 2017, workout 3</a>: repetições no cap e desempate no 60º burpee.</li>
+    <li><a href="https://games.crossfit.com/workouts/open/2020/5?division=5">Open 2020, workout 5</a>: desempate em marco fixo.</li>
+    <li><a href="https://games.crossfit.com/workouts/open/2026/2?division=1">Open 26.2</a>: desempate no último set de snatches; movimentos em pés e em repetições.</li>
+    <li><a href="https://games.crossfit.com/workouts/quarterfinalsindividual/2026">Quartas de final 2026</a> e <a href="https://games.crossfit.com/workouts/semifinals/2026/2?division=1">Semifinal 2026, workout 2</a>: relógio contínuo e desempate a cada 40 cal.</li>
+    <li><a href="https://games.crossfit.com/workouts/pro/2025/3">Games 2025, workout 3</a>: dois lifts em 20 min, tentativas ilimitadas.</li>
+    <li><a href="https://games.crossfit.com/workouts/level-4/2026/2">CrossFit Total 2026</a>: até 3 tentativas por lift, soma e desempate por tempo.</li>
+    <li><a href="https://games.crossfit.com/workouts/lastchance/2021/2">Semifinal 2021</a>: 3RM de deadlift sem desempate.</li>
+    <li><a href="https://www.thisiswhyimfit.com/crossfit/definition/amrap/">Definição de AMRAP</a> e <a href="https://crossfitsouthbrooklyn.com/workout-of-the-day/2013/03/23/2013323crossfit-open-workout-133-html.html/">Open 13.3</a>: rounds mais repetições e desempate por parcial.</li>
+  </ul>
+  <p class="small">Limite desta pesquisa: não li o regulamento completo dos Games nem as súmulas em PDF (o conteúdo não é legível por texto). As regras acima vêm das páginas de cada workout e valem para o evento citado. Os exemplos de estrutura (ladder, chipper, blocos em intervalo, Fran, Cindy) vêm do uso comum do esporte, não de uma página específica.</p>
+</section>
+
+</div>
+
+<script>
+(function(){
+  var $ = function(s, r){ return (r||document).querySelector(s); };
+  var esc = function(s){ return String(s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+  var mmss = function(n){ n = Math.max(0, Math.round(n)); return String(Math.floor(n/60)).padStart(2,'0') + ':' + String(n%60).padStart(2,'0'); };
+  var parseT = function(t){ var m = /^(\d{1,3}):([0-5]\d)$/.exec(String(t).trim()); return m ? (+m[1])*60 + (+m[2]) : null; };
+  var toN = function(v){ var n = parseInt(String(v).replace(/\D/g,''), 10); return isNaN(n) ? 0 : n; };
+  var toF = function(v){ var n = parseFloat(String(v).replace(',', '.')); return isNaN(n) ? 0 : n; };
+  var kg = function(v){ return String(v).trim().replace('.', ','); };
+  var FLAG = '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M3 1.5v13M3 2.5h9l-2 3 2 3H3" fill="currentColor" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>';
+
+  /* Campo de repetições: "50", "21-15-9" (uma por round) ou "3x10" (rounds iguais). */
+  function parseReps(text){
+    var raw = String(text || '').trim();
+    if (!raw) return {ok: false, empty: true};
+    var x = /^(\d{1,2})\s*[xX×]\s*(\d{1,3})$/.exec(raw);
+    var list = x ? Array.apply(null, Array(+x[1])).map(function(){ return +x[2]; })
+                 : raw.split(/\s*[-,;]\s*|\s+/).map(function(p){ return /^\d{1,3}$/.test(p) ? +p : NaN; });
+    if (!list.length || list.length > 9 || list.some(function(n){ return !(n >= 1 && n <= 99); })) return {ok: false};
+    return {ok: true, list: list};
+  }
+  var badLoad = function(v){ return String(v).trim() !== '' && !(toF(v) >= 0 && toF(v) <= 500 && /^\d{1,3}([.,]\d{1,2})?$/.test(String(v).trim())); };
+
+  var S = {
+    fmt: 'fortime',
+    ft: { cap: '10:00', pen: '1', rounds: '1', flag: {i: 1, r: 2}, lines: [
+      {reps: '21-15-9', name: 'Thruster', load: '43', mode: 'reps', note: '', open: false},
+      {reps: '21-15-9', name: 'Pull-up', load: '', mode: 'reps', note: 'Queixo acima da barra', open: false} ] },
+    am: { dur: '12:00', score: 'rounds', tb: 'last', lines: [
+      {reps: '5', name: 'Pull-up', load: ''},
+      {reps: '10', name: 'Push-up', load: ''},
+      {reps: '15', name: 'Air squat', load: ''} ] },
+    ml: { order: 'fixed', win: '20:00', step: '2,5', score: 'sum', tb: 'time', lines: [
+      {reps: '1', name: 'Back Squat', load: '100', att: 3, tries: [{l:140,ok:1},{l:150,ok:0},{l:150,ok:1}]},
+      {reps: '1', name: 'Press', load: '40', att: 3, tries: [{l:60,ok:1},{l:65,ok:1},{l:70,ok:0}]},
+      {reps: '1', name: 'Deadlift', load: '120', att: 3, tries: [{l:180,ok:1},{l:190,ok:1},{l:200,ok:0}]} ] }
+  };
+
+  function checksHTML(list){
+    return list.map(function(p){ return '<li><span class="' + p[0] + '">' + (p[0] === 'ok' ? '✓' : p[0] === 'no' ? '!' : '·') + '</span><span' + (p[0] === 'muted' ? ' class="muted"' : '') + '>' + esc(p[1]) + '</span></li>'; }).join('');
+  }
+  function lineHead(cls, cols){
+    return '<div class="lhead ' + cls + '" aria-hidden="true">' + cols.map(function(c){ return '<span>' + c + '</span>'; }).join('') + '</div>';
+  }
+
+  /* ---------- For Time ---------- */
+  function ftModel(){
+    var f = S.ft, parsed = f.lines.map(function(l){ return parseReps(l.reps); }), lens = [];
+    parsed.forEach(function(p){ if (p.ok && p.list.length > 1 && lens.indexOf(p.list.length) < 0) lens.push(p.list.length); });
+    var derived = lens.length ? Math.max.apply(null, lens) : null;
+    var rounds = derived || Math.min(9, Math.max(1, toN(f.rounds) || 1));
+    var steps = [];
+    for (var r = 0; r < rounds; r++) f.lines.forEach(function(l, i){
+      var p = parsed[i]; if (!p.ok) return;
+      var reps = p.list.length === 1 ? p.list[0] : p.list[r];
+      if (reps) steps.push({i: i, r: r, reps: reps, name: String(l.name).trim() || 'Sem nome', load: l.load});
+    });
+    return {parsed: parsed, lens: lens, derived: derived, rounds: rounds, steps: steps,
+            total: steps.reduce(function(a, s){ return a + s.reps; }, 0)};
+  }
+  function ftFlagStep(md){
+    var fl = S.ft.flag; if (!fl) return null;
+    for (var k = 0; k < md.steps.length; k++) if (md.steps[k].i === fl.i && md.steps[k].r === fl.r) return md.steps[k];
+    return null;
+  }
+  function ftProblems(md){
+    var f = S.ft, p = [], cap = parseT(f.cap);
+    p.push(cap && cap >= 30 ? ['ok', 'Time cap válido: ' + mmss(cap)] : ['no', 'Time cap deve estar no formato MM:SS (mínimo 00:30)']);
+    var unnamed = f.lines.map(function(l, i){ return String(l.name).trim() ? 0 : i + 1; }).filter(Boolean);
+    p.push(unnamed.length ? ['no', 'Linha ' + unnamed.join(', ') + ': informe o movimento'] : ['ok', f.lines.length + (f.lines.length === 1 ? ' movimento' : ' movimentos') + ' com nome']);
+    var badReps = md.parsed.map(function(x, i){ return x.ok ? 0 : i + 1; }).filter(Boolean);
+    p.push(badReps.length ? ['no', 'Linha ' + badReps.join(', ') + ': repetições aceitam 50, 21-15-9 ou 3x10 (de 1 a 99 cada)'] : ['ok', 'Repetições preenchidas em todas as linhas']);
+    if (md.lens.length > 1) p.push(['no', 'As sequências têm tamanhos diferentes (' + md.lens.join(' e ') + ' rounds). Use o mesmo número de rounds em todas.']);
+    var badLoads = f.lines.map(function(l, i){ return badLoad(l.load) ? i + 1 : 0; }).filter(Boolean);
+    p.push(badLoads.length ? ['no', 'Linha ' + badLoads.join(', ') + ': carga de 0 a 500 kg'] : ['ok', 'Cargas válidas (vazia = sem carga)']);
+    p.push(md.steps.length > 30 ? ['no', md.steps.length + ' etapas: o limite é 30. Reduza rounds ou movimentos.'] : ['ok', md.steps.length + ' etapas na súmula, ' + md.total + ' repetições']);
+    p.push(ftFlagStep(md) ? ['ok', 'Desempate definido'] : ['muted', 'Sem desempate (opcional): toque na bandeira de uma etapa']);
+    return p;
+  }
+  function ftRule(md){
+    var f = S.ft, cap = parseT(f.cap) || 0, pen = toN(f.pen), total = md.total, ex = Math.max(1, Math.min(8, total - 1)), fs = ftFlagStep(md);
+    return 'Quem terminar as <b>' + total + ' repetições</b> antes de <b>' + mmss(cap) + '</b> fica com o tempo real. Quem não terminar fica com <b>' + mmss(cap) + '</b> mais <b>' + pen + ' s</b> por repetição que faltou' +
+      (total > 1 ? ' (ex.: ' + (total - ex) + ' de ' + total + ' vira ' + mmss(cap + ex * pen) + ')' : '') + '.' +
+      (pen === 0 ? ' Com 0 s, quem não terminou empata com quem terminou no cap.' : '') +
+      (fs ? ' Em caso de empate, vence o menor tempo ao concluir <b>' + fs.reps + ' ' + esc(fs.name) + (md.rounds > 1 ? ' do round ' + (fs.r + 1) : '') + '</b>.' : ' Sem desempate: empates dividem a posição.');
+  }
+  function ftLine(l, i, n){
+    var h = '<div class="line lg5">';
+    h += '<input id="ft-reps-' + i + '" class="n f-reps' + (parseReps(l.reps).ok || !String(l.reps).trim() ? '' : ' bad') + '" data-ft="reps" data-i="' + i + '" placeholder="Reps" aria-label="Repetições do movimento ' + (i + 1) + '" autocomplete="off" value="' + esc(l.reps) + '">';
+    h += '<input id="ft-name-' + i + '" class="f-name" data-ft="name" data-i="' + i + '" placeholder="Movimento" aria-label="Movimento ' + (i + 1) + '" maxlength="60" autocomplete="off" value="' + esc(l.name) + '">';
+    h += '<input id="ft-load-' + i + '" class="n' + (badLoad(l.load) ? ' bad' : '') + '" data-ft="load" data-i="' + i + '" placeholder="kg" inputmode="decimal" aria-label="Carga do movimento ' + (i + 1) + ' em kg" autocomplete="off" value="' + esc(l.load) + '">';
+    h += '<button class="ib" type="button" data-act="ft-more" data-i="' + i + '" aria-expanded="' + (l.open ? 'true' : 'false') + '" aria-label="Mais opções do movimento ' + (i + 1) + '" title="Mais opções">⋯</button>';
+    h += '<button class="ib" type="button" data-act="ft-rm" data-i="' + i + '" aria-label="Remover o movimento ' + (i + 1) + '"' + (n <= 1 ? ' disabled' : '') + '>×</button>';
+    if (l.open){
+      h += '<div class="ldet"><div><label for="ft-mode-' + i + '">Como o judge conta</label><select id="ft-mode-' + i + '" data-ft="mode" data-i="' + i + '"><option value="reps"' + (l.mode === 'reps' ? ' selected' : '') + '>Toque a toque</option><option value="end"' + (l.mode === 'end' ? ' selected' : '') + '>Só o bloco inteiro</option></select></div>' +
+           '<div><label for="ft-note-' + i + '">Padrão do movimento (opcional)</label><input id="ft-note-' + i + '" data-ft="note" data-i="' + i + '" maxlength="300" autocomplete="off" value="' + esc(l.note) + '"></div></div>';
+    }
+    return h + '</div>';
+  }
+  function ftBuilder(){
+    var f = S.ft, h = '';
+    h += '<div class="bsec"><h4><i>2</i> Trabalho da prova</h4><div class="lines">' + lineHead('lg5', ['Repetições', 'Movimento', 'Carga (kg)', '', '']);
+    f.lines.forEach(function(l, i){ h += ftLine(l, i, f.lines.length); });
+    h += '</div><div class="rowtools"><button class="ib" id="ft-add" type="button" data-act="ft-add"' + (f.lines.length >= 10 ? ' disabled' : '') + '>+ Movimento</button></div>';
+    h += '<div class="two" style="margin-top:10px"><div><label for="ft-rounds">Rounds</label><input id="ft-rounds" class="n" data-ft="rounds" inputmode="numeric" autocomplete="off" value="' + esc(f.rounds) + '"></div><p class="note" id="ft-rounds-note" style="align-self:end"></p></div>';
+    h += '<p class="note">No campo de repetições vale um número (50), uma sequência com uma quantidade por round (21-15-9) ou rounds iguais (3x10). Um número sozinho se repete em todos os rounds.</p></div>';
+    h += '<div class="bsec"><h4><i>3</i> Como fica na súmula</h4><div class="stl" id="ft-steps"></div><p class="note">Etapas geradas a partir das linhas, na ordem em que o judge vai marcar. A bandeira escolhe a etapa em que o judge anota o tempo do desempate.</p></div>';
+    h += '<div class="bsec"><h4><i>4</i> Pontuação</h4><div class="two"><div><label for="ft-cap">Time cap (MM:SS)</label><input id="ft-cap" class="n" data-ft="cap" inputmode="numeric" autocomplete="off" value="' + esc(f.cap) + '"></div>' +
+         '<div><label for="ft-pen">Penalidade por repetição (s)</label><input id="ft-pen" class="n" data-ft="pen" inputmode="numeric" autocomplete="off" value="' + esc(f.pen) + '"></div></div></div>';
+    h += '<div class="bsec"><h4><i>5</i> Regra da prova</h4><p class="rule" id="rule" aria-live="polite"></p><ul class="checks" id="checks" style="margin-top:10px"></ul></div>';
+    return h;
+  }
+  function ftSteps(md){
+    if (!md.steps.length) return '<p class="note">Nenhuma etapa ainda: preencha repetições e movimento.</p>';
+    var h = '', last = -1, fl = S.ft.flag;
+    md.steps.forEach(function(s){
+      if (s.r !== last){ if (last >= 0) h += '</div>'; h += '<div class="stg">' + (md.rounds > 1 ? '<span class="rd">Round ' + (s.r + 1) + '</span>' : ''); last = s.r; }
+      var on = fl && fl.i === s.i && fl.r === s.r;
+      h += '<div class="st"><span class="n">' + s.reps + '</span><span class="nm">' + esc(s.name) + '</span><span class="ld n">' + (String(s.load).trim() && !badLoad(s.load) ? kg(s.load) + ' kg' : '') + '</span>' +
+           '<button class="flag" type="button" data-act="flag" data-i="' + s.i + '" data-r="' + s.r + '" aria-pressed="' + (on ? 'true' : 'false') + '" aria-label="Marcar o tempo de desempate ao concluir ' + s.reps + ' ' + esc(s.name) + (md.rounds > 1 ? ', round ' + (s.r + 1) : '') + '" title="Marcar o tempo de desempate aqui">' + FLAG + '</button></div>';
+    });
+    return h + '</div>';
+  }
+  function ftPhone(md){
+    var f = S.ft, cap = parseT(f.cap) || 0, cur = md.steps[0], fl = S.ft.flag, h = '';
+    h += '<div class="ph-h"><span><b>Prova 1 · For Time</b></span><span>Atleta de exemplo · Lane 1</span></div>';
+    h += '<div class="clock"><div class="big">00:00 <small>/ ' + mmss(cap) + '</small></div><div class="bar"><i style="width:0"></i></div></div>';
+    h += '<div class="tot"><span>Repetições</span><b>0 / ' + md.total + '</b></div>';
+    if (cur){
+      h += '<div class="tile"><span class="nm">' + esc(cur.name) + '</span><span class="ct">0<small> / ' + cur.reps + '</small></span>' + (String(cur.load).trim() && !badLoad(cur.load) ? '<span class="ld">' + kg(cur.load) + ' kg</span>' : '') +
+           '<span class="gh">' + (f.lines[cur.i].mode === 'reps' ? 'Toque para contar · segure para concluir' : 'Segure para concluir o bloco') + '</span></div>';
+    }
+    h += '<div class="lst">';
+    var last = -1;
+    md.steps.forEach(function(s, idx){
+      if (s.r !== last){ if (md.rounds > 1) h += '<div class="rd">Round ' + (s.r + 1) + '</div>'; last = s.r; }
+      var mk = fl && fl.i === s.i && fl.r === s.r;
+      h += '<div class="sg' + (idx === 0 ? ' cur' : '') + '"><span>' + esc(s.name) + '</span><span class="num">' + (mk ? '<span class="mk">Marco · </span>' : '') + s.reps + ' reps</span></div>';
+    });
+    return h + '</div>';
+  }
+
+  /* ---------- AMRAP ---------- */
+  function amModel(){
+    var parsed = S.am.lines.map(function(l){ return parseReps(l.reps); });
+    var per = parsed.reduce(function(a, p){ return a + (p.ok && p.list.length === 1 ? p.list[0] : 0); }, 0);
+    return {parsed: parsed, per: per};
+  }
+  function amBuilder(){
+    var a = S.am, h = '';
+    h += '<div class="bsec"><h4><i>2</i> Um round</h4><div class="lines">' + lineHead('lg4', ['Repetições', 'Movimento', 'Carga (kg)', '']);
+    a.lines.forEach(function(l, i){
+      var p = parseReps(l.reps), bad = String(l.reps).trim() && !(p.ok && p.list.length === 1);
+      h += '<div class="line lg4"><input id="am-reps-' + i + '" class="n f-reps' + (bad ? ' bad' : '') + '" data-am="reps" data-i="' + i + '" placeholder="Reps" inputmode="numeric" aria-label="Repetições do movimento ' + (i + 1) + '" autocomplete="off" value="' + esc(l.reps) + '">' +
+           '<input id="am-name-' + i + '" class="f-name" data-am="name" data-i="' + i + '" placeholder="Movimento" aria-label="Movimento ' + (i + 1) + '" maxlength="60" autocomplete="off" value="' + esc(l.name) + '">' +
+           '<input id="am-load-' + i + '" class="n' + (badLoad(l.load) ? ' bad' : '') + '" data-am="load" data-i="' + i + '" placeholder="kg" inputmode="decimal" aria-label="Carga do movimento ' + (i + 1) + ' em kg" autocomplete="off" value="' + esc(l.load) + '">' +
+           '<button class="ib" type="button" data-act="am-rm" data-i="' + i + '" aria-label="Remover o movimento ' + (i + 1) + '"' + (a.lines.length <= 1 ? ' disabled' : '') + '>×</button></div>';
+    });
+    h += '</div><div class="rowtools"><button class="ib" id="am-add" type="button" data-act="am-add"' + (a.lines.length >= 10 ? ' disabled' : '') + '>+ Movimento</button></div><p class="note">As linhas descrevem um round. O judge conta o round em andamento; ao concluir a última linha, o round fecha e a contagem recomeça.</p></div>';
+    h += '<div class="bsec"><h4><i>3</i> Pontuação</h4><div class="two"><div><label for="am-dur">Duração (MM:SS)</label><input id="am-dur" class="n" data-am="dur" inputmode="numeric" autocomplete="off" value="' + esc(a.dur) + '"></div>' +
+         '<div><label for="am-score">Score exibido</label><select id="am-score" data-am="score"><option value="rounds"' + (a.score === 'rounds' ? ' selected' : '') + '>Rounds + repetições</option><option value="total"' + (a.score === 'total' ? ' selected' : '') + '>Total de repetições</option></select></div></div>' +
+         '<div style="margin-top:10px"><label for="am-tb">Desempate</label><select id="am-tb" data-am="tb"><option value="none"' + (a.tb === 'none' ? ' selected' : '') + '>Sem desempate</option><option value="last"' + (a.tb === 'last' ? ' selected' : '') + '>Tempo do último round completo</option><option value="mark"' + (a.tb === 'mark' ? ' selected' : '') + '>Tempo em um marco do 1º round</option></select></div></div>';
+    h += '<div class="bsec"><h4><i>4</i> Regra da prova</h4><p class="rule" id="rule" aria-live="polite"></p><ul class="checks" id="checks" style="margin-top:10px"></ul></div>';
+    return h;
+  }
+  function amRule(md){
+    var a = S.am, dur = parseT(a.dur) || 0, per = md.per;
+    var tb = a.tb === 'last' ? ' Em caso de empate, vence quem fechou o último round completo em menos tempo.' : a.tb === 'mark' ? ' Em caso de empate, vence o menor tempo no marco do 1º round.' : ' Sem desempate: empates dividem a posição.';
+    return 'Vence quem somar mais repetições em <b>' + mmss(dur) + '</b>. Cada round tem <b>' + per + ' repetições</b>. O score aparece como ' + (a.score === 'rounds' ? '<b>"7 rounds + 12"</b>' : '<b>total de repetições</b>') + ' e, no ranking, vale ' + (per ? '7 × ' + per + ' + 12 = <b>' + (7 * per + 12) + '</b>' : 'o total') + '.' + tb;
+  }
+  function amProblems(md){
+    var a = S.am, dur = parseT(a.dur), p = [];
+    p.push(dur && dur >= 30 ? ['ok', 'Duração válida: ' + mmss(dur)] : ['no', 'Duração deve estar no formato MM:SS (mínimo 00:30)']);
+    var unnamed = a.lines.map(function(l, i){ return String(l.name).trim() ? 0 : i + 1; }).filter(Boolean);
+    p.push(unnamed.length ? ['no', 'Linha ' + unnamed.join(', ') + ': informe o movimento'] : ['ok', a.lines.length + ' movimentos com nome']);
+    var bad = md.parsed.map(function(x, i){ return x.ok && x.list.length === 1 ? 0 : i + 1; }).filter(Boolean);
+    p.push(bad.length ? ['no', 'Linha ' + bad.join(', ') + ': no AMRAP cada linha tem um número de 1 a 99 (o round se repete)'] : ['ok', md.per + ' repetições por round']);
+    var badLoads = a.lines.map(function(l, i){ return badLoad(l.load) ? i + 1 : 0; }).filter(Boolean);
+    p.push(badLoads.length ? ['no', 'Linha ' + badLoads.join(', ') + ': carga de 0 a 500 kg'] : ['ok', 'Cargas válidas (vazia = sem carga)']);
+    p.push(a.tb === 'none' ? ['muted', 'Sem desempate (opcional)'] : ['ok', 'Desempate definido']);
+    return p;
+  }
+  function amPhone(md){
+    var a = S.am, dur = parseT(a.dur) || 0, h = '';
+    h += '<div class="ph-h"><span><b>Prova 2 · AMRAP</b></span><span>Atleta de exemplo · Lane 1</span></div>';
+    h += '<div class="clock"><div class="big">00:00 <small>/ ' + mmss(dur) + '</small></div><div class="bar"><i style="width:0"></i></div></div>';
+    h += '<div class="tot"><span>Round em andamento</span><b>1</b></div>';
+    var cur = a.lines[0], cp = md.parsed[0];
+    if (cur) h += '<div class="tile"><span class="nm">' + esc(cur.name || 'Sem nome') + '</span><span class="ct">0<small> / ' + (cp.ok ? cp.list[0] : '—') + '</small></span>' + (String(cur.load).trim() && !badLoad(cur.load) ? '<span class="ld">' + kg(cur.load) + ' kg</span>' : '') + '<span class="gh">Toque para contar · segure para concluir</span></div>';
+    h += '<div class="lst"><div class="rd">Round 1</div>';
+    a.lines.forEach(function(l, i){ var p = md.parsed[i]; h += '<div class="sg' + (i === 0 ? ' cur' : '') + '"><span>' + esc(l.name || 'Sem nome') + (String(l.load).trim() && !badLoad(l.load) ? ' · ' + kg(l.load) + ' kg' : '') + '</span><span class="num">' + (p.ok ? p.list[0] : '—') + ' reps</span></div>'; });
+    h += '</div><div class="tot"><span>Score até agora</span><b>' + (a.score === 'rounds' ? '0 rounds + 0' : '0 reps') + ' · ' + md.per + ' por round</b></div>';
+    return h;
+  }
+
+  /* ---------- Carga máxima ---------- */
+  function mlBuilder(){
+    var m = S.ml, h = '';
+    h += '<div class="bsec"><h4><i>2</i> Movimentos de carga</h4><div class="lines">' + lineHead('lgml', ['Reps / tentativa', 'Movimento', 'Carga inicial (kg)', 'Tentativas', '']);
+    m.lines.forEach(function(l, i){
+      var r = toN(l.reps), badR = String(l.reps).trim() && !(r >= 1 && r <= 10);
+      h += '<div class="line lgml"><input id="ml-reps-' + i + '" class="n f-reps' + (badR ? ' bad' : '') + '" data-ml="reps" data-i="' + i + '" placeholder="Reps" inputmode="numeric" aria-label="Repetições por tentativa do movimento ' + (i + 1) + '" autocomplete="off" value="' + esc(l.reps) + '">' +
+           '<input id="ml-name-' + i + '" class="f-name" data-ml="name" data-i="' + i + '" placeholder="Movimento" aria-label="Movimento ' + (i + 1) + '" maxlength="60" autocomplete="off" value="' + esc(l.name) + '">' +
+           '<input id="ml-load-' + i + '" class="n' + (badLoad(l.load) ? ' bad' : '') + '" data-ml="load" data-i="' + i + '" placeholder="kg" inputmode="decimal" aria-label="Carga inicial do movimento ' + (i + 1) + ' em kg" autocomplete="off" value="' + esc(l.load) + '">' +
+           '<select id="ml-att-' + i + '" data-ml="att" data-i="' + i + '" aria-label="Tentativas do movimento ' + (i + 1) + '">' + [[1,'1 tentativa'],[2,'2 tentativas'],[3,'3 tentativas'],[0,'Ilimitadas']].map(function(o){ return '<option value="' + o[0] + '"' + (l.att === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>' +
+           '<button class="ib" type="button" data-act="ml-rm" data-i="' + i + '" aria-label="Remover o movimento ' + (i + 1) + '"' + (m.lines.length <= 1 ? ' disabled' : '') + '>×</button></div>';
+    });
+    h += '</div><div class="rowtools"><button class="ib" id="ml-add" type="button" data-act="ml-add"' + (m.lines.length >= 5 ? ' disabled' : '') + '>+ Movimento</button></div><p class="note">1 repetição por tentativa é um 1RM; 3 é um 3RM. A carga inicial é a da primeira tentativa (opcional); depois o judge registra a carga de cada tentativa. Para um complexo, escreva o complexo no movimento (ex.: "Clean + Jerk").</p></div>';
+    h += '<div class="bsec"><h4><i>3</i> Regras e pontuação</h4><div class="two"><div><label for="ml-order">Ordem dos movimentos</label><select id="ml-order" data-ml="order"><option value="fixed"' + (m.order === 'fixed' ? ' selected' : '') + '>Fixa, na ordem da lista</option><option value="free"' + (m.order === 'free' ? ' selected' : '') + '>Livre</option></select></div>' +
+         '<div><label for="ml-win">Janela de tempo (MM:SS, vazio = sem janela)</label><input id="ml-win" class="n" data-ml="win" inputmode="numeric" placeholder="sem janela" autocomplete="off" value="' + esc(m.win) + '"></div></div>' +
+         '<div class="two" style="margin-top:10px"><div><label for="ml-score">Score</label><select id="ml-score" data-ml="score"><option value="sum"' + (m.score === 'sum' ? ' selected' : '') + '>Soma das melhores cargas</option><option value="best"' + (m.score === 'best' ? ' selected' : '') + '>Maior carga única</option></select></div>' +
+         '<div><label for="ml-step">Incremento mínimo (kg)</label><input id="ml-step" class="n" data-ml="step" inputmode="decimal" autocomplete="off" value="' + esc(m.step) + '"></div></div>' +
+         '<div style="margin-top:10px"><label for="ml-tb">Desempate</label><select id="ml-tb" data-ml="tb"><option value="time"' + (m.tb === 'time' ? ' selected' : '') + '>Tempo em que terminou o último movimento</option><option value="att"' + (m.tb === 'att' ? ' selected' : '') + '>Menos tentativas</option><option value="none"' + (m.tb === 'none' ? ' selected' : '') + '>Sem desempate</option></select></div></div>';
+    h += '<div class="bsec"><h4><i>4</i> Regra da prova</h4><p class="rule" id="rule" aria-live="polite"></p><ul class="checks" id="checks" style="margin-top:10px"></ul></div>';
+    return h;
+  }
+  function mlBest(l){ return l.tries.slice(0, l.att === 0 ? 3 : l.att).reduce(function(b, t){ return t.ok === 1 && t.l > b ? t.l : b; }, 0); }
+  function mlTotal(){ var b = S.ml.lines.map(mlBest); return S.ml.score === 'sum' ? b.reduce(function(a, x){ return a + x; }, 0) : Math.max.apply(null, b.concat([0])); }
+  function mlRule(){
+    var m = S.ml, win = parseT(m.win);
+    var att = m.lines.every(function(l){ return l.att === 0; }) ? 'tentativas ilimitadas' : 'até ' + Math.max.apply(null, m.lines.map(function(l){ return l.att; })) + ' tentativas por movimento';
+    var tb = m.tb === 'time' ? ' Em caso de empate, vence quem terminou o último movimento em menos tempo.' : m.tb === 'att' ? ' Em caso de empate, vence quem usou menos tentativas.' : ' Sem desempate: empates dividem a posição.';
+    return 'Cada atleta tem <b>' + att + '</b>, na ordem ' + (m.order === 'fixed' ? '<b>fixa</b>' : '<b>livre</b>') + (win ? ', dentro de <b>' + mmss(win) + '</b> (levantamento concluído depois da janela não conta)' : '') + '. ' +
+      (m.score === 'sum' ? 'Vale a <b>maior carga válida de cada movimento, somadas</b>' : 'Vale a <b>maior carga válida</b> entre os movimentos') + ' (ex.: ' + (m.score === 'sum' ? m.lines.map(mlBest).join(' + ') + ' = ' + mlTotal() : mlTotal()) + ' kg).' + tb;
+  }
+  function mlProblems(){
+    var m = S.ml, win = m.win.trim() === '' ? null : parseT(m.win), p = [];
+    var unnamed = m.lines.map(function(l, i){ return String(l.name).trim() ? 0 : i + 1; }).filter(Boolean);
+    p.push(unnamed.length ? ['no', 'Linha ' + unnamed.join(', ') + ': informe o movimento'] : ['ok', m.lines.length + (m.lines.length === 1 ? ' movimento' : ' movimentos') + ' com nome']);
+    p.push(m.lines.every(function(l){ var r = toN(l.reps); return r >= 1 && r <= 10; }) ? ['ok', 'Repetições por tentativa entre 1 e 10'] : ['no', 'Repetições por tentativa vão de 1 a 10']);
+    var badLoads = m.lines.map(function(l, i){ return badLoad(l.load) ? i + 1 : 0; }).filter(Boolean);
+    p.push(badLoads.length ? ['no', 'Linha ' + badLoads.join(', ') + ': carga inicial de 0 a 500 kg'] : ['ok', 'Cargas iniciais válidas (vazia = livre)']);
+    p.push(m.win.trim() === '' || win ? ['ok', win ? 'Janela de ' + mmss(win) : 'Sem janela de tempo'] : ['no', 'Janela deve estar no formato MM:SS']);
+    p.push(toF(m.step) > 0 ? ['ok', 'Incremento de ' + kg(m.step) + ' kg'] : ['no', 'Informe um incremento maior que zero']);
+    p.push(m.tb === 'time' && !win ? ['muted', 'Desempate por tempo mede do início da prova'] : ['ok', 'Desempate definido']);
+    return p;
+  }
+  function mlPhone(){
+    var m = S.ml, win = parseT(m.win), h = '';
+    h += '<div class="ph-h"><span><b>Prova 3 · Carga máxima</b></span><span>Atleta de exemplo · Lane 1</span></div>';
+    h += '<div class="clock"><div class="big">00:00 ' + (win ? '<small>/ ' + mmss(win) + '</small>' : '<small>sem janela</small>') + '</div><div class="bar"><i style="width:0"></i></div></div>';
+    m.lines.forEach(function(l, li){
+      var slots = l.att === 0 ? 3 : l.att, best = mlBest(l);
+      h += '<div class="lift"><div class="top"><b>' + esc(l.name || 'Sem nome') + ' <span class="num" style="color:var(--a-muted);font-weight:500;font-size:11px">' + (toN(l.reps) || 1) + 'RM' + (String(l.load).trim() && !badLoad(l.load) ? ' · abre com ' + kg(l.load) + ' kg' : '') + '</span></b><span class="best">' + (best ? best + ' kg' : '—') + '</span></div><div class="tries">';
+      for (var t = 0; t < slots; t++){
+        var tr = l.tries[t] || {l: 0, ok: 2}, cls = tr.ok === 1 ? ' ok' : tr.ok === 0 ? ' no' : '';
+        h += '<button class="try' + cls + '" type="button" id="try-' + li + '-' + t + '" data-act="try" data-l="' + li + '" data-t="' + t + '" aria-label="Tentativa ' + (t + 1) + ' de ' + esc(l.name) + ', ' + tr.l + ' quilos, ' + (tr.ok === 1 ? 'válida' : tr.ok === 0 ? 'no-rep' : 'sem resultado') + '. Toque para alternar"><span>T' + (t + 1) + '</span><b>' + tr.l + '</b><em>' + (tr.ok === 1 ? 'válida' : tr.ok === 0 ? 'no-rep' : '—') + '</em></button>';
+      }
+      h += '</div></div>';
+    });
+    h += '<div class="tot"><span>' + (m.score === 'sum' ? 'Total das melhores cargas' : 'Maior carga') + '</span><b>' + mlTotal() + ' kg</b></div>';
+    return h;
+  }
+
+  /* ---------- montagem ---------- */
+  var fmtCards = [
+    ['fortime', 'For Time', 'Menor tempo para um trabalho definido'],
+    ['amrap', 'AMRAP', 'Mais repetições dentro do tempo'],
+    ['maxload', 'Carga máxima', 'Maior carga válida, por tentativas']
+  ];
+  function fmtSection(){
+    var h = '<div class="bsec"><h4><i>1</i> Formato da prova</h4><div class="fmts" role="radiogroup" aria-label="Formato da prova">';
+    fmtCards.forEach(function(c){
+      h += '<button class="fmt" type="button" role="radio" id="fmt-' + c[0] + '" data-act="fmt" data-f="' + c[0] + '" aria-checked="' + (S.fmt === c[0] ? 'true' : 'false') + '"><b>' + c[1] + '</b><span>' + c[2] + '</span></button>';
+    });
+    return h + '</div></div>';
+  }
+  function renderAll(){
+    var body = S.fmt === 'fortime' ? ftBuilder() : S.fmt === 'amrap' ? amBuilder() : mlBuilder();
+    $('#builder').innerHTML = fmtSection() + body;
+    refresh();
+  }
+  function refresh(){
+    var rule, probs, phone;
+    if (S.fmt === 'fortime'){
+      var md = ftModel();
+      rule = ftRule(md); probs = ftProblems(md); phone = ftPhone(md);
+      $('#ft-steps').innerHTML = ftSteps(md);
+      var ri = $('#ft-rounds'), rn = $('#ft-rounds-note');
+      if (ri){
+        ri.readOnly = Boolean(md.derived);
+        if (md.derived) ri.value = String(md.derived);
+        else if (document.activeElement !== ri) ri.value = S.ft.rounds;
+      }
+      if (rn) rn.textContent = md.derived ? 'Definido pela sequência de repetições (' + md.derived + ' rounds).' : 'Quantas vezes as linhas se repetem.';
+    } else if (S.fmt === 'amrap'){
+      var ma = amModel();
+      rule = amRule(ma); probs = amProblems(ma); phone = amPhone(ma);
+    } else { rule = mlRule(); probs = mlProblems(); phone = mlPhone(); }
+    $('#rule').innerHTML = rule;
+    $('#checks').innerHTML = checksHTML(probs);
+    $('#phone').innerHTML = phone;
+  }
+  function focusEl(sel){ var el = $(sel); if (el && el.focus) el.focus(); }
+
+  document.addEventListener('click', function(e){
+    var b = e.target.closest('[data-act]'); if (!b || !$('#mock').contains(b)) return;
+    var act = b.getAttribute('data-act'), i = +b.getAttribute('data-i'), f = S.ft;
+    if (act === 'fmt'){ S.fmt = b.getAttribute('data-f'); renderAll(); return; }
+    if (act === 'flag'){ var r = +b.getAttribute('data-r'); f.flag = (f.flag && f.flag.i === i && f.flag.r === r) ? null : {i: i, r: r}; refresh(); return; }
+    if (act === 'ft-more'){ f.lines[i].open = !f.lines[i].open; renderAll(); focusEl('[data-act="ft-more"][data-i="' + i + '"]'); return; }
+    if (act === 'ft-add'){
+      if (f.lines.length < 10){ var prev = f.lines[f.lines.length - 1]; f.lines.push({reps: prev ? prev.reps : '10', name: '', load: '', mode: 'reps', note: '', open: false}); }
+      renderAll(); focusEl('#ft-name-' + (f.lines.length - 1)); return;
+    }
+    if (act === 'ft-rm'){ if (f.lines.length > 1){ f.lines.splice(i, 1); if (f.flag){ if (f.flag.i === i) f.flag = null; else if (f.flag.i > i) f.flag.i -= 1; } } renderAll(); return; }
+    if (act === 'am-add'){ if (S.am.lines.length < 10) S.am.lines.push({reps: '10', name: '', load: ''}); renderAll(); focusEl('#am-name-' + (S.am.lines.length - 1)); return; }
+    if (act === 'am-rm'){ if (S.am.lines.length > 1) S.am.lines.splice(i, 1); renderAll(); return; }
+    if (act === 'ml-add'){ if (S.ml.lines.length < 5) S.ml.lines.push({reps: '1', name: '', load: '', att: 3, tries: [{l:100,ok:1},{l:105,ok:0},{l:105,ok:2}]}); renderAll(); focusEl('#ml-name-' + (S.ml.lines.length - 1)); return; }
+    if (act === 'ml-rm'){ if (S.ml.lines.length > 1) S.ml.lines.splice(i, 1); renderAll(); return; }
+    if (act === 'try'){ var tr = S.ml.lines[+b.getAttribute('data-l')].tries[+b.getAttribute('data-t')]; tr.ok = tr.ok === 1 ? 0 : tr.ok === 0 ? 2 : 1; refresh(); return; }
+  });
+
+  function onField(e){
+    var t = e.target, v = t.value;
+    if (t.hasAttribute('data-ft')){
+      var k = t.getAttribute('data-ft'), i = +t.getAttribute('data-i'), f = S.ft;
+      if (k === 'reps'){ f.lines[i].reps = v; t.classList.toggle('bad', Boolean(v.trim()) && !parseReps(v).ok); }
+      else if (k === 'name') f.lines[i].name = v;
+      else if (k === 'load'){ f.lines[i].load = v; t.classList.toggle('bad', badLoad(v)); }
+      else if (k === 'mode') f.lines[i].mode = v;
+      else if (k === 'note') f.lines[i].note = v;
+      else if (k === 'rounds'){ if (!t.readOnly) f.rounds = v.replace(/\D/g, ''); }
+      else if (k === 'cap') f.cap = v;
+      else if (k === 'pen') f.pen = v.replace(/\D/g, '');
+    } else if (t.hasAttribute('data-am')){
+      var k2 = t.getAttribute('data-am'), i2 = +t.getAttribute('data-i'), a = S.am;
+      if (k2 === 'reps'){ a.lines[i2].reps = v; var p2 = parseReps(v); t.classList.toggle('bad', Boolean(v.trim()) && !(p2.ok && p2.list.length === 1)); }
+      else if (k2 === 'name') a.lines[i2].name = v;
+      else if (k2 === 'load'){ a.lines[i2].load = v; t.classList.toggle('bad', badLoad(v)); }
+      else if (k2 === 'dur') a.dur = v; else if (k2 === 'score') a.score = v; else if (k2 === 'tb') a.tb = v;
+    } else if (t.hasAttribute('data-ml')){
+      var k3 = t.getAttribute('data-ml'), i3 = +t.getAttribute('data-i'), m = S.ml;
+      if (k3 === 'reps'){ m.lines[i3].reps = v.replace(/\D/g, ''); var r3 = toN(v); t.classList.toggle('bad', Boolean(v.trim()) && !(r3 >= 1 && r3 <= 10)); }
+      else if (k3 === 'name') m.lines[i3].name = v;
+      else if (k3 === 'load'){ m.lines[i3].load = v; t.classList.toggle('bad', badLoad(v)); }
+      else if (k3 === 'att') m.lines[i3].att = +v;
+      else if (k3 === 'order') m.order = v; else if (k3 === 'win') m.win = v; else if (k3 === 'score') m.score = v; else if (k3 === 'step') m.step = v; else if (k3 === 'tb') m.tb = v;
+    } else return;
+    refresh();
+  }
+  $('#mock').addEventListener('input', onField);
+  $('#mock').addEventListener('change', onField);
+
+  renderAll();
+})();
+</script>

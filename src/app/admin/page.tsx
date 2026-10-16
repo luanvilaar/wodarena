@@ -14,6 +14,7 @@ import PixPaymentModal from '@/components/PixPaymentModal';
 import { QualifierAthleteSubmissions } from '@/components/QualifierAthleteSubmissions';
 import { QualifierAthleteContestation } from '@/components/QualifierAthleteContestation';
 import { QualifierManagerPanel } from '@/components/QualifierManagerPanel';
+import { ScoresheetsPanel } from '@/components/admin/ScoresheetsPanel';
 import { QualifierResultsManager } from '@/components/QualifierResultsManager';
 import { DashboardOverview } from '@/components/admin/DashboardOverview';
 import {
@@ -25,6 +26,9 @@ import {
 import { ShirtSummaryCard } from '@/components/admin/ShirtSummaryCard';
 import { EventLocationPicker, toCoordinatesInput } from '@/components/admin/EventLocationPicker';
 import { parseCoordinatesInput } from '@/lib/eventMap';
+import { WorkoutStructureEditor } from '@/components/admin/WorkoutStructureEditor';
+import { deriveLegacyWorkoutFields, validateWorkoutStructure, type WorkoutStructure } from '@/lib/workoutStructure';
+import { summarizeStructure } from '@/lib/workoutStructureEditor';
 import {
   LayoutDashboard, Calendar, Trophy,
   ClipboardCheck, LogIn, LogOut, Ticket, Settings,
@@ -186,7 +190,8 @@ export default function AdminPage() {
     events, athletes, scores, registrations, contestations, coupons, currentUser,
     login, logout, addEvent, addDivision, updateDivision, reorderDivisions,
     addWorkout, deleteEvent, deleteDivision, deleteWorkout, submitScore, submitScoresBulk, updateEvent, getLeaderboard, createManualRegistration, saveCourseLayout, updateWorkout,
-    refreshRegistrations, updateRegistrationDetails, cancelRegistration, markRegistrationRefunded, confirmManualPayment, addCoupon, updateCoupon, toggleCouponActive, changePassword, updateAthleteProfile
+    refreshRegistrations, updateRegistrationDetails, cancelRegistration, markRegistrationRefunded, confirmManualPayment, addCoupon, updateCoupon, toggleCouponActive, changePassword, updateAthleteProfile,
+    replaceWorkoutScores
   } = useApp();
 
   // 1. Estados de Login (vinculado ao currentUser do contexto)
@@ -650,7 +655,7 @@ export default function AdminPage() {
 
   // Estado do evento sendo gerenciado internamente
   const [selectedEventToManage, setSelectedEventToManage] = useState<Event | null>(null);
-  const [activeEventTab, setActiveEventTab] = useState<'info' | 'categories' | 'wods' | 'schedule' | 'registrations' | 'scores' | 'leaderboard' | 'contestations' | 'submissions'>('info');
+  const [activeEventTab, setActiveEventTab] = useState<'info' | 'categories' | 'wods' | 'schedule' | 'registrations' | 'scores' | 'leaderboard' | 'contestations' | 'submissions' | 'sheets'>('info');
 
   // Área do Atleta: a seção ativa vem do hash da URL (#inscricoes, #resultados,
   // #contestar, #perfil). O servidor sempre renderiza "events"; o cliente lê o
@@ -919,6 +924,11 @@ export default function AdminPage() {
   const [wodDescription, setWodDescription] = useState('');
   const [wodDivisionId, setWodDivisionId] = useState('');
   const [wodTieBreaker, setWodTieBreaker] = useState('');
+  // Estrutura da prova para a súmula digital (Story 1.45); null = prova só com texto.
+  const [wodStructure, setWodStructure] = useState<WorkoutStructure | null>(null);
+  // Súmulas da arbitragem (Stories 1.51 e 1.52): quantas súmulas ativas cada prova tem (trava da
+  // estrutura) e o resultado publicado de cada atleta (confirmação do lançamento manual).
+  const [sheetOverview, setSheetOverview] = useState<{ eventId: string; locks: Record<string, number>; published: Record<string, string> }>({ eventId: '', locks: {}, published: {} });
   const [wodSubmissionOpensAt, setWodSubmissionOpensAt] = useState('');
   const [wodSubmissionClosesAt, setWodSubmissionClosesAt] = useState('');
   const [editingWorkoutId, setEditingWorkoutId] = useState('');
@@ -2163,9 +2173,58 @@ export default function AdminPage() {
     setWodTimeCap('');
     setWodDivisionId('');
     setWodTieBreaker('');
+    setWodStructure(null);
     setWodSubmissionOpensAt('');
     setWodSubmissionClosesAt('');
     setEditingWorkoutId('');
+  };
+
+  // Eventos presenciais de Functional Fitness aceitam estrutura de prova (Story 1.43).
+  const workoutStructureSupported = !selectedEventToManage?.eventType || selectedEventToManage.eventType === 'functional_fitness';
+
+  // Resumo das súmulas nas abas Provas e Lançamento de Scores (Stories 1.51 e 1.52): trava da
+  // estrutura, resultados publicados pelos judges (os scores da prova são trocados pelos do
+  // servidor) e a confirmação do lançamento manual por cima de uma súmula.
+  const sheetOverviewEventId = workoutStructureSupported && (activeEventTab === 'wods' || activeEventTab === 'scores') ? selectedEventToManage?.id || '' : '';
+  useEffect(() => {
+    if (!sheetOverviewEventId) return;
+    let active = true;
+    const refresh = async () => {
+      try {
+        const response = await fetch(`/api/sheets?view=manage&eventId=${encodeURIComponent(sheetOverviewEventId)}`);
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !active) return;
+        const published: Record<string, string> = {};
+        for (const sheet of (data.sheets || []) as { workoutId: string; athleteId: string; status: string; officialResult: string | null }[]) {
+          if (sheet.status === 'submitted' && sheet.officialResult) published[`${sheet.workoutId}|${sheet.athleteId}`] = sheet.officialResult;
+        }
+        setSheetOverview({ eventId: sheetOverviewEventId, locks: data.locks || {}, published });
+        for (const [workoutId, rows] of Object.entries((data.scores || {}) as Record<string, Score[]>)) replaceWorkoutScores(workoutId, rows);
+      } catch {
+        // Sem conexão ou sem a migration da súmula: sem trava e sem confirmação extra.
+      }
+    };
+    void refresh();
+    const interval = window.setInterval(() => void refresh(), 30_000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [sheetOverviewEventId, replaceWorkoutScores]);
+  const sheetLocks = sheetOverview.eventId === selectedEventToManage?.id ? sheetOverview.locks : {};
+  const publishedSheetResults = sheetOverview.eventId === selectedEventToManage?.id ? sheetOverview.published : {};
+
+  // Com estrutura ativa, tipo, time cap e desempate são os derivados dela (o servidor recusa
+  // divergência): o painel os espelha nos campos, que ficam somente leitura.
+  const handleWorkoutStructureChange = (next: WorkoutStructure | null) => {
+    setWodStructure(next);
+    if (!next) return;
+    const checked = validateWorkoutStructure(next);
+    if (!checked.ok) return;
+    const derived = deriveLegacyWorkoutFields(checked.structure);
+    setWodType(derived.type);
+    setWodTimeCap(derived.timeCap);
+    setWodTieBreaker(derived.tieBreaker);
   };
 
   const handleEditWorkout = (workout: Workout) => {
@@ -2177,6 +2236,7 @@ export default function AdminPage() {
     setWodTimeCap(workout.timeCap || '');
     setWodDivisionId(workout.divisionId || '');
     setWodTieBreaker(workout.tieBreaker || '');
+    setWodStructure(workout.structure ?? null);
     setWodSubmissionOpensAt(utcToFortalezaDateTimeLocal(workout.submissionOpensAt));
     setWodSubmissionClosesAt(utcToFortalezaDateTimeLocal(workout.submissionClosesAt));
     setEditingWorkoutId(workout.id);
@@ -2199,16 +2259,33 @@ export default function AdminPage() {
       }
     }
 
+    // Estrutura da prova (Story 1.45): validada aqui e de novo no servidor. Com ela, os campos
+    // legados são os derivados; sem ela (ou ao desligar), a prova volta ao modo só com texto.
+    let structureForSave: WorkoutStructure | null = null;
+    let legacyFields: { type: WorkoutType; timeCap: string; tieBreaker: string } | null = null;
+    if (wodStructure && workoutStructureSupported) {
+      const checked = validateWorkoutStructure(wodStructure);
+      if (!checked.ok) {
+        setAdminNotice({ text: `Revise a estrutura da prova: ${checked.error}`, tone: 'error' });
+        document.getElementById('wod-structure-open')?.focus();
+        return;
+      }
+      structureForSave = checked.structure;
+      legacyFields = deriveLegacyWorkoutFields(checked.structure);
+    }
+
     try {
       const workoutData: Omit<Workout, 'id'> = {
         name: wodName,
         description: wodDescription || 'Sem descrição cadastrada.',
-        type: wodType,
-        timeCap: wodTimeCap || undefined,
+        type: legacyFields ? legacyFields.type : wodType,
+        timeCap: (legacyFields ? legacyFields.timeCap : wodTimeCap) || undefined,
         code: wodCode,
         orderIndex: Number(wodOrder),
         divisionId: wodDivisionId || undefined,
-        tieBreaker: wodTieBreaker,
+        tieBreaker: legacyFields ? legacyFields.tieBreaker : wodTieBreaker,
+        // Criar sem estrutura não envia a coluna; editar sem estrutura envia null (limpa, se havia).
+        ...(workoutStructureSupported && (structureForSave || editingWorkoutId) ? { structure: structureForSave } : {}),
         submissionOpensAt: submissionWindow?.opensAt || fortalezaDateTimeLocalToUtc(wodSubmissionOpensAt),
         submissionClosesAt: submissionWindow?.closesAt || fortalezaDateTimeLocalToUtc(wodSubmissionClosesAt)
       };
@@ -2505,6 +2582,21 @@ export default function AdminPage() {
         splits
       });
     });
+
+    // Lançamento manual por cima de resultado publicado pela súmula (Story 1.51, decisão 6 da E3):
+    // pede confirmação; o servidor registra a troca no histórico da súmula.
+    const overridingSheets = scoresToSubmit.filter(score => {
+      const published = publishedSheetResults[`${score.workoutId}|${score.athleteId}`];
+      return published !== undefined && published !== score.result;
+    });
+    if (overridingSheets.length > 0) {
+      const names = overridingSheets.map(score => athletes.find(athlete => athlete.id === score.athleteId)?.name || score.athleteId).join(', ');
+      const confirmed = window.confirm(
+        `${names} ${overridingSheets.length === 1 ? 'tem resultado publicado' : 'têm resultados publicados'} pela súmula da arbitragem. ` +
+        'Lançar à mão substitui o resultado da súmula e fica registrado no histórico. Continuar?'
+      );
+      if (!confirmed) return;
+    }
 
     if (scoresToSubmit.length > 0) {
       submitScoresBulk(scoresToSubmit);
@@ -7370,7 +7462,7 @@ export default function AdminPage() {
                   id="wod-score-type-input"
                   name="scoreType"
                   value={wodType}
-                  disabled={scoreTypeLocked}
+                  disabled={scoreTypeLocked || Boolean(wodStructure)}
                   onChange={(e) => setWodType(e.target.value as WorkoutType)}
                   className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
                 >
@@ -7386,8 +7478,9 @@ export default function AdminPage() {
                   type="text"
                   placeholder="Ex: 12:00"
                   value={wodTimeCap}
+                  readOnly={Boolean(wodStructure)}
                   onChange={(e) => setWodTimeCap(e.target.value)}
-                  className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white placeholder:text-muted focus:border-primary/50 focus:outline-none"
+                  className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white placeholder:text-muted focus:border-primary/50 focus:outline-none read-only:cursor-not-allowed read-only:opacity-60"
                 />
               </div>
             </div>
@@ -7414,8 +7507,9 @@ export default function AdminPage() {
                 id="wod-tiebreaker-input"
                 name="tieBreaker"
                 value={wodTieBreaker}
+                disabled={Boolean(wodStructure)}
                 onChange={(e) => setWodTieBreaker(e.target.value)}
-                className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white placeholder:text-muted focus:border-primary/50 focus:outline-none"
+                className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white placeholder:text-muted focus:border-primary/50 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <option value="">Sem critério adicional</option>
                 {WORKOUT_TIE_BREAKER_OPTIONS.map((option) => (
@@ -7425,7 +7519,11 @@ export default function AdminPage() {
                   <option value={wodTieBreaker}>{wodTieBreaker}</option>
                 )}
               </select>
-              <p className="mt-1 text-[10px] text-muted">Use quando dois atletas/equipes terminarem empatados no score principal.</p>
+              <p className="mt-1 text-[10px] text-muted">
+                {wodStructure
+                  ? 'Tipo de score, time cap e desempate vêm da estrutura da prova (Súmula digital, abaixo).'
+                  : 'Use quando dois atletas/equipes terminarem empatados no score principal.'}
+              </p>
             </div>
 
             {selectedEventToManage?.eventType === 'functional_fitness_qualifier' && (
@@ -7475,6 +7573,19 @@ export default function AdminPage() {
                 className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white placeholder:text-muted focus:border-primary/50 focus:outline-none font-mono text-xs"
               />
             </div>
+
+            {workoutStructureSupported && (wodStructure || wodType === 'fortime' || wodType === 'amrap' || wodType === 'maxweight') && (
+              <WorkoutStructureEditor
+                key={editingWorkoutId || 'nova-prova'}
+                value={wodStructure}
+                onChange={handleWorkoutStructureChange}
+                defaultFormat={wodType === 'amrap' ? 'amrap' : wodType === 'maxweight' ? 'max_load' : 'for_time'}
+                workoutName={wodName}
+                timeCapHint={wodTimeCap}
+                lockedSheets={editingWorkoutId ? sheetLocks[editingWorkoutId] ?? 0 : 0}
+                idPrefix="wod-structure"
+              />
+            )}
           </div>
 
           <div className="flex gap-3">
@@ -7530,6 +7641,11 @@ export default function AdminPage() {
                       <pre className="text-xs font-mono text-muted-soft whitespace-pre-wrap font-sans">
                         {wod.description}
                       </pre>
+                      {wod.structure && (
+                        <p className="inline-flex items-center gap-1.5 rounded border border-primary/40 bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary">
+                          Súmula digital · {summarizeStructure(wod.structure)}
+                        </p>
+                      )}
                     </div>
 
                     <div className="sm:text-right space-y-2 flex flex-col justify-center items-start sm:items-end">
@@ -9757,7 +9873,7 @@ export default function AdminPage() {
                         value={activeEventTab}
                         onChange={(e) => {
                           const tabId = e.target.value;
-                          setActiveEventTab(tabId as 'info' | 'categories' | 'wods' | 'schedule' | 'registrations' | 'scores' | 'leaderboard' | 'contestations' | 'submissions');
+                          setActiveEventTab(tabId as 'info' | 'categories' | 'wods' | 'schedule' | 'registrations' | 'scores' | 'leaderboard' | 'contestations' | 'submissions' | 'sheets');
                           if (tabId === 'info') {
                             initEventEditForm(selectedEventToManage);
                           }
@@ -9774,6 +9890,9 @@ export default function AdminPage() {
                           { id: 'leaderboard', label: 'Leaderboard' },
                           ...(selectedEventToManage.eventType === 'functional_fitness_qualifier'
                             ? [{ id: 'submissions', label: 'Submissões e Judges' }]
+                            : []),
+                          ...((selectedEventToManage.eventType || 'functional_fitness') === 'functional_fitness'
+                            ? [{ id: 'sheets', label: 'Súmulas e Judges' }]
                             : []),
                           ...((selectedEventToManage.eventType || 'functional_fitness') !== 'fitness_racing'
                             ? [{ id: 'contestations', label: 'Contestações' }]
@@ -9799,6 +9918,9 @@ export default function AdminPage() {
                           ...(selectedEventToManage.eventType === 'functional_fitness_qualifier'
                             ? [{ id: 'submissions', label: 'Submissões e Judges' }]
                             : []),
+                          ...((selectedEventToManage.eventType || 'functional_fitness') === 'functional_fitness'
+                            ? [{ id: 'sheets', label: 'Súmulas e Judges' }]
+                            : []),
                         ...((selectedEventToManage.eventType || 'functional_fitness') !== 'fitness_racing'
                           ? [{ id: 'contestations', label: 'Contestações' }]
                           : [])
@@ -9806,7 +9928,7 @@ export default function AdminPage() {
                         <button
                           key={tab.id}
                           onClick={() => {
-                            setActiveEventTab(tab.id as 'info' | 'categories' | 'wods' | 'schedule' | 'registrations' | 'scores' | 'leaderboard' | 'contestations' | 'submissions');
+                            setActiveEventTab(tab.id as 'info' | 'categories' | 'wods' | 'schedule' | 'registrations' | 'scores' | 'leaderboard' | 'contestations' | 'submissions' | 'sheets');
                             if (tab.id === 'info') {
                               initEventEditForm(selectedEventToManage);
                             }
@@ -9842,6 +9964,7 @@ export default function AdminPage() {
                       )}
                       {activeEventTab === 'leaderboard' && renderAbaLeaderboard()}
                       {activeEventTab === 'submissions' && selectedEventToManage.eventType === 'functional_fitness_qualifier' && <QualifierManagerPanel event={selectedEventToManage} />}
+                      {activeEventTab === 'sheets' && (selectedEventToManage.eventType || 'functional_fitness') === 'functional_fitness' && <ScoresheetsPanel event={selectedEventToManage} />}
                       {activeEventTab === 'contestations' && renderAbaContestations()}
                     </div>
                   </div>

@@ -170,6 +170,13 @@ export default function JudgePage() {
         <div className="mt-1 flex flex-wrap items-end justify-between gap-3">
           <h1 className="text-balance text-2xl font-bold uppercase text-white sm:text-3xl">Dashboard do judge</h1>
           <div className="flex items-center gap-2">
+            {/* Arbitragem presencial (Story 1.49): súmulas dos eventos na quadra. */}
+            <Link
+              href="/judge/quadra"
+              className="inline-flex min-h-11 items-center rounded-md border border-primary/40 bg-primary/10 px-3 py-2 text-xs font-bold uppercase tracking-wider text-primary transition-colors hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              Quadra
+            </Link>
             <p className="rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-bold tabular-nums text-primary">
               {queue.length} {queue.length === 1 ? 'pendência' : 'pendências'}
             </p>

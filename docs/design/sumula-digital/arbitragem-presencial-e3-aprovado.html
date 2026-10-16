@@ -1,0 +1,270 @@
+<title>Arbitragem Presencial E3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@500;600;700&family=Inter:wght@400;500;600;700;800&display=swap">
+<style>
+/* Layout: leitura em uma coluna; no meio, as telas propostas lado a lado (judge no celular e gestor no painel). */
+:root{
+  --font-body:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --font-num:"IBM Plex Sans","JetBrains Mono",ui-monospace,Menlo,monospace;
+  --bg:#0b0e11; --surface:#14181d; --surface-2:#1e2329; --line:#2b3139;
+  --fg:#eaecef; --muted:#929aa5; --accent-text:#fcd535; --up:#0ecb81; --down:#f6465d; --info:#7db4ff;
+  --a-bg:#0b0e11; --a-card:#1e2329; --a-line:#2b3139; --a-gray:#181a20; --a-fg:#eaecef; --a-muted:#929aa5;
+  --a-primary:#fcd535; --a-ink:#181a20; --a-up:#0ecb81; --a-down:#f6465d; --a-info:#7db4ff;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --bg:#f4f5f7; --surface:#ffffff; --surface-2:#eceef2; --line:#d6dae1;
+    --fg:#181a20; --muted:#566070; --accent-text:#7a5c00; --up:#0a7d52; --down:#b8243a; --info:#1f5fd1;
+    color-scheme:light;
+  }
+}
+:root[data-theme="light"]{
+  --bg:#f4f5f7; --surface:#ffffff; --surface-2:#eceef2; --line:#d6dae1;
+  --fg:#181a20; --muted:#566070; --accent-text:#7a5c00; --up:#0a7d52; --down:#b8243a; --info:#1f5fd1;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:15px;line-height:1.55}
+h1,h2,h3{text-wrap:balance;line-height:1.2;margin:0}
+p{margin:0}
+a{color:var(--accent-text)}
+.wrap{max-width:1120px;margin:0 auto;padding-inline:16px;padding-block:32px 72px;display:grid;gap:52px}
+.num{font-family:var(--font-num);font-variant-numeric:tabular-nums}
+.eyebrow{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--accent-text)}
+h1{font-size:clamp(28px,5vw,40px);font-weight:800;letter-spacing:-.02em}
+h2{font-size:22px;font-weight:800;letter-spacing:-.01em}
+h3{font-size:15px;font-weight:700}
+.lead{max-width:70ch;color:var(--muted);font-size:16px}
+.head{display:grid;gap:14px}
+.pills{display:flex;flex-wrap:wrap;gap:8px}
+.pill{font-size:12px;font-weight:600;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:4px 12px}
+section{display:grid;gap:16px;min-width:0}
+.sec-lead{max-width:74ch;color:var(--muted)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;min-width:0}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+.k{font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:12px 0 4px}
+.card ul{margin:0;padding-left:18px;display:grid;gap:5px}
+.small{font-size:13px;color:var(--muted)}
+.tag{display:inline-block;font-size:11px;font-weight:700;padding:1px 8px;border-radius:4px;background:var(--surface-2);border:1px solid var(--line)}
+.tag.new{color:var(--accent-text);border-color:var(--accent-text)}
+.tag.up{color:var(--up);border-color:var(--up)}
+.scroll{overflow-x:auto;max-width:100%}
+table.t{border-collapse:collapse;width:100%;min-width:620px;font-size:13.5px}
+table.t th,table.t td{text-align:left;vertical-align:top;padding:9px 12px;border-bottom:1px solid var(--line)}
+table.t th{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--surface-2)}
+table.t td:first-child{font-weight:600}
+code{font-family:var(--font-num);font-size:12.5px;background:var(--surface-2);border:1px solid var(--line);border-radius:4px;padding:0 5px}
+.steps{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
+.dec{display:grid;gap:10px}
+.dec .row{display:grid;grid-template-columns:auto 1fr;gap:14px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px 16px}
+.dec .row b.n{font-family:var(--font-num);font-size:18px;color:var(--accent-text)}
+.rec{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--up);margin-right:6px}
+.alt{display:block;font-size:13px;color:var(--muted);margin-top:4px}
+
+/* telas propostas (tema do app, fixo) */
+.screens{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px}
+.phone{border:1px solid var(--a-line);border-radius:22px;background:var(--a-bg);color:var(--a-fg);padding:14px;display:grid;gap:10px;align-content:start;font-size:13px;min-width:0}
+.phone .cap{font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--a-primary)}
+.phone .ttl{font-size:16px;font-weight:800}
+.phone .sub{font-size:11.5px;color:var(--a-muted)}
+.item{display:flex;justify-content:space-between;gap:8px;align-items:center;border:1px solid var(--a-line);background:var(--a-card);border-radius:10px;padding:10px 12px;min-height:48px}
+.item b{font-size:13.5px}
+.item .meta{font-size:11px;color:var(--a-muted)}
+.chip{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border-radius:999px;padding:2px 8px;border:1px solid var(--a-line);color:var(--a-muted);white-space:nowrap}
+.chip.run{color:var(--a-primary);border-color:var(--a-primary)}
+.chip.sent{color:var(--a-info);border-color:var(--a-info)}
+.chip.ok{color:var(--a-up);border-color:var(--a-up)}
+.chip.back{color:var(--a-down);border-color:var(--a-down)}
+.sync{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--a-up)}
+.sync i{width:8px;height:8px;border-radius:50%;background:var(--a-up)}
+.sync.wait{color:var(--a-primary)}.sync.wait i{background:var(--a-primary)}
+.tile{border:2px solid var(--a-primary);background:rgba(252,213,53,.07);border-radius:14px;padding:12px;text-align:center;display:grid;gap:2px}
+.tile .big{font-family:var(--font-num);font-size:40px;font-weight:800;line-height:1}
+.btn{display:flex;align-items:center;justify-content:center;min-height:44px;border-radius:8px;border:1px solid var(--a-line);background:var(--a-gray);font-weight:700;font-size:12.5px;color:var(--a-fg)}
+.btn.pri{background:var(--a-primary);color:var(--a-ink);border-color:var(--a-primary)}
+.btn.warn{border-color:var(--a-down);background:rgba(246,70,93,.12)}
+.kv{display:flex;justify-content:space-between;font-size:12px;color:var(--a-muted)}
+.kv b{color:var(--a-fg);font-family:var(--font-num)}
+.result{border:1px solid var(--a-primary);border-radius:12px;padding:10px 12px;display:grid;gap:4px;background:rgba(252,213,53,.05)}
+.result .big{font-family:var(--font-num);font-size:30px;font-weight:800}
+.panel{border:1px solid var(--a-line);border-radius:12px;background:var(--a-bg);color:var(--a-fg);padding:14px;display:grid;gap:12px;font-size:13px;min-width:0}
+.panel table{border-collapse:collapse;width:100%;min-width:640px}
+.panel th,.panel td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--a-line)}
+.panel th{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--a-muted)}
+.panel td .acts{display:flex;gap:6px;flex-wrap:wrap}
+.panel .mini{min-height:32px;padding:0 10px;border-radius:6px;border:1px solid var(--a-line);background:var(--a-gray);font-size:11.5px;font-weight:700;display:inline-flex;align-items:center;color:var(--a-fg)}
+.panel .mini.pri{background:var(--a-primary);color:var(--a-ink);border-color:var(--a-primary)}
+.legend{font-size:12px;color:var(--muted)}
+</style>
+
+<div class="wrap">
+
+<header class="head">
+  <span class="eyebrow">Proposta E3 · aguardando aprovação</span>
+  <h1>Arbitragem presencial</h1>
+  <p class="lead">Judges em evento presencial, gravação da súmula, publicação no ranking e trava da estrutura depois do uso. Esta é a análise que o documento da súmula pede na seção 10, antes de criar tabelas, mudar permissões ou o ranking.</p>
+  <div class="pills">
+    <span class="pill">Nada foi alterado para a E3</span>
+    <span class="pill">Revisão das Stories 1.45 a 1.48: CONCERNS, 1 defeito alto corrigido</span>
+  </div>
+</header>
+
+<section aria-labelledby="h-reuso">
+  <h2 id="h-reuso">O que já existe e será reaproveitado</h2>
+  <p class="sec-lead">O WODArena já tem quase todas as peças. Falta ligar a súmula a elas sem criar um sistema de score paralelo.</p>
+  <div class="cols">
+    <article class="card">
+      <h3>Judges</h3>
+      <ul>
+        <li>Conta com papel <code>judge</code>, ligada ao gestor (<code>parent_manager_id</code>).</li>
+        <li>Atribuição por evento na tabela <code>event_judges</code>.</li>
+        <li>Hoje tudo isso é <b>só do Qualifier</b>: o painel recusa judges em outros eventos, e o acesso do servidor (<code>serverJudgeAccess.ts</code>) também.</li>
+      </ul>
+    </article>
+    <article class="card">
+      <h3>Baterias e raias</h3>
+      <ul>
+        <li>As baterias ficam no cronograma do evento (<code>event_schedule</code>), com a prova, o número da bateria e os atletas em ordem de raia.</li>
+        <li>As contestações já usam bateria e raia (<code>heat_id</code>, <code>lane</code>): o mesmo vocabulário serve à súmula.</li>
+      </ul>
+    </article>
+    <article class="card">
+      <h3>Scores e ranking</h3>
+      <ul>
+        <li>A tabela <code>scores</code> guarda o resultado, o valor numérico, a posição, os pontos e os splits (o desempate vai em <code>splits.tieBreaker</code>).</li>
+        <li>Hoje a posição e os pontos são calculados <b>no navegador do gestor</b> e gravados por ele. O judge não pode depender disso.</li>
+        <li>A regra já está numa função pura (<code>rankWorkoutScores</code>), que o servidor pode usar sem mudança.</li>
+      </ul>
+    </article>
+    <article class="card">
+      <h3>Súmula e motor</h3>
+      <ul>
+        <li>Prova estruturada, motor de cálculo, súmula do judge e construtor prontos (Stories 1.43 a 1.48).</li>
+        <li>O ajuste manual pelo cronômetro oficial existe no motor e na porta; falta a tela.</li>
+        <li>O fluxo do Qualifier (envio, revisões e publicação com histórico) é o modelo de estados e de auditoria a seguir.</li>
+      </ul>
+    </article>
+  </div>
+  <div class="card small">
+    <b style="color:var(--fg)">Também conta para o plano:</b> a tela <code>/judge</code> de hoje é a fila do Qualifier e tem um teste que trava o arquivo linha a linha, então a área presencial entra numa rota nova. A migration da estrutura (Story 1.43) <b>ainda não foi aplicada no Supabase</b>; a E3 depende dela e de migrations novas, o que exige a sua autorização para aplicar. O leaderboard público não se atualiza sozinho (lê na abertura da página).
+  </div>
+</section>
+
+<section aria-labelledby="h-fluxo">
+  <h2 id="h-fluxo">Como fica na quadra</h2>
+  <p class="sec-lead">O fluxo segue a seção 2 do documento: evento, bateria, raia, súmula, conferir e enviar. O gestor revisa e publica pelo painel.</p>
+  <div class="screens">
+    <div class="phone" aria-label="Tela 1: baterias">
+      <span class="cap">1 · Baterias</span>
+      <span class="ttl">Híbrido Games</span>
+      <span class="sub">Prova 2 · Fran · For Time</span>
+      <div class="item"><div><b>Bateria 3</b><div class="meta">10:40 · RX Masculino</div></div><span class="chip run">agora</span></div>
+      <div class="item"><div><b>Bateria 4</b><div class="meta">10:55 · RX Masculino</div></div><span class="chip">próxima</span></div>
+      <div class="item"><div><b>Bateria 2</b><div class="meta">10:25 · Scaled</div></div><span class="chip ok">6 aprovadas</span></div>
+    </div>
+    <div class="phone" aria-label="Tela 2: raias">
+      <span class="cap">2 · Raias da bateria 3</span>
+      <div class="item"><div><b>Raia 1 · Ana Souza</b><div class="meta">CrossFit Litoral</div></div><span class="chip sent">enviada</span></div>
+      <div class="item"><div><b>Raia 2 · Bruno Lima</b><div class="meta">Box Norte</div></div><span class="chip run">em andamento</span></div>
+      <div class="item"><div><b>Raia 3 · Caio Reis</b><div class="meta">Tropa Fit</div></div><span class="chip">não iniciada</span></div>
+      <div class="item"><div><b>Raia 4 · Davi Melo</b><div class="meta">Arena 83</div></div><span class="chip back">devolvida</span></div>
+      <span class="sub">Uma súmula por atleta e prova: a raia em andamento com outro judge aparece travada.</span>
+    </div>
+    <div class="phone" aria-label="Tela 3: súmula">
+      <span class="cap">3 · Súmula</span>
+      <div class="kv"><span>Fran · Bateria 3 · Raia 3</span><span class="sync"><i></i>Salvo</span></div>
+      <span class="ttl">Caio Reis <span class="sub">RX Masculino</span></span>
+      <div class="kv"><span>Em andamento</span><b>04:12 / 10:00</b></div>
+      <div class="tile"><span class="sub">PULL-UP · ROUND 2</span><span class="big">9</span><span class="sub">de 15 · toque +1 · segure para concluir</span></div>
+      <div class="kv"><span class="sync wait"><i></i>2 registros aguardando conexão</span></div>
+      <span class="sub">A súmula de hoje (Story 1.44), com o cabeçalho completo e o estado da gravação. Ela nunca mostra "enviado" sem a confirmação do servidor.</span>
+    </div>
+    <div class="phone" aria-label="Tela 4: conferir e enviar">
+      <span class="cap">4 · Conferir e enviar</span>
+      <div class="result"><span class="sub">Tempo final</span><span class="big">07:48</span><span class="sub">90 de 90 repetições · tie-break 04:31</span></div>
+      <div class="kv"><span>Cronômetro oficial</span><b>07:46</b></div>
+      <span class="sub">O judge corrige o tempo pelo cronômetro do evento (o da súmula fica guardado ao lado).</span>
+      <div class="btn pri">Enviar para validação</div>
+      <div class="btn">Voltar à súmula</div>
+    </div>
+  </div>
+  <div class="panel" aria-label="Painel do gestor: súmulas da prova">
+    <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:baseline">
+      <b style="font-size:13px;letter-spacing:.08em;text-transform:uppercase">Súmulas · Prova 2 · Fran</b>
+      <span style="font-size:12px;color:var(--a-muted)">Publicação: após a revisão do gestor</span>
+    </div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Bateria · raia</th><th>Atleta</th><th>Resultado</th><th>Judge</th><th>Estado</th><th>Ações</th></tr></thead>
+        <tbody>
+          <tr><td class="num">3 · 1</td><td>Ana Souza</td><td class="num">08:02 · tb 04:40</td><td>Judge Paula</td><td><span class="chip sent">enviada</span></td><td><div class="acts"><span class="mini pri">Aprovar e publicar</span><span class="mini">Devolver</span><span class="mini">Corrigir</span><span class="mini">Histórico</span></div></td></tr>
+          <tr><td class="num">3 · 3</td><td>Caio Reis</td><td class="num">07:46 · tb 04:31</td><td>Judge Rafa</td><td><span class="chip sent">enviada</span></td><td><div class="acts"><span class="mini pri">Aprovar e publicar</span><span class="mini">Devolver</span><span class="mini">Corrigir</span><span class="mini">Histórico</span></div></td></tr>
+          <tr><td class="num">2 · 2</td><td>Elis Prado</td><td class="num">10:08 · 82/90</td><td>Judge Paula</td><td><span class="chip ok">publicada</span></td><td><div class="acts"><span class="mini">Histórico</span></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <span style="font-size:12px;color:var(--a-muted)">"Corrigir" exige justificativa e fica no histórico; "Devolver" reabre a súmula para o judge com o motivo.</span>
+  </div>
+  <p class="legend">Telas ilustrativas, no tema escuro atual da súmula. O tema está na decisão 9.</p>
+</section>
+
+<section aria-labelledby="h-dados">
+  <h2 id="h-dados">Dados e servidor</h2>
+  <p class="sec-lead">Duas tabelas novas guardam a súmula e o log de cada toque; a publicação escreve na tabela <code>scores</code> de sempre. Todas com RLS ligada e acesso só pelo servidor, como o resto do banco.</p>
+  <div class="scroll card">
+    <table class="t">
+      <thead><tr><th>Peça</th><th>O que guarda</th><th>Por quê</th></tr></thead>
+      <tbody>
+        <tr><td><code>scoresheets</code> <span class="tag new">nova</span></td><td>Uma súmula por atleta e prova: evento, prova, categoria, atleta, bateria e raia, judge, <b>cópia da estrutura</b> no momento em que abriu, estado, resultado calculado no servidor e quem revisou e publicou</td><td>Uma súmula ativa por atleta e prova impede o envio duplicado; a cópia da estrutura garante que o cálculo não muda depois</td></tr>
+        <tr><td><code>scoresheet_events</code> <span class="tag new">nova</span></td><td>Cada toque, correção, tentativa ou ajuste de tempo, com número de sequência, id único, autor e horário; nunca é apagado</td><td>Histórico completo, sincronização sem duplicar (o id único descarta reenvio) e edição simultânea detectada pela sequência</td></tr>
+        <tr><td><code>scoresheet_reviews</code> <span class="tag new">nova</span></td><td>Cada decisão do gestor: aprovar, devolver, corrigir, com o motivo e o antes e depois</td><td>A seção 7 pede saber quem lançou, quando enviou e o que mudou depois</td></tr>
+        <tr><td><code>scores</code></td><td>Ganha a coluna <code>scoresheet_id</code> (opcional) para saber de qual súmula veio o resultado</td><td>Nada de sistema de score paralelo: o leaderboard e o painel continuam lendo daqui</td></tr>
+        <tr><td>Rotas <code>/api/sheets/*</code> <span class="tag new">nova</span></td><td>Abrir a súmula, gravar eventos em lote, enviar, revisar e publicar</td><td>O servidor valida cada evento e calcula o resultado com o mesmo motor; o resultado do aparelho nunca é aceito como está</td></tr>
+        <tr><td>Ranking no servidor <span class="tag up">reuso</span></td><td>Publicar recalcula a posição e os pontos da prova e categoria com <code>rankWorkoutScores</code></td><td>Mesma regra do painel de hoje, sem depender do navegador do gestor</td></tr>
+        <tr><td>Acesso do judge <span class="tag up">reuso</span></td><td><code>event_judges</code> passa a valer para eventos Functional Fitness presenciais; as regras do Qualifier ficam como estão</td><td>Permissão por evento e por gestor, como já funciona</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section aria-labelledby="h-etapas">
+  <h2 id="h-etapas">Etapas</h2>
+  <div class="steps">
+    <article class="card">
+      <h3><span class="tag">E3a</span> Judges no presencial</h3>
+      <p class="small">Cadastro e atribuição de judges em eventos Functional Fitness, acesso do servidor e a área do judge numa rota nova: eventos, baterias e raias. Sem gravar súmula ainda.</p>
+    </article>
+    <article class="card">
+      <h3><span class="tag">E3b</span> Gravação da súmula</h3>
+      <p class="small">Migration das tabelas, rotas de abrir e gravar em lote, fila no aparelho com indicador "Salvo" e "Aguardando conexão", tela de conferir e enviar com o ajuste pelo cronômetro oficial.</p>
+    </article>
+    <article class="card">
+      <h3><span class="tag">E3c</span> Revisão e publicação</h3>
+      <p class="small">Aba "Súmulas" no painel: aprovar e publicar, devolver, corrigir com justificativa e histórico. Publicação em <code>scores</code> com o ranking recalculado no servidor.</p>
+    </article>
+    <article class="card">
+      <h3><span class="tag">E3d</span> Trava da estrutura</h3>
+      <p class="small">Com súmula aberta, a estrutura da prova não muda mais (o servidor recusa e o construtor avisa), como a trava das provas do Qualifier.</p>
+    </article>
+  </div>
+  <p class="small">Cada etapa vira uma story, com a tela citando o desenho salvo em <code>docs/design/</code>. Antes da E3b, as migrations (a da Story 1.43 e as novas) precisam da sua autorização para serem aplicadas no Supabase.</p>
+</section>
+
+<section aria-labelledby="h-dec">
+  <h2 id="h-dec">Decisões para aprovar</h2>
+  <div class="dec">
+    <div class="row"><b class="n">1</b><p><span class="rec">Recomendo</span><b>Judge atribuído ao evento inteiro.</b> Na quadra ele escolhe a bateria e a raia; o sistema impede duas súmulas abertas para o mesmo atleta na mesma prova.<span class="alt">Alternativa: o gestor atribui o judge a baterias e raias específicas antes da prova (mais controle, mais trabalho para o gestor).</span></p></div>
+    <div class="row"><b class="n">2</b><p><span class="rec">Recomendo</span><b>Relógio por súmula:</b> cada judge toca "Iniciar" no sinal de largada, e o tempo final pode ser corrigido pelo cronômetro oficial.<span class="alt">Alternativa: relógio da bateria iniciado por um head judge e sincronizado em todos os aparelhos (exige conexão em tempo real; fica para depois).</span></p></div>
+    <div class="row"><b class="n">3</b><p><span class="rec">Recomendo</span><b>Publicação após a revisão do gestor</b> como padrão, escolhida por prova. A publicação automática fica como opção (o contrato da prova já tem o campo).<span class="alt">Alternativa: publicar direto ao enviar em todas as provas.</span></p></div>
+    <div class="row"><b class="n">4</b><p><span class="rec">Recomendo</span><b>Ranking recalculado no servidor</b> ao publicar, com a mesma regra do painel. O lançamento manual de hoje segue como está.</p></div>
+    <div class="row"><b class="n">5</b><p><span class="rec">Recomendo</span><b>O gestor pode devolver e pode corrigir.</b> Devolver reabre a súmula para o judge com o motivo; corrigir exige justificativa e vira um registro no histórico, sem apagar o que o judge lançou.</p></div>
+    <div class="row"><b class="n">6</b><p><span class="rec">Recomendo</span><b>Súmula e lançamento manual convivem</b> (o modo "Ambos" do contrato). Lançar à mão um atleta que já tem súmula publicada pede confirmação e fica no histórico.<span class="alt">Alternativa: com súmula, o lançamento manual daquela prova fica bloqueado.</span></p></div>
+    <div class="row"><b class="n">7</b><p><span class="rec">Recomendo</span><b>Fila no aparelho já nesta etapa:</b> sem conexão, os toques ficam guardados no celular e sobem quando a conexão volta, com o estado sempre à vista. A seção 7 do documento pede isso.</p></div>
+    <div class="row"><b class="n">8</b><p><span class="rec">Recomendo</span><b>Travar a estrutura a partir da primeira súmula aberta,</b> porque o log aponta para as etapas da prova. Para mudar, o gestor cancela as súmulas daquela prova (com registro).</p></div>
+    <div class="row"><b class="n">9</b><p><span class="rec">Pergunta</span><b>Tema da súmula na quadra.</b> O desenho D+E aprovado tinha a súmula em tema claro de alto contraste (E); como o arquivo do desenho se perdeu, a Story 1.44 entregou o tema escuro do painel. Recomendo o claro de alto contraste para a quadra (luz forte, ginásio aberto) e o escuro no painel, mas a escolha é sua.</p></div>
+  </div>
+</section>
+
+</div>

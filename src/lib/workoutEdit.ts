@@ -144,6 +144,8 @@ export const getWorkoutChanges = (original: Workout, next: WorkoutFormValues): P
   if ((next.timeCap || '') !== (original.timeCap || '')) changes.timeCap = next.timeCap;
   if ((next.divisionId || '') !== (original.divisionId || '')) changes.divisionId = next.divisionId;
   if ((next.tieBreaker || '') !== (original.tieBreaker || '')) changes.tieBreaker = next.tieBreaker;
+  // Estrutura da prova (Story 1.43): comparada por conteúdo; `null` = desligada.
+  if (JSON.stringify(next.structure ?? null) !== JSON.stringify(original.structure ?? null)) changes.structure = next.structure ?? null;
   if (toTime(next.submissionOpensAt) !== toTime(original.submissionOpensAt)) changes.submissionOpensAt = next.submissionOpensAt;
   if (toTime(next.submissionClosesAt) !== toTime(original.submissionClosesAt)) changes.submissionClosesAt = next.submissionClosesAt;
 

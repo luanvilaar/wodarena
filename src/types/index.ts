@@ -1,4 +1,5 @@
 import type { ShirtMode } from '@/lib/shirtPricing';
+import type { WorkoutStructure } from '@/lib/workoutStructure';
 
 export type { ShirtMode };
 
@@ -77,6 +78,8 @@ export interface Workout {
   orderIndex: number;
   divisionId?: string; // Categoria vinculada
   tieBreaker?: string; // Critério de desempate
+  /** Estrutura da prova para a súmula digital (Story 1.43). Ausente ou null = prova só com texto. */
+  structure?: WorkoutStructure | null;
   submissionOpensAt?: string;
   submissionClosesAt?: string;
 }

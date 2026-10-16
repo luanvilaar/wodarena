@@ -152,7 +152,7 @@ test('admin form disables locked fields, sends only changes and surfaces the ser
   assert.match(adminPage, /getWorkoutChanges\(originalWorkout/);
   assert.match(adminPage, /id="wod-division-id"[\s\S]*?disabled=\{editingLocked\}/);
   assert.match(adminPage, /id="wod-submission-opens-at"[\s\S]*?disabled=\{editingLocked\}/);
-  assert.match(adminPage, /id="wod-score-type-input"[\s\S]*?disabled=\{scoreTypeLocked\}/);
+  assert.match(adminPage, /id="wod-score-type-input"[\s\S]*?disabled=\{scoreTypeLocked(?: \|\| Boolean\(wodStructure\))?\}/);
   assert.match(adminPage, /id="wod-submission-closes-at"[\s\S]*?min=\{/);
   assert.match(adminPage, /err instanceof Error \? err\.message : 'Não foi possível excluir a prova\.'/);
 });
