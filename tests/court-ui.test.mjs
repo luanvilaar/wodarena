@@ -64,6 +64,9 @@ test('o gancho de gravação: lote com a posição confirmada, conflito para, se
   assert.match(hook, /if \(response\.status === 409\) \{\s*stopped\.current = true;\s*setStatus\('conflict'\);/);
   assert.match(hook, /setStatus\('offline'\);\s*const delay = retryDelayMs\(attempt\.current\);/);
   assert.match(hook, /window\.addEventListener\('online', online\)/);
+  // O finally é o único dono de inFlight; o lote seguinte sai depois de liberar a marca.
+  assert.equal(hook.match(/inFlight\.current = false;/g)?.length, 1);
+  assert.match(hook, /inFlight\.current = false;\s*if \(flushAgain\) void flushRef\.current\(\);\s*\}/);
   assert.match(hook, /saveLocalSheet\(sheetId, \{ pending: pendingRef\.current, clock: clockRef\.current \}\)/);
   assert.match(hook, /mergePending\(serverEvents, loadLocalSheet\(sheetId\)\.pending\)/);
   assert.doesNotMatch(hook, /supabase|useApp/);

@@ -59,6 +59,7 @@ export function useSheetSync({ sheetId, serverEvents, writable }: Options) {
     }
     inFlight.current = true;
     setStatus('saving');
+    let flushAgain = false;
     try {
       const response = await fetch('/api/sheets', {
         method: 'POST',
@@ -73,8 +74,7 @@ export function useSheetSync({ sheetId, serverEvents, writable }: Options) {
         setPending(pendingRef.current);
         attempt.current = 0;
         persist();
-        inFlight.current = false;
-        if (pendingRef.current.length > 0) void flushRef.current();
+        if (pendingRef.current.length > 0) flushAgain = true;
         else setStatus('saved');
         return;
       }
@@ -98,7 +98,10 @@ export function useSheetSync({ sheetId, serverEvents, writable }: Options) {
         void flushRef.current();
       }, delay);
     } finally {
+      // Único ponto que libera o envio: o próximo lote só sai depois disso, senão
+      // o finally apagaria a marca do envio novo e um record() abriria um segundo em paralelo.
       inFlight.current = false;
+      if (flushAgain) void flushRef.current();
     }
   }, [persist, sheetId, writable]);
 
