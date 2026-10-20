@@ -1,0 +1,1115 @@
+<title>Telão ao vivo</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@500;600;700&family=Inter:wght@400;500;600;700;800&display=swap">
+<style>
+/* Layout: o telão 16:9 é a peça central; a mesa de controle do gestor fica ao lado em telas largas e abaixo nas estreitas. Mundo visual herdado do WODArena (painel escuro, amarelo de destaque). */
+:root {
+  color-scheme: dark;
+  --bg: #0b0e11;
+  --tv-bg: #090b0e;
+  --panel: #14171c;
+  --card: #1e2329;
+  --line: #2b3139;
+  --line-soft: #1c2026;
+  --fg: #eaecef;
+  --muted: #929aa5;
+  --muted-soft: #707a8a;
+  --primary: #fcd535;
+  --primary-ink: #181a20;
+  --primary-tint: rgba(252, 213, 53, 0.12);
+  --up: #0ecb81;
+  --up-tint: rgba(14, 203, 129, 0.14);
+  --down: #f6465d;
+  --down-tint: rgba(246, 70, 93, 0.14);
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-num: "IBM Plex Sans", "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+}
+html { background: var(--bg); }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.5; }
+::selection { background: var(--primary); color: var(--primary-ink); }
+* { box-sizing: border-box; scrollbar-color: var(--line) transparent; }
+button, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 6px; }
+.ico { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+.page { max-width: 1480px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 36px 64px; display: grid; gap: 56px; }
+
+/* Abertura */
+.intro { display: grid; gap: 14px; max-width: 900px; }
+.intro-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.intro h1 { margin: 0; font-size: clamp(30px, 4vw, 44px); line-height: 1.05; letter-spacing: -0.025em; font-weight: 800; text-wrap: balance; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; letter-spacing: 0.02em; border: 1px solid var(--line); color: var(--muted); }
+.chip.wait { border-color: rgba(252, 213, 53, 0.45); color: var(--primary); background: var(--primary-tint); }
+.intro p { margin: 0; color: var(--muted); font-size: 17px; max-width: 70ch; }
+.intro p strong { color: var(--fg); font-weight: 600; }
+
+/* Palco */
+.stage { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 20px; align-items: start; }
+.stage-main { display: grid; gap: 14px; min-width: 0; }
+.tv-wrap { border-radius: 12px; background: #000; padding: 6px; box-shadow: 0 30px 60px -30px rgba(0, 0, 0, 0.9), 0 0 0 1px var(--line); }
+.tv-wrap:fullscreen { display: grid; place-items: center; padding: 0; border-radius: 0; background: #000; }
+.tv-wrap:fullscreen .tv { width: min(100vw, 177.78vh); border-radius: 0; }
+
+.toolbar { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+.tgroup { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; max-width: 100%; }
+.tlabel { font-size: 12px; color: var(--muted-soft); letter-spacing: 0.04em; text-transform: uppercase; font-weight: 600; }
+.seg { display: inline-flex; flex-wrap: wrap; max-width: 100%; background: var(--panel); border: 1px solid var(--line); border-radius: 9px; padding: 3px; gap: 2px; }
+.seg button { border: 0; background: transparent; padding: 6px 11px; border-radius: 6px; font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; white-space: nowrap; }
+.seg button:hover { color: var(--fg); }
+.seg button[aria-pressed="true"] { background: var(--card); color: var(--fg); box-shadow: inset 0 0 0 1px var(--line); }
+.btn { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--line); background: var(--panel); padding: 7px 12px; border-radius: 9px; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--fg); }
+.btn:hover:not(:disabled) { border-color: #3a414b; background: var(--card); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn.primary { background: var(--primary); color: var(--primary-ink); border-color: var(--primary); }
+.btn.primary:hover:not(:disabled) { background: #f0b90b; border-color: #f0b90b; }
+.btn.danger { color: var(--down); }
+.btn[aria-pressed="true"] { border-color: var(--down); color: var(--down); background: var(--down-tint); }
+.note { font-size: 13px; color: var(--muted-soft); margin: 0; }
+
+/* ---------------- TELÃO (unidades em cqw: escala de 720p a 4K) ---------------- */
+.tv { container-type: inline-size; position: relative; width: 100%; aspect-ratio: 16 / 9; background: var(--tv-bg); border-radius: 8px; overflow: hidden; color: var(--fg); font-family: var(--font-body); line-height: 1.15; }
+.tvc { position: absolute; inset: 0; display: grid; grid-template-rows: 6.6cqw 1fr 3.3cqw; }
+.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+
+.tv-top { display: flex; align-items: center; gap: 1.6cqw; padding: 0 2.2cqw; border-bottom: 0.08cqw solid var(--line); background: linear-gradient(#0f1216, var(--tv-bg)); }
+.tv-logo { width: 3.4cqw; height: 3.4cqw; flex: none; }
+.tv-id { display: grid; gap: 0.25cqw; min-width: 0; }
+.tv-event { font-size: 1.05cqw; color: var(--muted); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.tv-title { font-size: 1.85cqw; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -0.01em; }
+.tv-sp { flex: 1; }
+.tv-cat { display: grid; justify-items: end; gap: 0.25cqw; }
+.tv-cat b { font-size: 1.75cqw; font-weight: 800; letter-spacing: -0.01em; }
+.tv-cat span { font-size: 1.05cqw; color: var(--muted); font-weight: 600; }
+.tv-pill { display: inline-flex; align-items: center; gap: 0.6cqw; font-size: 1.05cqw; font-weight: 800; letter-spacing: 0.12em; padding: 0.55cqw 1cqw; border-radius: 0.5cqw; border: 0.08cqw solid var(--line); color: var(--muted); }
+.tv-pill i { width: 0.75cqw; height: 0.75cqw; border-radius: 50%; background: currentColor; }
+.tv-pill.live { color: #fff; background: var(--down); border-color: var(--down); }
+.tv-pill.live i { animation: pulse 1.4s ease-in-out infinite; background: #fff; }
+.tv-pill.call { color: var(--primary); border-color: rgba(252, 213, 53, 0.5); }
+@keyframes pulse { 50% { opacity: 0.25; } }
+.tv-clock { display: grid; justify-items: end; min-width: 13cqw; }
+.tv-clock b { font-size: 3.7cqw; font-weight: 700; letter-spacing: -0.02em; line-height: 1; }
+.tv-clock span { font-size: 0.95cqw; color: var(--muted); font-weight: 600; margin-top: 0.3cqw; letter-spacing: 0.06em; text-transform: uppercase; }
+
+.tv-body { position: relative; min-height: 0; }
+.scr { position: absolute; inset: 0; padding: 1.5cqw 2.2cqw 1.2cqw; opacity: 0; visibility: hidden; transition: opacity 0.6s var(--ease), visibility 0s 0.6s; }
+.scr.on { opacity: 1; visibility: visible; transition: opacity 0.6s var(--ease); }
+
+.tv-foot { display: flex; align-items: center; gap: 1.4cqw; padding: 0 2.2cqw; border-top: 0.08cqw solid var(--line-soft); font-size: 1cqw; color: var(--muted); }
+.tv-foot .sp { flex: 1; }
+.tv-foot b { color: var(--fg); font-weight: 600; }
+.tv-off { display: none; align-items: center; gap: 0.5cqw; color: var(--down); font-weight: 700; }
+.tv-off .ico { width: 1.2cqw; height: 1.2cqw; }
+.tv.offline .tv-off { display: inline-flex; }
+.tv.offline .tv-sync { display: none; }
+.tv-brand { color: var(--muted-soft); font-weight: 700; letter-spacing: 0.08em; }
+
+/* Chamada */
+.k-wrap { display: grid; grid-template-columns: 63fr 37fr; gap: 2.4cqw; height: 100%; }
+.k-lanes { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: repeat(4, 1fr); gap: 0.9cqw 1.4cqw; }
+.k-lane { display: grid; grid-template-columns: 5.4cqw 1fr; align-items: center; gap: 1.2cqw; border-bottom: 0.08cqw solid var(--line); padding-bottom: 0.4cqw; min-width: 0; }
+.k-lane .ln { font-size: 4.6cqw; font-weight: 700; color: var(--primary); line-height: 1; text-align: center; }
+.k-lane .nm { font-size: 1.9cqw; font-weight: 700; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.k-lane .bx { font-size: 1.15cqw; color: var(--muted); margin-top: 0.3cqw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.k-side { display: grid; grid-template-rows: 1fr auto; gap: 1.6cqw; background: var(--panel); border-radius: 1cqw; padding: 1.8cqw 2cqw; }
+.k-spec { display: grid; align-content: start; gap: 0.6cqw; }
+.k-spec .t { font-size: 1.05cqw; color: var(--muted); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.k-spec .big { font-size: 4.4cqw; font-weight: 700; letter-spacing: -0.02em; line-height: 1; margin: 0.3cqw 0 0.6cqw; }
+.k-spec .mv { font-size: 1.9cqw; font-weight: 700; }
+.k-spec .mv span { color: var(--muted); font-weight: 600; }
+.k-spec .cap { font-size: 1.25cqw; color: var(--muted); margin-top: 0.6cqw; }
+.k-when { border-top: 0.08cqw solid var(--line); padding-top: 1.3cqw; display: grid; gap: 0.3cqw; }
+.k-when .t { font-size: 1.05cqw; color: var(--muted); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.k-when .cd { font-size: 5.2cqw; font-weight: 700; color: var(--primary); line-height: 1; letter-spacing: -0.02em; }
+.k-when .at { font-size: 1.3cqw; color: var(--fg); font-weight: 600; }
+
+/* A · Corrida */
+.a-svg { width: 100%; height: 100%; display: block; }
+.a-svg text { font-family: var(--font-body); }
+.a-svg .n { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+
+/* B · Escada */
+.b-grid { display: grid; grid-template-columns: 9.5cqw repeat(8, 1fr); grid-template-rows: 3.2cqw 1fr 7cqw; column-gap: 0.9cqw; height: 100%; position: relative; }
+.b-bands { grid-column: 1 / -1; grid-row: 2; position: relative; }
+.b-band { position: absolute; left: 0; right: 0; border-top: 0.08cqw dashed #2a3038; }
+.b-band.alt { background: rgba(255, 255, 255, 0.022); }
+.b-band .lb { position: absolute; left: 0; top: 50%; transform: translateY(-50%); display: grid; gap: 0.1cqw; }
+.b-band .lb b { font-size: 1.6cqw; font-weight: 700; line-height: 1; }
+.b-band .lb span { font-size: 0.95cqw; color: var(--muted); font-weight: 600; }
+.b-pos { grid-row: 1; display: flex; align-items: center; justify-content: center; font-size: 1.7cqw; font-weight: 800; color: var(--muted); transition: color 0.4s; }
+.b-pos.lead { color: var(--primary); }
+.b-bar { grid-row: 2; position: relative; z-index: 1; }
+.b-fill { position: absolute; left: 12%; right: 12%; bottom: 0; background: #3a414b; border-radius: 0.4cqw 0.4cqw 0 0; transition: height 0.7s var(--ease), background-color 0.4s; }
+.b-fill.lead { background: var(--primary); }
+.b-fill.done { background: #5b6472; }
+.b-fill.official { background: var(--up); }
+.b-val { position: absolute; left: 0; right: 0; text-align: center; font-size: 2.3cqw; font-weight: 700; transition: bottom 0.7s var(--ease); line-height: 1; padding-bottom: 0.5cqw; }
+.b-val small { display: block; font-size: 0.85cqw; font-weight: 700; color: var(--muted); letter-spacing: 0.08em; margin-bottom: 0.25cqw; font-family: var(--font-body); }
+.b-meta { grid-row: 3; padding-top: 0.7cqw; border-top: 0.12cqw solid var(--line); min-width: 0; }
+.b-meta .ln { font-size: 1cqw; font-weight: 700; color: var(--muted); letter-spacing: 0.06em; }
+.b-meta .nm { font-size: 1.3cqw; font-weight: 700; line-height: 1.12; margin-top: 0.25cqw; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.b-meta .bx { font-size: 0.95cqw; color: var(--muted); margin-top: 0.25cqw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* C · Líder e pelotão */
+.c-wrap { display: grid; grid-template-columns: 37fr 63fr; gap: 2.2cqw; height: 100%; }
+.c-lead { position: relative; background: var(--panel); border-radius: 1cqw; padding: 1.8cqw 2cqw; display: grid; grid-template-rows: auto auto 1fr auto; overflow: hidden; }
+.c-lead .p { font-size: 9cqw; font-weight: 700; color: var(--primary); line-height: 0.82; letter-spacing: -0.04em; }
+.c-lead .p sup { font-size: 3cqw; vertical-align: top; margin-left: 0.2cqw; }
+.c-lead .who { margin-top: 1.2cqw; }
+.c-lead .who .ln { font-size: 1.05cqw; font-weight: 700; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
+.c-lead .who .nm { font-size: 3cqw; font-weight: 800; letter-spacing: -0.02em; line-height: 1.02; margin-top: 0.35cqw; }
+.c-lead .who .bx { font-size: 1.3cqw; color: var(--muted); margin-top: 0.4cqw; }
+.c-lead .stat { align-self: end; display: grid; gap: 0.3cqw; }
+.c-lead .stat .v { font-size: 6.2cqw; font-weight: 700; line-height: 1; letter-spacing: -0.03em; }
+.c-lead .stat .v small { font-size: 2.2cqw; color: var(--muted); font-weight: 600; }
+.c-lead .stat .mv { font-size: 1.45cqw; font-weight: 600; }
+.c-lead .gap { margin-top: 1.2cqw; padding-top: 1cqw; border-top: 0.08cqw solid var(--line); font-size: 1.2cqw; color: var(--muted); display: flex; justify-content: space-between; gap: 1cqw; }
+.c-lead .gap b { color: var(--fg); }
+.c-lead.swap .who, .c-lead.swap .p { animation: swapIn 0.7s var(--ease); }
+@keyframes swapIn { from { opacity: 0; transform: translateY(0.8cqw); filter: blur(0.3cqw); } }
+.c-list { position: relative; }
+.c-row { position: absolute; left: 0; right: 0; height: 5.5cqw; display: grid; grid-template-columns: 3.6cqw 3.4cqw minmax(0, 1fr) 19cqw 8.6cqw; align-items: center; gap: 1.1cqw; border-bottom: 0.08cqw solid var(--line-soft); transition: transform 0.8s var(--ease); }
+.c-row .p { font-size: 2.2cqw; font-weight: 700; color: var(--muted); }
+.c-row .ln { font-size: 1.05cqw; font-weight: 700; color: var(--muted); background: var(--card); border-radius: 0.35cqw; padding: 0.35cqw 0; text-align: center; letter-spacing: 0.04em; }
+.c-row .nm { font-size: 1.75cqw; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -0.01em; }
+.c-row .bx { font-size: 1cqw; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 0.2cqw; }
+.c-row .v { font-size: 2.4cqw; font-weight: 700; text-align: right; }
+.c-row .v small { display: block; font-size: 0.85cqw; font-weight: 700; color: var(--muted); letter-spacing: 0.06em; font-family: var(--font-body); }
+.prog { display: grid; gap: 0.5cqw; }
+.prog-bar { display: flex; gap: 0.3cqw; height: 1.05cqw; }
+.prog-bar > span { position: relative; background: #232830; border-radius: 0.2cqw; overflow: hidden; }
+.prog-bar > span > i { position: absolute; inset: 0 auto 0 0; background: #8b939f; transition: width 0.6s var(--ease); }
+.prog-bar > span.cur > i { background: var(--primary); }
+.prog-cap { font-size: 1cqw; color: var(--muted); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.prog-cap b { color: var(--fg); }
+.official { color: var(--up) !important; }
+.bump { animation: bump 0.5s var(--ease); }
+@keyframes bump { 0% { color: var(--primary); transform: scale(1.12); } 100% { transform: scale(1); } }
+
+/* Intervalo */
+.i-wrap { display: grid; grid-template-rows: auto auto 1fr auto; height: 100%; gap: 0.6cqw; }
+.i-head { display: flex; align-items: baseline; gap: 1.6cqw; }
+.i-head h3 { margin: 0; font-size: 2.6cqw; font-weight: 800; letter-spacing: -0.02em; }
+.i-head span { font-size: 1.2cqw; color: var(--muted); font-weight: 600; }
+.i-head .sp { flex: 1; }
+.i-page { display: flex; align-items: center; gap: 0.8cqw; font-size: 1.1cqw; color: var(--muted); font-weight: 700; }
+.i-page .track { width: 7cqw; height: 0.35cqw; background: var(--card); border-radius: 1cqw; overflow: hidden; }
+.i-page .track i { display: block; height: 100%; width: 0; background: var(--muted); }
+.i-cols, .i-row { display: grid; grid-template-columns: 4.4cqw 4.6cqw minmax(0, 1fr) 12cqw 12cqw 8cqw; align-items: center; gap: 1cqw; }
+.i-cols { font-size: 0.95cqw; color: var(--muted-soft); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding-bottom: 0.4cqw; border-bottom: 0.08cqw solid var(--line); }
+.i-cols .r, .i-row .r { text-align: right; }
+.i-cols .hot { color: var(--primary); }
+.i-body { position: relative; }
+.i-row { position: absolute; left: 0; right: 0; height: 3.2cqw; border-bottom: 0.08cqw solid var(--line-soft); transition: opacity 0.5s var(--ease); }
+.i-row .p { font-size: 1.8cqw; font-weight: 700; }
+.i-row .var { display: inline-flex; align-items: center; gap: 0.2cqw; font-size: 1.15cqw; font-weight: 700; color: var(--muted-soft); }
+.i-row .var .ico { width: 1.3cqw; height: 1.3cqw; stroke-width: 3; }
+.i-row .var.up { color: var(--up); }
+.i-row .var.down { color: var(--down); }
+.i-row .who { display: flex; align-items: baseline; gap: 1cqw; min-width: 0; }
+.i-row .nm { font-size: 1.6cqw; font-weight: 700; white-space: nowrap; letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 0 1 auto; }
+.i-row .bx { font-size: 1.05cqw; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.i-row .tag { font-size: 0.85cqw; font-weight: 800; color: var(--primary); border: 0.08cqw solid rgba(252, 213, 53, 0.5); border-radius: 0.3cqw; padding: 0.15cqw 0.4cqw; letter-spacing: 0.06em; flex: none; }
+.i-row .wk { font-size: 1.35cqw; font-weight: 700; text-align: right; }
+.i-row .wk small { font-size: 0.95cqw; color: var(--muted); font-weight: 600; margin-left: 0.4cqw; }
+.i-row .wk.hot { color: var(--primary); }
+.i-row .wk.pend { color: var(--muted-soft); }
+.i-row .pts { font-size: 1.9cqw; font-weight: 700; text-align: right; }
+.i-row.fresh { background: linear-gradient(90deg, var(--primary-tint), transparent 70%); }
+.i-next { display: flex; align-items: center; gap: 1.6cqw; background: var(--panel); border-radius: 0.8cqw; padding: 0.9cqw 1.4cqw; font-size: 1.35cqw; }
+.i-next .t { font-size: 1cqw; color: var(--muted); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.i-next b { font-weight: 800; }
+.i-next .sp { flex: 1; }
+.i-next .cd { font-size: 2cqw; font-weight: 700; color: var(--primary); }
+
+/* Espera */
+.w-wrap { display: grid; grid-template-columns: 55fr 45fr; gap: 3cqw; height: 100%; align-items: center; }
+.w-brand { display: grid; gap: 1.4cqw; }
+.w-brand svg { width: 9cqw; height: 9cqw; }
+.w-brand h3 { margin: 0; font-size: 5cqw; font-weight: 800; letter-spacing: -0.035em; line-height: 0.98; }
+.w-brand p { margin: 0; font-size: 1.6cqw; color: var(--muted); }
+.w-list { display: grid; gap: 0; }
+.w-item { display: grid; grid-template-columns: 7.5cqw 1fr; gap: 1.2cqw; padding: 1.2cqw 0; border-bottom: 0.08cqw solid var(--line); }
+.w-item .h { font-size: 2cqw; font-weight: 700; color: var(--muted); }
+.w-item.next .h { color: var(--primary); }
+.w-item .d b { display: block; font-size: 1.65cqw; font-weight: 700; }
+.w-item .d span { font-size: 1.1cqw; color: var(--muted); }
+
+/* ---------------- Mesa de controle ---------------- */
+.desk { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; display: grid; gap: 18px; position: sticky; top: max(16px, env(safe-area-inset-top, 0px)); }
+.desk h2 { margin: 0; font-size: 17px; font-weight: 700; }
+.desk .sub { margin: 2px 0 0; font-size: 13px; color: var(--muted-soft); }
+.dsec { display: grid; gap: 9px; }
+.dsec > .h { font-size: 12px; color: var(--muted-soft); letter-spacing: 0.06em; text-transform: uppercase; font-weight: 700; }
+.linkbox { display: flex; align-items: center; gap: 8px; background: var(--bg); border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; font-family: var(--font-num); font-size: 13px; color: var(--muted); min-width: 0; }
+.linkbox span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.modes { display: grid; gap: 6px; }
+.mode { display: grid; grid-template-columns: 18px 1fr; gap: 10px; align-items: start; padding: 9px 10px; border-radius: 9px; border: 1px solid var(--line); cursor: pointer; }
+.mode:hover { background: var(--card); }
+.mode input { margin: 2px 0 0; accent-color: var(--primary); width: 16px; height: 16px; }
+.mode b { display: block; font-size: 14px; font-weight: 600; }
+.mode small { display: block; font-size: 12.5px; color: var(--muted-soft); line-height: 1.4; }
+.mode:has(input:checked) { border-color: rgba(252, 213, 53, 0.5); background: var(--primary-tint); }
+.onair { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.onair b { color: var(--fg); }
+.onair i { width: 8px; height: 8px; border-radius: 50%; background: var(--down); }
+.lanes { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.lanes li { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: 13px; padding: 4px 0; border-bottom: 1px solid var(--line-soft); }
+.lanes li .l { color: var(--muted-soft); font-family: var(--font-num); font-weight: 600; }
+.lanes li .n { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st { font-size: 11.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+.st.run { color: var(--primary); border-color: rgba(252, 213, 53, 0.45); background: var(--primary-tint); }
+.st.ok { color: var(--up); border-color: rgba(14, 203, 129, 0.45); background: var(--up-tint); }
+.st.pend { color: var(--down); border-color: rgba(246, 70, 93, 0.45); }
+.toast { position: fixed; left: 50%; bottom: max(20px, env(safe-area-inset-bottom, 0px)); transform: translate(-50%, 20px); background: var(--card); border: 1px solid var(--line); color: var(--fg); padding: 10px 16px; border-radius: 10px; font-size: 14px; opacity: 0; pointer-events: none; transition: opacity 0.3s var(--ease), transform 0.3s var(--ease); max-width: min(520px, calc(100vw - 32px)); z-index: 20; }
+.toast.on { opacity: 1; transform: translate(-50%, 0); }
+
+/* ---------------- Seções do plano ---------------- */
+.sec { display: grid; gap: 20px; }
+.sec > header { display: grid; gap: 6px; max-width: 760px; }
+.sec h2 { margin: 0; font-size: 26px; letter-spacing: -0.02em; font-weight: 800; text-wrap: balance; }
+.sec > header p { margin: 0; color: var(--muted); font-size: 16px; }
+.opts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.opt { display: grid; grid-template-rows: auto auto 1fr auto; gap: 12px; padding: 20px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); }
+.opt.sel { border-color: rgba(252, 213, 53, 0.55); }
+.opt .lt { font-family: var(--font-num); font-size: 40px; font-weight: 700; line-height: 1; color: var(--muted-soft); }
+.opt.sel .lt { color: var(--primary); }
+.opt h3 { margin: 0; font-size: 19px; font-weight: 700; }
+.opt p { margin: 0; color: var(--muted); font-size: 14.5px; }
+.opt dl { margin: 0; display: grid; gap: 8px; font-size: 14px; }
+.opt dt { color: var(--muted-soft); font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
+.opt dd { margin: 0; }
+.flow { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; counter-reset: f; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.flow li { list-style: none; padding: 18px 20px; display: grid; gap: 6px; align-content: start; border-right: 1px solid var(--line); background: var(--panel); }
+.flow li:last-child { border-right: 0; background: var(--card); }
+.flow .ix { font-family: var(--font-num); font-size: 13px; color: var(--muted-soft); font-weight: 700; }
+.flow b { font-size: 15.5px; }
+.flow span { color: var(--muted); font-size: 14px; }
+.flow .ms { font-family: var(--font-num); color: var(--primary); font-weight: 700; font-size: 20px; }
+.flow-wrap { margin: 0; padding: 0; }
+.cols2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.box { border: 1px solid var(--line); border-radius: 14px; padding: 20px; background: var(--panel); display: grid; gap: 12px; align-content: start; }
+.box h3 { margin: 0; font-size: 16px; font-weight: 700; }
+.box ul { margin: 0; padding-left: 18px; display: grid; gap: 7px; color: var(--muted); font-size: 14.5px; }
+.box ul b { color: var(--fg); font-weight: 600; }
+.box code, .sec code { font-family: var(--font-num); font-size: 0.92em; color: var(--fg); background: var(--card); padding: 1px 6px; border-radius: 5px; }
+.dec { display: grid; gap: 0; border-top: 1px solid var(--line); }
+.dec > div { display: grid; grid-template-columns: 44px minmax(0, 1fr) minmax(0, 0.8fr); gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--line); align-items: start; }
+.dec .k { font-family: var(--font-num); font-weight: 700; color: var(--primary); font-size: 18px; }
+.dec .q { font-size: 15px; }
+.dec .r { font-size: 14px; color: var(--muted); }
+.dec .r b { color: var(--fg); font-weight: 600; }
+.foot { color: var(--muted-soft); font-size: 13px; border-top: 1px solid var(--line); padding-top: 18px; display: grid; gap: 4px; }
+
+@media (max-width: 1180px) {
+  .stage { grid-template-columns: minmax(0, 1fr); }
+  .desk { position: static; }
+}
+@media (max-width: 860px) {
+  .opts, .cols2 { grid-template-columns: minmax(0, 1fr); }
+  .flow { grid-template-columns: minmax(0, 1fr); }
+  .flow li { border-right: 0; border-bottom: 1px solid var(--line); }
+  .dec > div { grid-template-columns: 34px minmax(0, 1fr); }
+  .dec .r { grid-column: 2; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e2a93a"/><stop offset="1" stop-color="#9a6c1e"/></linearGradient>
+  </defs>
+  <symbol id="logo" viewBox="0 0 999.46 966.89">
+    <g fill="url(#gold)">
+      <path d="M506.72,439.9l-171.75-273.2-111.63-.37,97.13,178.81-45.91,89.75L111.35,166.24,0,168.86l270.63,485.17,117.04-185.14,108.92,200.51,102.36-186.52h98.97l-97.64,186.52h116.3l282.87-503.150h-345.8l-146.94,273.66ZM810.05,268.56l-62.33,119.15h-96.54l65.4-119.15h93.47Z"/>
+      <polygon points="538.88 337.84 602.33 219.35 573 166.24 441.98 166.24 538.88 337.84"/>
+      <polygon points="821.15 698.7 500.58 903.05 174.27 693.74 175.56 565.51 125.71 481.36 126.99 728.05 498.51 966.89 869.26 729.88 870.36 485.03 821.15 565.33 821.15 698.7"/>
+      <polygon points="687.15 724.13 311.73 724.13 371.13 772.6 627.06 774.29 687.15 724.13"/>
+      <path d="M872.37,120.68c.03-16.98-.18-34-.66-51.06-236.74-93.1-512.66-92.8-749.08.76-.21,16.8-.17,33.57.09,50.3,235.52-98.36,514.14-98.35,749.65,0Z"/>
+    </g>
+  </symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="m18 15-6-6-6 6"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-flat" viewBox="0 0 24 24"><path d="M6 12h12"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M6 3 20 12 6 21Z"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/></symbol>
+  <symbol id="i-restart" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></symbol>
+  <symbol id="i-full" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></symbol>
+  <symbol id="i-wifioff" viewBox="0 0 24 24"><path d="M12 20h.01"/><path d="M8.5 16.43a5 5 0 0 1 7 0"/><path d="M5 12.86a10 10 0 0 1 5.17-2.69"/><path d="M19 12.86a10 10 0 0 0-2-1.52"/><path d="M2 8.82a15 15 0 0 1 4.18-2.64"/><path d="M22 8.82a15 15 0 0 0-11.29-3.76"/><path d="m2 2 20 20"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+</svg>
+
+<main class="page">
+  <header class="intro">
+    <div class="intro-head">
+      <h1>Telão ao vivo</h1>
+      <span class="chip wait">Aprovado em 20/10/2026 · estrutura C</span>
+    </div>
+    <p>Uma segunda tela de leaderboard, feita para TV ou projetor no local do evento. <strong>Com a bateria rodando</strong>, mostra o placar daquela bateria, atualizado a cada repetição marcada na súmula digital. <strong>No intervalo</strong>, mostra a classificação geral da categoria com os resultados recém-publicados. A troca é automática pelo cronograma e pelas súmulas, e o gestor pode fixar uma tela pela mesa de controle.</p>
+    <p class="note">A simulação abaixo usa atletas e boxes fictícios. Ela roda sozinha: chamada, largada, bateria ao vivo e intervalo.</p>
+  </header>
+
+  <section class="stage" aria-label="Maquete do telão">
+    <div class="stage-main">
+      <div class="tv-wrap" id="tvWrap">
+        <div class="tv" id="tv" role="img" aria-label="Telão do evento em 16:9">
+          <div class="tvc">
+            <div class="tv-top">
+              <svg class="tv-logo" aria-hidden="true"><use href="#logo"/></svg>
+              <div class="tv-id">
+                <div class="tv-event">Desafio Litoral 2026</div>
+                <div class="tv-title" id="tvTitle">Prova 2 · 21-15-9 Thruster 43 kg e Pull-up</div>
+              </div>
+              <div class="tv-sp"></div>
+              <div class="tv-cat"><b id="tvCat">RX Masculino</b><span id="tvHeat">Bateria 3 de 5</span></div>
+              <div class="tv-pill" id="tvPill"><i></i><span>CHAMADA</span></div>
+              <div class="tv-clock"><b class="num" id="tvClock">14:27</b><span id="tvClockSub">horário</span></div>
+            </div>
+            <div class="tv-body">
+              <!-- Chamada -->
+              <div class="scr" id="scrCall">
+                <div class="k-wrap">
+                  <div class="k-lanes" id="callLanes"></div>
+                  <div class="k-side">
+                    <div class="k-spec">
+                      <div class="t">Prova 2 · For Time</div>
+                      <div class="big num">21-15-9</div>
+                      <div class="mv">Thruster <span>43 kg</span></div>
+                      <div class="mv">Pull-up</div>
+                      <div class="cap">Time cap 10:00 · desempate pelo tempo do último marco</div>
+                    </div>
+                    <div class="k-when">
+                      <div class="t">Largada em</div>
+                      <div class="cd num" id="callCd">03:00</div>
+                      <div class="at">Horário previsto 14:30</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <!-- Bateria ao vivo: A -->
+              <div class="scr" id="scrA"><svg class="a-svg" id="aSvg" viewBox="0 0 1500 680" preserveAspectRatio="xMidYMid meet" aria-hidden="true"></svg></div>
+              <!-- Bateria ao vivo: B -->
+              <div class="scr" id="scrB"><div class="b-grid" id="bGrid"></div></div>
+              <!-- Bateria ao vivo: C -->
+              <div class="scr" id="scrC">
+                <div class="c-wrap">
+                  <div class="c-lead" id="cLead"></div>
+                  <div class="c-list" id="cList"></div>
+                </div>
+              </div>
+              <!-- Intervalo -->
+              <div class="scr" id="scrInt">
+                <div class="i-wrap">
+                  <div class="i-head">
+                    <h3>Geral · RX Masculino</h3>
+                    <span id="iSub">Depois da Prova 2 · 24 atletas</span>
+                    <div class="sp"></div>
+                    <div class="i-page"><span id="iPage">1/2</span><div class="track"><i id="iTrack"></i></div></div>
+                  </div>
+                  <div class="i-cols"><span>Pos</span><span>Var</span><span>Atleta</span><span class="r">Prova 1</span><span class="r hot">Prova 2</span><span class="r">Pontos</span></div>
+                  <div class="i-body" id="iBody"></div>
+                  <div class="i-next">
+                    <span class="t">Próxima bateria</span>
+                    <b>Bateria 4 · RX Feminino</b>
+                    <span>Prova 2 · 21-15-9 Thruster 30 kg e Pull-up</span>
+                    <div class="sp"></div>
+                    <span>14:50</span>
+                    <span class="cd num" id="iNextCd">em 12:00</span>
+                  </div>
+                </div>
+              </div>
+              <!-- Espera -->
+              <div class="scr" id="scrWait">
+                <div class="w-wrap">
+                  <div class="w-brand">
+                    <svg aria-hidden="true"><use href="#logo"/></svg>
+                    <h3>Desafio Litoral 2026</h3>
+                    <p>Arena Beira-Mar · Fortaleza</p>
+                  </div>
+                  <div class="w-list">
+                    <div class="w-item next"><div class="h num">14:50</div><div class="d"><b>Bateria 4 · RX Feminino</b><span>Prova 2 · 21-15-9</span></div></div>
+                    <div class="w-item"><div class="h num">15:10</div><div class="d"><b>Bateria 5 · RX Feminino</b><span>Prova 2 · 21-15-9</span></div></div>
+                    <div class="w-item"><div class="h num">16:00</div><div class="d"><b>Prova 3 · Carga máxima</b><span>Todas as categorias</span></div></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="tv-foot">
+              <span id="tvMsg">Raias e horário conforme o cronograma oficial</span>
+              <span class="sp"></span>
+              <span class="tv-sync">Atualizado há <b class="num" id="tvAgo">1 s</b></span>
+              <span class="tv-off"><svg class="ico" aria-hidden="true"><use href="#i-wifioff"/></svg><span id="tvOff">Sem conexão · mostrando 14:31:05</span></span>
+              <span class="tv-brand">WODARENA</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <div class="tgroup">
+          <span class="tlabel" id="lblStruct">Placar da bateria</span>
+          <div class="seg" role="group" aria-labelledby="lblStruct" id="structSeg">
+            <button type="button" data-s="A" aria-pressed="false">A · Corrida</button>
+            <button type="button" data-s="B" aria-pressed="false">B · Escada</button>
+            <button type="button" data-s="C" aria-pressed="true">C · Líder e pelotão</button>
+          </div>
+        </div>
+        <div class="tgroup">
+          <span class="tlabel" id="lblSim">Simulação</span>
+          <button type="button" class="btn" id="btnPlay"><svg class="ico" aria-hidden="true"><use href="#i-pause"/></svg><span>Pausar</span></button>
+          <button type="button" class="btn" id="btnRestart"><svg class="ico" aria-hidden="true"><use href="#i-restart"/></svg>Reiniciar</button>
+          <div class="seg" role="group" aria-labelledby="lblSim" id="speedSeg">
+            <button type="button" data-v="1" aria-pressed="false">1×</button>
+            <button type="button" data-v="8" aria-pressed="true">8×</button>
+            <button type="button" data-v="20" aria-pressed="false">20×</button>
+          </div>
+        </div>
+        <div class="tgroup">
+          <button type="button" class="btn" id="btnOffline" aria-pressed="false"><svg class="ico" aria-hidden="true"><use href="#i-wifioff"/></svg>Simular queda da rede</button>
+          <button type="button" class="btn" id="btnFull"><svg class="ico" aria-hidden="true"><use href="#i-full"/></svg>Tela cheia</button>
+        </div>
+      </div>
+    </div>
+
+    <aside class="desk" aria-labelledby="deskTitle">
+      <div>
+        <h2 id="deskTitle">Mesa de controle</h2>
+        <p class="sub">Painel do gestor, aba Telão. Os comandos abaixo mexem no telão ao lado.</p>
+      </div>
+      <div class="dsec">
+        <div class="h">Link do telão</div>
+        <div class="linkbox"><svg class="ico" aria-hidden="true"><use href="#i-link"/></svg><span>wodarena…/telao/k3Qp••••••••••</span></div>
+        <div class="row-btns">
+          <button type="button" class="btn" data-toast="No painel, copia o endereço do telão para abrir na TV. Aqui o link é fictício."><svg class="ico" aria-hidden="true"><use href="#i-copy"/></svg>Copiar link</button>
+          <button type="button" class="btn" data-toast="Um link novo desativa o anterior. A TV com o link antigo mostra o aviso de link desativado.">Gerar novo</button>
+          <button type="button" class="btn danger" data-toast="Revogado: o telão para de atualizar e mostra que o link foi desativado.">Revogar</button>
+        </div>
+      </div>
+      <div class="dsec" role="radiogroup" aria-label="Modo do telão">
+        <div class="h">O que o telão mostra</div>
+        <div class="modes">
+          <label class="mode"><input type="radio" name="mode" value="auto" checked><span><b>Automático</b><small>Segue o cronograma e as súmulas: chamada, bateria ao vivo, geral no intervalo.</small></span></label>
+          <label class="mode"><input type="radio" name="mode" value="pin_heat"><span><b>Fixar a Bateria 3</b><small>Mantém o placar da bateria mesmo depois do envio das súmulas.</small></span></label>
+          <label class="mode"><input type="radio" name="mode" value="pin_standings"><span><b>Fixar o geral do RX Masculino</b><small>Mostra a classificação da categoria até você voltar ao automático.</small></span></label>
+          <label class="mode"><input type="radio" name="mode" value="standby"><span><b>Tela de espera</b><small>Marca do evento e as próximas atividades do cronograma.</small></span></label>
+        </div>
+        <div class="onair"><i></i>No ar agora: <b id="onAir">Chamada da Bateria 3</b></div>
+      </div>
+      <div class="dsec">
+        <div class="h">Bateria 3 · RX Masculino · 14:30</div>
+        <div class="row-btns">
+          <button type="button" class="btn primary" id="btnStart">Largada</button>
+          <button type="button" class="btn" id="btnEnd">Encerrar bateria</button>
+        </div>
+        <p class="note" id="heatNote">A largada marca o início do relógio do telão. Sem ela, o telão começa quando a primeira súmula recebe um registro.</p>
+        <ul class="lanes" id="deskLanes"></ul>
+      </div>
+    </aside>
+  </section>
+
+  <section class="sec" aria-labelledby="hOpts">
+    <header>
+      <h2 id="hOpts">Três propostas para o placar da bateria</h2>
+      <p>Chamada, intervalo e espera já têm forma definida. O placar da bateria é a tela mais vista e a que mais muda a cada segundo, por isso vem em três estruturas. Escolha uma para virar o desenho aprovado.</p>
+    </header>
+    <div class="opts" id="opts">
+      <article class="opt" data-s="A">
+        <div class="lt">A</div>
+        <h3>Corrida</h3>
+        <p>Um gráfico de repetições por tempo, uma linha por raia, com os nomes na ponta de cada linha. Mostra quem acelerou, quem parou e as ultrapassagens.</p>
+        <dl><div><dt>Melhor para</dt><dd>For Time e AMRAP, transmissão com narrador, público que quer ver a disputa.</dd></div><div><dt>Cuidado</dt><dd>Com 12 raias ou mais as linhas se cruzam muito; os nomes ficam no canto direito para não embolar.</dd></div></dl>
+        <button type="button" class="btn" data-view="A">Ver no telão</button>
+      </article>
+      <article class="opt" data-s="B">
+        <div class="lt">B</div>
+        <h3>Escada</h3>
+        <p>Uma coluna por raia, na mesma ordem da quadra, subindo pelos blocos da prova (21 Thruster, 21 Pull-up, 15…). Quem está na arena reconhece a raia de longe.</p>
+        <dl><div><dt>Melhor para</dt><dd>Público no local olhando a quadra e o telão ao mesmo tempo.</dd></div><div><dt>Cuidado</dt><dd>Com mais de 10 raias as colunas estreitam e o nome quebra em duas linhas.</dd></div></dl>
+        <button type="button" class="btn" data-view="B">Ver no telão</button>
+      </article>
+      <article class="opt sel" data-s="C">
+        <div class="lt">C</div>
+        <h3>Líder e pelotão</h3>
+        <p>Quem lidera ganha metade da tela; as demais raias ficam numa lista que se reordena a cada ultrapassagem, com a barra dos blocos da prova.</p>
+        <dl><div><dt>Melhor para</dt><dd>Baterias grandes (aguenta 16 raias) e a leitura mais rápida de quem ganha.</dd></div><div><dt>Cuidado</dt><dd>Dá menos destaque à posição física da raia na quadra.</dd></div></dl>
+        <button type="button" class="btn" data-view="C">Ver no telão</button>
+      </article>
+    </div>
+  </section>
+
+  <section class="sec" aria-labelledby="hFlow">
+    <header>
+      <h2 id="hFlow">Como a repetição chega ao telão</h2>
+      <p>Sem infraestrutura nova: o telão consulta o servidor a cada segundo durante a bateria. Tempo estimado do toque do judge até a tela: de 1 a 2,5 segundos.</p>
+    </header>
+    <ol class="flow flow-wrap">
+      <li><span class="ix">1</span><b>Toque na súmula</b><span>O judge marca a repetição. O celular guarda na fila e envia na hora (já funciona assim).</span><span class="ms">≈ 0,3–1 s</span></li>
+      <li><span class="ix">2</span><b>Servidor grava e resume</b><span>Ao gravar o lote, calcula o progresso da raia com o motor da súmula e guarda numa coluna nova.</span><span class="ms">no mesmo envio</span></li>
+      <li><span class="ix">3</span><b>Telão pergunta</b><span>A cada 1 s na bateria (5 s no intervalo), pelo link secreto. Se nada mudou, a resposta vem vazia.</span><span class="ms">≤ 1 s</span></li>
+      <li><span class="ix">4</span><b>Tela atualiza</b><span>Parcial até o judge enviar a súmula; depois, selo de oficial. No fim da bateria, o geral da categoria.</span><span class="ms">1–2,5 s no total</span></li>
+    </ol>
+  </section>
+
+  <section class="sec" aria-labelledby="hChange">
+    <header>
+      <h2 id="hChange">O que muda no sistema</h2>
+      <p>Detalhes, arquivos e stories no plano <code>docs/PLANO-TELAO-LEADERBOARD-AO-VIVO.md</code>.</p>
+    </header>
+    <div class="cols2">
+      <div class="box">
+        <h3>Banco e servidor</h3>
+        <ul>
+          <li><b>Duas tabelas e uma coluna</b>: configuração do telão por evento (link guardado como hash, modo fixado), largada e encerramento de cada bateria, e o progresso ao vivo da súmula. Migration nova, aplicada só com autorização.</li>
+          <li><b>Uma regra de classificação</b>: o geral sai do navegador para uma função compartilhada, usada pelo site e pelo telão, com teste de paridade.</li>
+          <li><b>Endpoint de leitura</b> pelo link, sem PII, com <code>noindex</code> e sem referer.</li>
+          <li><b>Pré-requisito</b>: aplicar as migrations da súmula digital que ainda estão pendentes.</li>
+        </ul>
+      </div>
+      <div class="box">
+        <h3>Telas</h3>
+        <ul>
+          <li><b>Telão</b> em <code>/telao/[link]</code>: chamada, bateria ao vivo, intervalo, espera, sem conexão e link desativado, de 720p a 4K.</li>
+          <li><b>Aba Telão</b> no painel do evento: link, modo, largada, encerrar e prévia das raias.</li>
+          <li><b>Fora desta fase</b>: Fitness Race, várias quadras ao mesmo tempo, áudio e patrocinadores.</li>
+          <li><b>Stories</b>: 1.53 a 1.58 (banco e link, progresso ao vivo, geral compartilhado, API e modo, telão, mesa).</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" aria-labelledby="hDec">
+    <header>
+      <h2 id="hDec">Decisões aprovadas</h2>
+      <p>Aprovadas pelo usuário em 19 e 20/10/2026: troca automática com mesa de controle, link secreto, uma bateria por vez e nome completo com o box.</p>
+    </header>
+    <div class="dec">
+      <div><span class="k">A</span><span class="q">Estrutura do placar da bateria</span><span class="r"><b>C · Líder e pelotão</b></span></div>
+      <div><span class="k">B</span><span class="q">Link do telão perdido: gerar outro ou poder copiar de novo</span><span class="r"><b>Gerar outro</b> (só o hash fica no banco)</span></div>
+      <div><span class="k">C</span><span class="q">Quem marca a largada e encerra a bateria</span><span class="r"><b>Só o gestor</b>. O telão detecta pelas súmulas quem está sendo julgado, sem depender do horário do cronograma</span></div>
+      <div><span class="k">D</span><span class="q">Quando a tela de chamada aparece</span><span class="r"><b>Quando os judges abrem as súmulas da bateria</b> ou a chamada é liberada no cronograma (o horário não dispara, por causa dos atrasos)</span></div>
+      <div><span class="k">E</span><span class="q">Migrations da súmula no Supabase</span><span class="r"><b>Já aplicadas</b> (conferido em 20/10/2026)</span></div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span>Maquete da proposta. Nomes de atletas, boxes, evento e resultados são fictícios.</span>
+    <span>Depois da aprovação, a maquete vai para <code>docs/design/telao-ao-vivo/</code> e é citada nos critérios de aceite.</span>
+  </footer>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(() => {
+  // ------------------------------------------------------------------ dados fictícios
+  const SEGS = [
+    { n: 21, m: 'Thruster', l: '43 kg' }, { n: 21, m: 'Pull-up' },
+    { n: 15, m: 'Thruster', l: '43 kg' }, { n: 15, m: 'Pull-up' },
+    { n: 9, m: 'Thruster', l: '43 kg' }, { n: 9, m: 'Pull-up' }
+  ];
+  const CUM = []; SEGS.reduce((acc, s) => { CUM.push(acc + s.n); return acc + s.n; }, 0);
+  const TOTAL = 90, CAP = 600;
+  const WALL_START = 14 * 3600 + 27 * 60, SCHEDULED = 14 * 3600 + 30 * 60, NEXT_HEAT = 14 * 3600 + 50 * 60;
+
+  const rng = (seed) => () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+
+  const HEAT = [
+    { id: 'h1', lane: 1, name: 'Rafael Monteiro', box: 'Box Iracema', target: 301, fat: 0.25, seed: 11, p1: 262 },
+    { id: 'h2', lane: 2, name: 'Diego Albuquerque', box: 'Arena Norte Training', target: 268, fat: 0.55, seed: 23, p1: 271 },
+    { id: 'h3', lane: 3, name: 'Thiago Bezerra', box: 'Mandacaru Strength', target: 322, fat: 1.6, seed: 37, p1: 248 },
+    { id: 'h4', lane: 4, name: 'Lucas Fontenele', box: 'Box Iracema', target: 349, fat: 0.1, seed: 41, p1: 255 },
+    { id: 'h5', lane: 5, name: 'Gabriel Sampaio', box: 'Praia Forte Fitness', target: 431, fat: 0.6, seed: 53, p1: 231 },
+    { id: 'h6', lane: 6, name: 'Mateus Holanda', box: 'Sertão Barbell Club', target: 389, fat: 1.2, seed: 67, p1: 240 },
+    { id: 'h7', lane: 7, name: 'Pedro Cavalcante', box: 'Arena Norte Training', target: 512, fat: 0.4, seed: 71, p1: 219 },
+    { id: 'h8', lane: 8, name: 'João Victor Aragão', box: 'Mandacaru Strength', target: 700, fat: 0.7, seed: 83, p1: 204 }
+  ];
+  // Baterias 1 e 2 já publicadas (resultado da Prova 2: segundos, ou repetições quando no cap)
+  const OTHERS = [
+    ['André Lacerda', 'Jangada Fitness', 266, { t: 284 }], ['Bruno Teixeira', 'Box Iracema', 244, { t: 312 }],
+    ['Caio Pinheiro', 'Praia Forte Fitness', 259, { t: 296 }], ['Daniel Rocha', 'Sertão Barbell Club', 233, { t: 344 }],
+    ['Eduardo Maia', 'Mandacaru Strength', 228, { t: 371 }], ['Felipe Correia', 'Arena Norte Training', 251, { t: 333 }],
+    ['Gustavo Arruda', 'Jangada Fitness', 212, { t: 452 }], ['Henrique Paiva', 'Box Iracema', 238, { t: 398 }],
+    ['Igor Mendonça', 'Praia Forte Fitness', 199, { r: 81 }], ['Leonardo Brito', 'Sertão Barbell Club', 221, { t: 487 }],
+    ['Marcelo Viana', 'Mandacaru Strength', 209, { t: 541 }], ['Nicolas Furtado', 'Arena Norte Training', 246, { t: 359 }],
+    ['Otávio Campos', 'Jangada Fitness', 190, { r: 74 }], ['Paulo Sérgio Lima', 'Box Iracema', 215, { t: 566 }],
+    ['Renan Castelo', 'Praia Forte Fitness', 226, { t: 419 }], ['Vinícius Torres', 'Sertão Barbell Club', 197, { r: 86 }]
+  ].map(([name, box, p1, p2], i) => ({ id: 'o' + i, name, box, p1, p2 }));
+
+  const buildTimes = (a) => {
+    const r = rng(a.seed); const raw = []; let acc = 1.5 + r() * 2;
+    SEGS.forEach((s, si) => {
+      if (si > 0) acc += 3 + r() * 4;
+      const isT = s.m === 'Thruster';
+      let setLeft = isT ? 5 + Math.floor(r() * 6) : 4 + Math.floor(r() * 6);
+      for (let k = 0; k < s.n; k++) {
+        const prog = raw.length / TOTAL;
+        acc += (isT ? 2.4 : 1.7) * (1 + a.fat * prog * 1.6) * (0.85 + r() * 0.3);
+        raw.push(acc);
+        if (--setLeft === 0 && k < s.n - 1) {
+          acc += 2.5 + r() * (4 + 9 * prog * a.fat);
+          setLeft = isT ? 4 + Math.floor(r() * 5) : 3 + Math.floor(r() * 5);
+        }
+      }
+    });
+    const scale = a.target / raw[raw.length - 1];
+    return raw.map((x) => x * scale);
+  };
+  HEAT.forEach((a) => {
+    a.ts = buildTimes(a);
+    const r = rng(a.seed * 7);
+    a.sub = (a.target <= CAP ? a.target : CAP) + 16 + r() * 26;
+  });
+  const LAST_SUB = Math.max(...HEAT.map((a) => a.sub));
+
+  // ------------------------------------------------------------------ utilidades
+  const $ = (id) => document.getElementById(id);
+  const fmt = (s) => { s = Math.max(0, Math.floor(s)); return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); };
+  const hhmm = (w) => String(Math.floor(w / 3600)).padStart(2, '0') + ':' + String(Math.floor(w % 3600 / 60)).padStart(2, '0');
+  const hhmmss = (w) => hhmm(w) + ':' + String(Math.floor(w % 60)).padStart(2, '0');
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const shortName = (n, max) => { if (n.length <= max) return n; const p = n.split(' '); return p[0] + ' ' + p[p.length - 1]; };
+  const ord = (p) => p + 'º';
+
+  // ------------------------------------------------------------------ estado
+  const S = { wall: WALL_START, start: null, forcedEnd: false, doneAt: null, paused: false, speed: 8, mode: 'auto', struct: 'C', offline: false, lastSync: WALL_START, leaderId: null };
+  const prevReps = new Map();
+
+  const heatT = () => (S.start === null ? 0 : S.wall - S.start);
+  const athleteAt = (a, t) => {
+    const tt = Math.min(t, CAP);
+    let reps = 0; while (reps < TOTAL && a.ts[reps] <= tt) reps++;
+    const finished = reps === TOTAL;
+    const capped = !finished && t >= CAP;
+    const submitted = (finished || capped) && t >= a.sub;
+    const segIdx = finished ? -1 : CUM.findIndex((c) => reps < c);
+    return {
+      a, reps, finished, capped, submitted,
+      time: finished ? a.ts[TOTAL - 1] : null,
+      segIdx, segLeft: segIdx >= 0 ? CUM[segIdx] - reps : 0,
+      lastRep: reps ? a.ts[reps - 1] : Infinity
+    };
+  };
+  // Ordem parcial da bateria (For Time): terminou (menor tempo) → mais repetições → chegou antes à última
+  const rankLive = (t) => HEAT.map((a) => athleteAt(a, t)).sort((x, y) => {
+    if (x.finished && y.finished) return x.time - y.time;
+    if (x.finished !== y.finished) return x.finished ? -1 : 1;
+    if (y.reps !== x.reps) return y.reps - x.reps;
+    return x.lastRep - y.lastRep;
+  }).map((x, i) => ({ ...x, pos: i + 1 }));
+
+  const phase = () => {
+    if (S.start === null) return 'call';
+    if (S.forcedEnd || heatT() >= LAST_SUB) return 'done';
+    return 'live';
+  };
+  const screen = () => {
+    if (S.mode === 'standby') return 'wait';
+    if (S.mode === 'pin_standings') return 'int';
+    const ph = phase();
+    if (ph === 'call') return 'call';
+    if (S.mode === 'pin_heat') return 'live';
+    if (ph === 'done' && S.doneAt !== null && S.wall - S.doneAt >= 6) return 'int';
+    return 'live';
+  };
+
+  // ------------------------------------------------------------------ geral da categoria (low-point, como rankWorkoutScores)
+  const standings = (includeHeat) => {
+    const t = heatT();
+    const all = [
+      ...OTHERS.map((o) => ({ id: o.id, name: o.name, box: o.box, p1: o.p1, p2: o.p2, heat: false })),
+      ...HEAT.map((a) => {
+        const s = athleteAt(a, t);
+        const done = includeHeat && s.submitted;
+        return { id: a.id, name: a.name, box: a.box, p1: a.p1, p2: done ? (s.finished ? { t: s.time } : { r: s.reps }) : null, heat: true };
+      })
+    ];
+    const n = all.length;
+    const p1 = [...all].sort((x, y) => y.p1 - x.p1);
+    p1.forEach((x, i) => { x.p1r = i + 1; });
+    const done = all.filter((x) => x.p2);
+    done.sort((x, y) => {
+      const xt = 'r' in x.p2 ? Infinity : x.p2.t, yt = 'r' in y.p2 ? Infinity : y.p2.t;
+      if (xt !== yt) return xt - yt;
+      return (y.p2.r || 0) - (x.p2.r || 0);
+    });
+    done.forEach((x, i) => { x.p2r = i + 1; });
+    all.forEach((x) => { if (!x.p2) x.p2r = null; x.pts = x.p1r + (x.p2r ?? n + 1); });
+    all.sort((x, y) => x.pts - y.pts || Math.min(x.p1r, x.p2r ?? 99) - Math.min(y.p1r, y.p2r ?? 99) || x.name.localeCompare(y.name));
+    all.forEach((x, i) => { x.pos = i + 1; });
+    return all;
+  };
+
+  // ------------------------------------------------------------------ topo e rodapé
+  const setTop = (scr) => {
+    const pill = $('tvPill');
+    const t = heatT();
+    pill.className = 'tv-pill';
+    if (scr === 'live') {
+      const ended = phase() === 'done';
+      pill.classList.add(ended ? 'x' : 'live');
+      pill.querySelector('span').textContent = ended ? 'ENCERRADA' : 'AO VIVO';
+      $('tvClock').textContent = fmt(Math.min(t, CAP));
+      $('tvClockSub').textContent = t >= CAP ? 'time cap' : 'de 10:00';
+      $('tvTitle').textContent = 'Prova 2 · 21-15-9 Thruster 43 kg e Pull-up';
+      $('tvCat').textContent = 'RX Masculino'; $('tvHeat').textContent = 'Bateria 3 de 5';
+    } else {
+      $('tvClock').textContent = hhmm(S.wall);
+      $('tvClockSub').textContent = 'horário';
+      if (scr === 'call') {
+        pill.classList.add('call'); pill.querySelector('span').textContent = 'CHAMADA';
+        $('tvTitle').textContent = 'Prova 2 · 21-15-9 Thruster 43 kg e Pull-up';
+        $('tvCat').textContent = 'RX Masculino'; $('tvHeat').textContent = 'Bateria 3 de 5';
+      } else if (scr === 'int') {
+        pill.querySelector('span').textContent = 'INTERVALO';
+        $('tvTitle').textContent = 'Classificação geral';
+        $('tvCat').textContent = 'RX Masculino'; $('tvHeat').textContent = '2 de 3 provas';
+      } else {
+        pill.querySelector('span').textContent = 'PROGRAMAÇÃO';
+        $('tvTitle').textContent = 'Próximas atividades';
+        $('tvCat').textContent = 'Sábado'; $('tvHeat').textContent = '25 de outubro';
+      }
+    }
+    const msg = {
+      call: 'Raias e horário conforme o cronograma oficial',
+      live: 'Parcial. O resultado oficial sai quando o judge envia a súmula',
+      int: 'Resultados publicados pelas súmulas · pontos por colocação (menor soma vence)',
+      wait: 'Programação conforme o cronograma oficial'
+    };
+    $('tvMsg').textContent = msg[scr];
+  };
+
+  // ------------------------------------------------------------------ chamada
+  const renderCall = () => {
+    $('callLanes').innerHTML = HEAT.map((a) => `<div class="k-lane"><div class="ln num">${a.lane}</div><div style="min-width:0"><div class="nm">${esc(a.name)}</div><div class="bx">${esc(a.box)}</div></div></div>`).join('');
+  };
+  const updateCall = () => { $('callCd').textContent = fmt(Math.max(0, SCHEDULED - S.wall)); };
+
+  // ------------------------------------------------------------------ A · Corrida (SVG)
+  const A = { x0: 170, x1: 1080, y0: 22, y1: 630, gx: 1104 };
+  const ax = (s) => A.x0 + (Math.min(s, CAP) / CAP) * (A.x1 - A.x0);
+  const ay = (r) => A.y1 - (r / TOTAL) * (A.y1 - A.y0);
+  const renderA = (L, t) => {
+    const parts = [];
+    let prev = 0;
+    SEGS.forEach((s, i) => {
+      const yTop = ay(CUM[i]), yBot = ay(prev), mid = (yTop + yBot) / 2;
+      if (i % 2 === 0) parts.push(`<rect x="${A.x0}" y="${yTop}" width="${A.x1 - A.x0}" height="${yBot - yTop}" fill="#ffffff" fill-opacity="0.025"/>`);
+      parts.push(`<line x1="${A.x0}" x2="${A.x1}" y1="${yTop}" y2="${yTop}" stroke="#2a3038" stroke-dasharray="4 6"/>`);
+      parts.push(`<text x="12" y="${mid - 3}" font-size="27" font-weight="700" fill="#eaecef" class="n">${s.n}</text>`);
+      parts.push(`<text x="12" y="${mid + 20}" font-size="17" font-weight="600" fill="#929aa5">${s.m}${s.l ? ' ' + s.l : ''}</text>`);
+      prev = CUM[i];
+    });
+    for (let m = 0; m <= 10; m += 2) {
+      const x = ax(m * 60);
+      parts.push(`<text x="${x}" y="${A.y1 + 30}" font-size="17" fill="#707a8a" text-anchor="middle" class="n">${m}:00</text>`);
+    }
+    parts.push(`<line x1="${A.x0}" x2="${A.x1}" y1="${A.y1}" y2="${A.y1}" stroke="#2b3139" stroke-width="2"/>`);
+    parts.push(`<line x1="${A.x1}" x2="${A.x1}" y1="${A.y0}" y2="${A.y1}" stroke="#f6465d" stroke-opacity="0.5" stroke-dasharray="3 5"/>`);
+    if (t < CAP) parts.push(`<line x1="${ax(t)}" x2="${ax(t)}" y1="${A.y0}" y2="${A.y1}" stroke="#fcd535" stroke-opacity="0.35" stroke-width="1.5"/>`);
+
+    const color = (x) => x.pos === 1 ? '#fcd535' : x.pos <= 3 ? '#eaecef' : '#6d7682';
+    // linhas (as de trás primeiro, o líder por cima)
+    [...L].reverse().forEach((x) => {
+      const tt = Math.min(t, CAP);
+      let d = `M${A.x0} ${A.y1}`;
+      for (let i = 0; i < x.reps; i++) d += `H${ax(x.a.ts[i]).toFixed(1)}V${ay(i + 1).toFixed(1)}`;
+      if (!x.finished) d += `H${ax(tt).toFixed(1)}`;
+      parts.push(`<path d="${d}" fill="none" stroke="${color(x)}" stroke-width="${x.pos === 1 ? 4.5 : x.pos <= 3 ? 3 : 2.2}" stroke-linejoin="round"/>`);
+    });
+    // rótulos à direita, sem sobreposição
+    const GAP = 66, MIN = A.y0 + 22, MAX = A.y1 - 8;
+    const labels = L.map((x) => ({ x, hx: x.finished ? ax(x.time) : ax(Math.min(t, CAP)), hy: ay(x.reps), y: ay(x.reps) }))
+      .sort((p, q) => p.y - q.y || p.x.pos - q.x.pos);
+    labels.forEach((l, i) => { l.y = Math.max(l.y, MIN); if (i > 0) l.y = Math.max(l.y, labels[i - 1].y + GAP); });
+    for (let i = labels.length - 1; i >= 0; i--) {
+      const lim = i === labels.length - 1 ? MAX : labels[i + 1].y - GAP;
+      if (labels[i].y > lim) labels[i].y = lim;
+    }
+    labels.forEach(({ x, hx, hy, y }) => {
+      const c = color(x);
+      parts.push(`<path d="M${hx} ${hy} L${A.gx - 8} ${y}" stroke="${c}" stroke-opacity="0.35" stroke-width="1.2" fill="none"/>`);
+      parts.push(`<circle cx="${hx}" cy="${hy}" r="${x.pos === 1 ? 8 : 6}" fill="${x.submitted ? '#0ecb81' : c}" stroke="#090b0e" stroke-width="3"/>`);
+      const val = x.finished ? fmt(x.time) : String(x.reps);
+      const sub = x.finished || x.capped
+        ? (x.submitted ? 'Oficial' : (x.capped ? 'Time cap · aguardando súmula' : 'Terminou · aguardando súmula'))
+        : `${SEGS[x.segIdx].n} ${SEGS[x.segIdx].m} · faltam ${x.segLeft}`;
+      parts.push(`<g transform="translate(${A.gx} ${y})">
+        <text x="0" y="10" font-size="30" font-weight="800" fill="${x.pos === 1 ? '#fcd535' : '#eaecef'}" class="n">${x.pos}</text>
+        <text x="44" y="-4" font-size="23" font-weight="700" fill="#eaecef">${esc(shortName(x.a.name, 17))}</text>
+        <text x="44" y="20" font-size="15" font-weight="600" fill="${x.submitted ? '#0ecb81' : '#929aa5'}">Raia ${x.a.lane} · ${esc(sub)}</text>
+        <text x="392" y="10" font-size="32" font-weight="700" fill="${x.submitted ? '#0ecb81' : '#eaecef'}" text-anchor="end" class="n">${val}</text>
+      </g>`);
+    });
+    $('aSvg').innerHTML = parts.join('');
+  };
+
+  // ------------------------------------------------------------------ B · Escada
+  const B = {};
+  const buildB = () => {
+    const g = $('bGrid');
+    let bands = '<div class="b-bands">';
+    let prev = 0;
+    SEGS.forEach((s, i) => {
+      const bottom = (prev / TOTAL) * 100, h = (s.n / TOTAL) * 100;
+      bands += `<div class="b-band${i % 2 === 0 ? ' alt' : ''}" style="bottom:${bottom}%;height:${h}%"><div class="lb"><b class="num">${s.n}</b><span>${s.m}${s.l ? ' ' + s.l : ''}</span></div></div>`;
+      prev += s.n;
+    });
+    bands += '</div>';
+    let html = bands;
+    HEAT.forEach((a, i) => {
+      const col = i + 2;
+      html += `<div class="b-pos num" style="grid-column:${col}" id="bp-${a.id}">–</div>
+        <div class="b-bar" style="grid-column:${col}"><div class="b-fill" id="bf-${a.id}" style="height:0%"></div><div class="b-val num" id="bv-${a.id}" style="bottom:0%">0</div></div>
+        <div class="b-meta" style="grid-column:${col}"><div class="ln">RAIA ${a.lane}</div><div class="nm">${esc(a.name)}</div><div class="bx">${esc(a.box)}</div></div>`;
+    });
+    g.innerHTML = html;
+    HEAT.forEach((a) => { B[a.id] = { p: $('bp-' + a.id), f: $('bf-' + a.id), v: $('bv-' + a.id) }; });
+  };
+  const renderB = (L) => {
+    L.forEach((x) => {
+      const el = B[x.a.id]; const pct = (x.reps / TOTAL) * 100;
+      el.p.textContent = ord(x.pos); el.p.classList.toggle('lead', x.pos === 1);
+      el.f.style.height = `calc(${pct / 100} * (100% - 4.4cqw))`;
+      el.f.className = 'b-fill' + (x.submitted ? ' official' : x.finished ? ' done' : x.pos === 1 ? ' lead' : '');
+      el.v.style.bottom = `calc(${pct / 100} * (100% - 4.4cqw))`;
+      const label = x.submitted ? 'OFICIAL' : x.finished ? 'FINAL' : x.capped ? 'CAP' : '';
+      const val = x.finished ? fmt(x.time) : String(x.reps);
+      const html = (label ? `<small>${label}</small>` : '') + val;
+      if (el.v.innerHTML !== html) el.v.innerHTML = html;
+      el.v.classList.toggle('official', x.submitted);
+    });
+  };
+
+  // ------------------------------------------------------------------ C · Líder e pelotão
+  const C = {};
+  const ROW_H = 5.5;
+  const buildC = () => {
+    $('cLead').innerHTML = `<div class="p num">1<sup>º</sup></div>
+      <div class="who"><div class="ln" id="clLn"></div><div class="nm" id="clNm"></div><div class="bx" id="clBx"></div></div>
+      <div class="stat"><div class="v num" id="clV"></div><div class="mv" id="clMv"></div></div>
+      <div class="gap" id="clGap"></div>`;
+    $('cList').innerHTML = HEAT.map((a) => `<div class="c-row" id="cr-${a.id}">
+      <div class="p num"></div><div class="ln">R${a.lane}</div>
+      <div style="min-width:0"><div class="nm">${esc(a.name)}</div><div class="bx">${esc(a.box)}</div></div>
+      <div class="prog"><div class="prog-bar">${SEGS.map((s) => `<span style="flex:${s.n}"><i style="width:0%"></i></span>`).join('')}</div><div class="prog-cap"></div></div>
+      <div class="v num"></div></div>`).join('');
+    HEAT.forEach((a) => {
+      const r = $('cr-' + a.id);
+      C[a.id] = { r, p: r.querySelector('.p'), segs: [...r.querySelectorAll('.prog-bar > span')], cap: r.querySelector('.prog-cap'), v: r.querySelector('.v') };
+    });
+  };
+  const segFill = (reps) => SEGS.map((s, i) => { const lo = i ? CUM[i - 1] : 0; return Math.max(0, Math.min(1, (reps - lo) / s.n)); });
+  const statusLine = (x) => {
+    if (x.submitted) return '<b class="official">Oficial</b>';
+    if (x.finished) return 'Terminou · aguardando súmula';
+    if (x.capped) return `Time cap · ${x.reps} reps · aguardando súmula`;
+    const s = SEGS[x.segIdx];
+    return `<b>${s.n} ${s.m}</b> · faltam ${x.segLeft}`;
+  };
+  const renderC = (L) => {
+    const lead = L[0];
+    const box = $('cLead');
+    if (S.leaderId !== lead.a.id) {
+      if (S.leaderId !== null) { box.classList.remove('swap'); void box.offsetWidth; box.classList.add('swap'); }
+      S.leaderId = lead.a.id;
+      $('clLn').textContent = 'Raia ' + lead.a.lane; $('clNm').textContent = lead.a.name; $('clBx').textContent = lead.a.box;
+    }
+    const second = L[1];
+    const gap = lead.finished
+      ? (second.finished ? `<span>Vantagem sobre o 2º</span><b class="num">${fmt(second.time - lead.time)}</b>` : `<span>2º lugar</span><b>${second.reps} reps</b>`)
+      : `<span>Vantagem sobre o 2º</span><b class="num">+${lead.reps - second.reps} reps</b>`;
+    const v = $('clV');
+    const vHtml = lead.finished ? fmt(lead.time) : lead.reps + '<small>/90</small>';
+    if (v.innerHTML !== vHtml) { v.innerHTML = vHtml; if (!lead.finished) { v.classList.remove('bump'); void v.offsetWidth; v.classList.add('bump'); } }
+    v.classList.toggle('official', lead.submitted);
+    $('clMv').innerHTML = statusLine(lead);
+    $('clGap').innerHTML = gap;
+    L.forEach((x) => {
+      const el = C[x.a.id];
+      const idx = x.pos - 2;
+      el.r.style.transform = `translateY(${Math.max(idx, -1) * ROW_H}cqw)`;
+      el.r.style.opacity = x.pos === 1 ? '0' : '1';
+      el.p.textContent = ord(x.pos);
+      segFill(x.reps).forEach((f, i) => {
+        el.segs[i].firstChild.style.width = (f * 100) + '%';
+        el.segs[i].classList.toggle('cur', i === x.segIdx);
+      });
+      el.cap.innerHTML = statusLine(x);
+      const html = x.finished ? fmt(x.time) : (x.capped ? `<small>CAP</small>${x.reps}` : String(x.reps));
+      if (el.v.innerHTML !== html) el.v.innerHTML = html;
+      el.v.classList.toggle('official', x.submitted);
+    });
+  };
+
+  // ------------------------------------------------------------------ intervalo
+  const PER_PAGE = 10, PAGE_MS = 10000;
+  let pageStart = performance.now(), page = 0;
+  const p2Text = (x) => {
+    if (!x.p2) return '<span class="wk pend">aguardando</span>';
+    const v = 'r' in x.p2 ? `CAP ${x.p2.r}` : fmt(x.p2.t);
+    return `${ord(x.p2r)}<small>${v}</small>`;
+  };
+  const renderInt = () => {
+    const after = standings(true), before = standings(false);
+    const bpos = new Map(before.map((x) => [x.id, x.pos]));
+    const pages = Math.ceil(after.length / PER_PAGE);
+    const now = performance.now();
+    if (now - pageStart > PAGE_MS) { page = (page + 1) % pages; pageStart = now; }
+    $('iPage').textContent = `${page + 1}/${pages}`;
+    $('iTrack').style.width = Math.min(100, ((now - pageStart) / PAGE_MS) * 100) + '%';
+    const rows = after.slice(page * PER_PAGE, page * PER_PAGE + PER_PAGE);
+    $('iBody').innerHTML = rows.map((x, i) => {
+      const d = (bpos.get(x.id) ?? x.pos) - x.pos;
+      const cls = d > 0 ? 'up' : d < 0 ? 'down' : '';
+      const icon = d > 0 ? 'i-up' : d < 0 ? 'i-down' : 'i-flat';
+      const fresh = x.heat && x.p2;
+      return `<div class="i-row${fresh ? ' fresh' : ''}" style="top:${i * 3.2}cqw">
+        <span class="p num">${x.pos}</span>
+        <span class="var num ${cls}"><svg class="ico" aria-hidden="true"><use href="#${icon}"/></svg>${d ? Math.abs(d) : ''}</span>
+        <span class="who"><span class="nm">${esc(x.name)}</span>${fresh ? '<span class="tag">B3</span>' : ''}<span class="bx">${esc(x.box)}</span></span>
+        <span class="wk num">${ord(x.p1r)}<small>${x.p1} reps</small></span>
+        <span class="wk num ${fresh ? 'hot' : ''}">${p2Text(x)}</span>
+        <span class="pts num">${x.pts}</span>
+      </div>`;
+    }).join('');
+    $('iNextCd').textContent = 'em ' + fmt(Math.max(0, NEXT_HEAT - S.wall));
+  };
+
+  // ------------------------------------------------------------------ mesa
+  const renderDesk = (scr, L) => {
+    const ph = phase();
+    $('btnStart').disabled = ph !== 'call';
+    $('btnEnd').disabled = ph !== 'live';
+    const names = { call: 'Chamada da Bateria 3', live: ph === 'done' ? 'Bateria 3 encerrada' : 'Bateria 3 ao vivo', int: 'Geral do RX Masculino', wait: 'Tela de espera' };
+    $('onAir').textContent = names[scr];
+    const byId = new Map(L.map((x) => [x.a.id, x]));
+    $('deskLanes').innerHTML = HEAT.map((a) => {
+      const x = byId.get(a.id);
+      let st = '<span class="st">Não iniciada</span>';
+      if (ph !== 'call') {
+        if (x.submitted) st = '<span class="st ok">Publicada</span>';
+        else if (S.forcedEnd) st = '<span class="st pend">Pendente</span>';
+        else st = '<span class="st run">Em andamento</span>';
+      }
+      return `<li><span class="l">R${a.lane}</span><span class="n">${esc(a.name)}</span>${st}</li>`;
+    }).join('');
+    $('heatNote').textContent = S.forcedEnd
+      ? 'Bateria encerrada pela mesa. Súmulas pendentes continuam valendo quando forem enviadas.'
+      : ph === 'call' ? 'A largada marca o início do relógio do telão. Sem ela, o telão começa quando a primeira súmula recebe um registro.'
+      : ph === 'live' ? 'O telão vai para o geral sozinho quando todas as súmulas forem enviadas.'
+      : 'Todas as súmulas enviadas. O telão mostra o geral da categoria.';
+  };
+
+  // ------------------------------------------------------------------ ciclo
+  const SCR = { call: 'scrCall', int: 'scrInt', wait: 'scrWait' };
+  let shown = '';
+  const render = () => {
+    const tv = $('tv');
+    tv.classList.toggle('offline', S.offline);
+    const scr = screen();
+    const L = rankLive(heatT());
+    renderDesk(scr, L);
+    if (S.offline) { $('tvOff').textContent = 'Sem conexão · mostrando ' + hhmmss(S.lastSync); return; }
+    S.lastSync = S.wall;
+    const id = scr === 'live' ? 'scr' + S.struct : SCR[scr];
+    if (id !== shown) {
+      document.querySelectorAll('.scr').forEach((el) => el.classList.toggle('on', el.id === id));
+      shown = id;
+    }
+    setTop(scr);
+    if (scr === 'call') updateCall();
+    if (scr === 'live') {
+      if (S.struct === 'A') renderA(L, heatT());
+      if (S.struct === 'B') renderB(L);
+      if (S.struct === 'C') renderC(L);
+      L.forEach((x) => {
+        const before = prevReps.get(x.a.id) ?? 0;
+        if (x.reps > before) {
+          const el = S.struct === 'B' ? B[x.a.id]?.v : S.struct === 'C' ? C[x.a.id]?.v : null;
+          if (el) { el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
+        }
+        prevReps.set(x.a.id, x.reps);
+      });
+    }
+    if (scr === 'int') renderInt();
+    $('tvAgo').textContent = '1 s';
+  };
+
+  let lastFrame = performance.now(), acc = 0;
+  const loop = (now) => {
+    const dt = Math.min(0.25, (now - lastFrame) / 1000); lastFrame = now;
+    if (!S.paused) {
+      S.wall += dt * S.speed;
+      if (S.start === null && S.wall >= SCHEDULED) S.start = SCHEDULED;
+      if (S.start !== null && S.doneAt === null && (S.forcedEnd || heatT() >= LAST_SUB)) S.doneAt = S.wall;
+    }
+    acc += dt;
+    if (acc >= 0.25) { acc = 0; render(); }
+    requestAnimationFrame(loop);
+  };
+
+  const restart = () => {
+    Object.assign(S, { wall: WALL_START, start: null, forcedEnd: false, doneAt: null, leaderId: null });
+    prevReps.clear(); page = 0; pageStart = performance.now();
+    render();
+  };
+
+  // ------------------------------------------------------------------ controles
+  const toast = (msg) => {
+    const t = $('toast'); t.textContent = msg; t.classList.add('on');
+    clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('on'), 3200);
+  };
+  const setStruct = (s) => {
+    S.struct = s;
+    document.querySelectorAll('#structSeg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.s === s)));
+    document.querySelectorAll('.opt').forEach((o) => o.classList.toggle('sel', o.dataset.s === s));
+    S.leaderId = null;
+    render();
+  };
+  document.querySelectorAll('#structSeg button').forEach((b) => b.addEventListener('click', () => setStruct(b.dataset.s)));
+  document.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => {
+    setStruct(b.dataset.view);
+    if (phase() === 'call') { S.start = S.wall; }
+    if (phase() === 'done' && S.mode === 'auto') { document.querySelector('input[value="pin_heat"]').checked = true; S.mode = 'pin_heat'; }
+    $('tvWrap').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }));
+  document.querySelectorAll('#speedSeg button').forEach((b) => b.addEventListener('click', () => {
+    S.speed = Number(b.dataset.v);
+    document.querySelectorAll('#speedSeg button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+  }));
+  $('btnPlay').addEventListener('click', () => {
+    S.paused = !S.paused;
+    $('btnPlay').innerHTML = S.paused
+      ? '<svg class="ico" aria-hidden="true"><use href="#i-play"/></svg><span>Continuar</span>'
+      : '<svg class="ico" aria-hidden="true"><use href="#i-pause"/></svg><span>Pausar</span>';
+  });
+  $('btnRestart').addEventListener('click', restart);
+  $('btnOffline').addEventListener('click', () => {
+    S.offline = !S.offline;
+    $('btnOffline').setAttribute('aria-pressed', String(S.offline));
+    render();
+  });
+  $('btnFull').addEventListener('click', () => {
+    const el = $('tvWrap');
+    if (document.fullscreenElement) { document.exitFullscreen?.().catch(() => {}); return; }
+    const p = el.requestFullscreen?.();
+    if (p && p.catch) p.catch(() => toast('Tela cheia não está disponível nesta janela.'));
+    else if (!p) toast('Tela cheia não está disponível nesta janela.');
+  });
+  document.querySelectorAll('input[name="mode"]').forEach((r) => r.addEventListener('change', () => { S.mode = r.value; render(); }));
+  $('btnStart').addEventListener('click', () => { if (phase() === 'call') { S.start = S.wall; render(); } });
+  $('btnEnd').addEventListener('click', () => { if (phase() === 'live') { S.forcedEnd = true; S.doneAt = S.wall; render(); } });
+  document.querySelectorAll('[data-toast]').forEach((b) => b.addEventListener('click', () => toast(b.dataset.toast)));
+
+  renderCall(); buildB(); buildC();
+  render();
+  requestAnimationFrame(loop);
+})();
+</script>
