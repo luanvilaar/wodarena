@@ -15,6 +15,7 @@ import { QualifierAthleteSubmissions } from '@/components/QualifierAthleteSubmis
 import { QualifierAthleteContestation } from '@/components/QualifierAthleteContestation';
 import { QualifierManagerPanel } from '@/components/QualifierManagerPanel';
 import { ScoresheetsPanel } from '@/components/admin/ScoresheetsPanel';
+import { BroadcastPanel } from '@/components/admin/BroadcastPanel';
 import { QualifierResultsManager } from '@/components/QualifierResultsManager';
 import { DashboardOverview } from '@/components/admin/DashboardOverview';
 import {
@@ -655,7 +656,7 @@ export default function AdminPage() {
 
   // Estado do evento sendo gerenciado internamente
   const [selectedEventToManage, setSelectedEventToManage] = useState<Event | null>(null);
-  const [activeEventTab, setActiveEventTab] = useState<'info' | 'categories' | 'wods' | 'schedule' | 'registrations' | 'scores' | 'leaderboard' | 'contestations' | 'submissions' | 'sheets'>('info');
+  const [activeEventTab, setActiveEventTab] = useState<'info' | 'categories' | 'wods' | 'schedule' | 'registrations' | 'scores' | 'leaderboard' | 'contestations' | 'submissions' | 'sheets' | 'broadcast'>('info');
 
   // Área do Atleta: a seção ativa vem do hash da URL (#inscricoes, #resultados,
   // #contestar, #perfil). O servidor sempre renderiza "events"; o cliente lê o
@@ -9873,7 +9874,7 @@ export default function AdminPage() {
                         value={activeEventTab}
                         onChange={(e) => {
                           const tabId = e.target.value;
-                          setActiveEventTab(tabId as 'info' | 'categories' | 'wods' | 'schedule' | 'registrations' | 'scores' | 'leaderboard' | 'contestations' | 'submissions' | 'sheets');
+                          setActiveEventTab(tabId as 'info' | 'categories' | 'wods' | 'schedule' | 'registrations' | 'scores' | 'leaderboard' | 'contestations' | 'submissions' | 'sheets' | 'broadcast');
                           if (tabId === 'info') {
                             initEventEditForm(selectedEventToManage);
                           }
@@ -9892,7 +9893,7 @@ export default function AdminPage() {
                             ? [{ id: 'submissions', label: 'Submissões e Judges' }]
                             : []),
                           ...((selectedEventToManage.eventType || 'functional_fitness') === 'functional_fitness'
-                            ? [{ id: 'sheets', label: 'Súmulas e Judges' }]
+                            ? [{ id: 'sheets', label: 'Súmulas e Judges' }, { id: 'broadcast', label: 'Telão' }]
                             : []),
                           ...((selectedEventToManage.eventType || 'functional_fitness') !== 'fitness_racing'
                             ? [{ id: 'contestations', label: 'Contestações' }]
@@ -9919,7 +9920,7 @@ export default function AdminPage() {
                             ? [{ id: 'submissions', label: 'Submissões e Judges' }]
                             : []),
                           ...((selectedEventToManage.eventType || 'functional_fitness') === 'functional_fitness'
-                            ? [{ id: 'sheets', label: 'Súmulas e Judges' }]
+                            ? [{ id: 'sheets', label: 'Súmulas e Judges' }, { id: 'broadcast', label: 'Telão' }]
                             : []),
                         ...((selectedEventToManage.eventType || 'functional_fitness') !== 'fitness_racing'
                           ? [{ id: 'contestations', label: 'Contestações' }]
@@ -9928,7 +9929,7 @@ export default function AdminPage() {
                         <button
                           key={tab.id}
                           onClick={() => {
-                            setActiveEventTab(tab.id as 'info' | 'categories' | 'wods' | 'schedule' | 'registrations' | 'scores' | 'leaderboard' | 'contestations' | 'submissions' | 'sheets');
+                            setActiveEventTab(tab.id as 'info' | 'categories' | 'wods' | 'schedule' | 'registrations' | 'scores' | 'leaderboard' | 'contestations' | 'submissions' | 'sheets' | 'broadcast');
                             if (tab.id === 'info') {
                               initEventEditForm(selectedEventToManage);
                             }
@@ -9965,6 +9966,7 @@ export default function AdminPage() {
                       {activeEventTab === 'leaderboard' && renderAbaLeaderboard()}
                       {activeEventTab === 'submissions' && selectedEventToManage.eventType === 'functional_fitness_qualifier' && <QualifierManagerPanel event={selectedEventToManage} />}
                       {activeEventTab === 'sheets' && (selectedEventToManage.eventType || 'functional_fitness') === 'functional_fitness' && <ScoresheetsPanel event={selectedEventToManage} />}
+                      {activeEventTab === 'broadcast' && (selectedEventToManage.eventType || 'functional_fitness') === 'functional_fitness' && <BroadcastPanel event={selectedEventToManage} />}
                       {activeEventTab === 'contestations' && renderAbaContestations()}
                     </div>
                   </div>

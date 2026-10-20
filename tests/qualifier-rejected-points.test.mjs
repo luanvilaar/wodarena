@@ -5,7 +5,7 @@ import test from 'node:test';
 const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
 const migration = read('../supabase/migrations/20261006140000_qualifier_rejected_points_last_place.sql');
-const appContext = read('../src/context/AppContext.tsx');
+const appContext = read('../src/lib/leaderboardStandings.ts');
 
 test('rejected qualifier results score the last place (participants), not participants + 1', () => {
   assert.match(migration, /WHEN s\.result_status = 'rejected' THEN v_participant_count\s/);

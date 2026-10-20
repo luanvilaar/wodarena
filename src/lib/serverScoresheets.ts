@@ -10,6 +10,7 @@ import {
   type ScoresheetStatus
 } from '@/lib/scoresheet';
 import { SCORE_TIE_BREAKER_SPLIT_KEY, parseScoreForWorkout, rankWorkoutScores, secondsToTime, timeToSeconds, type WorkoutScoreForRanking } from '@/lib/scoring';
+import { estimateClockStart, summarizeLiveProgress, type LiveProgress } from '@/lib/liveProgress';
 import type { SessionUser } from '@/lib/serverSecurity';
 import { validateWorkoutStructure, type SheetEvent, type WorkoutStructure } from '@/lib/workoutStructure';
 import type { WorkoutType } from '@/types';
@@ -290,12 +291,12 @@ const readSheetRow = async (supabaseAdmin: SupabaseClient, sheetId: unknown) => 
 /** Evento da súmula, para conferir o acesso antes de qualquer outra coisa. */
 export const readSheetEventId = async (supabaseAdmin: SupabaseClient, sheetId: unknown) => (await readSheetRow(supabaseAdmin, sheetId)).event_id;
 
-type StoredEvent = { seq: number; client_event_id: string; event: SheetEvent };
+type StoredEvent = { seq: number; client_event_id: string; event: SheetEvent; recorded_at?: string | null };
 
 const readEvents = async (supabaseAdmin: SupabaseClient, sheetId: string) => {
   const rows = (check(await supabaseAdmin
     .from('scoresheet_events')
-    .select('seq, client_event_id, event')
+    .select('seq, client_event_id, event, recorded_at')
     .eq('sheet_id', sheetId)
     .order('seq', { ascending: true })) || []) as StoredEvent[];
   return [...rows].sort((a, b) => a.seq - b.seq);
@@ -494,9 +495,36 @@ export const appendSheetEvents = async (
       }
       check(inserted);
     }
-    check(await supabaseAdmin.from('scoresheets').update({ updated_at: nowIso() }).eq('id', row.id));
+    await writeLiveProgress(supabaseAdmin, row, [...stored, ...rows]);
   }
   return { count: count + rows.length };
+};
+
+// Coluna live_progress ainda não criada (migration do telão pendente): a súmula segue sem ela.
+const isMissingLiveProgress = (error: unknown) => {
+  const details = error && typeof error === 'object' ? error as { code?: unknown; message?: unknown } : null;
+  return (details?.code === '42703' || details?.code === 'PGRST204') && /live_progress/.test(String(details?.message ?? ''));
+};
+
+/** Resumo do log para o telão (Story 1.54), recalculado a cada lote com o mesmo motor da súmula. */
+export const buildLiveProgress = (structure: WorkoutStructure, events: readonly StoredEvent[]): LiveProgress => {
+  let clockStartAt: string | null = null;
+  for (const item of events) {
+    const recordedAt = item.recorded_at ? Date.parse(item.recorded_at) : Number.NaN;
+    if (Number.isFinite(recordedAt)) clockStartAt = estimateClockStart(clockStartAt, recordedAt, [item.event]);
+  }
+  return summarizeLiveProgress(structure, events.map((item) => item.event), clockStartAt);
+};
+
+const writeLiveProgress = async (supabaseAdmin: SupabaseClient, row: SheetRow, events: readonly StoredEvent[]) => {
+  const updatedAt = nowIso();
+  const written = await supabaseAdmin
+    .from('scoresheets')
+    .update({ updated_at: updatedAt, live_progress: buildLiveProgress(row.structure, events) })
+    .eq('id', row.id);
+  if (!written.error) return;
+  if (!isMissingLiveProgress(written.error)) check(written);
+  check(await supabaseAdmin.from('scoresheets').update({ updated_at: updatedAt }).eq('id', row.id));
 };
 
 // ---------------------------------------------------------------------------

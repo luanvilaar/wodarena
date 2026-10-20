@@ -86,6 +86,11 @@ const securityHeaders = [
   },
 ];
 
+const telaoHeaders = [
+  { key: "Referrer-Policy", value: "no-referrer" },
+  { key: "X-Robots-Tag", value: "noindex, nofollow" },
+];
+
 const nextConfig: NextConfig = {
   // Token do mapa do Mapbox no navegador (Story 1.42). Usa NEXT_PUBLIC_MAPBOX_TOKEN se existir e, senão,
   // o MAPBOX_TOKEN que já está no .env (decisão do usuário). O valor vai para o JavaScript da página:
@@ -108,6 +113,17 @@ const nextConfig: NextConfig = {
       {
         source: "/:path*",
         headers: securityHeaders,
+      },
+      {
+        // Telão ao vivo (Story 1.57): o token do link está na URL, então a página
+        // não manda referer para nenhum destino e fica fora dos buscadores.
+        // Vem depois da regra geral para sobrescrever o Referrer-Policy dela.
+        source: "/:locale/telao/:token",
+        headers: telaoHeaders,
+      },
+      {
+        source: "/telao/:token",
+        headers: telaoHeaders,
       },
     ];
   },

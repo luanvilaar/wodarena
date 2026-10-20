@@ -1,0 +1,663 @@
+import { createHash, randomBytes } from 'node:crypto';
+import type { SupabaseClient } from '@supabase/supabase-js';
+
+import { sanitizeNamePII } from '@/lib/bootstrapPayload';
+import {
+  BROADCAST_MODES,
+  buildGroups,
+  nextHeat,
+  resolveBroadcast,
+  sheetGroupKey,
+  type BroadcastMode,
+  type HeatMark,
+  type ModeHeat,
+  type ModeSheet
+} from '@/lib/broadcastMode';
+import type {
+  BroadcastCallLane,
+  BroadcastHeat,
+  BroadcastLiveEntry,
+  BroadcastNext,
+  BroadcastPayload,
+  BroadcastStandingsBoard,
+  BroadcastWorkout
+} from '@/lib/broadcastPayload';
+import { sortDivisions } from '@/lib/divisionOrder';
+import { computeDivisionStandings } from '@/lib/leaderboardStandings';
+import { rankLiveEntries } from '@/lib/liveHeatRanking';
+import { readLiveProgress, type LiveProgress } from '@/lib/liveProgress';
+import { rankWorkoutScores } from '@/lib/scoring';
+import { buildLiveProgress } from '@/lib/serverScoresheets';
+import type { SessionUser } from '@/lib/serverSecurity';
+import { getTeamDisplayName } from '@/lib/teamDisplay';
+import { sortWorkouts } from '@/lib/workoutOrder';
+import { validateWorkoutStructure, type SheetEvent, type WorkoutStructure } from '@/lib/workoutStructure';
+import type { Athlete, Score, Workout, WorkoutType } from '@/types';
+
+// Telão ao vivo no servidor (Stories 1.53 a 1.58). O link do telão é um token
+// aleatório; o banco guarda só o SHA-256 dele. O estado da tela é montado aqui a
+// cada leitura: quem está sendo julgado sai das súmulas (broadcastMode.ts), o
+// progresso de cada raia sai de scoresheets.live_progress (calculado no
+// servidor a cada lote) e o geral da categoria usa a mesma regra do leaderboard
+// do site (leaderboardStandings.ts) e a mesma elegibilidade (leaderboard_entries).
+
+export class BroadcastError extends Error {
+  constructor(message: string, readonly status = 400) {
+    super(message);
+    this.name = 'BroadcastError';
+  }
+}
+
+const UNAVAILABLE_MESSAGE = 'O telão ainda não está disponível neste ambiente. Aplique a migration do telão antes de usar.';
+
+/** Tabela ou coluna do telão ainda não criada (migration 20261020120000 pendente). */
+export const isMissingBroadcastSchema = (error: unknown) => {
+  const details = error && typeof error === 'object' ? error as { code?: unknown; message?: unknown } : null;
+  const code = typeof details?.code === 'string' ? details.code : '';
+  const message = typeof details?.message === 'string' ? details.message : '';
+  return code === '42P01' || code === 'PGRST205' || ((code === '42703' || code === 'PGRST204') && /broadcast|live_progress/.test(message));
+};
+
+const check = <T>(result: { data: T; error: unknown }) => {
+  if (result.error) {
+    if (isMissingBroadcastSchema(result.error)) throw new BroadcastError(UNAVAILABLE_MESSAGE, 503);
+    throw result.error;
+  }
+  return result.data;
+};
+
+const nowIso = () => new Date().toISOString();
+
+// ---------------------------------------------------------------------------
+// Link do telão
+// ---------------------------------------------------------------------------
+
+const TOKEN_PATTERN = /^[A-Za-z0-9_-]{24,64}$/;
+
+export const hashBroadcastToken = (token: string) => createHash('sha256').update(token).digest('hex');
+export const isBroadcastTokenFormat = (token: unknown): token is string => typeof token === 'string' && TOKEN_PATTERN.test(token);
+
+export type BroadcastConfig = {
+  event_id: string;
+  token_hash: string | null;
+  token_created_at: string | null;
+  token_revoked_at: string | null;
+  mode: BroadcastMode;
+  pinned_heat_id: string | null;
+  pinned_division_id: string | null;
+  updated_at: string;
+};
+
+const CONFIG_SELECT = 'event_id, token_hash, token_created_at, token_revoked_at, mode, pinned_heat_id, pinned_division_id, updated_at';
+
+const defaultConfig = (eventId: string): BroadcastConfig => ({
+  event_id: eventId,
+  token_hash: null,
+  token_created_at: null,
+  token_revoked_at: null,
+  mode: 'auto',
+  pinned_heat_id: null,
+  pinned_division_id: null,
+  updated_at: nowIso()
+});
+
+export const readBroadcastConfig = async (supabaseAdmin: SupabaseClient, eventId: string) => {
+  const row = check(await supabaseAdmin.from('event_broadcasts').select(CONFIG_SELECT).eq('event_id', eventId).maybeSingle()) as BroadcastConfig | null;
+  return row ?? defaultConfig(eventId);
+};
+
+/** Configuração do evento dono deste link, ou null (link inexistente ou revogado). */
+export const findBroadcastByToken = async (supabaseAdmin: SupabaseClient, token: unknown) => {
+  if (!isBroadcastTokenFormat(token)) return null;
+  const row = check(await supabaseAdmin
+    .from('event_broadcasts')
+    .select(CONFIG_SELECT)
+    .eq('token_hash', hashBroadcastToken(token))
+    .maybeSingle()) as BroadcastConfig | null;
+  return row && row.token_hash && !row.token_revoked_at ? row : null;
+};
+
+const writeConfig = async (supabaseAdmin: SupabaseClient, actor: SessionUser, eventId: string, patch: Partial<BroadcastConfig>) => {
+  check(await supabaseAdmin.from('event_broadcasts').upsert({
+    event_id: eventId,
+    ...patch,
+    updated_by: actor.id,
+    updated_at: nowIso()
+  }, { onConflict: 'event_id' }));
+  return readBroadcastConfig(supabaseAdmin, eventId);
+};
+
+/** Gera um link novo (o anterior para de funcionar). O token só existe nesta resposta. */
+export const generateBroadcastLink = async (supabaseAdmin: SupabaseClient, actor: SessionUser, eventId: string) => {
+  const token = randomBytes(24).toString('base64url');
+  const createdAt = nowIso();
+  await writeConfig(supabaseAdmin, actor, eventId, { token_hash: hashBroadcastToken(token), token_created_at: createdAt, token_revoked_at: null });
+  return { token, createdAt };
+};
+
+export const revokeBroadcastLink = (supabaseAdmin: SupabaseClient, actor: SessionUser, eventId: string) => (
+  writeConfig(supabaseAdmin, actor, eventId, { token_hash: null, token_revoked_at: nowIso() })
+);
+
+export const setBroadcastMode = async (
+  supabaseAdmin: SupabaseClient,
+  actor: SessionUser,
+  eventId: string,
+  input: { mode?: unknown; heatId?: unknown; divisionId?: unknown }
+) => {
+  const mode = BROADCAST_MODES.find((item) => item === input.mode);
+  if (!mode) throw new BroadcastError('Escolha o que o telão mostra.');
+  const patch: Partial<BroadcastConfig> = { mode, pinned_heat_id: null, pinned_division_id: null };
+  if (mode === 'pin_heat') {
+    if (typeof input.heatId !== 'string' || !input.heatId || input.heatId.length > 200) throw new BroadcastError('Escolha a bateria que fica no telão.');
+    patch.pinned_heat_id = input.heatId;
+  }
+  if (mode === 'pin_standings') {
+    if (typeof input.divisionId !== 'string' || !input.divisionId) throw new BroadcastError('Escolha a categoria do geral.');
+    const division = check(await supabaseAdmin.from('divisions').select('id, event_id').eq('id', input.divisionId).maybeSingle()) as { event_id: string } | null;
+    if (!division || division.event_id !== eventId) throw new BroadcastError('Categoria não encontrada neste evento.', 404);
+    patch.pinned_division_id = input.divisionId;
+  }
+  return writeConfig(supabaseAdmin, actor, eventId, patch);
+};
+
+/**
+ * Marca a bateria (grupo de súmulas) na mesa do gestor: `start` acerta o relógio
+ * do telão no sinal oficial, `finish` força o intervalo com súmula pendente e
+ * `reopen` desfaz o encerramento.
+ */
+export const markBroadcastHeat = async (
+  supabaseAdmin: SupabaseClient,
+  actor: SessionUser,
+  eventId: string,
+  input: { heatId?: unknown; mark?: unknown }
+) => {
+  if (typeof input.heatId !== 'string' || !input.heatId || input.heatId.length > 200) throw new BroadcastError('Informe a bateria.');
+  const at = nowIso();
+  const patch = input.mark === 'start'
+    ? { started_at: at, started_by: actor.id }
+    : input.mark === 'finish'
+      ? { finished_at: at, finished_by: actor.id }
+      : input.mark === 'reopen'
+        ? { finished_at: null, finished_by: null }
+        : null;
+  if (!patch) throw new BroadcastError('Ação desconhecida: use largada, encerrar ou reabrir.');
+  check(await supabaseAdmin.from('broadcast_heat_states').upsert({
+    event_id: eventId,
+    heat_id: input.heatId,
+    ...patch,
+    updated_at: at
+  }, { onConflict: 'event_id,heat_id' }));
+};
+
+// ---------------------------------------------------------------------------
+// Leitura do evento
+// ---------------------------------------------------------------------------
+
+type ScheduleItem = { id?: unknown; kind?: unknown; workoutId?: unknown; heatNumber?: unknown; date?: unknown; time?: unknown; title?: unknown; athleteIds?: unknown; isCallReleased?: unknown };
+
+type EventRow = { id: string; name: string | null; logo_url: string | null; date: string | null; event_type: string | null; event_schedule: unknown };
+type DivisionRow = { id: string; name: string; order_index: number | null };
+type WorkoutRow = { id: string; name: string; code: string | null; order_index: number | null; division_id: string | null; type: WorkoutType; tie_breaker: string | null; time_cap: string | null; submission_closes_at: string | null; structure: unknown };
+type SheetRow = {
+  id: string;
+  workout_id: string;
+  athlete_id: string;
+  division_id: string | null;
+  heat_id: string | null;
+  lane: number | null;
+  status: ModeSheet['status'];
+  official_result: string | null;
+  submitted_at: string | null;
+  updated_at: string;
+  live_progress?: unknown;
+};
+type AthleteRow = { id: string; name: string; box: string | null; division_id: string; is_team: boolean | null };
+type HeatRow = { heat_id: string; started_at: string | null; finished_at: string | null };
+
+const SHEET_SELECT = 'id, workout_id, athlete_id, division_id, heat_id, lane, status, official_result, submitted_at, updated_at, live_progress';
+
+type ScheduleHeat = ModeHeat & { workoutId: string; heatNumber: number | null; date: string; time: string; title: string; athleteIds: string[] };
+
+export const readScheduleHeats = (schedule: unknown): ScheduleHeat[] => {
+  const items = Array.isArray(schedule) ? schedule as ScheduleItem[] : [];
+  return items
+    .filter((item) => item && item.kind === 'heat' && typeof item.id === 'string' && typeof item.workoutId === 'string')
+    .map((item) => ({
+      id: String(item.id),
+      workoutId: String(item.workoutId),
+      heatNumber: typeof item.heatNumber === 'number' ? item.heatNumber : null,
+      date: typeof item.date === 'string' ? item.date : '',
+      time: typeof item.time === 'string' ? item.time : '',
+      title: typeof item.title === 'string' ? item.title.trim() : '',
+      athleteIds: Array.isArray(item.athleteIds) ? item.athleteIds.map((id) => (typeof id === 'string' ? id.trim() : '')) : [],
+      isCallReleased: item.isCallReleased === true,
+      order: 0
+    }))
+    .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`) || (a.heatNumber ?? 0) - (b.heatNumber ?? 0))
+    .map((heat, index) => ({ ...heat, order: index }));
+};
+
+const readStructure = (raw: unknown): WorkoutStructure | null => {
+  if (!raw) return null;
+  const checked = validateWorkoutStructure(raw);
+  return checked.ok ? checked.structure : null;
+};
+
+const unitText = (unit: string) => (unit === 'cal' ? ' cal' : unit === 'm' ? ' m' : '');
+
+/** A prova como o telão mostra: esquema, linhas da chamada e segmentos da barra de progresso. */
+export const describeWorkoutForBoard = (row: Pick<WorkoutRow, 'name' | 'code'>, structure: WorkoutStructure): BroadcastWorkout => {
+  const segments = structure.segments.map((segment) => {
+    const load = segment.load ? ` ${segment.load.value} kg` : '';
+    return { id: segment.id, name: segment.name, reps: segment.reps, unit: segment.unit, label: `${segment.reps}${unitText(segment.unit)} ${segment.name}${load}` };
+  });
+  const generator = structure.generator;
+  const scheme = generator && generator.reps.length > 1
+    ? (generator.kind === 'fixed' ? `${generator.reps.length} rounds` : generator.reps.join('-'))
+    : null;
+  const lines = structure.format === 'max_load'
+    ? (structure.maxLoad?.lifts ?? []).map((lift) => (lift.reps > 1 ? `${lift.name} · ${lift.reps}RM` : lift.name))
+    : scheme
+      ? [...new Set(structure.segments.map((segment) => `${segment.name}${segment.load ? ` ${segment.load.value} kg` : ''}`))]
+      : segments.map((segment) => segment.label);
+  return {
+    name: row.name,
+    code: row.code ?? '',
+    format: structure.format,
+    timeCapSeconds: structure.timeCapSeconds,
+    scheme,
+    lines: lines.length > 8 ? [...lines.slice(0, 7), `+ ${lines.length - 7} etapas`] : lines,
+    segments,
+    lifts: (structure.maxLoad?.lifts ?? []).map((lift) => ({ id: lift.id, name: lift.name })),
+    totalReps: structure.totalReps,
+    scoreDisplay: structure.scoreDisplay
+  };
+};
+
+const displayName = (athlete: AthleteRow | undefined) => (
+  athlete ? getTeamDisplayName({ name: sanitizeNamePII(athlete.name), isTeam: Boolean(athlete.is_team) }) : 'Atleta'
+);
+
+const minIso = (values: (string | null | undefined)[]) => {
+  const times = values.map((value) => (value ? Date.parse(value) : Number.NaN)).filter(Number.isFinite);
+  return times.length ? new Date(Math.min(...times)).toISOString() : null;
+};
+
+const fingerprint = (value: unknown) => createHash('sha1').update(JSON.stringify(value)).digest('base64url').slice(0, 16);
+
+const readSheets = async (supabaseAdmin: SupabaseClient, eventId: string) => (
+  (check(await supabaseAdmin.from('scoresheets').select(SHEET_SELECT).eq('event_id', eventId)) || []) as SheetRow[]
+);
+
+/** Progresso das súmulas do grupo; as que ainda não têm o resumo gravado são calculadas do log. */
+const readGroupProgress = async (supabaseAdmin: SupabaseClient, sheets: SheetRow[], structure: WorkoutStructure) => {
+  const progress = new Map<string, LiveProgress | null>();
+  const missing: string[] = [];
+  for (const sheet of sheets) {
+    const stored = readLiveProgress(sheet.live_progress);
+    progress.set(sheet.id, stored);
+    if (!stored) missing.push(sheet.id);
+  }
+  if (missing.length > 0) {
+    const rows = (check(await supabaseAdmin
+      .from('scoresheet_events')
+      .select('sheet_id, seq, client_event_id, event, recorded_at')
+      .in('sheet_id', missing)
+      .order('seq', { ascending: true })) || []) as { sheet_id: string; seq: number; client_event_id: string; event: SheetEvent; recorded_at: string | null }[];
+    for (const sheetId of missing) {
+      const events = rows.filter((row) => row.sheet_id === sheetId).sort((a, b) => a.seq - b.seq);
+      progress.set(sheetId, events.length > 0 ? buildLiveProgress(structure, events) : null);
+    }
+  }
+  return progress;
+};
+
+// ---------------------------------------------------------------------------
+// Geral da categoria (intervalo)
+// ---------------------------------------------------------------------------
+
+const toWorkout = (row: WorkoutRow): Workout => ({
+  id: row.id,
+  name: row.name,
+  description: '',
+  type: row.type,
+  timeCap: row.time_cap ?? undefined,
+  code: row.code ?? '',
+  orderIndex: Number(row.order_index ?? 0),
+  divisionId: row.division_id ?? undefined,
+  tieBreaker: row.tie_breaker ?? undefined,
+  submissionClosesAt: row.submission_closes_at ?? undefined
+});
+
+type ScoreRow = { athlete_id: string; workout_id: string; result: string; value: number; rank: number | null; points: number | null; splits: Record<string, string> | null; result_status: string | null };
+
+const toScore = (row: ScoreRow): Score => ({
+  athleteId: row.athlete_id,
+  workoutId: row.workout_id,
+  result: row.result,
+  value: Number(row.value),
+  rank: row.rank ?? undefined,
+  points: row.points ?? undefined,
+  splits: row.splits || {},
+  resultStatus: (row.result_status || undefined) as Score['resultStatus']
+});
+
+const MAX_COLUMNS = 4;
+
+const buildStandingsBoards = async (
+  supabaseAdmin: SupabaseClient,
+  event: EventRow,
+  divisions: DivisionRow[],
+  workoutRows: WorkoutRow[],
+  divisionIds: string[],
+  fresh: { workoutId: string; athleteIds: Set<string> } | null
+): Promise<BroadcastStandingsBoard[]> => {
+  if (divisionIds.length === 0) return [];
+  const workouts = sortWorkouts(workoutRows.map(toWorkout));
+  const workoutIds = workouts.map((workout) => workout.id);
+  const [athleteRows, scoreRows, entryRows] = await Promise.all([
+    supabaseAdmin.from('athletes').select('id, name, box, division_id, is_team').in('division_id', divisionIds),
+    workoutIds.length > 0
+      ? supabaseAdmin.from('scores').select('athlete_id, workout_id, result, value, rank, points, splits, result_status').in('workout_id', workoutIds)
+      : Promise.resolve({ data: [], error: null }),
+    supabaseAdmin.from('leaderboard_entries').select('athlete_id, division_id').eq('event_id', event.id)
+  ]);
+  const athletes = (check(athleteRows) || []) as AthleteRow[];
+  const scores = ((check(scoreRows) || []) as ScoreRow[]).map(toScore);
+  const entries = (check(entryRows) || []) as { athlete_id: string; division_id: string }[];
+  const eventInput = { date: event.date ?? '', eventType: 'functional_fitness' as const, workouts };
+
+  const boards: BroadcastStandingsBoard[] = [];
+  for (const division of sortDivisions(divisions.filter((item) => divisionIds.includes(item.id)).map((item) => ({ ...item, orderIndex: item.order_index })))) {
+    const eligible = new Set(entries.filter((entry) => entry.division_id === division.id).map((entry) => entry.athlete_id));
+    const divisionAthletes: Athlete[] = athletes
+      .filter((athlete) => athlete.division_id === division.id && eligible.has(athlete.id))
+      .map((athlete) => ({ id: athlete.id, name: displayName(athlete), box: athlete.box ?? '', country: '', divisionId: athlete.division_id }));
+    const after = computeDivisionStandings({ event: eventInput, divisionId: division.id, divisionAthletes, scores });
+
+    // "Antes" desta bateria: sem os resultados recém-publicados, com a prova reclassificada.
+    let before = after;
+    const freshInDivision = fresh ? divisionAthletes.filter((athlete) => fresh.athleteIds.has(athlete.id)).map((athlete) => athlete.id) : [];
+    if (fresh && freshInDivision.length > 0) {
+      const workout = workouts.find((item) => item.id === fresh.workoutId);
+      const divisionSize = athletes.filter((athlete) => athlete.division_id === division.id).length;
+      const remaining = scores.filter((score) => score.workoutId === fresh.workoutId && !freshInDivision.includes(score.athleteId));
+      const reranked = workout ? rankWorkoutScores(workout.type, workout.tieBreaker || '', remaining, divisionSize) : remaining;
+      const beforeScores = [...scores.filter((score) => score.workoutId !== fresh.workoutId), ...reranked];
+      before = computeDivisionStandings({ event: eventInput, divisionId: division.id, divisionAthletes, scores: beforeScores });
+    }
+    const beforeRank = new Map(before.map((item) => [item.athlete.id, item.rank]));
+
+    const divisionWorkouts = workouts.filter((workout) => !workout.divisionId || workout.divisionId === division.id);
+    const scored = divisionWorkouts.filter((workout) => after.some((item) => {
+      const score = item.scores[workout.id];
+      return score && score.result !== '-' && score.result !== '';
+    }));
+    const freshIndex = fresh ? scored.findIndex((workout) => workout.id === fresh.workoutId) : -1;
+    const end = freshIndex >= 0 ? freshIndex + 1 : scored.length;
+    const columns = scored.slice(Math.max(0, end - MAX_COLUMNS), end);
+
+    boards.push({
+      divisionName: division.name,
+      athleteCount: divisionAthletes.length,
+      columns: columns.map((workout) => ({ label: workout.code || workout.name, fresh: workout.id === fresh?.workoutId })),
+      rows: after.map((item) => ({
+        position: item.rank,
+        delta: (beforeRank.get(item.athlete.id) ?? item.rank) - item.rank,
+        name: item.athlete.name,
+        box: item.athlete.box,
+        fresh: freshInDivision.includes(item.athlete.id),
+        cells: columns.map((workout) => {
+          const score = item.scores[workout.id];
+          return score && score.result !== '-' && score.result !== '' ? { rank: score.rank ?? 0, result: score.result } : null;
+        }),
+        points: item.totalPoints
+      }))
+    });
+  }
+  return boards;
+};
+
+// ---------------------------------------------------------------------------
+// Estado do telão
+// ---------------------------------------------------------------------------
+
+const APP_VERSION = process.env.VERCEL_GIT_COMMIT_SHA || process.env.VERCEL_DEPLOYMENT_ID || '';
+
+export const buildBroadcastState = async (
+  supabaseAdmin: SupabaseClient,
+  eventId: string,
+  config: BroadcastConfig,
+  nowMs = Date.now()
+): Promise<BroadcastPayload> => {
+  const eventRow = check(await supabaseAdmin
+    .from('events')
+    .select('id, name, logo_url, date, event_type, event_schedule')
+    .eq('id', eventId)
+    .maybeSingle()) as EventRow | null;
+  if (!eventRow) throw new BroadcastError('Evento não encontrado.', 404);
+  if (eventRow.event_type && eventRow.event_type !== 'functional_fitness') {
+    throw new BroadcastError('O telão ao vivo é exclusivo de eventos Functional Fitness presenciais.', 400);
+  }
+
+  const [divisionResult, workoutResult, sheets, markResult] = await Promise.all([
+    supabaseAdmin.from('divisions').select('id, name, order_index').eq('event_id', eventId),
+    supabaseAdmin.from('workouts').select('id, name, code, order_index, division_id, type, tie_breaker, time_cap, submission_closes_at, structure').eq('event_id', eventId),
+    readSheets(supabaseAdmin, eventId),
+    supabaseAdmin.from('broadcast_heat_states').select('heat_id, started_at, finished_at').eq('event_id', eventId)
+  ]);
+  const divisions = (check(divisionResult) || []) as DivisionRow[];
+  const workoutRows = (check(workoutResult) || []) as WorkoutRow[];
+  const marks: HeatMark[] = ((check(markResult) || []) as HeatRow[]).map((row) => ({ heatId: row.heat_id, startedAt: row.started_at, finishedAt: row.finished_at }));
+  const heats = readScheduleHeats(eventRow.event_schedule);
+
+  const modeSheets = sheets.map((sheet) => ({
+    sheet,
+    mode: {
+      heatId: sheet.heat_id,
+      workoutId: sheet.workout_id,
+      divisionId: sheet.division_id,
+      status: sheet.status,
+      seq: readLiveProgress(sheet.live_progress)?.seq ?? 0,
+      updatedAt: sheet.updated_at,
+      submittedAt: sheet.submitted_at
+    } satisfies ModeSheet
+  }));
+  const resolution = resolveBroadcast({
+    mode: config.mode,
+    pinnedHeatId: config.pinned_heat_id,
+    pinnedDivisionId: config.pinned_division_id,
+    heats,
+    sheets: modeSheets.map((item) => item.mode),
+    marks,
+    nowMs
+  });
+
+  const divisionName = new Map(divisions.map((division) => [division.id, division.name]));
+  const workoutById = new Map(workoutRows.map((row) => [row.id, row]));
+  const heatById = new Map(heats.map((heat) => [heat.id, heat]));
+  const groupSheets = (key: string) => modeSheets.filter((item) => item.sheet.status !== 'cancelled' && sheetGroupKey(item.mode) === key).map((item) => item.sheet);
+
+  const athleteIds = new Set<string>();
+  const wantedHeat = resolution.screen === 'live' || resolution.screen === 'call' ? resolution.groupKey : null;
+  if (wantedHeat) {
+    groupSheets(wantedHeat).forEach((sheet) => athleteIds.add(sheet.athlete_id));
+    heatById.get(wantedHeat)?.athleteIds.forEach((id) => id && athleteIds.add(id));
+  }
+  const upcoming = heats.filter((heat) => !modeSheets.some((item) => item.sheet.heat_id === heat.id));
+  upcoming.slice(0, 4).forEach((heat) => heat.athleteIds.forEach((id) => id && athleteIds.add(id)));
+  const athletes = athleteIds.size > 0
+    ? (check(await supabaseAdmin.from('athletes').select('id, name, box, division_id, is_team').in('id', [...athleteIds])) || []) as AthleteRow[]
+    : [];
+  const athleteById = new Map(athletes.map((athlete) => [athlete.id, athlete]));
+
+  const heatDivisionNames = (heat: ScheduleHeat | undefined, sheetsOfGroup: SheetRow[]) => {
+    const ids = new Set<string>();
+    sheetsOfGroup.forEach((sheet) => sheet.division_id && ids.add(sheet.division_id));
+    heat?.athleteIds.forEach((id) => { const athlete = athleteById.get(id); if (athlete) ids.add(athlete.division_id); });
+    const workout = heat ? workoutById.get(heat.workoutId) : undefined;
+    if (ids.size === 0 && workout?.division_id) ids.add(workout.division_id);
+    return sortDivisions([...ids].map((id) => ({ id, name: divisionName.get(id) ?? '', orderIndex: divisions.find((item) => item.id === id)?.order_index ?? null })))
+      .map((item) => item.name)
+      .filter(Boolean);
+  };
+
+  const describeHeat = (key: string): BroadcastHeat => {
+    const heat = heatById.get(key);
+    const sheetsOfGroup = groupSheets(key);
+    const workoutId = heat?.workoutId ?? sheetsOfGroup[0]?.workout_id ?? '';
+    const workoutRow = workoutById.get(workoutId);
+    const structure = readStructure(workoutRow?.structure);
+    const names = heatDivisionNames(heat, sheetsOfGroup);
+    const sameWorkout = heat ? heats.filter((item) => item.workoutId === heat.workoutId) : [];
+    return {
+      key,
+      title: heat ? (heat.heatNumber ? `Bateria ${heat.heatNumber}` : heat.title || 'Bateria') : names.join(' · ') || 'Bateria',
+      heatNumber: heat?.heatNumber ?? null,
+      heatCount: sameWorkout.length > 0 ? sameWorkout.length : null,
+      divisionNames: names,
+      time: heat?.time ?? '',
+      workout: workoutRow && structure ? describeWorkoutForBoard(workoutRow, structure) : null
+    };
+  };
+
+  const toNext = (heat: ScheduleHeat): BroadcastNext => ({
+    title: heat.heatNumber ? `Bateria ${heat.heatNumber}` : heat.title || 'Bateria',
+    divisionNames: heatDivisionNames(heat, []),
+    time: heat.time,
+    workoutName: workoutById.get(heat.workoutId)?.name ?? ''
+  });
+  const groups = buildGroups({ sheets: modeSheets.map((item) => item.mode), marks, nowMs });
+  const following = nextHeat(heats, groups);
+
+  const payload: Omit<BroadcastPayload, 'version' | 'serverTime'> = {
+    appVersion: APP_VERSION,
+    event: { name: eventRow.name ?? '', logoUrl: eventRow.logo_url ?? '' },
+    mode: config.mode,
+    screen: resolution.screen,
+    live: null,
+    call: null,
+    interval: null,
+    standby: null,
+    next: following ? toNext(following) : null
+  };
+
+  if (resolution.screen === 'live') {
+    const heat = describeHeat(resolution.groupKey);
+    const sheetsOfGroup = groupSheets(resolution.groupKey);
+    const structure = readStructure(workoutById.get(sheetsOfGroup[0]?.workout_id ?? '')?.structure);
+    const progress = structure ? await readGroupProgress(supabaseAdmin, sheetsOfGroup, structure) : new Map<string, LiveProgress | null>();
+    const scheduleLane = (athleteId: string) => {
+      const index = heatById.get(resolution.groupKey)?.athleteIds.indexOf(athleteId) ?? -1;
+      return index >= 0 ? index + 1 : null;
+    };
+    const ranked = rankLiveEntries(structure?.format ?? 'for_time', sheetsOfGroup.map((sheet) => ({ sheet, lane: sheet.lane ?? scheduleLane(sheet.athlete_id), progress: progress.get(sheet.id) ?? null })));
+    const mark = marks.find((item) => item.heatId === resolution.groupKey);
+    const entries: BroadcastLiveEntry[] = ranked.map(({ sheet, lane, progress: item, position }) => {
+      const athlete = athleteById.get(sheet.athlete_id);
+      return {
+        key: sheet.id,
+        position,
+        lane,
+        name: displayName(athlete),
+        box: athlete?.box ?? '',
+        divisionName: divisionName.get(sheet.division_id ?? '') ?? '',
+        status: sheet.status === 'submitted' || sheet.status === 'returned'
+          ? sheet.status
+          : !item || item.seq === 0 ? 'waiting' : 'in_progress',
+        repsDone: item?.repsDone ?? 0,
+        roundsCompleted: item?.roundsCompleted ?? 0,
+        segments: item?.segments ?? [],
+        currentSegmentId: item?.currentSegmentId ?? null,
+        completedAt: item?.completedAt ?? null,
+        scoreKg: item?.scoreKg ?? null,
+        officialResult: sheet.status === 'submitted' ? sheet.official_result : null
+      };
+    });
+    const group = groups.find((item) => item.key === resolution.groupKey);
+    payload.live = {
+      heat,
+      startedAt: mark?.startedAt ?? minIso(sheetsOfGroup.map((sheet) => progress.get(sheet.id)?.clockStartAt)),
+      finished: Boolean(group && !group.live),
+      entries
+    };
+  }
+
+  if (resolution.screen === 'call') {
+    const heat = describeHeat(resolution.groupKey);
+    const scheduled = heatById.get(resolution.groupKey);
+    const sheetsOfGroup = groupSheets(resolution.groupKey);
+    const opened = new Set(sheetsOfGroup.map((sheet) => sheet.athlete_id));
+    const lanes: BroadcastCallLane[] = [];
+    const seen = new Set<string>();
+    scheduled?.athleteIds.forEach((athleteId, index) => {
+      const athlete = athleteById.get(athleteId);
+      if (!athleteId || !athlete) return;
+      seen.add(athleteId);
+      const sheet = sheetsOfGroup.find((item) => item.athlete_id === athleteId);
+      lanes.push({ lane: sheet?.lane ?? index + 1, name: displayName(athlete), box: athlete.box ?? '', divisionName: divisionName.get(athlete.division_id) ?? '', sheetOpened: opened.has(athleteId) });
+    });
+    for (const sheet of sheetsOfGroup) {
+      if (seen.has(sheet.athlete_id)) continue;
+      const athlete = athleteById.get(sheet.athlete_id);
+      lanes.push({ lane: sheet.lane, name: displayName(athlete), box: athlete?.box ?? '', divisionName: divisionName.get(sheet.division_id ?? '') ?? '', sheetOpened: true });
+    }
+    lanes.sort((a, b) => (a.lane ?? 999) - (b.lane ?? 999));
+    payload.call = { heat, lanes };
+  }
+
+  if (resolution.screen === 'interval') {
+    const sheetsOfGroup = resolution.groupKey ? groupSheets(resolution.groupKey) : [];
+    const submitted = sheetsOfGroup.filter((sheet) => sheet.status === 'submitted');
+    const fresh = submitted.length > 0
+      ? { workoutId: submitted[0].workout_id, athleteIds: new Set(submitted.map((sheet) => sheet.athlete_id)) }
+      : null;
+    const boards = await buildStandingsBoards(supabaseAdmin, eventRow, divisions, workoutRows, resolution.divisionIds, fresh);
+    const freshWorkout = fresh ? workoutById.get(fresh.workoutId) : undefined;
+    payload.interval = { boards, afterTitle: freshWorkout ? `Depois da ${freshWorkout.code || freshWorkout.name}` : '' };
+  }
+
+  if (resolution.screen === 'standby') {
+    const touched = new Set(groups.map((group) => group.key));
+    payload.standby = { upcoming: heats.filter((heat) => !touched.has(heat.id) && heat.order >= (following?.order ?? 0)).slice(0, 4).map(toNext) };
+  }
+
+  return { ...payload, version: fingerprint(payload), serverTime: new Date(nowMs).toISOString() };
+};
+
+// ---------------------------------------------------------------------------
+// Mesa de controle (aba Telão do painel)
+// ---------------------------------------------------------------------------
+
+/** O que a aba Telão mostra: link (sem o token), modo, baterias, categorias, marcações e a prévia do telão. */
+export const readBroadcastControl = async (supabaseAdmin: SupabaseClient, eventId: string, nowMs = Date.now()) => {
+  const config = await readBroadcastConfig(supabaseAdmin, eventId);
+  const [eventRow, divisionRows, workoutRows, markRows] = await Promise.all([
+    supabaseAdmin.from('events').select('event_schedule').eq('id', eventId).maybeSingle(),
+    supabaseAdmin.from('divisions').select('id, name, order_index').eq('event_id', eventId),
+    supabaseAdmin.from('workouts').select('id, name, code').eq('event_id', eventId),
+    supabaseAdmin.from('broadcast_heat_states').select('heat_id, started_at, finished_at').eq('event_id', eventId)
+  ]);
+  const schedule = (check(eventRow) as { event_schedule?: unknown } | null)?.event_schedule;
+  const workouts = new Map(((check(workoutRows) || []) as { id: string; name: string; code: string | null }[]).map((row) => [row.id, row]));
+  const preview = await buildBroadcastState(supabaseAdmin, eventId, config, nowMs);
+  return {
+    link: {
+      active: Boolean(config.token_hash && !config.token_revoked_at),
+      createdAt: config.token_hash ? config.token_created_at : null
+    },
+    mode: config.mode,
+    pinnedHeatId: config.pinned_heat_id,
+    pinnedDivisionId: config.pinned_division_id,
+    heats: readScheduleHeats(schedule).map((heat) => {
+      const workout = workouts.get(heat.workoutId);
+      const label = heat.heatNumber ? `Bateria ${heat.heatNumber}` : heat.title || 'Bateria';
+      return { id: heat.id, label: [label, workout?.code || workout?.name, heat.time].filter(Boolean).join(' · ') };
+    }),
+    divisions: sortDivisions(((check(divisionRows) || []) as DivisionRow[]).map((row) => ({ id: row.id, name: row.name, orderIndex: row.order_index })))
+      .map((row) => ({ id: row.id, name: row.name })),
+    marks: ((check(markRows) || []) as HeatRow[]).map((row) => ({ heatId: row.heat_id, startedAt: row.started_at, finishedAt: row.finished_at })),
+    preview
+  };
+};

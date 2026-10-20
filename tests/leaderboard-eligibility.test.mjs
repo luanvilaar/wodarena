@@ -17,7 +17,7 @@ const sliceBetween = (source, startMarker, endMarker) => {
 const getLeaderboardEligibility = sliceBetween(
   appContext,
   'const getLeaderboard = (eventId: string, divisionId: string)',
-  "if (event.eventType === 'fitness_racing')"
+  'return computeDivisionStandings('
 );
 
 const confirmManualPaymentCase = sliceBetween(

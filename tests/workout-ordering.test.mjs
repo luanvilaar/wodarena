@@ -12,6 +12,8 @@ const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
 const workoutOrder = read('../src/lib/workoutOrder.ts');
 const context = read('../src/context/AppContext.tsx');
+// Classificação geral (Story 1.55): saiu do AppContext para uma função pura compartilhada com o telão.
+const standings = read('../src/lib/leaderboardStandings.ts');
 const admin = read('../src/app/admin/page.tsx');
 const leaderboard = read('../src/components/Leaderboard.tsx');
 const qualifierResults = read('../src/components/QualifierResultsManager.tsx');
@@ -110,7 +112,8 @@ test('módulo de ordenação é puro e sem imports de runtime', () => {
 });
 
 test('mapper do AppContext entrega event.workouts já ordenado', () => {
-  assert.match(context, /import \{ FIRST_WORKOUT_TIEBREAK_CUTOFF, getTiebreakFirstWorkout, sortWorkouts \} from '@\/lib\/workoutOrder';/);
+  assert.match(context, /import \{ sortWorkouts \} from '@\/lib\/workoutOrder';/);
+  assert.match(standings, /import \{ FIRST_WORKOUT_TIEBREAK_CUTOFF, getTiebreakFirstWorkout \} from '@\/lib\/workoutOrder';/);
   assert.match(context, /const evWods: Workout\[\] = sortWorkouts\(dbWorkouts\s*\.filter\(w => w\.event_id === evt\.id\)/);
 });
 
@@ -166,14 +169,16 @@ test('telas usam um único comparador de provas', () => {
 });
 
 test('desempate "WOD 1" usa a primeira prova da categoria, calculada uma vez', () => {
-  const leaderboardStart = context.indexOf('// 2. Mapear workouts do evento (Functional Fitness)');
-  const leaderboardEnd = context.indexOf('// Atualizar configurações de bilheteria e formato do evento');
-  const functionalFitness = context.slice(leaderboardStart, leaderboardEnd);
+  const leaderboardStart = standings.indexOf('// 2. Mapear workouts do evento (Functional Fitness)');
+  const leaderboardEnd = standings.length;
+  const functionalFitness = standings.slice(leaderboardStart, leaderboardEnd);
   assert.ok(leaderboardStart > 0 && leaderboardEnd > leaderboardStart);
 
   assert.match(functionalFitness, /const usesLegacyFirstWorkoutTiebreak = hasEventDatePassed\(event\.date, FIRST_WORKOUT_TIEBREAK_CUTOFF\);/);
   assert.match(functionalFitness, /const firstWorkout = getTiebreakFirstWorkout\(event\.workouts, divisionWorkouts, usesLegacyFirstWorkoutTiebreak\);/);
-  assert.equal(context.match(/const firstWorkout =/g)?.length, 1);
+  assert.equal(standings.match(/const firstWorkout =/g)?.length, 1);
+  assert.doesNotMatch(context, /const firstWorkout =/);
+  assert.doesNotMatch(standings, /\[\.\.\.event\.workouts\]\.sort\(/);
   assert.doesNotMatch(context, /\[\.\.\.event\.workouts\]\.sort\(/);
 
   // O mesmo workout serve à ordenação e à atribuição do rank.
@@ -224,8 +229,8 @@ test('corte do desempate: encerrados antes de 07/10/2026 mantêm o critério ant
 });
 
 test('Fitness Racing mantém o leaderboard pela prova TOTAL, antes do desempate "WOD 1"', () => {
-  const racingBranch = context.indexOf("if (event.eventType === 'fitness_racing') {\n      const totalWorkout = event.workouts.find(w => w.divisionId === divisionId && w.code === 'TOTAL');");
+  const racingBranch = standings.indexOf("if (event.eventType === 'fitness_racing') {\n    const totalWorkout = event.workouts.find(w => w.divisionId === divisionId && w.code === 'TOTAL');");
   assert.ok(racingBranch > 0);
-  assert.ok(racingBranch < context.indexOf('const firstWorkout = getTiebreakFirstWorkout('));
-  assert.match(context, /const sortedList = \[\.\.\.list\]\.sort\(\(a, b\) => a\.totalPoints - b\.totalPoints\);/);
+  assert.ok(racingBranch < standings.indexOf('const firstWorkout = getTiebreakFirstWorkout('));
+  assert.match(standings, /const sortedList = \[\.\.\.list\]\.sort\(\(a, b\) => a\.totalPoints - b\.totalPoints\);/);
 });

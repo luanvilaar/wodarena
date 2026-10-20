@@ -4,6 +4,13 @@ import test from 'node:test';
 
 const appContext = readFileSync(new URL('../src/context/AppContext.tsx', import.meta.url), 'utf8');
 const scoring = readFileSync(new URL('../src/lib/scoring.ts', import.meta.url), 'utf8');
+// A classificação geral saiu do AppContext para uma função pura (Story 1.55), usada pelo site e pelo telão.
+const standings = readFileSync(new URL('../src/lib/leaderboardStandings.ts', import.meta.url), 'utf8');
+
+test('AppContext delegates the overall standings to the shared pure function', () => {
+  assert.match(appContext, /import \{ computeDivisionStandings \} from '@\/lib\/leaderboardStandings';/);
+  assert.match(appContext, /return computeDivisionStandings\(\{ event, divisionId, divisionAthletes, scores \}\);/);
+});
 
 test('implements low-point scoring logic by ranking', () => {
   // O valor dos pontos na prova é igual ao rank
@@ -13,29 +20,29 @@ test('implements low-point scoring logic by ranking', () => {
 
 test('presents tie-breaking cascade logic for overall leaderboard', () => {
   // Confronto direto e WOD 1
-  assert.match(appContext, /getDirectWins/);
-  assert.match(appContext, /firstWorkout/);
-  assert.match(appContext, /Confronto Direto/);
+  assert.match(standings, /getDirectWins/);
+  assert.match(standings, /firstWorkout/);
+  assert.match(standings, /Confronto Direto/);
 });
 
 test('does not auto-penalize unscored workouts while the event is in progress', () => {
   // Functional Fitness: provas ainda sem resultado NÃO geram penalidade automática
   // nem score falso — o evento segue em andamento. Ausência real é tratada pelo
   // organizador via lançamento manual da pontuação máxima (entra como score normal).
-  assert.doesNotMatch(appContext, /penaltyPoints = divisionAthletes\.length \+ 1/);
+  assert.doesNotMatch(standings, /penaltyPoints = divisionAthletes\.length \+ 1/);
   // O total soma apenas provas com resultado válido lançado
-  assert.match(appContext, /score && score\.result !== '-' && score\.result !== ''/);
+  assert.match(standings, /score && score\.result !== '-' && score\.result !== ''/);
 });
 
 test('ranks qualifier athletes without a result last while the submission window is open', () => {
   // Prova pendente com janela aberta mostra 0 pontos, mas é o pior resultado possível:
   // a ordenação compara antes a quantidade de provas pendentes e só depois os pontos.
-  assert.match(appContext, /if \(isQualifier && !closed\) pendingCount \+= 1;/);
-  assert.match(appContext, /const pendingDiff = getPendingDiff\(a, b\);\s*if \(pendingDiff !== 0\) return pendingDiff;\s*if \(a\.totalPoints !== b\.totalPoints\)/);
-  assert.match(appContext, /let isEqual = getPendingDiff\(item, prevItem\) === 0 && item\.totalPoints === prevItem\.totalPoints;/);
+  assert.match(standings, /if \(isQualifier && !closed\) pendingCount \+= 1;/);
+  assert.match(standings, /const pendingDiff = getPendingDiff\(a, b\);\s*if \(pendingDiff !== 0\) return pendingDiff;\s*if \(a\.totalPoints !== b\.totalPoints\)/);
+  assert.match(standings, /let isEqual = getPendingDiff\(item, prevItem\) === 0 && item\.totalPoints === prevItem\.totalPoints;/);
   // Janela encerrada: ausência recebe a maior pontuação em jogo (última colocação da divisão).
-  assert.match(appContext, /const qualifierAbsencePoints = divisionAthletes\.length;/);
-  assert.match(appContext, /const absencePoints = isQualifier && closed \? qualifierAbsencePoints : 0;/);
+  assert.match(standings, /const qualifierAbsencePoints = divisionAthletes\.length;/);
+  assert.match(standings, /const absencePoints = isQualifier && closed \? qualifierAbsencePoints : 0;/);
 });
 
 test('keeps qualifier scores restricted to judge review instead of manual bulk launch', () => {

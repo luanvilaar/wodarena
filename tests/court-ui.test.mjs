@@ -130,7 +130,7 @@ test('súmula na quadra: envia só com tudo salvo, confirma antes, limpa o apare
 test('aba Súmulas e Judges: só em evento presencial, com revisão, histórico, judges e scores do servidor', () => {
   const admin = read('../src/app/admin/page.tsx');
   assert.match(admin, /import \{ ScoresheetsPanel \} from '@\/components\/admin\/ScoresheetsPanel';/);
-  assert.equal((admin.match(/\? \[\{ id: 'sheets', label: 'Súmulas e Judges' \}\]/g) || []).length, 2, 'celular e desktop');
+  assert.equal((admin.match(/\? \[\{ id: 'sheets', label: 'Súmulas e Judges' \}, \{ id: 'broadcast', label: 'Telão' \}\]/g) || []).length, 2, 'celular e desktop');
   assert.match(admin, /\{activeEventTab === 'sheets' && \(selectedEventToManage\.eventType \|\| 'functional_fitness'\) === 'functional_fitness' && <ScoresheetsPanel event=\{selectedEventToManage\} \/>\}/);
 
   const panel = read('../src/components/admin/ScoresheetsPanel.tsx');
