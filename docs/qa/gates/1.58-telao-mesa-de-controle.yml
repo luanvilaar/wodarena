@@ -1,0 +1,78 @@
+schema: 1
+story: '1.58'
+story_title: 'Telão: Mesa de Controle'
+gate: PASS
+status_reason: 'Rodada 3: REQ-003 resolvido na tela ("Encerrar" só ao vivo), no servidor (finish em grupo sem registro dá 409 sem gravar) e na Largada (limpa o encerramento), tudo testado pelas rotas. A recusa não barra encerramento legítimo: ao vivo e finish usam a mesma condição, seq > 0. TEST-002 resolvido. Só achados LOW.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-10-21T18:00:00-03:00'
+expires: '2026-11-04T18:00:00-03:00'
+quality_score: 90
+
+top_issues:
+  - id: REQ-004
+    severity: low
+    finding: 'Com uma bateria encerrada fixada, a mesa mostra "Marcar largada de novo"; clicar limpa finished_at e reabre a bateria sem avisar. No automático ela volta ao vivo se ainda houver súmula em andamento recente. A mensagem fala só do relógio.'
+    refs: ['src/components/admin/BroadcastPanel.tsx:214-215', 'src/lib/serverBroadcast.ts:189-190']
+    suggested_owner: dev
+  - id: PERF-003
+    severity: low
+    finding: 'O finish lê todas as súmulas do evento, paginadas, para conferir um grupo só. O custo é baixo (ação da mesa, 60/min).'
+    refs: ['src/lib/serverBroadcast.ts:200']
+    suggested_owner: dev
+  - id: REQ-001
+    severity: low
+    finding: 'pin_heat e mark_heat aceitam heatId fora do cronograma. Ficou fora por decisão do usuário.'
+    refs: ['src/lib/serverBroadcast.ts']
+    suggested_owner: dev
+  - id: REQ-002
+    severity: low
+    finding: 'O plano ainda diz que Largada e Encerrar "ficam no histórico", mas o histórico ficou fora por decisão do usuário.'
+    refs: ['docs/PLANO-TELAO-LEADERBOARD-AO-VIVO.md:96']
+    suggested_owner: po
+waiver: { active: false }
+
+evidence:
+  tests_reviewed: 9
+  risks_identified: 4
+  trace:
+    ac_covered: [1, 2, 4, 5]
+    ac_gaps: [3]
+  notes: 'AC3 (tela do painel) só tem conferência no código; a aba não foi aberta em tela. Testes de rota novos: finish recusado na Chamada (409, nada gravado) e depois ao vivo com 12 e 9 registros; Largada limpando a marca; finish com { seq } parcial; Qualifier mantendo a mensagem da súmula em /api/sheets.'
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: 'Sem mudança de acesso. O 409 não expõe dado.'
+  performance:
+    status: PASS
+    notes: 'PERF-003 é LOW.'
+  reliability:
+    status: PASS
+    notes: 'Encerrar na Chamada não é mais possível (tela e servidor). A Largada desfaz uma marca antiga. Fica o REQ-004 (LOW).'
+  maintainability:
+    status: PASS
+    notes: 'A recusa usa sheetGroupKey e a mesma regra de toque do motor.'
+
+recommendations:
+  immediate: []
+  future:
+    - action: 'Na Largada de uma bateria com finishedAt, avisar que ela foi reaberta (ou pedir confirmação)'
+      refs: ['src/components/admin/BroadcastPanel.tsx']
+    - action: 'No finish, ler só as súmulas do grupo (eq heat_id, ou workout e categoria no grupo sem bateria)'
+      refs: ['src/lib/serverBroadcast.ts']
+    - action: 'Validar heatId contra o cronograma; alinhar o plano sobre o histórico'
+      refs: ['src/lib/serverBroadcast.ts', 'docs/PLANO-TELAO-LEADERBOARD-AO-VIVO.md']
+
+history:
+  - date: '2026-10-20'
+    gate: PASS
+    quality_score: 90
+    issues: 'REQ-001, REQ-002 e TEST-001 (low)'
+  - date: '2026-10-21'
+    gate: CONCERNS
+    quality_score: 80
+    issues: 'Novos REQ-003 (medium) e TEST-002 (low)'
+  - date: '2026-10-21 (rodada 3)'
+    gate: PASS
+    quality_score: 90
+    issues: 'REQ-003 e TEST-002 resolvidos; novos REQ-004 e PERF-003 (low); REQ-001 e REQ-002 abertos por decisão do usuário'

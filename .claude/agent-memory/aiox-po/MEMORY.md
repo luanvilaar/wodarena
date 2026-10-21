@@ -1,0 +1,1 @@
+- [Story 1.59 validada](project_story_1_59_validation.md) — GO 9/10 em 2026-10-21, Ready; decisões 12 a 17 confirmadas pelo Luan, sem pendência

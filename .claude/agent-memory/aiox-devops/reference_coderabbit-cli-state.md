@@ -20,6 +20,8 @@ CodeRabbit CLI lives at `~/.local/bin/coderabbit` (native macOS, no WSL wrapper 
 
 `--base-commit origin/main` (a ref, not just a SHA) also works. That run (2026-10-06, 24 files) took about 4 minutes and returned `findings: 0`. The CLI (v0.7.6) also printed "cannot update automatically — run `coderabbit update` / `brew upgrade coderabbit`". That is an advisory and the review still completes.
 
+`--base origin/main` (no `-commit`) also works on main once the local commits sit ahead of origin. On 2026-10-20, 33 files / ~3.5k lines (telão 1.53–1.58), the run took **over 10 minutes**. Run it with `run_in_background` and wait for the completion notification. Do not block on a `tail -f | grep` loop: it hits the 600s Bash cap and leaves a stray `tail` process behind.
+
 **Severity vocabulary is `critical` / `major` / `minor`** — NOT the `CRITICAL/HIGH/MEDIUM/LOW` that `github-devops-pre-push-quality-gate.md`'s `parseCodeRabbitOutput` greps for. That parser will silently count zero against real output. Map `major` → HIGH (gate CONCERNS, warn + recommend fix) and `minor` → LOW. Only a literal `critical` blocks the push.
 
 **Findings need verification before you act on them** — each one even says so. On 2026-09-14, of the majors: the `/api/stripe/return` "trusts caller-supplied userId" finding was real but over-weighted (the endpoint only writes Stripe-sourced booleans, so the true impact is user-enumeration + an unauthenticated Stripe-call amplifier, not payout hijack), and the `FeaturedEventBanner` "featured event should be the first slide" finding contradicted the deliberate design (commercial slide first). Read the cited lines before escalating or fixing.

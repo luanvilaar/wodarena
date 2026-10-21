@@ -1,0 +1,37 @@
+schema: 1
+story: '1.55'
+story_title: 'Telão: Geral da Categoria em Função Pura Compartilhada'
+gate: PASS
+status_reason: 'Extração sem mudança de regra: comparei mecanicamente o corpo removido de getLeaderboard com computeDivisionStandings e a única diferença é Date.now() virar parâmetro nowMs com o mesmo padrão. Elegibilidade continua no AppContext; testes estáticos apontam para o novo arquivo.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-10-20T23:40:00-03:00'
+expires: '2026-11-03T23:40:00-03:00'
+quality_score: 100
+
+top_issues: []
+waiver: { active: false }
+
+evidence:
+  tests_reviewed: 5
+  risks_identified: 0
+  trace:
+    ac_covered: [1, 2, 3, 4, 5]
+    ac_gaps: []
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: 'Telão usa a elegibilidade do leaderboard público (leaderboard_entries), sem fallback para todos os atletas.'
+  performance:
+    status: PASS
+    notes: 'Mesma complexidade de antes.'
+  reliability:
+    status: PASS
+    notes: 'npm test 835/835.'
+  maintainability:
+    status: PASS
+    notes: 'Uma regra só para site e telão.'
+
+recommendations:
+  immediate: []
+  future: []

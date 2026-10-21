@@ -1,0 +1,56 @@
+schema: 1
+story: '1.57'
+story_title: 'Telão: Tela na TV'
+gate: CONCERNS
+status_reason: 'O código cobre todos os ACs (conferi um a um), mas os ACs 2 a 8 são visuais ou de comportamento no aparelho e não têm nenhuma evidência executável: o teste é estático e ninguém validou em TV ou projetor. Não achei defeito.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-10-20T23:40:00-03:00'
+expires: '2026-11-03T23:40:00-03:00'
+quality_score: 80
+
+top_issues:
+  - id: TEST-001
+    severity: medium
+    finding: 'Sem evidência de render para ACs 2 a 8: 16 raias encolhendo, páginas de 10 linhas a cada 10 s, "Sem conexão · mostrando hh:mm:ss", recarga na versão nova, relógio acertado pelo servidor, tela cheia/cursor/wake lock e prefers-reduced-motion. Recomendo validar no ensaio, numa TV 1080p e num projetor 720p.'
+    refs: ['src/components/broadcast/BroadcastScreen.tsx', 'src/components/broadcast/Broadcast.module.css']
+    suggested_owner: dev
+  - id: MNT-001
+    severity: low
+    finding: 'decodeURIComponent(token) na página lança com "%" malformado e mostra a página de erro em vez do aviso de link desativado.'
+    refs: ['src/app/[locale]/telao/[token]/page.tsx:20']
+    suggested_owner: dev
+  - id: REQ-001
+    severity: low
+    finding: 'Desvio do plano (não do AC): o plano diz que a raia sem súmula aberta aparece como "Aguardando súmula" na bateria ao vivo. Na implementação, a bateria ao vivo só lista quem tem súmula; o atleta do cronograma sem súmula não aparece.'
+    refs: ['docs/PLANO-TELAO-LEADERBOARD-AO-VIVO.md', 'src/lib/serverBroadcast.ts:546-585']
+    suggested_owner: po
+waiver: { active: false }
+
+evidence:
+  tests_reviewed: 1
+  risks_identified: 3
+  trace:
+    ac_covered: [1, 9]
+    ac_gaps: [2, 3, 4, 5, 6, 7, 8]
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: 'noindex e no-referrer na página (metadata) e nos cabeçalhos (a regra do telão vem depois da geral e sobrescreve o Referrer-Policy). React escapa os textos, sem dangerouslySetInnerHTML. Sem analytics de terceiros no layout.'
+  performance:
+    status: PASS
+    notes: 'Consulta a cada 1 s ao vivo e 5 s no resto, com backoff até 5 s em falha e 304 por ETag.'
+  reliability:
+    status: PASS
+    notes: 'Mantém a última tela quando cai a conexão; com link revogado, mostra o aviso.'
+  maintainability:
+    status: PASS
+    notes: 'Componente grande (568 linhas), mas dividido por tela.'
+
+recommendations:
+  immediate:
+    - action: 'Validar no ensaio em TV e projetor reais (lista na QA Results da story)'
+      refs: ['docs/stories/1.57.story.md']
+  future:
+    - action: 'Tratar decodeURIComponent com try/catch'
+      refs: ['src/app/[locale]/telao/[token]/page.tsx']

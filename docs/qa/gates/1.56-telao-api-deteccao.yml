@@ -1,0 +1,61 @@
+schema: 1
+story: '1.56'
+story_title: 'Telão: API e Detecção do que Vai ao Ar'
+gate: PASS
+status_reason: 'Rodada 3: SEC-002, REL-002, REL-003 e PERF-002 resolvidos e testados pelas rotas. O cache de links válidos não abre brecha: o link é conferido no banco a cada consulta e o revogado sai do cache na hora. Fica um LOW residual: a TV que abre o link durante uma varredura no mesmo IP.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-10-21T18:00:00-03:00'
+expires: '2026-11-04T18:00:00-03:00'
+quality_score: 95
+
+top_issues:
+  - id: SEC-003
+    severity: low
+    finding: 'Uma TV que abre o link durante uma varredura de tokens no mesmo IP ainda não está no cache de links válidos e recebe 429 até a varredura parar. O mesmo vale para uma TV que ficou mais de 10 min sem consultar ou que cai numa instância nova. A TV já no ar segue funcionando. A TV com link revogado atrás de um IP bloqueado vê 429 ("Sem conexão") em vez do aviso de link desativado. Não vaza dado.'
+    refs: ['src/app/api/telao/[token]/route.ts:82']
+    suggested_owner: dev
+waiver: { active: false }
+
+evidence:
+  tests_reviewed: 21
+  risks_identified: 1
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7]
+    ac_gaps: []
+  notes: 'Conferido no código e nos testes: revogação (consulta ao banco antes do estado, delete na hora); remoção LRU com máximo de 1000; token inventado fora do cache e sem ir ao banco; { seq } parcial rejeitado por readLiveProgress e recalculado do log; dedupe por id na paginação.'
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: 'O cache só pula o bloqueio de 404 por IP: não pula a conferência do link nem o limite de 240/min por link e IP. Só entra nele um hash confirmado no banco. Fica o SEC-003 (LOW, disponibilidade).'
+  performance:
+    status: PASS
+    notes: 'Leitura paginada e com dedupe. Até três gravações por lote só no caminho de falha do resumo.'
+  reliability:
+    status: PASS
+    notes: 'O contador { seq } mantém a detecção ao vivo quando o resumo falha. O cálculo pelo log tem try/catch e a raia fica sem progresso, sem derrubar o telão.'
+  maintainability:
+    status: PASS
+    notes: 'Comentários explicam as trocas aceitas (grupo sem bateria, paginação por posição).'
+
+recommendations:
+  immediate: []
+  future:
+    - action: 'Com o IP acima do limite de 404, deixar passar até o banco poucos tokens no formato certo por minuto, com uma cota separada por IP (por exemplo 10/min), para a TV que liga durante uma varredura'
+      refs: ['src/app/api/telao/[token]/route.ts']
+    - action: 'Smoke test de seq:live_progress->seq contra o Supabase real logo depois de aplicar a migration do telão'
+      refs: ['supabase/migrations/20261020120000_live_broadcast.sql']
+
+history:
+  - date: '2026-10-20'
+    gate: CONCERNS
+    quality_score: 70
+    issues: 'REQ-001, REQ-002 e PERF-001 (medium); MNT-001, SEC-001 e TEST-001 (low)'
+  - date: '2026-10-21'
+    gate: PASS
+    quality_score: 90
+    issues: 'Todos os anteriores resolvidos; novos SEC-002, REL-002, REL-003 e PERF-002 (low)'
+  - date: '2026-10-21 (rodada 3)'
+    gate: PASS
+    quality_score: 95
+    issues: 'SEC-002, REL-002, REL-003 e PERF-002 resolvidos; novo SEC-003 (low)'

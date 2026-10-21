@@ -1,0 +1,51 @@
+schema: 1
+story: '1.54'
+story_title: 'Telão: Progresso ao Vivo da Súmula e Ordem Parcial da Bateria'
+gate: PASS
+status_reason: 'live_progress é calculado no servidor a cada lote com o motor da súmula; a súmula segue gravando sem a coluna (fallback PGRST204/42703 testado); a ordem parcial segue o AC e nada parcial vai para scores. Só achados LOW.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-10-20T23:40:00-03:00'
+expires: '2026-11-03T23:40:00-03:00'
+quality_score: 90
+
+top_issues:
+  - id: REQ-001
+    severity: low
+    finding: 'AC3 vale para o progresso mostrado, mas não para a detecção da tela: o modo lê seq só do resumo gravado (serverBroadcast.ts:462). Súmula com registros no log e sem resumo (gravados antes da migration) é vista como aberta sem toque. Reproduzido: tela "call" com 1 registro no log. Corrige sozinho no próximo lote.'
+    refs: ['src/lib/serverBroadcast.ts:462']
+    suggested_owner: dev
+  - id: REL-001
+    severity: low
+    finding: 'Se buildLiveProgress lançar ou o update falhar por outro motivo, o append responde 500 depois de gravar os eventos. O reenvio recupera pelo replay, mas aquele lote fica sem resumo. O resumo do telão não deveria poder derrubar a resposta da súmula.'
+    refs: ['src/lib/serverScoresheets.ts:498', 'src/lib/serverScoresheets.ts:519-528']
+    suggested_owner: dev
+waiver: { active: false }
+
+evidence:
+  tests_reviewed: 4
+  risks_identified: 2
+  trace:
+    ac_covered: [1, 2, 4, 5, 6]
+    ac_gaps: [3]
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: 'Nada vem do aparelho: o resumo é recalculado do log validado.'
+  performance:
+    status: PASS
+    notes: 'Um update por lote (já existia o de updated_at). Enquanto a migration não for aplicada, cada lote faz um update que falha e o fallback: duas idas ao banco por lote.'
+  reliability:
+    status: PASS
+    notes: 'Fallback sem a coluna testado. Corrida entre dois lotes do mesmo aparelho pode deixar o resumo um lote atrasado (raro depois da 1.51).'
+  maintainability:
+    status: PASS
+    notes: 'liveProgress.ts e liveHeatRanking.ts puros e testados.'
+
+recommendations:
+  immediate: []
+  future:
+    - action: 'Na detecção, usar a contagem do log (ou updated_at > created_at) quando live_progress for null'
+      refs: ['src/lib/serverBroadcast.ts']
+    - action: 'Envolver buildLiveProgress em try/catch; em erro, registrar no log e gravar só updated_at'
+      refs: ['src/lib/serverScoresheets.ts']
