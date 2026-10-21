@@ -5,6 +5,8 @@ import {
   appendSheetEvents,
   buildSheetBoard,
   listSheetsForManager,
+  markAthleteAbsent,
+  markSheetAbsent,
   openSheet,
   readScoresForWorkouts,
   readSheetEventId,
@@ -24,10 +26,12 @@ import { checkRateLimit, createSupabaseAdmin, requireSession, safeErrorMessage }
 // como /api/admin/persistence: sessão de judge, gestor ou owner; acesso
 // conferido por evento (serverSheetAccess.ts) antes de ler ou gravar; limite
 // de requisições por pessoa e ação. O servidor calcula e publica o resultado;
-// o aparelho só envia o log.
+// o aparelho só envia o log. Atleta ausente (Story 1.59): `absent` (judge, na
+// súmula dele), `review` com `review: 'absent'` (gestor, sobre a súmula) e
+// `mark_absent` (gestor, atleta sem súmula); nenhum leva resultado no corpo.
 
 const ROLES = ['judge', 'manager', 'owner'] as const;
-const LIMITS: Record<string, number> = { append: 600, open: 60, submit: 30, review: 60 };
+const LIMITS: Record<string, number> = { append: 600, open: 60, submit: 30, review: 60, absent: 30, mark_absent: 60 };
 
 const errorResponse = (error: unknown) => {
   if (error instanceof SheetError) return NextResponse.json({ error: error.message, ...error.extra }, { status: error.status });
@@ -106,6 +110,18 @@ export async function POST(request: Request) {
       return NextResponse.json(await readSheetForActor(supabaseAdmin, row.id));
     }
 
+    if (action === 'mark_absent') {
+      const event = await assertSheetManagerAccess(supabaseAdmin, actor, body.eventId);
+      return NextResponse.json(await markAthleteAbsent(supabaseAdmin, actor, {
+        eventId: event.id,
+        workoutId: body.workoutId,
+        athleteId: body.athleteId,
+        reason: body.reason,
+        heatId: body.heatId,
+        lane: body.lane
+      }));
+    }
+
     const eventId = await readSheetEventId(supabaseAdmin, body.sheetId);
 
     if (action === 'append') {
@@ -116,6 +132,11 @@ export async function POST(request: Request) {
     if (action === 'submit') {
       await assertSheetJudgeAccess(supabaseAdmin, actor, eventId);
       return NextResponse.json(await submitSheet(supabaseAdmin, actor, body.sheetId, { expectedCount: body.expectedCount }));
+    }
+
+    if (action === 'absent') {
+      await assertSheetJudgeAccess(supabaseAdmin, actor, eventId);
+      return NextResponse.json(await markSheetAbsent(supabaseAdmin, actor, body.sheetId));
     }
 
     await assertSheetManagerAccess(supabaseAdmin, actor, eventId);

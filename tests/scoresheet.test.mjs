@@ -5,9 +5,9 @@ import { importServerModule } from './support/serverModuleHarness.mjs';
 
 // Stories 1.50 e 1.51: o que o servidor aceita do aparelho (validação de cada
 // registro da súmula) e o resultado que ele publica, calculado do log pelo
-// mesmo motor da súmula.
+// mesmo motor da súmula. Story 1.59: o resultado atribuído ao atleta ausente.
 
-const { validateClientEvent, computeSheetOutcome, MAX_EVENT_SECONDS, SCORESHEET_STATUS_LABELS } = await importServerModule('lib/scoresheet.ts');
+const { validateClientEvent, computeSheetOutcome, computeAbsentOutcome, ABSENT_OUTCOME_TOO_LONG, MAX_EVENT_SECONDS, SCORESHEET_STATUS_LABELS, SCORESHEET_REVIEW_LABELS } = await importServerModule('lib/scoresheet.ts');
 const { validateWorkoutStructure } = await importServerModule('lib/workoutStructure.ts');
 const scoring = await importServerModule('lib/scoring.ts');
 
@@ -138,4 +138,58 @@ test('rótulos dos estados seguem a seção 7 do documento (enviada = publicada,
   assert.deepEqual(SCORESHEET_STATUS_LABELS, {
     not_started: 'Não iniciada', in_progress: 'Em andamento', submitted: 'Publicada', returned: 'Devolvida para correção', cancelled: 'Cancelada'
   });
+});
+
+// ---------------------------------------------------------------------------
+// Atleta ausente (Story 1.59, AC2 e AC10)
+// ---------------------------------------------------------------------------
+
+// For Time do exemplo aprovado: cap 12:00, 150 repetições, 1 s por repetição faltante, sem desempate.
+const forTime150 = (secondsPerRep) => valid({
+  ...base, format: 'for_time', totalReps: 150, timeCapSeconds: 720,
+  incomplete: { rule: 'penalty_per_rep', secondsPerRep, base: 'time_cap' },
+  tieBreak: null,
+  segments: [
+    segment('f1', 1, 'Wall ball', 50), segment('f2', 1, 'Pull-up', 50), segment('f3', 1, 'Burpee', 50)
+  ]
+});
+
+test('computeAbsentOutcome: For Time = cap + repetições × penalidade (exemplo aprovado 14:30) e o cap com 0 s', () => {
+  const absent = computeAbsentOutcome(forTime150(1));
+  assert.deepEqual(absent, { ok: true, result: '14:30', value: 870, tieBreak: null, summary: 'Atleta ausente · 14:30' });
+  assert.deepEqual(scoring.parseScoreForWorkout('fortime', absent.result), { result: '14:30', value: 870 });
+  assert.deepEqual(computeAbsentOutcome(forTime150(0)), { ok: true, result: '12:00', value: 720, tieBreak: null, summary: 'Atleta ausente · 12:00' });
+  // Fran: cap 10:00 + 90 × 1 s.
+  assert.deepEqual([computeAbsentOutcome(FRAN).result, computeAbsentOutcome(FRAN).value], ['11:30', 690]);
+});
+
+test('computeAbsentOutcome: AMRAP 0 repetições e carga máxima 0 kg, sem desempate', () => {
+  assert.deepEqual(computeAbsentOutcome(CINDY), { ok: true, result: '0', value: 0, tieBreak: null, summary: 'Atleta ausente · 0 repetições' });
+  assert.deepEqual(computeAbsentOutcome(TOTAL), { ok: true, result: '0', value: 0, tieBreak: null, summary: 'Atleta ausente · 0 kg' });
+  assert.deepEqual(scoring.parseScoreForWorkout('amrap', '0'), { result: '0', value: 0 });
+  assert.deepEqual(scoring.parseScoreForWorkout('maxweight', '0'), { result: '0', value: 0 });
+});
+
+test('computeAbsentOutcome: For Time e AMRAP dão o mesmo resultado que o motor com o log vazio', () => {
+  for (const structure of [forTime150(1), forTime150(0), FRAN, CINDY]) {
+    const engine = computeSheetOutcome(structure, []);
+    const absent = computeAbsentOutcome(structure);
+    assert.equal(engine.ok, true);
+    assert.deepEqual([absent.result, absent.value], [engine.result, engine.value]);
+  }
+});
+
+test('computeAbsentOutcome: estrutura extrema (tempo acima de 99:59:59) devolve erro, como computeSheetOutcome', () => {
+  const extreme = valid({
+    ...base, format: 'for_time', totalReps: 10000, timeCapSeconds: 5999,
+    incomplete: { rule: 'penalty_per_rep', secondsPerRep: 60, base: 'time_cap' },
+    tieBreak: null,
+    segments: [{ ...segment('m1', 1, 'Row', 10000), unit: 'm', mark: 'end' }]
+  });
+  assert.deepEqual(computeAbsentOutcome(extreme), { ok: false, error: ABSENT_OUTCOME_TOO_LONG });
+  assert.equal(computeSheetOutcome(extreme, []).ok, false);
+});
+
+test('histórico: a ação absent tem o rótulo "Atleta ausente"', () => {
+  assert.equal(SCORESHEET_REVIEW_LABELS.absent, 'Atleta ausente');
 });

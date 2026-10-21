@@ -4,6 +4,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   MAX_EVENTS_PER_BATCH,
   MAX_EVENTS_PER_SHEET,
+  computeAbsentOutcome,
   computeSheetOutcome,
   validateClientEvent,
   type ScoresheetReviewAction,
@@ -13,7 +14,7 @@ import { SCORE_TIE_BREAKER_SPLIT_KEY, parseScoreForWorkout, rankWorkoutScores, s
 import { estimateClockStart, summarizeLiveProgress, type LiveProgress } from '@/lib/liveProgress';
 import type { SessionUser } from '@/lib/serverSecurity';
 import { validateWorkoutStructure, type SheetEvent, type WorkoutStructure } from '@/lib/workoutStructure';
-import type { WorkoutType } from '@/types';
+import type { Score, WorkoutType } from '@/types';
 
 // Súmula gravada no servidor (Stories 1.49 a 1.52, etapa E3). Abrir a súmula
 // guarda a cópia da estrutura da prova; o log chega em lotes com sequência
@@ -22,7 +23,9 @@ import type { WorkoutType } from '@/types';
 // posição e os pontos da prova e categoria com a mesma regra do painel
 // (rankWorkoutScores). O gestor pode devolver, corrigir (com justificativa) ou
 // cancelar; tudo fica em scoresheet_reviews. O acesso é conferido antes, em
-// serverSheetAccess.ts.
+// serverSheetAccess.ts. Story 1.59: o judge (súmula sem registro) ou o gestor
+// (com motivo, sobre a súmula ou sem súmula) marcam o atleta ausente; o
+// servidor publica o pior resultado da prova com result_status = 'absent'.
 
 export class SheetError extends Error {
   constructor(message: string, readonly status = 400, readonly extra: Record<string, unknown> = {}) {
@@ -32,6 +35,15 @@ export class SheetError extends Error {
 }
 
 const UNAVAILABLE_MESSAGE = 'A súmula digital ainda não está disponível neste ambiente. Aplique as migrations pendentes antes de usar.';
+/** Ações de ausência com a coluna scoresheets.absent ainda não criada (a súmula funciona; só elas param). */
+export const ABSENT_UNAVAILABLE_MESSAGE = 'A marcação de atleta ausente ainda não está disponível neste ambiente. Aplique a migration 20261021120000_scoresheet_absent.sql antes de usar.';
+
+// Coluna scoresheets.absent ainda não criada (migration da Story 1.59 pendente):
+// as leituras repetem sem ela e só as ações de ausência respondem 503.
+export const isMissingAbsentColumn = (error: unknown) => {
+  const details = error && typeof error === 'object' ? error as { code?: unknown; message?: unknown } : null;
+  return (details?.code === '42703' || details?.code === 'PGRST204') && /\babsent\b/.test(String(details?.message ?? ''));
+};
 
 // Tabela ou coluna da súmula ainda não criada (migration não aplicada): 503 com a mensagem acima.
 export const isMissingSheetSchema = (error: unknown) => {
@@ -43,6 +55,7 @@ export const isMissingSheetSchema = (error: unknown) => {
 
 const check = <T>(result: { data: T; error: unknown }) => {
   if (result.error) {
+    if (isMissingAbsentColumn(result.error)) throw new SheetError(ABSENT_UNAVAILABLE_MESSAGE, 503);
     if (isMissingSheetSchema(result.error)) throw new SheetError(UNAVAILABLE_MESSAGE, 503);
     throw result.error;
   }
@@ -77,9 +90,32 @@ export type SheetRow = {
   published_at: string | null;
   created_at: string;
   updated_at: string;
+  /** Atleta ausente nesta prova (Story 1.59); false quando a coluna ainda não existe. */
+  absent: boolean;
 };
 
-const SHEET_SELECT = 'id, event_id, workout_id, athlete_id, division_id, heat_id, heat_number, lane, judge_user_id, judge_name, structure, status, computed_result, computed_value, computed_tie_break, official_result, official_value, official_tie_break, corrected, return_reason, submitted_at, published_at, created_at, updated_at';
+const SHEET_COLUMNS = 'id, event_id, workout_id, athlete_id, division_id, heat_id, heat_number, lane, judge_user_id, judge_name, structure, status, computed_result, computed_value, computed_tie_break, official_result, official_value, official_tie_break, corrected, return_reason, submitted_at, published_at, created_at, updated_at';
+const SHEET_SELECT = `${SHEET_COLUMNS}, absent`;
+
+const withAbsentFlag = (row: Record<string, unknown>) => ({ ...row, absent: row.absent === true }) as SheetRow;
+
+/**
+ * Lê súmulas com a coluna `absent` e, se ela ainda não existe (migration da
+ * Story 1.59 pendente), repete a mesma consulta sem ela: a súmula segue igual,
+ * com `absent` false. `absentColumn` diz se a coluna existe; é por ele que as
+ * ações de ausência respondem 503 antes de gravar qualquer coisa.
+ */
+const selectSheets = async <T>(run: (columns: string) => PromiseLike<{ data: unknown; error: unknown }>) => {
+  const normalize = (data: unknown) => (
+    Array.isArray(data)
+      ? data.map((row) => withAbsentFlag(row as Record<string, unknown>))
+      : data ? withAbsentFlag(data as Record<string, unknown>) : null
+  ) as T;
+  const first = await run(SHEET_SELECT);
+  if (!first.error) return { data: normalize(first.data), absentColumn: true };
+  if (!isMissingAbsentColumn(first.error)) check(first);
+  return { data: normalize(check(await run(SHEET_COLUMNS))), absentColumn: false };
+};
 
 export const toSheetDto = (row: SheetRow) => ({
   id: row.id,
@@ -100,6 +136,7 @@ export const toSheetDto = (row: SheetRow) => ({
   officialValue: row.official_value === null ? null : Number(row.official_value),
   officialTieBreak: row.official_tie_break,
   corrected: Boolean(row.corrected),
+  absent: row.absent === true,
   returnReason: row.return_reason,
   submittedAt: row.submitted_at,
   publishedAt: row.published_at,
@@ -117,6 +154,7 @@ type ScoreRow = {
   rank: number | null;
   points: number | null;
   splits: Record<string, string> | null;
+  result_status?: string | null;
 };
 
 const toScoreDto = (row: ScoreRow) => ({
@@ -126,7 +164,8 @@ const toScoreDto = (row: ScoreRow) => ({
   value: Number(row.value),
   rank: row.rank ?? undefined,
   points: row.points ?? undefined,
-  splits: row.splits || {}
+  splits: row.splits || {},
+  resultStatus: (row.result_status || undefined) as Score['resultStatus']
 });
 
 export type RankedScoreDto = ReturnType<typeof toScoreDto>;
@@ -207,6 +246,7 @@ const summarizeSheet = (row: SheetRow) => ({
   heatId: row.heat_id,
   lane: row.lane,
   officialResult: row.official_result,
+  absent: row.absent === true,
   updatedAt: row.updated_at
 });
 
@@ -225,7 +265,7 @@ export const buildSheetBoard = async (supabaseAdmin: SupabaseClient, eventId: st
   const athletes = divisionIds.length > 0
     ? (check(await supabaseAdmin.from('athletes').select('id, name, box, division_id').in('division_id', divisionIds)) || []) as { id: string; name: string; box: string; division_id: string }[]
     : [];
-  const sheets = (check(await supabaseAdmin.from('scoresheets').select(SHEET_SELECT).eq('event_id', eventId)) || []) as SheetRow[];
+  const sheets = (await selectSheets<SheetRow[] | null>((columns) => supabaseAdmin.from('scoresheets').select(columns).eq('event_id', eventId))).data || [];
 
   const divisionName = new Map(divisions.map((division) => [division.id, division.name]));
   const athleteById = new Map(athletes.map((athlete) => [athlete.id, athlete]));
@@ -281,12 +321,14 @@ export const buildSheetBoard = async (supabaseAdmin: SupabaseClient, eventId: st
 // Abrir, ler e gravar
 // ---------------------------------------------------------------------------
 
-const readSheetRow = async (supabaseAdmin: SupabaseClient, sheetId: unknown) => {
+const readSheet = async (supabaseAdmin: SupabaseClient, sheetId: unknown) => {
   if (typeof sheetId !== 'string' || !sheetId) throw new SheetError('Informe a súmula.', 400);
-  const row = check(await supabaseAdmin.from('scoresheets').select(SHEET_SELECT).eq('id', sheetId).maybeSingle()) as SheetRow | null;
+  const { data: row, absentColumn } = await selectSheets<SheetRow | null>((columns) => supabaseAdmin.from('scoresheets').select(columns).eq('id', sheetId).maybeSingle());
   if (!row) throw new SheetError('Súmula não encontrada.', 404);
-  return row;
+  return { row, absentColumn };
 };
+
+const readSheetRow = async (supabaseAdmin: SupabaseClient, sheetId: unknown) => (await readSheet(supabaseAdmin, sheetId)).row;
 
 /** Evento da súmula, para conferir o acesso antes de qualquer outra coisa. */
 export const readSheetEventId = async (supabaseAdmin: SupabaseClient, sheetId: unknown) => (await readSheetRow(supabaseAdmin, sheetId)).event_id;
@@ -354,6 +396,9 @@ type OpenInput = { eventId: string; workoutId: unknown; athleteId: unknown; heat
 /**
  * Abre (ou retoma) a súmula do atleta nesta prova. Uma súmula ativa por atleta
  * e prova: a mesma pessoa retoma a dela; com outra pessoa arbitrando, 409.
+ * Súmula em andamento ou devolvida sem judge (criada pelo gestor como ausente,
+ * ou cujo judge foi apagado): o judge que abre assume; o gestor dono e o owner
+ * abrem só para leitura (Story 1.59, decisões 12, 16 e 17).
  */
 export const openSheet = async (supabaseAdmin: SupabaseClient, actor: SessionUser, input: OpenInput) => {
   if (typeof input.workoutId !== 'string' || typeof input.athleteId !== 'string') throw new SheetError('Informe a prova e o atleta.');
@@ -374,17 +419,13 @@ export const openSheet = async (supabaseAdmin: SupabaseClient, actor: SessionUse
     .maybeSingle()) as { id: string; event_id: string } | null;
   if (!division || division.event_id !== input.eventId) throw new SheetError('Este atleta não pertence ao evento.', 400);
 
-  const existing = async () => {
-    const rows = (check(await supabaseAdmin
-      .from('scoresheets')
-      .select(SHEET_SELECT)
-      .eq('workout_id', workout.id)
-      .eq('athlete_id', athlete.id)) || []) as SheetRow[];
-    return rows.find((row) => row.status !== 'cancelled') ?? null;
-  };
-  const resume = (row: SheetRow) => {
+  const existing = async () => (await findActiveSheet(supabaseAdmin, workout.id, athlete.id)).row;
+  const resume = async (row: SheetRow) => {
     const sameJudge = row.judge_user_id === actor.id;
     if (row.status === 'submitted' || sameJudge) return row;
+    if (row.judge_user_id === null && (row.status === 'in_progress' || row.status === 'returned')) {
+      return actor.role === 'judge' ? claimSheet(supabaseAdmin, actor, row) : row;
+    }
     throw new SheetError(`Esta súmula está com ${row.judge_name}. Peça ao gestor para liberar antes de arbitrar.`, 409, { sheetId: row.id });
   };
 
@@ -437,7 +478,35 @@ export const openSheet = async (supabaseAdmin: SupabaseClient, actor: SessionUse
     check(inserted);
   }
   await insertReview(supabaseAdmin, row.id, actor, 'opened');
-  return row as SheetRow;
+  return { ...row, absent: false } as SheetRow;
+};
+
+/** A súmula não cancelada do atleta nesta prova (o índice único garante no máximo uma). */
+const findActiveSheet = async (supabaseAdmin: SupabaseClient, workoutId: string, athleteId: string) => {
+  const { data, absentColumn } = await selectSheets<SheetRow[] | null>((columns) => supabaseAdmin
+    .from('scoresheets')
+    .select(columns)
+    .eq('workout_id', workoutId)
+    .eq('athlete_id', athleteId));
+  return { row: (data || []).find((row) => row.status !== 'cancelled') ?? null, absentColumn };
+};
+
+/**
+ * O judge assume a súmula sem judge. A gravação só vale enquanto ela continua
+ * sem judge: com dois judges abrindo ao mesmo tempo, o segundo recebe 409.
+ */
+const claimSheet = async (supabaseAdmin: SupabaseClient, actor: SessionUser, row: SheetRow) => {
+  check(await supabaseAdmin
+    .from('scoresheets')
+    .update({ judge_user_id: actor.id, judge_name: actor.name, updated_at: nowIso() })
+    .eq('id', row.id)
+    .is('judge_user_id', null));
+  const claimed = await readSheetRow(supabaseAdmin, row.id);
+  if (claimed.judge_user_id !== actor.id) {
+    throw new SheetError(`Esta súmula está com ${claimed.judge_name}. Peça ao gestor para liberar antes de arbitrar.`, 409, { sheetId: row.id });
+  }
+  await insertReview(supabaseAdmin, row.id, actor, 'opened');
+  return claimed;
 };
 
 const assertSheetWriter = (row: SheetRow, actor: SessionUser) => {
@@ -495,7 +564,13 @@ export const appendSheetEvents = async (
       }
       check(inserted);
     }
-    await writeLiveProgress(supabaseAdmin, row, [...stored, ...rows]);
+    // Os eventos já estão gravados: falha no resumo do telão não derruba o lote
+    // (fica ao menos o contador; o telão recalcula o resto do log).
+    try {
+      await writeLiveProgress(supabaseAdmin, row, [...stored, ...rows]);
+    } catch (error) {
+      console.error('Erro ao gravar o progresso ao vivo da súmula:', error);
+    }
   }
   return { count: count + rows.length };
 };
@@ -516,14 +591,30 @@ export const buildLiveProgress = (structure: WorkoutStructure, events: readonly 
   return summarizeLiveProgress(structure, events.map((item) => item.event), clockStartAt);
 };
 
+// Sem o resumo completo (cálculo ou gravação com erro), grava ao menos o
+// contador do log ({ seq }): é por ele que o telão sabe que a bateria começou
+// (com seq 0, a bateria em andamento apareceria como Chamada). O contador sozinho
+// não passa em readLiveProgress, então o telão calcula o progresso do log para o
+// grupo no ar. Sem nem isso (coluna ausente ou erro de novo), ao menos o
+// updated_at avança: é por ele que o telão sabe que a bateria segue no ar.
 const writeLiveProgress = async (supabaseAdmin: SupabaseClient, row: SheetRow, events: readonly StoredEvent[]) => {
   const updatedAt = nowIso();
-  const written = await supabaseAdmin
-    .from('scoresheets')
-    .update({ updated_at: updatedAt, live_progress: buildLiveProgress(row.structure, events) })
-    .eq('id', row.id);
-  if (!written.error) return;
-  if (!isMissingLiveProgress(written.error)) check(written);
+  let progress: LiveProgress | null = null;
+  try {
+    progress = buildLiveProgress(row.structure, events);
+  } catch (error) {
+    console.error('Erro ao calcular o progresso ao vivo da súmula:', error);
+  }
+  const attempts: (LiveProgress | { seq: number })[] = progress ? [progress, { seq: events.length }] : [{ seq: events.length }];
+  for (const liveProgress of attempts) {
+    const written = await supabaseAdmin
+      .from('scoresheets')
+      .update({ updated_at: updatedAt, live_progress: liveProgress })
+      .eq('id', row.id);
+    if (!written.error) return;
+    if (isMissingLiveProgress(written.error)) break;
+    console.error('Erro ao gravar o progresso ao vivo da súmula:', written.error);
+  }
   check(await supabaseAdmin.from('scoresheets').update({ updated_at: updatedAt }).eq('id', row.id));
 };
 
@@ -546,7 +637,7 @@ export const recalculateWorkoutRanking = async (supabaseAdmin: SupabaseClient, w
   if (athleteIds.length === 0) return [];
   const scoreRows = (check(await supabaseAdmin
     .from('scores')
-    .select('athlete_id, workout_id, result, value, rank, points, splits')
+    .select('athlete_id, workout_id, result, value, rank, points, splits, result_status')
     .eq('workout_id', workoutId)
     .in('athlete_id', athleteIds)) || []) as ScoreRow[];
   if (scoreRows.length === 0) return [];
@@ -554,9 +645,16 @@ export const recalculateWorkoutRanking = async (supabaseAdmin: SupabaseClient, w
   const ranked = rankWorkoutScores(
     workout.type,
     workout.tie_breaker || '',
-    scoreRows.map((score): WorkoutScoreForRanking => ({ athleteId: score.athlete_id, result: score.result, value: Number(score.value), splits: score.splits || {} })),
+    scoreRows.map((score): WorkoutScoreForRanking => ({
+      athleteId: score.athlete_id,
+      result: score.result,
+      value: Number(score.value),
+      splits: score.splits || {},
+      resultStatus: score.result_status ?? null
+    })),
     athleteIds.length
   );
+  // O upsert por athlete_id,workout_id preserva result_status (não vai no payload).
   const payload = ranked.map((score) => ({
     athlete_id: score.athleteId,
     workout_id: workoutId,
@@ -567,7 +665,7 @@ export const recalculateWorkoutRanking = async (supabaseAdmin: SupabaseClient, w
     splits: score.splits || {}
   }));
   check(await supabaseAdmin.from('scores').upsert(payload, { onConflict: 'athlete_id,workout_id' }));
-  return payload.map((score) => toScoreDto(score));
+  return payload.map((score, index) => toScoreDto({ ...score, result_status: ranked[index].resultStatus ?? null }));
 };
 
 /** Recalcula as provas e categorias tocadas por um lote de scores (a categoria vem do atleta). */
@@ -588,8 +686,10 @@ export const recalculateRankingForPairs = async (supabaseAdmin: SupabaseClient, 
  * Grava o resultado oficial em scores e recalcula a prova e categoria. Devolve
  * também o resultado que estava no ranking sem ter vindo desta súmula (um
  * lançamento manual), para o histórico dizer o que foi substituído.
+ * `result_status` vai sempre: 'absent' na ausência e null no envio e na
+ * correção, para um selo antigo nunca sobreviver a um resultado real.
  */
-const publish = async (supabaseAdmin: SupabaseClient, row: SheetRow, official: Official) => {
+const publish = async (supabaseAdmin: SupabaseClient, row: SheetRow, official: Official, resultStatus: 'absent' | null = null) => {
   const athlete = check(await supabaseAdmin.from('athletes').select('id, division_id').eq('id', row.athlete_id).maybeSingle()) as { division_id: string } | null;
   if (!athlete) throw new SheetError('O atleta desta súmula não existe mais.', 409);
   const current = check(await supabaseAdmin
@@ -607,7 +707,8 @@ const publish = async (supabaseAdmin: SupabaseClient, row: SheetRow, official: O
     result: official.result,
     value: official.value,
     splits: official.tieBreak ? { [SCORE_TIE_BREAKER_SPLIT_KEY]: official.tieBreak } : {},
-    scoresheet_id: row.id
+    scoresheet_id: row.id,
+    result_status: resultStatus
   }, { onConflict: 'athlete_id,workout_id' }));
   return { ranking: await recalculateWorkoutRanking(supabaseAdmin, row.workout_id, athlete.division_id), replaced };
 };
@@ -655,15 +756,192 @@ export const submitSheet = async (
     return_reason: null,
     submitted_at: at,
     published_at: at,
-    updated_at: at
+    updated_at: at,
+    // Só toca em `absent` quando a súmula era ausente: assim o envio funciona sem a migration da Story 1.59.
+    ...(row.absent ? { absent: false } : {})
   };
   check(await supabaseAdmin.from('scoresheets').update(patch).eq('id', row.id));
   await insertReview(supabaseAdmin, row.id, actor, 'submitted', {
-    reason: replaced ? 'Substituiu um resultado lançado à mão.' : null,
+    reason: replaced ? MANUAL_REPLACED_REASON : null,
     previous: replaced ?? (previous.result ? previous : null),
     applied: official
   });
   return { sheet: toSheetDto({ ...row, ...patch }), summary: outcome.summary, ranking };
+};
+
+const MANUAL_REPLACED_REASON = 'Substituiu um resultado lançado à mão.';
+
+// ---------------------------------------------------------------------------
+// Atleta ausente (Story 1.59)
+// ---------------------------------------------------------------------------
+
+/**
+ * Publica a ausência sobre a súmula: o resultado atribuído sai da estrutura
+ * copiada (computeAbsentOutcome), nunca do aparelho; vai para scores com
+ * result_status = 'absent'; a súmula fica enviada, com `absent` e o resultado
+ * atribuído como calculado e oficial; o histórico ganha "Atleta ausente" com o
+ * antes e, quando foi o gestor, o motivo. A ordem é a do envio: publicar antes
+ * de marcar a súmula.
+ */
+const publishAbsence = async (supabaseAdmin: SupabaseClient, actor: SessionUser, row: SheetRow, reason: string | null) => {
+  const outcome = computeAbsentOutcome(row.structure);
+  if (!outcome.ok) throw new SheetError(outcome.error);
+  const official: Official = { result: outcome.result, value: outcome.value, tieBreak: null };
+  const previous = officialOf(row);
+  const { ranking, replaced } = await publish(supabaseAdmin, row, official, 'absent');
+  const at = nowIso();
+  const patch = {
+    status: 'submitted' as const,
+    absent: true,
+    computed_result: official.result,
+    computed_value: official.value,
+    computed_tie_break: null,
+    official_result: official.result,
+    official_value: official.value,
+    official_tie_break: null,
+    corrected: false,
+    return_reason: null,
+    submitted_at: at,
+    published_at: at,
+    updated_at: at
+  };
+  check(await supabaseAdmin.from('scoresheets').update(patch).eq('id', row.id));
+  await insertReview(supabaseAdmin, row.id, actor, 'absent', {
+    reason: reason ?? (replaced ? MANUAL_REPLACED_REASON : null),
+    previous: replaced ?? (previous.result ? previous : null),
+    applied: official
+  });
+  return { sheet: toSheetDto({ ...row, ...patch }), summary: outcome.summary, ranking };
+};
+
+/**
+ * O judge marca ausente o atleta da súmula dele (Story 1.59, AC4): só com a
+ * súmula em andamento ou devolvida e sem nenhum registro no servidor. O corpo
+ * não leva resultado.
+ */
+export const markSheetAbsent = async (supabaseAdmin: SupabaseClient, actor: SessionUser, sheetId: unknown) => {
+  const { row, absentColumn } = await readSheet(supabaseAdmin, sheetId);
+  assertSheetWriter(row, actor);
+  if (!absentColumn) throw new SheetError(ABSENT_UNAVAILABLE_MESSAGE, 503);
+  const stored = await readEvents(supabaseAdmin, row.id);
+  if (stored.length > 0) {
+    throw new SheetError('Esta súmula já tem registros, então o atleta não pode ser marcado como ausente por aqui. Recarregue a súmula ou peça ao gestor.', 409, { serverCount: stored.length });
+  }
+  return publishAbsence(supabaseAdmin, actor, row, null);
+};
+
+/** O gestor marca ausente sobre uma súmula que existe (AC6): qualquer estado ativo, sem exigir log vazio. */
+const markExistingSheetAbsent = async (supabaseAdmin: SupabaseClient, actor: SessionUser, row: SheetRow, absentColumn: boolean, reason: string) => {
+  if (row.status === 'cancelled') throw new SheetError('Esta súmula foi cancelada.', 409);
+  if (row.absent) throw new SheetError('Este atleta já está marcado como ausente nesta prova.', 409);
+  if (!absentColumn) throw new SheetError(ABSENT_UNAVAILABLE_MESSAGE, 503);
+  return publishAbsence(supabaseAdmin, actor, row, reason);
+};
+
+type MarkAbsentInput = { eventId: string; workoutId: unknown; athleteId: unknown; reason: unknown; heatId?: unknown; lane?: unknown };
+
+/**
+ * O gestor marca ausente o atleta numa prova (Story 1.59, AC13), com motivo.
+ * Se o atleta já tem súmula não cancelada nessa prova, vale o caminho da súmula
+ * existente. Senão, cria a súmula já enviada e ausente, sem judge
+ * (`judge_user_id` nulo, `judge_name` de quem marcou), na bateria do cronograma
+ * em que o atleta aparece para a prova (ou na informada, conferida).
+ */
+export const markAthleteAbsent = async (supabaseAdmin: SupabaseClient, actor: SessionUser, input: MarkAbsentInput) => {
+  const reason = readReason(input.reason);
+  if (typeof input.workoutId !== 'string' || typeof input.athleteId !== 'string') throw new SheetError('Informe a prova e o atleta.');
+  const workouts = await readStructuredWorkouts(supabaseAdmin, input.eventId);
+  const workout = workouts.find((item) => item.id === input.workoutId);
+  if (!workout) throw new SheetError('Esta prova não tem súmula digital estruturada.', 404);
+
+  const athlete = check(await supabaseAdmin
+    .from('athletes')
+    .select('id, name, division_id')
+    .eq('id', input.athleteId)
+    .maybeSingle()) as { id: string; division_id: string } | null;
+  if (!athlete) throw new SheetError('Atleta não encontrado.', 404);
+  const division = check(await supabaseAdmin
+    .from('divisions')
+    .select('id, event_id')
+    .eq('id', athlete.division_id)
+    .maybeSingle()) as { id: string; event_id: string } | null;
+  if (!division || division.event_id !== input.eventId) throw new SheetError('Este atleta não pertence ao evento.', 400);
+  if (workout.divisionId && workout.divisionId !== athlete.division_id) {
+    throw new SheetError('Esta prova é de outra categoria: o atleta não compete nela.', 400);
+  }
+
+  const eventRow = check(await supabaseAdmin.from('events').select('event_schedule').eq('id', input.eventId).maybeSingle()) as { event_schedule?: unknown } | null;
+  const heats = (Array.isArray(eventRow?.event_schedule) ? eventRow.event_schedule as ScheduleItem[] : [])
+    .filter((item) => item && item.kind === 'heat' && typeof item.id === 'string');
+  const laneIn = (item: ScheduleItem) => (Array.isArray(item.athleteIds) ? item.athleteIds.indexOf(athlete.id) + 1 : 0);
+  const informedHeat = typeof input.heatId === 'string' ? input.heatId : input.heatId === undefined || input.heatId === null || input.heatId === '' ? null : '';
+  let heat: ScheduleItem | undefined;
+  if (informedHeat !== null) {
+    heat = heats.find((item) => item.id === informedHeat);
+    if (!heat || heat.workoutId !== workout.id) throw new SheetError('Bateria não encontrada no cronograma desta prova.', 400);
+  } else {
+    heat = heats.find((item) => item.workoutId === workout.id && laneIn(item) > 0);
+  }
+  const informedLane = Number.isInteger(input.lane) && (input.lane as number) > 0 && (input.lane as number) < 100 ? input.lane as number : null;
+  const scheduleLane = heat && laneIn(heat) > 0 ? laneIn(heat) : null;
+
+  const current = await findActiveSheet(supabaseAdmin, workout.id, athlete.id);
+  if (current.row) return markExistingSheetAbsent(supabaseAdmin, actor, current.row, current.absentColumn, reason);
+  if (!current.absentColumn) throw new SheetError(ABSENT_UNAVAILABLE_MESSAGE, 503);
+
+  const outcome = computeAbsentOutcome(workout.structure);
+  if (!outcome.ok) throw new SheetError(outcome.error);
+  const official: Official = { result: outcome.result, value: outcome.value, tieBreak: null };
+  const at = nowIso();
+  const row: SheetRow = {
+    id: newId('sheet'),
+    event_id: input.eventId,
+    workout_id: workout.id,
+    athlete_id: athlete.id,
+    division_id: athlete.division_id,
+    heat_id: heat ? String(heat.id) : null,
+    heat_number: typeof heat?.heatNumber === 'number' && heat.heatNumber > 0 ? heat.heatNumber : null,
+    lane: informedLane ?? scheduleLane,
+    judge_user_id: null,
+    judge_name: actor.name,
+    structure: workout.structure,
+    status: 'submitted',
+    computed_result: official.result,
+    computed_value: official.value,
+    computed_tie_break: null,
+    official_result: official.result,
+    official_value: official.value,
+    official_tie_break: null,
+    corrected: false,
+    return_reason: null,
+    submitted_at: at,
+    published_at: at,
+    created_at: at,
+    updated_at: at,
+    absent: true
+  };
+  const inserted = await supabaseAdmin.from('scoresheets').insert(row);
+  if (inserted.error) {
+    // Outra súmula do atleta nesta prova entrou no mesmo instante (índice único): segue sobre ela.
+    if ((inserted.error as { code?: string }).code === '23505') {
+      const raced = await findActiveSheet(supabaseAdmin, workout.id, athlete.id);
+      if (raced.row) return markExistingSheetAbsent(supabaseAdmin, actor, raced.row, raced.absentColumn, reason);
+    }
+    check(inserted);
+  }
+  // A súmula precisa existir antes do score (scores.scoresheet_id). Se a
+  // publicação falhar, a súmula recém-criada sai, para a próxima tentativa
+  // começar do zero.
+  let published: Awaited<ReturnType<typeof publish>>;
+  try {
+    published = await publish(supabaseAdmin, row, official, 'absent');
+  } catch (error) {
+    const removed = await supabaseAdmin.from('scoresheets').delete().eq('id', row.id);
+    if (removed.error) console.error('Erro ao desfazer a súmula de ausência sem publicação:', removed.error);
+    throw error;
+  }
+  await insertReview(supabaseAdmin, row.id, actor, 'absent', { reason, previous: published.replaced, applied: official });
+  return { sheet: toSheetDto(row), summary: outcome.summary, ranking: published.ranking };
 };
 
 // ---------------------------------------------------------------------------
@@ -699,7 +977,8 @@ const removePublishedScore = async (supabaseAdmin: SupabaseClient, row: SheetRow
  * Ações do gestor sobre uma súmula:
  * - `return`: devolve ao judge com o motivo; o resultado publicado fica até o reenvio;
  * - `correct`: troca o resultado publicado (com justificativa), sem apagar o que o judge lançou;
- * - `cancel`: cancela a súmula (com o motivo) e tira do ranking o resultado que veio dela.
+ * - `cancel`: cancela a súmula (com o motivo) e tira do ranking o resultado que veio dela;
+ * - `absent`: marca o atleta ausente (com o motivo), com o pior resultado da prova (Story 1.59).
  */
 export const reviewSheet = async (
   supabaseAdmin: SupabaseClient,
@@ -707,7 +986,7 @@ export const reviewSheet = async (
   sheetId: unknown,
   input: { action?: unknown; reason?: unknown; result?: unknown; tieBreak?: unknown }
 ) => {
-  const row = await readSheetRow(supabaseAdmin, sheetId);
+  const { row, absentColumn } = await readSheet(supabaseAdmin, sheetId);
   const reason = readReason(input.reason);
   const at = nowIso();
 
@@ -747,7 +1026,8 @@ export const reviewSheet = async (
       corrected: true,
       return_reason: null,
       published_at: at,
-      updated_at: at
+      updated_at: at,
+      ...(row.absent ? { absent: false } : {})
     };
     check(await supabaseAdmin.from('scoresheets').update(patch).eq('id', row.id));
     // O "antes" é o que estava no ranking: um lançamento manual por cima da súmula, se houver.
@@ -764,12 +1044,14 @@ export const reviewSheet = async (
     return { sheet: toSheetDto({ ...row, ...patch }), ranking };
   }
 
-  throw new SheetError('Ação desconhecida: use devolver, corrigir ou cancelar.');
+  if (input.action === 'absent') return markExistingSheetAbsent(supabaseAdmin, actor, row, absentColumn, reason);
+
+  throw new SheetError('Ação desconhecida: use devolver, corrigir, cancelar ou marcar ausente.');
 };
 
 /** Súmulas do evento para o painel do gestor, com o nome do atleta e da prova. */
 export const listSheetsForManager = async (supabaseAdmin: SupabaseClient, eventId: string) => {
-  const sheets = (check(await supabaseAdmin.from('scoresheets').select(SHEET_SELECT).eq('event_id', eventId)) || []) as SheetRow[];
+  const sheets = (await selectSheets<SheetRow[] | null>((columns) => supabaseAdmin.from('scoresheets').select(columns).eq('event_id', eventId))).data || [];
   const athleteIds = [...new Set(sheets.map((sheet) => sheet.athlete_id))];
   const athletes = athleteIds.length > 0
     ? (check(await supabaseAdmin.from('athletes').select('id, name, box').in('id', athleteIds)) || []) as { id: string; name: string; box: string }[]
@@ -794,7 +1076,7 @@ export const readScoresForWorkouts = async (supabaseAdmin: SupabaseClient, worko
   if (workoutIds.length === 0) return grouped;
   const rows = (check(await supabaseAdmin
     .from('scores')
-    .select('athlete_id, workout_id, result, value, rank, points, splits')
+    .select('athlete_id, workout_id, result, value, rank, points, splits, result_status')
     .in('workout_id', workoutIds)) || []) as ScoreRow[];
   for (const row of rows) grouped[row.workout_id]?.push(toScoreDto(row));
   return grouped;
@@ -823,32 +1105,57 @@ type ManualScoreRow = { athlete_id: string; workout_id: string; result: string; 
  * Lançamento manual por cima de resultado de súmula (decisão 6 da E3): o
  * resultado que muda deixa de apontar para a súmula e vira um registro no
  * histórico; os outros mantêm a origem. Sem nenhuma súmula envolvida (ou sem a
- * migration), as linhas voltam como vieram.
+ * migration), as linhas voltam como vieram. Story 1.59: o resultado de ausente
+ * que muda perde o selo (result_status nulo) e a súmula volta a `absent` false;
+ * com o mesmo resultado, nada muda e o selo fica.
  */
 export const reconcileManualScores = async (supabaseAdmin: SupabaseClient, actor: SessionUser, rows: ManualScoreRow[]) => {
   const workoutIds = [...new Set(rows.map((row) => row.workout_id))];
   if (workoutIds.length === 0) return { rows, touchedPairs: [] as { workoutId: string; athleteId: string }[] };
   const { data, error } = await supabaseAdmin
     .from('scores')
-    .select('athlete_id, workout_id, result, value, scoresheet_id')
+    .select('athlete_id, workout_id, result, value, scoresheet_id, result_status')
     .in('workout_id', workoutIds);
   if (error) {
     if (isMissingSheetSchema(error)) return { rows, touchedPairs: [] };
     throw error;
   }
-  const linked = new Map(((data || []) as { athlete_id: string; workout_id: string; result: string; value: number; scoresheet_id: string | null }[])
-    .filter((score) => score.scoresheet_id)
-    .map((score) => [`${score.athlete_id}|${score.workout_id}`, score]));
+  type StoredScore = { athlete_id: string; workout_id: string; result: string; value: number; scoresheet_id: string | null; result_status?: string | null };
+  const stored = new Map(((data || []) as StoredScore[]).map((score) => [`${score.athlete_id}|${score.workout_id}`, score]));
+  const linked = new Map([...stored].filter(([, score]) => score.scoresheet_id));
   if (linked.size === 0) return { rows, touchedPairs: [] };
 
-  const overridden: { sheetId: string; previous: { result: string; value: number }; applied: { result: string; value: number } }[] = [];
-  const next = rows.map((row) => {
+  const overridden: { sheetId: string; absent: boolean; previous: { result: string; value: number }; applied: { result: string; value: number } }[] = [];
+  const reconciled = rows.map((row) => {
     const existing = linked.get(`${row.athlete_id}|${row.workout_id}`);
     if (!existing) return { ...row, scoresheet_id: null };
     const changed = existing.result !== row.result || Number(existing.value) !== Number(row.value);
-    if (changed) overridden.push({ sheetId: existing.scoresheet_id as string, previous: { result: existing.result, value: Number(existing.value) }, applied: { result: row.result, value: Number(row.value) } });
+    if (changed) {
+      overridden.push({
+        sheetId: existing.scoresheet_id as string,
+        absent: existing.result_status === 'absent',
+        previous: { result: existing.result, value: Number(existing.value) },
+        applied: { result: row.result, value: Number(row.value) }
+      });
+    }
     return { ...row, scoresheet_id: changed ? null : existing.scoresheet_id };
   });
+  // O selo do ausente sai só do resultado que mudou. As linhas vão num upsert
+  // em lote, que precisa das mesmas colunas em todas: as outras levam o
+  // result_status que já tinham (sem mudança).
+  const clearedAbsent = overridden.filter((item) => item.absent);
+  const next = clearedAbsent.length === 0 ? reconciled : reconciled.map((row) => {
+    const existing = stored.get(`${row.athlete_id}|${row.workout_id}`);
+    const cleared = clearedAbsent.some((item) => existing && item.sheetId === existing.scoresheet_id && row.scoresheet_id === null);
+    return { ...row, result_status: cleared ? null : existing?.result_status ?? null };
+  });
+  if (clearedAbsent.length > 0) {
+    const written = await supabaseAdmin
+      .from('scoresheets')
+      .update({ absent: false, updated_at: nowIso() })
+      .in('id', clearedAbsent.map((item) => item.sheetId));
+    if (written.error && !isMissingAbsentColumn(written.error)) throw written.error;
+  }
   for (const item of overridden) {
     await insertReview(supabaseAdmin, item.sheetId, actor, 'manual_override', {
       previous: { ...item.previous, tieBreak: null },

@@ -1,12 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, CloudOff, Loader2, Send, TriangleAlert } from 'lucide-react';
+import { CheckCircle2, CloudOff, Loader2, Send, TriangleAlert, UserX } from 'lucide-react';
 
 import { CourtShell } from '@/components/judge/CourtShell';
 import { useSheetSync } from '@/components/judge/useSheetSync';
 import { SheetView } from '@/components/sheet/SheetView';
-import { computeSheetOutcome, type ScoresheetStatus } from '@/lib/scoresheet';
+import { computeAbsentOutcome, computeSheetOutcome, type ScoresheetStatus } from '@/lib/scoresheet';
 import {
   clearLocalSheet,
   clockSeconds,
@@ -31,7 +31,9 @@ import { parseTimeInput } from '@/lib/workoutStructureEditor';
 // gravação no servidor, o relógio guardado no aparelho (recarregar a página
 // não perde a prova), a tela fica acesa enquanto o relógio roda, e o "Conferir
 // e enviar" com o ajuste pelo cronômetro oficial. Enviar publica na hora
-// (decisão 3 da E3); o servidor calcula o resultado do log.
+// (decisão 3 da E3); o servidor calcula o resultado do log. "Atleta ausente"
+// (Story 1.59) só aparece com a súmula sem nenhum registro e publica o pior
+// resultado da prova, calculado pelo servidor (a requisição não leva resultado).
 
 type SheetPayload = {
   sheet: {
@@ -47,6 +49,7 @@ type SheetPayload = {
     officialResult: string | null;
     officialTieBreak: string | null;
     corrected: boolean;
+    absent: boolean;
     returnReason: string | null;
   };
   events: QueuedEvent[];
@@ -151,7 +154,7 @@ function OfficialTimeForm({ structure, events, at, onRecord }: { structure: Work
 function SheetSession({ payload }: { payload: SheetPayload }) {
   const { sheet, context, viewer } = payload;
   const [status, setStatus] = useState<ScoresheetStatus>(sheet.status);
-  const [published, setPublished] = useState({ result: sheet.officialResult, tieBreak: sheet.officialTieBreak, corrected: sheet.corrected });
+  const [published, setPublished] = useState({ result: sheet.officialResult, tieBreak: sheet.officialTieBreak, corrected: sheet.corrected, absent: sheet.absent === true });
   const isWriter = sheet.judgeUserId === viewer.id;
   const writable = isWriter && (status === 'in_progress' || status === 'returned');
   const sync = useSheetSync({ sheetId: sheet.id, serverEvents: payload.events, writable });
@@ -160,6 +163,9 @@ function SheetSession({ payload }: { payload: SheetPayload }) {
   const [confirming, setConfirming] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const [confirmingAbsent, setConfirmingAbsent] = useState(false);
+  const [markingAbsent, setMarkingAbsent] = useState(false);
+  const [absentError, setAbsentError] = useState('');
 
   useEffect(() => {
     if (clock.phase !== 'running') return;
@@ -197,6 +203,11 @@ function SheetSession({ payload }: { payload: SheetPayload }) {
   const outcome = useMemo(() => computeSheetOutcome(structure, events), [structure, events]);
   const showReview = writable && (clock.phase === 'stopped' || finished);
   const syncReady = sync.pendingCount === 0 && sync.status === 'saved';
+  // Atleta ausente: só sem nenhum registro, nem no servidor nem na fila do aparelho.
+  const canMarkAbsent = writable && sync.confirmedCount === 0 && sync.pendingCount === 0 && events.length === 0;
+  // Só informativo (o servidor calcula de novo); com erro, a confirmação omite o resultado.
+  const absentOutcome = useMemo(() => computeAbsentOutcome(structure), [structure]);
+  const absentResultText = absentOutcome.ok ? `${absentOutcome.result.replace('.', ',')}${structure.format === 'max_load' ? ' kg' : ''}` : '';
 
   const submit = async () => {
     setSubmitting(true);
@@ -210,7 +221,7 @@ function SheetSession({ payload }: { payload: SheetPayload }) {
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || 'Não foi possível enviar a súmula.');
       setStatus('submitted');
-      setPublished({ result: data.sheet.officialResult, tieBreak: data.sheet.officialTieBreak, corrected: false });
+      setPublished({ result: data.sheet.officialResult, tieBreak: data.sheet.officialTieBreak, corrected: false, absent: false });
       if (clock.phase === 'running') stop();
       clearLocalSheet(sheet.id);
       setConfirming(false);
@@ -218,6 +229,29 @@ function SheetSession({ payload }: { payload: SheetPayload }) {
       setSubmitError(cause instanceof Error ? cause.message : 'Não foi possível enviar a súmula.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const markAbsent = async () => {
+    setMarkingAbsent(true);
+    setAbsentError('');
+    try {
+      const response = await fetch('/api/sheets', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'absent', sheetId: sheet.id })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Não foi possível marcar o atleta como ausente.');
+      setStatus('submitted');
+      setPublished({ result: data.sheet.officialResult, tieBreak: null, corrected: false, absent: true });
+      if (clock.phase === 'running') stop();
+      clearLocalSheet(sheet.id);
+      setConfirmingAbsent(false);
+    } catch (cause) {
+      setAbsentError(cause instanceof Error ? cause.message : 'Não foi possível marcar o atleta como ausente.');
+    } finally {
+      setMarkingAbsent(false);
     }
   };
 
@@ -255,6 +289,7 @@ function SheetSession({ payload }: { payload: SheetPayload }) {
       {status === 'submitted' && (
         <div className="space-y-1 rounded-2xl border-2 border-trading-up bg-trading-up/10 p-4">
           <p className="text-[11px] font-bold uppercase tracking-widest text-trading-up">Publicada no ranking</p>
+          {published.absent && <p className="text-lg font-extrabold">Atleta ausente</p>}
           <p className="font-number text-4xl font-extrabold">{published.result}</p>
           {published.tieBreak && <p className="text-sm font-semibold">Tie-break {published.tieBreak}</p>}
           {published.corrected && <p className="text-xs font-semibold text-muted">Corrigida pelo gestor.</p>}
@@ -264,7 +299,11 @@ function SheetSession({ payload }: { payload: SheetPayload }) {
         <p className="rounded-md border border-card-border bg-card px-3 py-2 text-sm font-semibold">Esta súmula foi cancelada pelo gestor.</p>
       )}
       {!isWriter && (status === 'in_progress' || status === 'returned') && (
-        <p className="rounded-md border border-card-border bg-card px-3 py-2 text-sm font-semibold">Esta súmula está com {sheet.judgeName}. Você vê sem poder marcar.</p>
+        <p className="rounded-md border border-card-border bg-card px-3 py-2 text-sm font-semibold">
+          {sheet.judgeUserId === null
+            ? 'Esta súmula está sem judge: o judge do evento que abri-la assume. Você vê sem poder marcar.'
+            : `Esta súmula está com ${sheet.judgeName}. Você vê sem poder marcar.`}
+        </p>
       )}
 
       <SheetView
@@ -277,6 +316,39 @@ function SheetSession({ payload }: { payload: SheetPayload }) {
         onStart={writable ? start : undefined}
         onStop={writable ? stop : undefined}
       />
+
+      {canMarkAbsent && (
+        <section aria-label="Atleta ausente" className="space-y-2">
+          {absentError && <p role="alert" className="text-sm font-bold text-trading-down">{absentError}</p>}
+          {confirmingAbsent ? (
+            <div role="group" aria-label="Confirmar ausência" className="space-y-2 rounded-xl border border-trading-down bg-trading-down/10 p-3">
+              <p className="text-sm font-bold">
+                {absentResultText
+                  ? `Marcar ${context.athleteName} como ausente? O resultado ${absentResultText} vai direto para o ranking, com o selo Ausente.`
+                  : `Marcar ${context.athleteName} como ausente? O resultado vai direto para o ranking, com o selo Ausente.`}
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => setConfirmingAbsent(false)} disabled={markingAbsent} className={`${buttonClass} border-card-border bg-dark-gray focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary`}>
+                  Voltar
+                </button>
+                <button type="button" onClick={() => void markAbsent()} disabled={markingAbsent} className={`${buttonClass} border-trading-down bg-trading-down text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary`}>
+                  {markingAbsent ? <Loader2 className="h-4 w-4 motion-safe:animate-spin" aria-hidden="true" /> : <UserX className="h-4 w-4" aria-hidden="true" />}
+                  Confirmar ausência
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => { setAbsentError(''); setConfirmingAbsent(true); }}
+              className={`${buttonClass} w-full border-card-border bg-dark-gray focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary`}
+            >
+              <UserX className="h-4 w-4" aria-hidden="true" />
+              Atleta ausente
+            </button>
+          )}
+        </section>
+      )}
 
       {showReview && (
         <section aria-labelledby="review-title" className={panelClass}>

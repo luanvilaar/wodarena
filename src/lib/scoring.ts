@@ -9,6 +9,8 @@ export type WorkoutScoreForRanking = {
   rank?: number;
   points?: number;
   splits?: Record<string, string>;
+  /** `'absent'` (Story 1.59): resultado atribuído ao atleta ausente. Os outros valores não mudam a ordem. */
+  resultStatus?: string | null;
 };
 export const SCORE_TIE_BREAKER_SPLIT_KEY = 'tieBreaker';
 
@@ -109,6 +111,11 @@ export const compareTimeTieBreaker = (aRaw?: string, bRaw?: string) => {
 };
 
 const isPendingRankScore = (score: WorkoutScoreForRanking) => !score.result || score.result === '-' || score.result === '';
+// Atleta ausente (Story 1.59): o resultado atribuído pelo servidor fica depois
+// de qualquer resultado real (mesmo com o valor igual, como 0 repetições ou o
+// cap com 0 s por repetição) e antes de quem ainda não tem resultado. Os
+// ausentes dividem a posição entre si, qualquer que seja o valor ou o desempate.
+const isAbsentRankScore = (score: WorkoutScoreForRanking) => score.resultStatus === 'absent' && !isPendingRankScore(score);
 
 export const compareWorkoutScoresForRank = (
   workoutType: WorkoutType,
@@ -121,6 +128,12 @@ export const compareWorkoutScoresForRank = (
   if (aPending && !bPending) return 1;
   if (!aPending && bPending) return -1;
   if (aPending && bPending) return 0;
+
+  const aAbsent = isAbsentRankScore(a);
+  const bAbsent = isAbsentRankScore(b);
+  if (aAbsent && !bAbsent) return 1;
+  if (!aAbsent && bAbsent) return -1;
+  if (aAbsent && bAbsent) return 0;
 
   const primaryComparison = isLowerScoreBetter(workoutType)
     ? a.value - b.value
@@ -139,12 +152,13 @@ export const workoutScoresShareRank = (
   tieBreaker: string | undefined,
   a: WorkoutScoreForRanking,
   b: WorkoutScoreForRanking
-) => (
-  !isPendingRankScore(a)
-  && !isPendingRankScore(b)
-  && a.value === b.value
-  && compareWorkoutScoresForRank(workoutType, tieBreaker, a, b) === 0
-);
+) => {
+  if (isPendingRankScore(a) || isPendingRankScore(b)) return false;
+  const aAbsent = isAbsentRankScore(a);
+  const bAbsent = isAbsentRankScore(b);
+  if (aAbsent || bAbsent) return aAbsent && bAbsent;
+  return a.value === b.value && compareWorkoutScoresForRank(workoutType, tieBreaker, a, b) === 0;
+};
 
 export const rankWorkoutScores = <T extends WorkoutScoreForRanking>(
   workoutType: WorkoutType,

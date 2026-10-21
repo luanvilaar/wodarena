@@ -1,6 +1,6 @@
 // Cliente Supabase falso, em memória, para testes de comportamento das rotas e
 // helpers do servidor. Implementa só o necessário: from().select/insert/update/
-// upsert/delete com eq/in/not/order/maybeSingle/single, contagem com head e rpc. As chaves
+// upsert/delete com eq/in/is/not/order/range/maybeSingle/single, contagem com head e rpc. As chaves
 // únicas seguem as do banco (supabase/migrations) e um conflito devolve o mesmo
 // código do Postgres (23505), sem gravar nada.
 
@@ -61,6 +61,27 @@ const findConflict = (table, existingRows, candidate) => {
   return null;
 };
 
+// Projeção só quando o select usa caminho JSON (`alias:coluna->chave`): aí as
+// colunas pedidas saem como no PostgREST e as demais ficam de fora. Sem caminho
+// JSON, a linha volta inteira (comportamento de sempre do fake).
+const parseJsonPathProjection = (columns) => {
+  if (typeof columns !== 'string' || !columns.includes('->')) return null;
+  const fields = columns.split(',').map((item) => item.trim()).filter(Boolean).map((item) => {
+    const match = item.match(/^(?:(\w+):)?(\w+)(?:->(\w+))?$/);
+    if (!match) throw new Error(`fakeSupabase: coluna não suportada no select: ${item}`);
+    const [, alias, column, key] = match;
+    return { name: alias || key || column, column, key };
+  });
+  return (row) => {
+    const projected = {};
+    for (const { name, column, key } of fields) {
+      if (key) projected[name] = row[column] && typeof row[column] === 'object' && key in row[column] ? row[column][key] : null;
+      else if (column in row) projected[name] = row[column];
+    }
+    return projected;
+  };
+};
+
 class FakeQuery {
   constructor(database, table) {
     this.database = database;
@@ -73,11 +94,14 @@ class FakeQuery {
     this.countOnly = false;
     this.conflictColumns = ['id'];
     this.ordering = [];
+    this.projection = null;
+    this.window = null;
   }
 
-  select(_columns, options = {}) {
+  select(columns, options = {}) {
     if (this.action === 'select') {
       this.countOnly = options.count === 'exact' && options.head === true;
+      this.projection = parseJsonPathProjection(columns);
     } else {
       this.returning = true;
     }
@@ -106,6 +130,12 @@ class FakeQuery {
     return this;
   }
 
+  // Intervalo inclusivo de linhas, como o PostgREST (aplicado depois da ordem).
+  range(from, to) {
+    this.window = { from, to };
+    return this;
+  }
+
   upsert(payload, options = {}) {
     this.action = 'upsert';
     this.payload = payload;
@@ -121,6 +151,13 @@ class FakeQuery {
   in(column, values) {
     const accepted = new Set(values);
     this.filters.push((row) => row[column] !== null && row[column] !== undefined && accepted.has(row[column]));
+    return this;
+  }
+
+  // `is(coluna, null)`, como no PostgREST: casa a coluna nula (ou ausente na linha).
+  is(column, value) {
+    if (value !== null) throw new Error(`fakeSupabase: is() só aceita null: ${value}`);
+    this.filters.push((row) => row[column] === null || row[column] === undefined);
     return this;
   }
 
@@ -174,9 +211,10 @@ class FakeQuery {
     database.operations.push({ table, action: this.action });
 
     if (this.action === 'select') {
-      const rows = this.matchingRows();
-      if (this.countOnly) return { data: null, count: rows.length, error: null };
-      return this.shape(rows);
+      const matched = this.matchingRows();
+      if (this.countOnly) return { data: null, count: matched.length, error: null };
+      const rows = this.window ? matched.slice(this.window.from, this.window.to + 1) : matched;
+      return this.shape(this.projection ? rows.map(this.projection) : rows);
     }
 
     if (this.action === 'insert') {

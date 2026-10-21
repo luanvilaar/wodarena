@@ -9,7 +9,9 @@ import { importServerModule, setActiveSupabaseClient } from './support/serverMod
 // abrir e retomar a súmula, gravar em lote com reenvio sem duplicar, enviar e
 // publicar na hora com o ranking recalculado no servidor, revisão do gestor
 // (devolver, corrigir, cancelar), trava da estrutura, lançamento manual por
-// cima da súmula e judges em evento presencial.
+// cima da súmula e judges em evento presencial. Story 1.59: atleta ausente
+// (judge, gestor sobre a súmula, gestor sem súmula), desfazer, a súmula sem
+// judge assumida pelo judge e o banco sem a migration da coluna absent.
 
 process.env.SUPABASE_URL = 'http://supabase.test.invalid';
 process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-de-teste';
@@ -17,6 +19,33 @@ process.env.WODA_SESSION_SECRET = 'segredo-de-teste-sumula-presencial';
 
 let database = createFakeSupabase();
 let missingTables = false;
+// Story 1.59: coluna scoresheets.absent ainda não criada (o banco em memória não
+// valida colunas, então o erro do PostgREST é injetado aqui): select que pede a
+// coluna e gravação que a leva falham como no Supabase.
+let missingAbsent = false;
+const failingQuery = (error) => {
+  const failing = new Proxy({}, {
+    get: (_, prop) => (prop === 'then' ? (resolve) => resolve({ data: null, error }) : () => failing)
+  });
+  return failing;
+};
+const hasAbsentKey = (payload) => (Array.isArray(payload) ? payload : [payload]).some((row) => row && typeof row === 'object' && 'absent' in row);
+const withoutAbsentColumn = (query) => new Proxy(query, {
+  get(target, prop) {
+    if (prop === 'select') {
+      return (columns, options) => (/\babsent\b/.test(String(columns))
+        ? failingQuery({ code: '42703', message: 'column scoresheets.absent does not exist' })
+        : target.select(columns, options));
+    }
+    if (prop === 'insert' || prop === 'update' || prop === 'upsert') {
+      return (payload, options) => (hasAbsentKey(payload)
+        ? failingQuery({ code: 'PGRST204', message: "Could not find the 'absent' column of 'scoresheets' in the schema cache" })
+        : target[prop](payload, options));
+    }
+    const value = target[prop];
+    return typeof value === 'function' ? value.bind(target) : value;
+  }
+});
 setActiveSupabaseClient({
   from: (table) => {
     if (missingTables && table.startsWith('scoresheet')) {
@@ -26,6 +55,7 @@ setActiveSupabaseClient({
       };
       return failing;
     }
+    if (missingAbsent && table === 'scoresheets') return withoutAbsentColumn(database.client.from(table));
     return database.client.from(table);
   },
   rpc: (name, args) => database.client.rpc(name, args)
@@ -101,6 +131,7 @@ const seed = () => {
     registrations: []
   });
   missingTables = false;
+  missingAbsent = false;
 };
 
 const cookie = (user) => `woda_session=${createSessionToken({ id: user.id, name: user.name, email: user.email, role: user.role })}`;
@@ -251,7 +282,8 @@ test('enviar: o servidor calcula, publica na hora em scores e recalcula o rankin
   assert.equal(submitted.status, 200, submitted.body.error);
   assert.equal(submitted.body.sheet.status, 'submitted');
   assert.deepEqual([submitted.body.sheet.officialResult, submitted.body.sheet.officialTieBreak, submitted.body.summary], ['09:41', '04:31', 'Concluída em 09:41']);
-  assert.deepEqual(scoreOf('ath-caio'), { athlete_id: 'ath-caio', workout_id: 'wod-fran', result: '09:41', value: 581, splits: { tieBreaker: '04:31' }, scoresheet_id: sheetId, rank: 2, points: 2 });
+  // Story 1.59 (AUTO-DECISION 5): a publicação grava result_status sempre (null no envio normal).
+  assert.deepEqual(scoreOf('ath-caio'), { athlete_id: 'ath-caio', workout_id: 'wod-fran', result: '09:41', value: 581, splits: { tieBreaker: '04:31' }, scoresheet_id: sheetId, result_status: null, rank: 2, points: 2 });
   assert.deepEqual([scoreOf('ath-bruno').rank, scoreOf('ath-bruno').points], [1, 1]);
   assert.deepEqual(submitted.body.ranking.map((score) => [score.athleteId, score.rank]).sort(), [['ath-bruno', 1], ['ath-caio', 2]]);
   assert.deepEqual(rows('scoresheet_reviews').map((review) => review.action), ['opened', 'submitted']);
@@ -449,4 +481,437 @@ test('judges: o painel cria, atribui e remove judge em evento presencial pelas f
   const race = await persist(MANAGER, 'createJudge', { eventId: 'ev-race', name: 'Judge R', email: 'r@example.com', password: 'senha-forte-1' });
   assert.equal(race.status, 400);
   assert.match(race.body.error, /Judges são exclusivos de eventos Functional Fitness/);
+});
+
+// ---------------------------------------------------------------------------
+// Atleta ausente (Story 1.59)
+// ---------------------------------------------------------------------------
+
+// Fran: cap 10:00 + 90 repetições × 1 s = 11:30 (690 s).
+const FRAN_ABSENT = { result: '11:30', value: 690 };
+const reviewsOf = (sheetId) => rows('scoresheet_reviews').filter((review) => review.sheet_id === sheetId);
+const sheetRow = (sheetId) => rows('scoresheets').find((row) => row.id === sheetId);
+const markAbsent = (user, athleteId, extra = {}) => post(user, { action: 'mark_absent', eventId: EVENT, workoutId: 'wod-fran', athleteId, reason: 'Não compareceu à bateria', ...extra });
+
+test('ausente (judge): súmula sem registro vira enviada e ausente, com o resultado do servidor, o selo e o ranking', async (t) => {
+  quiet(t);
+  seed();
+  const sheetId = (await openFran()).body.sheet.id;
+  // Resultado inventado no corpo é ignorado: o servidor calcula da estrutura.
+  const marked = await post(JUDGE, { action: 'absent', sheetId, result: '01:00', value: 60, officialResult: '01:00' });
+  assert.equal(marked.status, 200, marked.body.error);
+  const { sheet } = marked.body;
+  assert.deepEqual(
+    [sheet.status, sheet.absent, sheet.computedResult, sheet.officialResult, sheet.officialTieBreak, sheet.corrected, sheet.returnReason, sheet.judgeUserId],
+    ['submitted', true, '11:30', '11:30', null, false, null, JUDGE.id]
+  );
+  assert.equal(marked.body.summary, 'Atleta ausente · 11:30');
+  assert.deepEqual(scoreOf('ath-caio'), {
+    athlete_id: 'ath-caio', workout_id: 'wod-fran', result: '11:30', value: 690, splits: {}, scoresheet_id: sheetId, result_status: 'absent', rank: 2, points: 2
+  });
+  assert.deepEqual([scoreOf('ath-bruno').rank, scoreOf('ath-bruno').points], [1, 1]);
+  assert.deepEqual(marked.body.ranking.find((score) => score.athleteId === 'ath-caio').resultStatus, 'absent');
+  const stored = sheetRow(sheetId);
+  assert.deepEqual([stored.absent, stored.official_value, stored.computed_value, Boolean(stored.submitted_at), Boolean(stored.published_at)], [true, 690, 690, true, true]);
+  const absentReview = reviewsOf(sheetId).at(-1);
+  assert.deepEqual(
+    [absentReview.action, absentReview.actor_name, absentReview.actor_role, absentReview.reason, absentReview.previous_result, absentReview.applied_result],
+    ['absent', 'Judge Rafa', 'judge', null, null, '11:30']
+  );
+
+  // Repetir: já enviada (409), sem duplicar o histórico.
+  const again = await post(JUDGE, { action: 'absent', sheetId });
+  assert.equal(again.status, 409);
+  assert.equal(reviewsOf(sheetId).filter((review) => review.action === 'absent').length, 1);
+
+  // O quadro (view=board) leva absent no resumo da súmula; o painel (view=manage), o selo nos scores.
+  const board = await get(JUDGE, { view: 'board', eventId: EVENT });
+  assert.equal(board.body.sheets.find((item) => item.id === sheetId).absent, true);
+  const manage = await get(MANAGER, { view: 'manage', eventId: EVENT });
+  assert.equal(manage.body.sheets.find((item) => item.id === sheetId).absent, true);
+  assert.equal(manage.body.scores['wod-fran'].find((score) => score.athleteId === 'ath-caio').resultStatus, 'absent');
+});
+
+test('ausente (judge): só sem registro e só na própria súmula; devolvida sem registro aceita; carga máxima 0 kg', async (t) => {
+  quiet(t);
+  seed();
+  const withRecord = (await openFran(JUDGE, 'ath-ana')).body.sheet.id;
+  await post(JUDGE, { action: 'append', sheetId: withRecord, fromSeq: 0, events: [e({ t: 'rep', seg: 's1', at: 3 })] });
+  const refused = await post(JUDGE, { action: 'absent', sheetId: withRecord });
+  assert.equal(refused.status, 409);
+  assert.match(refused.body.error, /já tem registros/);
+  assert.equal(scoreOf('ath-ana'), undefined, 'nada é publicado');
+  assert.equal(sheetRow(withRecord).status, 'in_progress');
+  assert.equal(reviewsOf(withRecord).some((review) => review.action === 'absent'), false);
+
+  const sheetId = (await openFran()).body.sheet.id;
+  assert.equal((await post(JUDGE_2, { action: 'absent', sheetId })).status, 403, 'judge de outra súmula');
+  assert.equal((await post(MANAGER, { action: 'absent', sheetId })).status, 403, 'o gestor usa a revisão, com motivo');
+  assert.equal((await post(JUDGE, { action: 'absent', sheetId })).status, 200);
+
+  // Devolvida (AUTO-DECISION 4: devolver não mexe em absent) e ainda sem registro: o judge pode marcar de novo.
+  assert.equal((await post(MANAGER, { action: 'review', sheetId, review: 'return', reason: 'Conferir a chamada' })).status, 200);
+  assert.equal(scoreOf('ath-caio').result_status, 'absent', 'o selo fica até o reenvio');
+  const remarked = await post(JUDGE, { action: 'absent', sheetId });
+  assert.equal(remarked.status, 200, remarked.body.error);
+  assert.equal(remarked.body.sheet.returnReason, null);
+
+  const totalId = (await post(JUDGE, { action: 'open', eventId: EVENT, workoutId: 'wod-total', athleteId: 'ath-ana' })).body.sheet.id;
+  const total = await post(JUDGE, { action: 'absent', sheetId: totalId });
+  assert.equal(total.status, 200, total.body.error);
+  assert.deepEqual([scoreOf('ath-ana', 'wod-total').result, scoreOf('ath-ana', 'wod-total').value, scoreOf('ath-ana', 'wod-total').splits], ['0', 0, {}]);
+  assert.equal(total.body.summary, 'Atleta ausente · 0 kg');
+});
+
+test('ausente sobre lançamento manual: substitui e o histórico guarda o antes', async (t) => {
+  quiet(t);
+  seed();
+  const sheetId = (await post(JUDGE, { action: 'open', eventId: EVENT, workoutId: 'wod-fran', athleteId: 'ath-bruno' })).body.sheet.id;
+  assert.equal((await post(JUDGE, { action: 'absent', sheetId })).status, 200);
+  assert.deepEqual([scoreOf('ath-bruno').result, scoreOf('ath-bruno').scoresheet_id, scoreOf('ath-bruno').result_status], ['11:30', sheetId, 'absent']);
+  const review = reviewsOf(sheetId).at(-1);
+  assert.deepEqual(
+    [review.action, review.reason, review.previous_result, review.previous_value, review.previous_tie_break, review.applied_result],
+    ['absent', 'Substituiu um resultado lançado à mão.', '08:00', 480, '04:00', '11:30']
+  );
+});
+
+test('ausente (gestor, review absent): motivo, permissões, estados; judge mantido; enviada com resultado real guarda o substituído', async (t) => {
+  quiet(t);
+  seed();
+  const sheetId = (await openFran()).body.sheet.id;
+  await post(JUDGE, { action: 'append', sheetId, fromSeq: 0, events: [e({ t: 'rep', seg: 's1', at: 3 }), e({ t: 'rep', seg: 's1', at: 5 })] });
+  assert.equal((await post(MANAGER, { action: 'review', sheetId, review: 'absent', reason: '' })).status, 400, 'motivo obrigatório');
+  assert.equal((await post(MANAGER, { action: 'review', sheetId, review: 'absent', reason: 'x'.repeat(501) })).status, 400);
+  assert.equal((await post(JUDGE, { action: 'review', sheetId, review: 'absent', reason: 'Não veio' })).status, 403);
+  assert.equal((await post(OTHER_MANAGER, { action: 'review', sheetId, review: 'absent', reason: 'Não veio' })).status, 403);
+  assert.equal((await post(ATHLETE_USER, { action: 'review', sheetId, review: 'absent', reason: 'Não veio' })).status, 403);
+
+  // Em andamento e com registro: aceita (o gestor não exige log vazio).
+  const marked = await post(MANAGER, { action: 'review', sheetId, review: 'absent', reason: 'Atleta não se apresentou', result: '00:10' });
+  assert.equal(marked.status, 200, marked.body.error);
+  assert.deepEqual([marked.body.sheet.absent, marked.body.sheet.officialResult, marked.body.sheet.judgeUserId, marked.body.sheet.judgeName], [true, '11:30', JUDGE.id, 'Judge Rafa']);
+  assert.equal(scoreOf('ath-caio').result_status, 'absent');
+  assert.equal(rows('scoresheet_events').length, 2, 'o log do judge fica');
+  const review = reviewsOf(sheetId).at(-1);
+  assert.deepEqual([review.action, review.actor_name, review.actor_role, review.reason], ['absent', 'Gestora Quadra', 'manager', 'Atleta não se apresentou']);
+  const again = await post(MANAGER, { action: 'review', sheetId, review: 'absent', reason: 'De novo' });
+  assert.equal(again.status, 409);
+  assert.match(again.body.error, /já está marcado como ausente/);
+
+  // Enviada com resultado real (decisão 14): o owner marca e o histórico guarda o 09:41.
+  const anaId = (await openFran(JUDGE, 'ath-ana')).body.sheet.id;
+  await post(JUDGE, { action: 'append', sheetId: anaId, fromSeq: 0, events: franRun() });
+  assert.equal((await post(JUDGE, { action: 'submit', sheetId: anaId, expectedCount: 6 })).status, 200);
+  const byOwner = await post(OWNER, { action: 'review', sheetId: anaId, review: 'absent', reason: 'Trocou de bateria sem avisar' });
+  assert.equal(byOwner.status, 200, byOwner.body.error);
+  const ownerReview = reviewsOf(anaId).at(-1);
+  assert.deepEqual([ownerReview.action, ownerReview.actor_role, ownerReview.previous_result, ownerReview.applied_result], ['absent', 'owner', '09:41', '11:30']);
+
+  // Cancelada: 409.
+  const brunoId = (await post(JUDGE, { action: 'open', eventId: EVENT, workoutId: 'wod-fran', athleteId: 'ath-bruno' })).body.sheet.id;
+  await post(MANAGER, { action: 'review', sheetId: brunoId, review: 'cancel', reason: 'Aberta por engano' });
+  assert.equal((await post(MANAGER, { action: 'review', sheetId: brunoId, review: 'absent', reason: 'Não veio' })).status, 409);
+});
+
+test('recálculo: um segundo ausente muda os pontos do primeiro', async (t) => {
+  quiet(t);
+  seed();
+  const caioId = (await openFran()).body.sheet.id;
+  await post(JUDGE, { action: 'absent', sheetId: caioId });
+  const anaId = (await openFran(JUDGE, 'ath-ana')).body.sheet.id;
+  await post(JUDGE, { action: 'append', sheetId: anaId, fromSeq: 0, events: franRun() });
+  await post(JUDGE, { action: 'submit', sheetId: anaId, expectedCount: 6 });
+  assert.deepEqual([scoreOf('ath-bruno').points, scoreOf('ath-ana').points, scoreOf('ath-caio').points], [1, 2, 3]);
+  assert.equal((await post(MANAGER, { action: 'review', sheetId: anaId, review: 'absent', reason: 'Resultado era de outra atleta' })).status, 200);
+  assert.deepEqual([scoreOf('ath-bruno').points, scoreOf('ath-ana').points, scoreOf('ath-caio').points], [1, 2, 2], 'os ausentes dividem a última posição');
+});
+
+test('AC13 mark_absent: cria a súmula já enviada e ausente, sem judge, na bateria e raia do cronograma', async (t) => {
+  quiet(t);
+  seed();
+  const marked = await markAbsent(MANAGER, 'ath-ana', { result: '00:30', value: 30 });
+  assert.equal(marked.status, 200, marked.body.error);
+  const sheetId = marked.body.sheet.id;
+  const stored = sheetRow(sheetId);
+  assert.deepEqual(
+    [stored.status, stored.absent, stored.judge_user_id, stored.judge_name, stored.heat_id, stored.heat_number, stored.lane, stored.division_id],
+    ['submitted', true, null, 'Gestora Quadra', 'heat-1', 1, 3, 'div-rx']
+  );
+  assert.deepEqual(stored.structure, FRAN);
+  assert.deepEqual(
+    [stored.computed_result, stored.computed_value, stored.official_result, stored.official_value, stored.official_tie_break, Boolean(stored.submitted_at), Boolean(stored.published_at)],
+    ['11:30', 690, '11:30', 690, null, true, true]
+  );
+  assert.equal(rows('scoresheet_events').filter((event) => event.sheet_id === sheetId).length, 0, 'nenhum registro no log');
+  assert.deepEqual(scoreOf('ath-ana'), {
+    athlete_id: 'ath-ana', workout_id: 'wod-fran', result: '11:30', value: 690, splits: {}, scoresheet_id: sheetId, result_status: 'absent', rank: 2, points: 2
+  });
+  assert.deepEqual(reviewsOf(sheetId).map((review) => [review.action, review.actor_name, review.actor_role, review.reason, review.applied_result]), [
+    ['absent', 'Gestora Quadra', 'manager', 'Não compareceu à bateria', '11:30']
+  ]);
+  assert.equal(marked.body.summary, 'Atleta ausente · 11:30');
+
+  // De novo: já ausente (409), continua uma súmula só.
+  assert.equal((await markAbsent(MANAGER, 'ath-ana')).status, 409);
+  assert.equal(rows('scoresheets').filter((row) => row.athlete_id === 'ath-ana').length, 1);
+
+  // Fora de qualquer bateria da prova: súmula sem bateria. O owner pode.
+  const bruno = await markAbsent(OWNER, 'ath-bruno');
+  assert.equal(bruno.status, 200, bruno.body.error);
+  assert.deepEqual([sheetRow(bruno.body.sheet.id).heat_id, sheetRow(bruno.body.sheet.id).lane, sheetRow(bruno.body.sheet.id).judge_name], [null, null, 'Owner']);
+  assert.equal(reviewsOf(bruno.body.sheet.id)[0].actor_role, 'owner');
+});
+
+test('AC13 mark_absent: validações e recusas (motivo, papéis, gestor expirado, bateria, atleta, prova, categoria, tipo de evento)', async (t) => {
+  quiet(t);
+  seed();
+  database.rows('divisions').push({ id: 'div-fem', event_id: EVENT, name: 'RX Feminino' });
+  database.rows('workouts').push({ id: 'wod-fem', event_id: EVENT, name: 'Fran Fem', code: 'W4', order_index: 4, type: 'fortime', time_cap: '10:00', tie_breaker: '', division_id: 'div-fem', structure: FRAN });
+  const before = database.snapshot();
+  const expectStatus = async (promise, status, pattern) => {
+    const response = await promise;
+    assert.equal(response.status, status, JSON.stringify(response.body));
+    if (pattern) assert.match(response.body.error, pattern);
+  };
+  await expectStatus(markAbsent(MANAGER, 'ath-ana', { reason: 'ok' }), 400, /motivo/);
+  await expectStatus(markAbsent(JUDGE, 'ath-ana'), 403);
+  await expectStatus(markAbsent(ATHLETE_USER, 'ath-ana'), 403);
+  await expectStatus(markAbsent(OTHER_MANAGER, 'ath-ana'), 403);
+  await expectStatus(markAbsent(MANAGER, 'ath-ana', { heatId: 'nao-existe' }), 400, /Bateria não encontrada/);
+  await expectStatus(markAbsent(MANAGER, 'ath-caio', { heatId: 'heat-text' }), 400, /Bateria não encontrada/);
+  await expectStatus(markAbsent(MANAGER, 'ath-fora'), 400, /não pertence ao evento/);
+  await expectStatus(post(MANAGER, { action: 'mark_absent', eventId: EVENT, workoutId: 'wod-texto', athleteId: 'ath-caio', reason: 'Não veio' }), 404);
+  await expectStatus(post(MANAGER, { action: 'mark_absent', eventId: EVENT, workoutId: 'wod-fem', athleteId: 'ath-caio', reason: 'Não veio' }), 400, /outra categoria/);
+  await expectStatus(post(MANAGER, { action: 'mark_absent', eventId: 'ev-qualifier', workoutId: 'wod-fran', athleteId: 'ath-caio', reason: 'Não veio' }), 400);
+  await expectStatus(post(MANAGER, { action: 'mark_absent', eventId: 'ev-race', workoutId: 'wod-fran', athleteId: 'ath-caio', reason: 'Não veio' }), 400);
+  assert.deepEqual(database.snapshot(), before, 'nenhuma recusa grava');
+
+  database.rows('users').find((user) => user.id === MANAGER.id).service_valid_until = '2020-01-01';
+  await expectStatus(markAbsent(MANAGER, 'ath-ana'), 403, /expirou/);
+});
+
+test('AC13 mark_absent: súmula existente segue o caminho do AC6; só cancelada cria nova; corrida do índice único', async (t) => {
+  quiet(t);
+  seed();
+  const openId = (await openFran()).body.sheet.id;
+  const onExisting = await markAbsent(MANAGER, 'ath-caio');
+  assert.equal(onExisting.status, 200, onExisting.body.error);
+  assert.equal(onExisting.body.sheet.id, openId);
+  assert.equal(sheetRow(openId).judge_user_id, JUDGE.id, 'o judge original fica');
+  assert.equal(rows('scoresheets').filter((row) => row.athlete_id === 'ath-caio' && row.status !== 'cancelled').length, 1);
+
+  const cancelledId = (await openFran(JUDGE, 'ath-ana')).body.sheet.id;
+  await post(MANAGER, { action: 'review', sheetId: cancelledId, review: 'cancel', reason: 'Aberta por engano' });
+  const fresh = await markAbsent(MANAGER, 'ath-ana');
+  assert.equal(fresh.status, 200, fresh.body.error);
+  assert.notEqual(fresh.body.sheet.id, cancelledId);
+  assert.equal(fresh.body.sheet.judgeUserId, null);
+
+  // Um judge abre a súmula de Bruno entre a leitura e a gravação do gestor.
+  database.onceBeforeInsert('scoresheets', (db) => {
+    db.rows('scoresheets').push({
+      id: 'sheet-corrida', event_id: EVENT, workout_id: 'wod-fran', athlete_id: 'ath-bruno', division_id: 'div-rx', heat_id: null, heat_number: null, lane: null,
+      judge_user_id: JUDGE_2.id, judge_name: JUDGE_2.name, structure: FRAN, status: 'in_progress',
+      computed_result: null, computed_value: null, computed_tie_break: null, official_result: null, official_value: null, official_tie_break: null,
+      corrected: false, return_reason: null, submitted_at: null, published_at: null, created_at: '2026-11-01T10:00:00.000Z', updated_at: '2026-11-01T10:00:00.000Z'
+    });
+  });
+  const raced = await markAbsent(MANAGER, 'ath-bruno');
+  assert.equal(raced.status, 200, raced.body.error);
+  assert.equal(raced.body.sheet.id, 'sheet-corrida');
+  assert.deepEqual([raced.body.sheet.absent, raced.body.sheet.judgeUserId], [true, JUDGE_2.id]);
+  assert.equal(rows('scoresheets').filter((row) => row.athlete_id === 'ath-bruno').length, 1);
+});
+
+test('devolver e assumir: o judge do evento assume a súmula sem judge; gestor e owner só leem; judge apagado também', async (t) => {
+  quiet(t);
+  seed();
+  const sheetId = (await markAbsent(MANAGER, 'ath-ana')).body.sheet.id;
+  assert.equal((await post(MANAGER, { action: 'review', sheetId, review: 'return', reason: 'Ela chegou atrasada e competiu' })).status, 200);
+  assert.equal(scoreOf('ath-ana').result_status, 'absent', 'o resultado ausente fica até o reenvio');
+
+  const asManager = await openFran(MANAGER, 'ath-ana');
+  assert.equal(asManager.status, 200, asManager.body.error);
+  assert.equal(asManager.body.sheet.judgeUserId, null, 'o gestor não assume');
+  assert.equal((await post(MANAGER, { action: 'append', sheetId, fromSeq: 0, events: [e({ t: 'rep', seg: 's1', at: 3 })] })).status, 403);
+  assert.equal((await openFran(OWNER, 'ath-ana')).body.sheet.judgeUserId, null, 'o owner não assume');
+  assert.equal((await post(OWNER, { action: 'submit', sheetId, expectedCount: 0 })).status, 403);
+  assert.equal((await openFran(JUDGE_OTHER, 'ath-ana')).status, 403, 'judge de outro evento');
+  assert.equal(sheetRow(sheetId).judge_user_id, null);
+
+  const claimed = await openFran(JUDGE_2, 'ath-ana');
+  assert.equal(claimed.status, 200, claimed.body.error);
+  assert.deepEqual([claimed.body.sheet.id, claimed.body.sheet.judgeUserId, claimed.body.sheet.judgeName], [sheetId, JUDGE_2.id, 'Judge Paula']);
+  assert.deepEqual([sheetRow(sheetId).judge_user_id, reviewsOf(sheetId).at(-1).action, reviewsOf(sheetId).at(-1).actor_name], [JUDGE_2.id, 'opened', 'Judge Paula']);
+  const late = await openFran(JUDGE, 'ath-ana');
+  assert.equal(late.status, 409);
+  assert.match(late.body.error, /Esta súmula está com Judge Paula/);
+
+  // A nova dona grava e reenvia do jeito normal: o selo sai.
+  await post(JUDGE_2, { action: 'append', sheetId, fromSeq: 0, events: franRun() });
+  const resubmitted = await post(JUDGE_2, { action: 'submit', sheetId, expectedCount: 6 });
+  assert.equal(resubmitted.status, 200, resubmitted.body.error);
+  assert.deepEqual([scoreOf('ath-ana').result, scoreOf('ath-ana').result_status, sheetRow(sheetId).absent, resubmitted.body.sheet.absent], ['09:41', null, false, false]);
+
+  // Súmula cujo judge foi apagado (ON DELETE SET NULL): assumida do mesmo jeito.
+  const orphanId = (await openFran()).body.sheet.id;
+  database.rows('scoresheets').find((row) => row.id === orphanId).judge_user_id = null;
+  const adopted = await openFran(JUDGE_2);
+  assert.equal(adopted.status, 200, adopted.body.error);
+  assert.deepEqual([adopted.body.sheet.id, adopted.body.sheet.judgeUserId], [orphanId, JUDGE_2.id]);
+});
+
+test('desfazer: corrigir tira o selo; lançamento manual que muda tira, com o mesmo valor mantém; cancelar libera outra', async (t) => {
+  quiet(t);
+  seed();
+  const caioId = (await openFran()).body.sheet.id;
+  await post(JUDGE, { action: 'absent', sheetId: caioId });
+  const anaId = (await markAbsent(MANAGER, 'ath-ana')).body.sheet.id;
+
+  // Lançamento manual com o mesmo valor (o painel manda a categoria inteira): nada muda e o selo fica.
+  const same = await persist(MANAGER, 'upsertScores', { scores: [
+    { athlete_id: 'ath-bruno', workout_id: 'wod-fran', result: '08:00', value: 480, rank: 1, points: 1, splits: { tieBreaker: '04:00' } },
+    { athlete_id: 'ath-caio', workout_id: 'wod-fran', result: '11:30', value: 690, rank: 2, points: 2, splits: {} },
+    { athlete_id: 'ath-ana', workout_id: 'wod-fran', result: '11:30', value: 690, rank: 2, points: 2, splits: {} }
+  ] });
+  assert.equal(same.status, 200, same.body.error);
+  assert.deepEqual([scoreOf('ath-caio').result_status, scoreOf('ath-caio').scoresheet_id, sheetRow(caioId).absent], ['absent', caioId, true]);
+  assert.equal(reviewsOf(caioId).some((review) => review.action === 'manual_override'), false);
+
+  // Caio muda à mão: perde o selo e a origem; Ana (mesmo lote, sem mudança) continua ausente.
+  const changed = await persist(MANAGER, 'upsertScores', { scores: [
+    { athlete_id: 'ath-bruno', workout_id: 'wod-fran', result: '08:00', value: 480, rank: 1, points: 1, splits: { tieBreaker: '04:00' } },
+    { athlete_id: 'ath-caio', workout_id: 'wod-fran', result: '10:00', value: 600, rank: 2, points: 2, splits: {} },
+    { athlete_id: 'ath-ana', workout_id: 'wod-fran', result: '11:30', value: 690, rank: 3, points: 3, splits: {} }
+  ] });
+  assert.equal(changed.status, 200, changed.body.error);
+  assert.deepEqual([scoreOf('ath-caio').result_status, scoreOf('ath-caio').scoresheet_id, sheetRow(caioId).absent], [null, null, false]);
+  assert.deepEqual([scoreOf('ath-ana').result_status, scoreOf('ath-ana').scoresheet_id, sheetRow(anaId).absent], ['absent', anaId, true]);
+  assert.deepEqual([reviewsOf(caioId).at(-1).action, reviewsOf(caioId).at(-1).previous_result, reviewsOf(caioId).at(-1).applied_result], ['manual_override', '11:30', '10:00']);
+  assert.deepEqual([scoreOf('ath-bruno').rank, scoreOf('ath-caio').rank, scoreOf('ath-ana').rank], [1, 2, 3]);
+
+  // Corrigir tira o selo.
+  const corrected = await post(MANAGER, { action: 'review', sheetId: anaId, review: 'correct', reason: 'Ela competiu na bateria 2', result: '9:10' });
+  assert.equal(corrected.status, 200, corrected.body.error);
+  assert.deepEqual([scoreOf('ath-ana').result, scoreOf('ath-ana').result_status, sheetRow(anaId).absent, corrected.body.sheet.absent], ['09:10', null, false, false]);
+
+  // Cancelar uma súmula ausente tira do ranking e libera abrir outra.
+  const brunoId = (await markAbsent(MANAGER, 'ath-bruno')).body.sheet.id;
+  assert.equal((await post(MANAGER, { action: 'review', sheetId: brunoId, review: 'cancel', reason: 'Marcado por engano' })).status, 200);
+  assert.equal(scoreOf('ath-bruno'), undefined);
+  const reopened = await post(JUDGE, { action: 'open', eventId: EVENT, workoutId: 'wod-fran', athleteId: 'ath-bruno' });
+  assert.equal(reopened.status, 200);
+  assert.notEqual(reopened.body.sheet.id, brunoId);
+});
+
+test('sem a migration da coluna absent: o resto segue igual e só as ações de ausência respondem 503, sem gravar', async (t) => {
+  quiet(t);
+  seed();
+  missingAbsent = true;
+  const opened = await openFran();
+  assert.equal(opened.status, 200, opened.body.error);
+  assert.equal(opened.body.sheet.absent, false);
+  const sheetId = opened.body.sheet.id;
+  assert.equal((await post(JUDGE, { action: 'append', sheetId, fromSeq: 0, events: franRun() })).status, 200);
+  assert.equal((await post(JUDGE, { action: 'submit', sheetId, expectedCount: 6 })).status, 200);
+  assert.equal((await get(JUDGE, { view: 'board', eventId: EVENT })).status, 200);
+  assert.equal((await get(JUDGE, { view: 'sheet', sheetId })).status, 200);
+  const manage = await get(MANAGER, { view: 'manage', eventId: EVENT });
+  assert.equal(manage.status, 200, manage.body.error);
+  assert.equal(manage.body.sheets[0].absent, false);
+  assert.equal((await post(MANAGER, { action: 'review', sheetId, review: 'return', reason: 'Conferir' })).status, 200);
+  assert.equal((await post(MANAGER, { action: 'review', sheetId, review: 'correct', reason: 'Cronômetro', result: '09:40' })).status, 200);
+  assert.equal((await persist(MANAGER, 'upsertScores', { scores: [{ athlete_id: 'ath-caio', workout_id: 'wod-fran', result: '09:30', value: 570, rank: 1, points: 1, splits: {} }] })).status, 200);
+
+  const anaId = (await openFran(JUDGE, 'ath-ana')).body.sheet.id;
+  const before = database.snapshot();
+  const expectPending = (response) => {
+    assert.equal(response.status, 503, JSON.stringify(response.body));
+    assert.match(response.body.error, /20261021120000_scoresheet_absent\.sql/);
+    assert.doesNotMatch(response.body.error, /A súmula digital ainda não está disponível/);
+  };
+  expectPending(await post(JUDGE, { action: 'absent', sheetId: anaId }));
+  expectPending(await post(MANAGER, { action: 'review', sheetId: anaId, review: 'absent', reason: 'Não veio' }));
+  expectPending(await markAbsent(MANAGER, 'ath-bruno'));
+  assert.deepEqual(database.snapshot(), before, 'nada é gravado');
+  assert.equal((await post(MANAGER, { action: 'review', sheetId: anaId, review: 'cancel', reason: 'Liberar' })).status, 200, 'cancelar segue');
+});
+
+test('AC14: ausência só naquela prova (exemplo do README, L ausente na prova 1 e 5º na prova 2 → 17 pontos)', async (t) => {
+  quiet(t);
+  const { computeDivisionStandings } = await importServerModule('lib/leaderboardStandings.ts');
+  const { rankWorkoutScores } = await importServerModule('lib/scoring.ts');
+  const ids = [...'ABCDEFGHIJKLMN'];
+  const PROVA1 = validateWorkoutStructure({
+    version: 2, format: 'for_time', totalReps: 150, timeCapSeconds: 720,
+    incomplete: { rule: 'penalty_per_rep', secondsPerRep: 1, base: 'time_cap' }, tieBreak: null, generator: null, customized: true,
+    entry: { mode: 'both', marking: 'reps', publish: 'after_review' },
+    segments: [segment('p1', 1, 'Wall ball', 50), segment('p2', 1, 'Pull-up', 50), segment('p3', 1, 'Burpee', 50)],
+    maxLoad: null, scoreDisplay: null
+  }).structure;
+  const real1 = { A: 522, B: 555, C: 598, D: 620, E: 620, F: 647, G: 665, H: 699, I: 718, J: 728, K: 750 };
+  // Prova 2: 4 atletas à frente de L (09:41 = 581 s), 9 atrás.
+  const real2 = { A: 500, B: 520, C: 540, D: 560, E: 600, F: 610, G: 620, H: 630, I: 640, J: 650, K: 660, M: 670, N: 680 };
+  const mmss = (seconds) => `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+  seed();
+  database = createFakeSupabase({
+    users: [MANAGER, JUDGE],
+    events: [{ id: 'ev-14', name: 'Exemplo', date: '2026-11-01', location: 'Recife', organizer_id: MANAGER.id, event_type: 'functional_fitness', status: 'upcoming',
+      event_schedule: [
+        { id: 'h1', kind: 'heat', workoutId: 'w1', heatNumber: 1, athleteIds: ids },
+        { id: 'h2', kind: 'heat', workoutId: 'w2', heatNumber: 2, athleteIds: ids }
+      ] }],
+    event_judges: [{ event_id: 'ev-14', judge_user_id: JUDGE.id }],
+    divisions: [{ id: 'd14', event_id: 'ev-14', name: 'RX' }],
+    athletes: ids.map((id) => ({ id, name: `Atleta ${id}`, box: 'Box', division_id: 'd14' })),
+    workouts: [
+      { id: 'w1', event_id: 'ev-14', name: 'Prova 1', code: 'W1', order_index: 1, type: 'fortime', time_cap: '12:00', tie_breaker: '', division_id: null, structure: PROVA1 },
+      { id: 'w2', event_id: 'ev-14', name: 'Prova 2', code: 'W2', order_index: 2, type: 'fortime', time_cap: '10:00', tie_breaker: '', division_id: null, structure: FRAN }
+    ],
+    scores: [
+      ...Object.entries(real1).map(([id, value]) => ({ athlete_id: id, workout_id: 'w1', result: mmss(value), value, rank: null, points: null, splits: {} })),
+      ...['M', 'N'].map((id) => ({ athlete_id: id, workout_id: 'w1', result: '14:30', value: 870, rank: null, points: null, splits: {}, result_status: 'absent' })),
+      ...Object.entries(real2).map(([id, value]) => ({ athlete_id: id, workout_id: 'w2', result: mmss(value), value, rank: null, points: null, splits: {} }))
+    ],
+    registrations: []
+  });
+  const prova2Before = rankWorkoutScores('fortime', '', [...Object.entries(real2).map(([id, value]) => ({ athleteId: id, result: mmss(value), value, splits: {} })), { athleteId: 'L', result: '09:41', value: 581, splits: {} }], 14);
+
+  const sheet1 = (await post(JUDGE, { action: 'open', eventId: 'ev-14', workoutId: 'w1', athleteId: 'L', heatId: 'h1', lane: 12 })).body.sheet.id;
+  const marked = await post(JUDGE, { action: 'absent', sheetId: sheet1 });
+  assert.equal(marked.status, 200, marked.body.error);
+  assert.equal(marked.body.sheet.officialResult, '14:30');
+
+  // O quadro continua listando L na bateria da prova 2, e a súmula dela abre normalmente.
+  const board = await get(JUDGE, { view: 'board', eventId: 'ev-14' });
+  assert.ok(board.body.heats.find((heat) => heat.workoutId === 'w2').lanes.some((lane) => lane.athleteId === 'L'));
+  assert.deepEqual(board.body.sheets.map((sheet) => [sheet.workoutId, sheet.absent]), [['w1', true]]);
+  const sheet2 = await post(JUDGE, { action: 'open', eventId: 'ev-14', workoutId: 'w2', athleteId: 'L', heatId: 'h2', lane: 12 });
+  assert.equal(sheet2.status, 200, sheet2.body.error);
+  await post(JUDGE, { action: 'append', sheetId: sheet2.body.sheet.id, fromSeq: 0, events: franRun() });
+  assert.equal((await post(JUDGE, { action: 'submit', sheetId: sheet2.body.sheet.id, expectedCount: 6 })).status, 200);
+
+  const scores = rows('scores').map((row) => ({
+    athleteId: row.athlete_id, workoutId: row.workout_id, result: row.result, value: Number(row.value), rank: row.rank ?? undefined, points: row.points ?? undefined,
+    splits: row.splits || {}, resultStatus: row.result_status || undefined
+  }));
+  const L1 = scores.find((score) => score.athleteId === 'L' && score.workoutId === 'w1');
+  const L2 = scores.find((score) => score.athleteId === 'L' && score.workoutId === 'w2');
+  assert.deepEqual([L1.rank, L1.points, L1.resultStatus], [12, 12, 'absent']);
+  assert.deepEqual([L2.rank, L2.points, L2.resultStatus], [5, 5, undefined], 'o selo fica só na prova 1');
+  for (const id of ['M', 'N']) assert.equal(scores.find((score) => score.athleteId === id && score.workoutId === 'w1').points, 12);
+  for (const expected of prova2Before.filter((score) => score.athleteId !== 'L')) {
+    assert.equal(scores.find((score) => score.athleteId === expected.athleteId && score.workoutId === 'w2').points, expected.points, expected.athleteId);
+  }
+  const standings = computeDivisionStandings({
+    event: { date: '2026-11-01', eventType: 'functional_fitness', workouts: [
+      { id: 'w1', name: 'Prova 1', description: '', type: 'fortime', code: 'W1', orderIndex: 1 },
+      { id: 'w2', name: 'Prova 2', description: '', type: 'fortime', code: 'W2', orderIndex: 2 }
+    ] },
+    divisionId: 'd14',
+    divisionAthletes: ids.map((id) => ({ id, name: `Atleta ${id}`, box: 'Box', country: 'BR', divisionId: 'd14' })),
+    scores
+  });
+  assert.equal(standings.find((item) => item.athlete.id === 'L').totalPoints, 17);
 });

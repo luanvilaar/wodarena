@@ -14,7 +14,7 @@ import type { SheetEvent, WorkoutStructure } from '@/lib/workoutStructure';
 // rótulos de estado. O resultado do aparelho nunca é aceito como está.
 
 export type ScoresheetStatus = 'in_progress' | 'submitted' | 'returned' | 'cancelled';
-export type ScoresheetReviewAction = 'opened' | 'submitted' | 'returned' | 'corrected' | 'cancelled' | 'manual_override';
+export type ScoresheetReviewAction = 'opened' | 'submitted' | 'returned' | 'corrected' | 'cancelled' | 'manual_override' | 'absent';
 
 /** Rótulos da seção 7 do documento da súmula ("Enviada" já é publicada: decisão 3 da E3). */
 export const SCORESHEET_STATUS_LABELS: Record<ScoresheetStatus | 'not_started', string> = {
@@ -31,7 +31,8 @@ export const SCORESHEET_REVIEW_LABELS: Record<ScoresheetReviewAction, string> = 
   returned: 'Devolvida para correção',
   corrected: 'Resultado corrigido pelo gestor',
   cancelled: 'Súmula cancelada',
-  manual_override: 'Resultado lançado à mão por cima da súmula'
+  manual_override: 'Resultado lançado à mão por cima da súmula',
+  absent: 'Atleta ausente'
 };
 
 /** Eventos por lote enviados pelo aparelho. */
@@ -168,4 +169,27 @@ export const computeSheetOutcome = (structure: WorkoutStructure, events: readonl
       ? `Concluída em ${result.display}`
       : `${result.repsDone} de ${result.repsDone + result.repsRemaining} no cap (${result.display})`
   };
+};
+
+/** Erro do resultado de ausência que não cabe no formato de tempo publicável (acima de 99:59:59). */
+export const ABSENT_OUTCOME_TOO_LONG = 'O resultado de ausência desta prova passa do maior tempo que o ranking aceita (99:59:59). Confira o time cap e a penalidade por repetição na estrutura da prova.';
+
+/**
+ * Resultado atribuído ao atleta ausente (Story 1.59), calculado só da estrutura
+ * copiada na súmula, nunca do aparelho. For Time e AMRAP saem do motor com o
+ * log vazio (o mesmo de computeSheetOutcome(structure, [])): For Time = time
+ * cap + total de repetições × segundos por repetição; AMRAP = 0 repetições.
+ * Carga máxima = 0 kg. Sem desempate nos três formatos. O ranking põe o
+ * ausente depois de qualquer resultado real (result_status = 'absent').
+ */
+export const computeAbsentOutcome = (structure: WorkoutStructure): SheetOutcome => {
+  if (structure.format === 'max_load') {
+    return { ok: true, result: '0', value: 0, tieBreak: null, summary: 'Atleta ausente · 0 kg' };
+  }
+  const result = computeSheetResult(structure, deriveSheetState(structure, []));
+  if (result.format === 'amrap') {
+    return { ok: true, result: result.display, value: result.value, tieBreak: null, summary: `Atleta ausente · ${result.display} repetições` };
+  }
+  if (result.display === null) return { ok: false, error: ABSENT_OUTCOME_TOO_LONG };
+  return { ok: true, result: result.display, value: result.value, tieBreak: null, summary: `Atleta ausente · ${result.display}` };
 };
