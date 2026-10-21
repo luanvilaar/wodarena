@@ -1,0 +1,690 @@
+<title>Intervalado na Súmula Digital</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@500;600;700&family=Inter:wght@400;500;600;700;800&display=swap">
+<style>
+/* Layout: leitura em uma coluna (resumo, regra, regras, impacto, decisões) com dois blocos largos no meio:
+   a maquete do construtor (painel escuro) e a maquete da súmula do judge (quadra clara). */
+:root{
+  --font-body:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --font-num:"IBM Plex Sans",ui-monospace,Menlo,monospace;
+  /* página: escura primeiro, como o painel do WODArena */
+  --bg:#0b0e11; --surface:#14181d; --surface-2:#1e2329; --line:#2b3139;
+  --fg:#eaecef; --muted:#929aa5; --accent:#fcd535; --accent-text:#fcd535;
+  --up:#0ecb81; --down:#f6465d; --info:#7db4ff;
+  /* maquete do construtor: sempre o tema escuro do painel */
+  --a-bg:#0b0e11; --a-card:#1e2329; --a-line:#2b3139; --a-gray:#181a20; --a-fg:#eaecef; --a-muted:#929aa5;
+  --a-primary:#fcd535; --a-ink:#181a20; --a-up:#0ecb81; --a-down:#f6465d; --a-info:#7db4ff;
+  /* maquete da súmula: sempre a quadra clara de alto contraste (.court-light do app) */
+  --c-bg:#ffffff; --c-fg:#0b0e11; --c-card:#f3f4f6; --c-line:#b9c0cb; --c-elev:#dde1e7; --c-muted:#3f4652;
+  --c-primary:#f5c518; --c-primary-text:#7a5c00; --c-up:#0a7d52; --c-down:#b8243a; --c-info:#1f5fd1;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --bg:#f4f5f7; --surface:#ffffff; --surface-2:#eceef2; --line:#d6dae1;
+    --fg:#181a20; --muted:#566070; --accent-text:#7a5c00; --up:#0a7d52; --down:#b8243a; --info:#1f5fd1;
+    color-scheme:light;
+  }
+}
+:root[data-theme="light"]{
+  --bg:#f4f5f7; --surface:#ffffff; --surface-2:#eceef2; --line:#d6dae1;
+  --fg:#181a20; --muted:#566070; --accent-text:#7a5c00; --up:#0a7d52; --down:#b8243a; --info:#1f5fd1;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:15px;line-height:1.55;-webkit-text-size-adjust:100%;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:32px 72px}
+h1,h2,h3,h4{text-wrap:balance;line-height:1.2;margin:0}
+p{margin:0}
+code{font-family:var(--font-num);font-size:.92em;background:var(--surface-2);border:1px solid var(--line);border-radius:4px;padding:0 5px}
+.wrap{max-width:1120px;margin:0 auto;display:grid;gap:56px}
+.num{font-family:var(--font-num);font-variant-numeric:tabular-nums}
+.eyebrow{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--accent-text)}
+h1{font-size:clamp(28px,5vw,40px);font-weight:800;letter-spacing:-.02em}
+h2{font-size:22px;font-weight:800;letter-spacing:-.01em}
+h3{font-size:15px;font-weight:700}
+.lead{max-width:68ch;color:var(--muted);font-size:16px}
+.head{display:grid;gap:14px}
+.pills{display:flex;flex-wrap:wrap;gap:8px}
+.pill{display:inline-block;font-size:12px;font-weight:600;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:999px;padding:4px 12px}
+.notice{border:1px solid var(--up);background:var(--surface);border-radius:8px;padding:12px 16px;max-width:76ch}
+.notice b{color:var(--up)}
+section{display:grid;gap:16px;min-width:0}
+.sec-lead{max-width:72ch;color:var(--muted)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;min-width:0}
+.card h3{margin-bottom:10px}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:16px}
+.card ul{margin:0;padding-left:18px;display:grid;gap:4px}
+.small{font-size:13px;color:var(--muted)}
+.scroll{overflow-x:auto;max-width:100%}
+table.t{border-collapse:collapse;width:100%;min-width:600px;font-size:13.5px}
+table.t th,table.t td{text-align:left;vertical-align:top;padding:9px 12px;border-bottom:1px solid var(--line)}
+table.t th{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--surface-2)}
+table.t td:first-child{font-weight:600}
+table.t td.n,table.t th.n{text-align:right;font-family:var(--font-num);font-variant-numeric:tabular-nums}
+.tag{display:inline-block;font-size:11px;font-weight:700;padding:1px 8px;border-radius:4px;background:var(--surface-2);border:1px solid var(--line)}
+.tag.ok{color:var(--up);border-color:var(--up)}
+.tag.warn{color:var(--accent-text);border-color:var(--accent-text)}
+.wod{font-family:var(--font-num);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px 16px;line-height:1.7;font-size:14px}
+.two{display:grid;grid-template-columns:minmax(0,300px) minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:760px){.two{grid-template-columns:1fr}}
+
+/* linha do tempo (a mesma função desenha na regra, no construtor e na súmula) */
+.tl{position:relative}
+.tl-bar{display:flex;height:34px;border-radius:6px;overflow:hidden;border:1px solid var(--line);background:var(--surface-2)}
+.tl-on{display:flex;min-width:0}
+.tl-on i{display:block;height:100%}
+.tl-on .fx{flex:45 0 0;background:var(--info)}
+.tl-on .mx{flex:55 0 0;background:var(--accent)}
+.tl-off{background:repeating-linear-gradient(135deg,var(--line) 0 5px,transparent 5px 10px)}
+.tl-ticks{position:relative;height:18px;margin-top:4px;font-family:var(--font-num);font-size:11px;color:var(--muted)}
+.tl-ticks span{position:absolute;top:0;transform:translateX(-50%);white-space:nowrap}
+.tl-ticks span:first-child{transform:none}
+.tl-ticks span:last-child{transform:translateX(-100%)}
+.ph{position:absolute;top:-4px;height:42px;width:2px;background:var(--fg);pointer-events:none}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;color:var(--muted);margin-top:8px}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.lg-fx{background:var(--info)}.lg-mx{background:var(--accent)}.lg-off{background:repeating-linear-gradient(135deg,var(--line) 0 3px,transparent 3px 6px);border:1px solid var(--line)}
+
+/* ---------- maquete 1: construtor (painel escuro) ---------- */
+.mock{background:var(--a-bg);border:1px solid var(--a-line);border-radius:10px;padding:16px;color:var(--a-fg);font-size:13.5px;display:grid;gap:12px}
+.mock *{min-width:0}
+.mbar{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;border-bottom:1px solid var(--a-line);padding-bottom:12px}
+.mbar b{font-size:13px;letter-spacing:.08em;text-transform:uppercase}
+.mbar span{color:var(--a-muted);font-size:12px}
+.bsec{background:var(--a-card);border:1px solid var(--a-line);border-radius:8px;padding:12px;display:grid;gap:10px}
+.bsec h4{font-size:11px;letter-spacing:.08em;text-transform:uppercase;display:flex;gap:8px;align-items:baseline;font-weight:700}
+.bsec h4 b{color:var(--a-primary);font-family:var(--font-num);font-size:13px}
+.opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px}
+.opt{border:1px solid var(--a-line);background:var(--a-gray);border-radius:6px;padding:8px 12px;display:grid;gap:2px;min-height:62px;align-content:center}
+.opt.sel{border-color:var(--a-primary);background:rgba(252,213,53,.1)}
+.opt b{font-size:14px}
+.opt.sel b::before{content:"✓ ";color:var(--a-primary)}
+.opt span{font-size:11px;color:var(--a-muted)}
+.opt.new b::after{content:"novo";margin-left:8px;font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--a-ink);background:var(--a-primary);border-radius:3px;padding:1px 5px;vertical-align:1px}
+.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.fld label,.fld .lb{display:block;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--a-muted);margin-bottom:4px}
+.fld input{width:100%;background:var(--a-gray);border:1px solid var(--a-line);color:var(--a-fg);border-radius:6px;padding:8px 12px;font:inherit;font-family:var(--font-num);text-align:center}
+.fld input:focus-visible{outline:2px solid var(--a-primary);outline-offset:1px}
+.fld input[disabled]{opacity:.7;cursor:not-allowed}
+.fld input[aria-invalid="true"]{border-color:var(--a-down)}
+.lines{display:grid;gap:8px}
+.line{display:grid;grid-template-columns:5.5rem minmax(0,1fr) 4.5rem;gap:8px}
+.line input{text-align:left}
+.line input.c{text-align:center}
+.line.max input.maxf{border-color:var(--a-primary);color:var(--a-primary);font-weight:700}
+.hint{font-size:11px;color:var(--a-muted);line-height:1.5}
+.rule{background:var(--a-gray);border:1px solid var(--a-line);border-radius:6px;padding:10px 12px;font-size:13px;line-height:1.65}
+.rule strong{color:var(--a-primary);font-weight:600}
+.chk{list-style:none;margin:0;padding:0;display:grid;gap:4px;font-size:12px}
+.chk li{display:flex;gap:8px;align-items:baseline}
+.chk .ok{color:var(--a-up)}.chk .er{color:var(--a-down)}.chk .mu{color:var(--a-muted)}
+.mock .tl-bar{border-color:var(--a-line);background:var(--a-gray)}
+.mock .tl-off{background:repeating-linear-gradient(135deg,var(--a-line) 0 5px,transparent 5px 10px)}
+.mock .tl-on .fx{background:var(--a-info)}.mock .tl-on .mx{background:var(--a-primary)}
+.mock .tl-ticks{color:var(--a-muted)}
+.mock .legend{color:var(--a-muted)}
+
+/* ---------- maquete 2: súmula do judge (quadra clara) ---------- */
+.ctl{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px 16px;display:grid;gap:10px}
+.ctl .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.ctl input[type=range]{flex:1 1 240px;accent-color:var(--accent)}
+.ctl button,.jump{font:inherit;font-size:12px;font-weight:600;color:var(--fg);background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:6px 10px;min-height:36px;cursor:pointer}
+.ctl button:hover{border-color:var(--accent-text)}
+.ctl button:focus-visible,.phone button:focus-visible,.ctl input:focus-visible{outline:2px solid var(--accent-text);outline-offset:2px}
+.phones{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;align-items:start}
+.phone{background:var(--c-bg);color:var(--c-fg);border:8px solid #1e2329;border-radius:30px;padding:14px;display:grid;gap:10px;max-width:390px;width:100%;margin:0 auto;font-size:13px}
+.phone *{min-width:0}
+.cap{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--c-muted)}
+.cap.pr{color:var(--c-primary-text)}
+.c-card{background:var(--c-card);border:1px solid var(--c-line);border-radius:14px;padding:12px;display:grid;gap:8px}
+.c-row{display:flex;justify-content:space-between;align-items:flex-end;gap:10px}
+.big{font-family:var(--font-num);font-variant-numeric:tabular-nums;font-weight:800;line-height:1}
+.phase{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.pl{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;border-radius:999px;padding:4px 10px}
+.pl.on{background:var(--c-up);color:#fff}
+.pl.off{background:var(--c-elev);color:var(--c-fg)}
+.pl.end{background:var(--c-down);color:#fff}
+.phone .tl-bar{height:18px;border-color:var(--c-line);background:var(--c-card)}
+.phone .tl-on .fx{background:var(--c-info)}.phone .tl-on .mx{background:var(--c-primary)}
+.phone .tl-off{background:repeating-linear-gradient(135deg,var(--c-line) 0 4px,transparent 4px 8px)}
+.phone .tl-ticks{color:var(--c-muted);font-size:10px}
+.phone .ph{background:var(--c-fg);top:-3px;height:26px}
+.tile{width:100%;min-height:132px;border:2px solid #b88f00;background:rgba(245,197,24,.14);color:var(--c-fg);border-radius:16px;display:grid;gap:2px;justify-items:center;align-content:center;padding:10px;cursor:pointer;font:inherit;touch-action:manipulation;user-select:none}
+.tile:active{background:rgba(245,197,24,.3)}
+.tile[aria-disabled="true"]{border-color:var(--c-line);background:var(--c-card);color:var(--c-muted);cursor:not-allowed}
+.tile .nm{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--c-muted);text-align:center}
+.tile .ct{font-size:56px}
+.tile .of{font-size:12px;font-weight:600;color:var(--c-muted)}
+.tile .hn{font-size:11px;font-weight:600;color:var(--c-primary-text)}
+.tile[aria-disabled="true"] .hn{color:var(--c-muted)}
+.cbtn{font:inherit;font-weight:700;font-size:12px;color:var(--c-fg);background:var(--c-bg);border:1px solid var(--c-line);border-radius:10px;min-height:44px;padding:0 12px;cursor:pointer}
+.cbtn[disabled]{opacity:.45;cursor:not-allowed}
+.cbtn.pri{background:var(--c-primary);border-color:#b88f00}
+.cbtn.dn{border-color:var(--c-down)}
+.bar2{display:flex;gap:8px}.bar2 .cbtn{flex:1}
+.msg{font-size:11.5px;font-weight:700;border-radius:8px;padding:6px 10px;background:rgba(184,36,58,.1);border:1px solid var(--c-down);color:var(--c-fg)}
+.msg.okm{background:rgba(10,125,82,.1);border-color:var(--c-up)}
+.rt{width:100%;border-collapse:collapse;font-family:var(--font-num);font-variant-numeric:tabular-nums;font-size:12px}
+.rt th{font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--c-muted);text-align:right;padding:3px 4px;font-family:var(--font-body)}
+.rt th:first-child,.rt td:first-child{text-align:left}
+.rt td{text-align:right;padding:5px 4px;border-top:1px solid var(--c-line)}
+.rt tr.cur td{background:rgba(245,197,24,.2);font-weight:700}
+.rt td.cn{font-weight:800}
+.rt tr.bad td.cn{color:var(--c-down)}
+.rt tfoot td{border-top:2px solid var(--c-fg);font-weight:800;font-size:13px}
+.rc{border:1px solid var(--c-line);background:var(--c-bg);border-radius:12px;padding:8px 10px;display:grid;gap:6px}
+.rc.bad{border-color:var(--c-down);background:rgba(184,36,58,.06)}
+.rc .rh{display:flex;justify-content:space-between;gap:8px;font-weight:700;font-size:12px}
+.adj{display:flex;align-items:center;gap:6px;justify-content:space-between;font-size:12px}
+.adj .v{font-family:var(--font-num);font-weight:800;min-width:3.2rem;text-align:center}
+.adj .m{width:34px;height:34px;border:1px solid var(--c-line);border-radius:8px;background:var(--c-bg);font-weight:800;display:grid;place-items:center}
+.res{border:2px solid #b88f00;background:rgba(245,197,24,.12);border-radius:14px;padding:12px;display:grid;gap:6px}
+.res ul{margin:0;padding-left:16px;font-size:12px;color:var(--c-muted);display:grid;gap:2px}
+
+/* ---------- regras, impacto, decisões ---------- */
+.dec{display:grid;gap:10px}
+.dec .row{display:grid;grid-template-columns:auto 1fr;gap:14px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px 16px}
+.dec .row b.n{font-family:var(--font-num);font-size:18px;color:var(--accent-text)}
+.dec p+p{margin-top:4px}
+.rec{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--up);margin-right:6px}
+.alt{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--info);margin-right:6px}
+.steps{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
+.step{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px 16px;display:grid;gap:8px;align-content:start}
+.step b.id{font-family:var(--font-num);color:var(--accent-text);font-size:18px}
+.step ul{margin:0;padding-left:18px;display:grid;gap:3px;font-size:13.5px}
+.risks{display:grid;gap:10px}
+.risk{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 16px}
+.risk h3{margin-bottom:4px}
+@media (prefers-reduced-motion: reduce){*{scroll-behavior:auto!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+
+<header class="head">
+  <p class="eyebrow">Proposta · aguardando aprovação · 21/10/2026</p>
+  <h1>Intervalado na súmula digital</h1>
+  <p class="lead">Um quarto formato de prova, ao lado de For Time, AMRAP e Carga máxima: rounds de trabalho e descanso com relógio próprio, em que o resultado é a soma das repetições do movimento máximo.</p>
+  <div class="notice"><b>Nada foi alterado.</b> Nenhuma mudança foi feita no código, no banco, na autenticação ou na infraestrutura. Esta página reúne a análise e a proposta. A implementação só começa depois da sua aprovação.</div>
+  <div class="pills">
+    <span class="pill">Sem migration</span>
+    <span class="pill">Contrato da prova na versão 3</span>
+    <span class="pill">4 stories</span>
+    <span class="pill">Maquetes com simulador</span>
+  </div>
+</header>
+
+<section aria-labelledby="s-resumo">
+  <h2 id="s-resumo">Resumo</h2>
+  <div class="cols">
+    <div class="card">
+      <h3>O gestor passa a fazer</h3>
+      <ul>
+        <li>Escolher <strong>Intervalado</strong> em "Formato da prova".</li>
+        <li>Informar os rounds, o tempo de trabalho (ON) e o de descanso (OFF).</li>
+        <li>Listar os movimentos fixos, com as repetições, e o movimento máximo, sempre o último.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>A súmula passa a fazer</h3>
+      <ul>
+        <li>Mostrar o round e a fase (trabalho ou descanso), com contagem regressiva.</li>
+        <li>Aceitar toques só dentro da janela de trabalho.</li>
+        <li>Calcular o resultado no servidor: a soma das repetições do máximo, round a round.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>O que não muda</h3>
+      <ul>
+        <li>Login, sessão e permissões.</li>
+        <li>Tabelas e colunas do banco: nenhuma migration.</li>
+        <li>Publicação, ranking, revisão do gestor e atleta ausente: o mesmo caminho dos outros formatos.</li>
+        <li>Provas e súmulas que já existem.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section aria-labelledby="s-regra">
+  <h2 id="s-regra">Como o treino vira regra</h2>
+  <p class="sec-lead">O exemplo que você enviou, lido pelo sistema. A prova dura 18:00, porque não há descanso depois do último round (decisão 2).</p>
+  <div class="two">
+    <div class="wod" aria-label="Texto do treino">5 Rounds<br>2min ON / 2min OFF<br>6 Ring Muscle Ups<br>15 Box Jump Overs #24/20in<br>Max. Squat Clean #80/55kg</div>
+    <div class="scroll">
+      <table class="t" style="min-width:520px">
+        <thead><tr><th>No quadro</th><th>No sistema</th></tr></thead>
+        <tbody>
+          <tr><td>5 Rounds</td><td>5 rounds</td></tr>
+          <tr><td>2min ON / 2min OFF</td><td>120 s de trabalho e 120 s de descanso por round</td></tr>
+          <tr><td>6 Ring Muscle Ups</td><td>movimento fixo, meta de 6 repetições</td></tr>
+          <tr><td>15 Box Jump Overs #24/20in</td><td>movimento fixo, meta de 15. A altura da caixa vai no nome do movimento, porque o campo de carga só aceita kg</td></tr>
+          <tr><td>Max. Squat Clean #80/55kg</td><td>movimento máximo, sem meta. 80 kg numa prova e 55 kg na prova da outra categoria</td></tr>
+          <tr><td>Resultado: soma das repetições</td><td>score = repetições de Squat Clean dos 5 rounds somadas; maior vence</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card">
+    <h3>Linha do tempo da prova</h3>
+    <div class="tl" id="tl-static"></div>
+    <div class="legend"><span><i class="lg-fx"></i>Movimentos fixos (com meta)</span><span><i class="lg-mx"></i>Máximo (até o fim da janela)</span><span><i class="lg-off"></i>Descanso</span></div>
+    <p class="small" style="margin-top:8px">Dentro de cada janela de trabalho, o atleta termina os movimentos fixos e usa o tempo que sobrar no máximo. A divisão entre as duas cores é só ilustrativa: ela depende da velocidade do atleta.</p>
+  </div>
+</section>
+
+<section aria-labelledby="s-m1">
+  <h2 id="s-m1">Maquete 1 · Construtor da prova</h2>
+  <p class="sec-lead">É a tela da sua captura, com o quarto cartão. Edite rounds, trabalho e descanso: a linha do tempo, a duração e a frase da regra se recalculam. As seções e os campos seguem o construtor atual.</p>
+  <div class="mock">
+    <div class="mbar"><b>Construtor da prova</b><span>Prova: Intervalado 5 × 2′ · categoria vinculada: Rx Masculino</span></div>
+
+    <div class="bsec">
+      <h4><b>1</b>Formato da prova</h4>
+      <div class="opts" role="radiogroup" aria-label="Formato da prova">
+        <div class="opt" role="radio" aria-checked="false"><b>For Time</b><span>Menor tempo para um trabalho definido</span></div>
+        <div class="opt" role="radio" aria-checked="false"><b>AMRAP</b><span>Mais repetições dentro do tempo</span></div>
+        <div class="opt" role="radio" aria-checked="false"><b>Carga máxima</b><span>Maior carga válida, por tentativas</span></div>
+        <div class="opt sel new" role="radio" aria-checked="true"><b>Intervalado</b><span>Rounds de trabalho e descanso; soma das repetições</span></div>
+      </div>
+    </div>
+
+    <div class="bsec">
+      <h4><b>2</b>Rounds e tempos</h4>
+      <div class="grid3">
+        <div class="fld"><label for="b-r">Rounds</label><input id="b-r" type="text" inputmode="numeric" autocomplete="off" value="5"></div>
+        <div class="fld"><label for="b-on">Trabalho · ON (MM:SS)</label><input id="b-on" type="text" inputmode="numeric" autocomplete="off" value="02:00"></div>
+        <div class="fld"><label for="b-off">Descanso · OFF (MM:SS)</label><input id="b-off" type="text" inputmode="numeric" autocomplete="off" value="02:00"></div>
+        <div class="fld"><span class="lb">Duração da prova</span><input id="b-tot" type="text" value="18:00" disabled aria-label="Duração total calculada"></div>
+      </div>
+      <div class="tl" id="tl-build" aria-live="polite"></div>
+      <div class="legend"><span><i class="lg-fx" style="background:var(--a-info)"></i>Fixos</span><span><i class="lg-mx" style="background:var(--a-primary)"></i>Máximo</span><span><i class="lg-off"></i>Descanso</span></div>
+      <p class="hint">Sem descanso depois do último round. Com OFF em 00:00 os rounds ficam colados (EMOM).</p>
+    </div>
+
+    <div class="bsec">
+      <h4><b>3</b>Trabalho de cada round</h4>
+      <div class="lines">
+        <div class="line"><div class="fld"><input class="c" type="text" value="6" aria-label="Repetições do movimento 1"></div><div class="fld"><input type="text" value="Ring Muscle Ups" aria-label="Movimento 1"></div><div class="fld"><input class="c" type="text" placeholder="kg" aria-label="Carga do movimento 1"></div></div>
+        <div class="line"><div class="fld"><input class="c" type="text" value="15" aria-label="Repetições do movimento 2"></div><div class="fld"><input type="text" value="Box Jump Overs (24/20 in)" aria-label="Movimento 2"></div><div class="fld"><input class="c" type="text" placeholder="kg" aria-label="Carga do movimento 2"></div></div>
+        <div class="line max"><div class="fld"><input class="c maxf" type="text" value="Máx." disabled aria-label="Repetições do movimento máximo: sem meta"></div><div class="fld"><input type="text" value="Squat Clean" aria-label="Movimento máximo"></div><div class="fld"><input class="c" type="text" value="80" aria-label="Carga do movimento máximo em kg"></div></div>
+      </div>
+      <p class="hint">O movimento máximo fica sempre por último e não tem meta: o judge conta até o fim da janela. A carga é uma por linha; 80 kg e 55 kg viram duas provas, uma por categoria (campo "Categoria vinculada"), como hoje.</p>
+    </div>
+
+    <div class="bsec">
+      <h4><b>4</b>Pontuação</h4>
+      <div class="grid3">
+        <div class="fld"><span class="lb">Score</span><input type="text" value="Soma das repetições do máximo" disabled aria-label="Score" style="text-align:left"></div>
+        <div class="fld"><span class="lb">Desempate</span><input type="text" value="Sem desempate" disabled aria-label="Desempate" style="text-align:left"></div>
+      </div>
+      <p class="hint">Round em que os movimentos fixos não terminam dentro da janela vale 0 no máximo. Empates dividem a posição.</p>
+    </div>
+
+    <div class="bsec">
+      <h4><b>5</b>Regra da prova</h4>
+      <p class="rule" id="b-rule" aria-live="polite"></p>
+      <ul class="chk" id="b-chk" aria-live="polite"></ul>
+    </div>
+  </div>
+</section>
+
+<section aria-labelledby="s-m2">
+  <h2 id="s-m2">Maquete 2 · Súmula do judge</h2>
+  <p class="sec-lead">A quadra no tema claro de alto contraste, como a súmula atual. O primeiro aparelho é um simulador: arraste o relógio e toque no quadro grande. Experimente tocar no descanso e voltar o tempo. Os outros dois mostram a correção por round e o resultado.</p>
+
+  <div class="ctl">
+    <div class="row">
+      <label for="sim-t" class="small" style="min-width:120px">Relógio simulado: <b class="num" id="sim-tl" style="color:var(--fg)">00:00</b></label>
+      <input id="sim-t" type="range" min="0" max="1080" step="1" value="0" aria-describedby="sim-help">
+    </div>
+    <div class="row" role="group" aria-label="Saltos do relógio">
+      <button type="button" data-t="0">Largada (00:00)</button>
+      <button type="button" data-t="119">Último segundo do round 1 (01:59)</button>
+      <button type="button" data-t="120">Fim da janela (02:00)</button>
+      <button type="button" data-t="250">Round 2 (04:10)</button>
+      <button type="button" data-t="1079">Último segundo (17:59)</button>
+      <button type="button" data-t="1080">Prova encerrada (18:00)</button>
+      <button type="button" id="sim-reset">Zerar contagens</button>
+    </div>
+    <p class="small" id="sim-help">Cada toque soma 1 no movimento da vez: primeiro os fixos, depois o máximo. "Concluir segmento" faz o papel do toque longo. Toque no quadro durante o descanso para ver a recusa.</p>
+  </div>
+
+  <div class="phones">
+    <div class="phone" aria-label="Simulador da súmula do judge">
+      <div>
+        <p class="cap pr">Intervalado 5 × 2′</p>
+        <p style="font-size:17px;font-weight:800;line-height:1.2">Atleta exemplo <span style="font-size:12px;font-weight:600;color:var(--c-muted)">Raia 3</span></p>
+      </div>
+      <div class="c-card">
+        <div class="c-row">
+          <div><p class="cap">Relógio da prova</p><p class="big" id="p-clock" style="font-size:34px">00:00</p></div>
+          <div style="text-align:right"><p class="cap">Duração</p><p class="big" style="font-size:16px">18:00</p></div>
+        </div>
+        <div class="phase"><span class="pl on" id="p-pill">Trabalho</span><span style="font-weight:700" id="p-round">Round 1 de 5</span></div>
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px"><span class="small" id="p-left-l" style="color:var(--c-muted)">Restam no round</span><b class="big" id="p-left" style="font-size:24px">02:00</b></div>
+        <div class="tl" id="tl-phone"></div>
+        <p class="msg" id="p-msg" role="status" hidden></p>
+      </div>
+      <button type="button" class="tile" id="p-tile" aria-live="polite"></button>
+      <button type="button" class="cbtn" id="p-fill">Concluir segmento</button>
+      <div class="c-card" style="padding:8px 10px">
+        <table class="rt">
+          <thead><tr><th>Round</th><th>RMU</th><th>BJO</th><th>Squat Clean</th><th>Conta</th></tr></thead>
+          <tbody id="p-rows"></tbody>
+          <tfoot><tr><td colspan="4">Total</td><td id="p-total">0</td></tr></tfoot>
+        </table>
+        <p class="small" id="p-ign" style="color:var(--c-muted)" hidden></p>
+      </div>
+      <div class="bar2"><button type="button" class="cbtn" id="p-undo">Desfazer</button><button type="button" class="cbtn dn" id="p-stop">Parar</button></div>
+    </div>
+
+    <div class="phone" aria-label="Correção por round depois de parar o relógio">
+      <div><p class="cap pr">Relógio parado · 18:00</p><p style="font-size:17px;font-weight:800;line-height:1.2">Corrigir por round</p></div>
+      <p class="small" style="color:var(--c-muted)">Parado, o relógio não diz a que round um ajuste pertence. Por isso a correção é feita dentro do round.</p>
+      <div class="rc"><div class="rh"><span>Round 1</span><span style="color:var(--c-up)">Trabalho fixo completo</span></div><div class="adj"><span>Squat Clean</span><span style="display:flex;gap:6px;align-items:center"><span class="m">−</span><span class="v">9</span><span class="m">+</span></span></div></div>
+      <div class="rc"><div class="rh"><span>Round 2</span><span style="color:var(--c-up)">Trabalho fixo completo</span></div><div class="adj"><span>Squat Clean</span><span style="display:flex;gap:6px;align-items:center"><span class="m">−</span><span class="v">8</span><span class="m">+</span></span></div></div>
+      <div class="rc"><div class="rh"><span>Round 3</span><span style="color:var(--c-up)">Trabalho fixo completo</span></div><div class="adj"><span>Squat Clean</span><span style="display:flex;gap:6px;align-items:center"><span class="m">−</span><span class="v">5</span><span class="m">+</span></span></div></div>
+      <div class="rc"><div class="rh"><span>Round 4</span><span style="color:var(--c-up)">Trabalho fixo completo</span></div><div class="adj"><span>Squat Clean</span><span style="display:flex;gap:6px;align-items:center"><span class="m">−</span><span class="v">1</span><span class="m">+</span></span></div></div>
+      <div class="rc bad"><div class="rh"><span>Round 5</span><span style="color:var(--c-down)">Fixo incompleto</span></div>
+        <div class="adj"><span>Box Jump Overs</span><span style="display:flex;gap:6px;align-items:center"><span class="m">−</span><span class="v">11/15</span><span class="m">+</span></span></div>
+        <div class="adj"><span>Squat Clean</span><span style="display:flex;gap:6px;align-items:center"><span class="m">−</span><span class="v">0</span><span class="m">+</span></span></div>
+        <p style="font-size:11.5px;font-weight:600;color:var(--c-down)">O Squat Clean deste round só conta se os fixos chegarem à meta.</p></div>
+    </div>
+
+    <div class="phone" aria-label="Resultado e envio">
+      <div><p class="cap pr">Relógio parado · 18:00</p><p style="font-size:17px;font-weight:800;line-height:1.2">Resultado</p></div>
+      <div class="res">
+        <p class="cap pr">Soma do Squat Clean nos 5 rounds</p>
+        <p class="big" style="font-size:44px">23 <span style="font-size:18px">repetições</span></p>
+        <ul>
+          <li>Round 1: 9 · Round 2: 8 · Round 3: 5 · Round 4: 1</li>
+          <li>Round 5: 0 (Box Jump Overs 11/15, o máximo não conta)</li>
+        </ul>
+      </div>
+      <p class="msg">1 registro fora da janela não contou (chegou do aparelho às 02:00, depois do fim do round 1).</p>
+      <p class="small" style="color:var(--c-muted)">O servidor calcula o mesmo resultado a partir dos registros. O número do aparelho não é aceito como está.</p>
+      <button type="button" class="cbtn pri" style="min-height:48px">Enviar e publicar</button>
+    </div>
+  </div>
+</section>
+
+<section aria-labelledby="s-regras">
+  <h2 id="s-regras">Regras do formato</h2>
+  <p class="sec-lead">O que o motor da súmula decide, e o que o judge vê quando uma regra age. Cada linha vira critério de aceite nas stories.</p>
+  <div class="scroll"><table class="t">
+    <thead><tr><th>Regra</th><th>Como funciona</th><th>Exemplo (5 × 02:00 ON / 02:00 OFF)</th></tr></thead>
+    <tbody>
+      <tr><td>1 · Round e janela</td><td>round = ⌊tempo ÷ (ON + OFF)⌋ + 1. O registro conta se o tempo dentro do ciclo for menor que ON. É o relógio gravado no registro que manda.</td><td>04:10 → round 2, a 10 s do início da janela</td></tr>
+      <tr><td>2 · Limite da janela</td><td>Segundos inteiros, como o relógio da súmula já grava. A janela vai do início até o segundo anterior ao fim.</td><td>01:59 conta; 02:00 não conta</td></tr>
+      <tr><td>3 · Descanso e fim</td><td>A tela recusa o toque no descanso e depois do fim, com aviso na hora. Se um registro fora da janela chegar ao servidor mesmo assim (relógio do aparelho, reenvio), o motor o ignora e a súmula mostra "N registros fora da janela" antes do envio.</td><td>03:30 (descanso) e 18:00 (fim) não contam</td></tr>
+      <tr><td>4 · Fixos antes do máximo</td><td>O round só pontua se todos os movimentos fixos chegaram à meta. Senão o máximo vale 0 naquele round. A contagem bruta fica guardada e visível, para o gestor corrigir se o judge errou.</td><td>Round 5 com Box Jump Overs 11/15 → 0</td></tr>
+      <tr><td>5 · Resultado</td><td>Soma do máximo nos rounds que pontuaram. Maior vence. Publicado como número, no ranking de "maior vence".</td><td>9 + 8 + 5 + 1 + 0 = 23</td></tr>
+      <tr><td>6 · Correção</td><td>Depois de parar o relógio, o judge corrige dentro do round (+ e −). O gestor corrige o resultado publicado como nos outros formatos.</td><td>Round 3: Squat Clean de 5 para 6</td></tr>
+      <tr><td>7 · Desfazer</td><td>Igual aos outros formatos: desfaz o último registro, sem apagar o log.</td><td>—</td></tr>
+      <tr><td>8 · Empate</td><td>Sem desempate nesta primeira versão. Empatados dividem a posição, como já acontece.</td><td>40 e 40 → 1º e 1º; o seguinte é 3º</td></tr>
+      <tr><td>9 · Atleta ausente</td><td>Resultado de 0 repetições, depois de qualquer resultado real (Story 1.59).</td><td>Ausente fica na última posição</td></tr>
+      <tr><td>10 · Estrutura travada</td><td>A partir da primeira súmula aberta a estrutura não muda, como hoje. Súmulas abertas guardam uma cópia da estrutura.</td><td>—</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="card">
+    <h3>Como os registros viram rounds</h3>
+    <div class="scroll"><table class="t" style="min-width:520px">
+      <thead><tr><th>Registro</th><th>Tempo</th><th>O que o motor faz</th></tr></thead>
+      <tbody>
+        <tr><td>+1 Ring Muscle Up</td><td class="n">00:35</td><td><span class="tag ok">conta</span> round 1, 35 s dentro da janela</td></tr>
+        <tr><td>+1 Squat Clean</td><td class="n">01:59</td><td><span class="tag ok">conta</span> round 1, último segundo da janela</td></tr>
+        <tr><td>+1 Squat Clean</td><td class="n">02:00</td><td><span class="tag warn">fora</span> a janela já fechou</td></tr>
+        <tr><td>+1 Box Jump Over</td><td class="n">03:30</td><td><span class="tag warn">fora</span> descanso do round 1</td></tr>
+        <tr><td>+1 Ring Muscle Up</td><td class="n">04:10</td><td><span class="tag ok">conta</span> round 2, 10 s dentro da janela</td></tr>
+        <tr><td>+1 Squat Clean</td><td class="n">18:00</td><td><span class="tag warn">fora</span> a prova terminou em 17:59</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</section>
+
+<section aria-labelledby="s-ex">
+  <h2 id="s-ex">Exemplo para os testes</h2>
+  <p class="sec-lead">Quatro atletas na mesma prova. Os números abaixo viram o caso de teste do motor, do ranking e da publicação.</p>
+  <div class="scroll"><table class="t" style="min-width:640px">
+    <thead><tr><th>Atleta</th><th class="n">R1</th><th class="n">R2</th><th class="n">R3</th><th class="n">R4</th><th class="n">R5</th><th class="n">Resultado</th><th class="n">Posição</th><th>Observação</th></tr></thead>
+    <tbody>
+      <tr><td>A</td><td class="n">9</td><td class="n">8</td><td class="n">5</td><td class="n">1</td><td class="n">0</td><td class="n">23</td><td class="n">3</td><td>Round 5 com Box Jump Overs 11/15: o máximo não conta</td></tr>
+      <tr><td>B</td><td class="n">10</td><td class="n">9</td><td class="n">8</td><td class="n">7</td><td class="n">6</td><td class="n">40</td><td class="n">1</td><td>Empata com C</td></tr>
+      <tr><td>C</td><td class="n">8</td><td class="n">8</td><td class="n">8</td><td class="n">8</td><td class="n">8</td><td class="n">40</td><td class="n">1</td><td>Sem desempate: divide a 1ª posição</td></tr>
+      <tr><td>D</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">0</td><td class="n">4</td><td>Ausente: depois de qualquer resultado real</td></tr>
+    </tbody>
+  </table></div>
+  <p class="small">Pontos no low-point: 1, 1, 3 e 4. B, C e A seguem o ranking atual (<code>rankWorkoutScores</code>); D segue a regra do atleta ausente.</p>
+</section>
+
+<section aria-labelledby="s-impacto">
+  <h2 id="s-impacto">O que muda no sistema</h2>
+  <p class="sec-lead">Levantado lendo o código atual, sem alterar nada. As colunas dizem onde mexe e qual é o cuidado.</p>
+  <div class="scroll"><table class="t" style="min-width:720px">
+    <thead><tr><th>Área</th><th>Arquivos</th><th>Mudança</th></tr></thead>
+    <tbody>
+      <tr><td>Contrato e motor</td><td><code>src/lib/workoutStructure.ts</code></td><td>Formato <code>interval</code>; campo <code>interval</code> (rounds, trabalho, descanso, movimento máximo); validação; funções puras que derivam o estado e o resultado do log e que dizem a fase pelo relógio. A versão do contrato passa de 2 para 3 (a 1 e a 2 continuam sendo aceitas, como a 1 já é hoje). Os eventos <code>set</code> e <code>adj</code> ganham o campo opcional <code>rd</code> (round), usado só na correção.</td></tr>
+      <tr><td>Servidor da súmula</td><td><code>src/lib/scoresheet.ts</code>, <code>src/lib/liveProgress.ts</code>, <code>src/app/api/admin/persistence/route.ts</code></td><td>Validar os registros do intervalado, calcular o resultado e o resultado do atleta ausente, resumir o progresso ao vivo. O tipo legado da prova passa a poder ser <code>reps</code>.</td></tr>
+      <tr><td>Construtor</td><td><code>src/lib/workoutStructureEditor.ts</code>, <code>src/components/admin/SheetBuilderForm.tsx</code>, <code>src/app/admin/page.tsx</code>, <code>SheetPreview.tsx</code></td><td>Quarto cartão, seções 2 a 5, frase da regra e resumo da prova, edição de uma prova já gravada. O painel já troca o tipo legado pelo derivado da estrutura ao salvar.</td></tr>
+      <tr><td>Súmula do judge</td><td><code>src/lib/sheetView.ts</code>, <code>src/components/sheet/SheetView.tsx</code>, <code>CourtSheet.tsx</code></td><td>Tela própria do intervalado (fase, round, contagem regressiva, quadro do máximo, correção por round, resultado) escolhida pelo formato, como a carga máxima já é.</td></tr>
+      <tr><td>Telão</td><td><code>src/lib/serverBroadcast.ts</code>, <code>src/components/broadcast/BroadcastScreen.tsx</code></td><td>Onda separada: rótulo do formato, linha do movimento máximo na chamada, round e fase na bateria. O ranking ao vivo já cai na regra de "mais repetições" e funciona sem mudança.</td></tr>
+      <tr><td>Banco</td><td>nenhum</td><td><strong>Nenhuma migration.</strong> A estrutura da prova e o log da súmula são JSONB, sem checagem do formato. O tipo legado <code>reps</code> já é aceito pela checagem de <code>workouts.type</code>.</td></tr>
+      <tr><td>Autenticação, infraestrutura, CSP, variáveis de ambiente</td><td>nenhum</td><td>Nada muda.</td></tr>
+      <tr><td>Testes</td><td><code>tests/*.test.mjs</code></td><td>Arquivos novos para contrato, motor, servidor, construtor e tela. A troca de versão obriga a ajustar as asserções de <code>version: 2</code> em alguns testes existentes (só o texto das asserções).</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section aria-labelledby="s-stories">
+  <h2 id="s-stories">Plano em stories</h2>
+  <p class="sec-lead">Tamanhos: P pequeno, M médio, G grande. O fluxo é o de sempre: @sm cria, @po valida, @dev implementa, @qa dá o gate, e o push fica com você.</p>
+  <div class="steps">
+    <div class="step"><b class="id">1.60 · M</b><h3>Contrato v3 e motor</h3><ul><li>Formato, validação e limites</li><li>Estado, resultado e fase pelo relógio</li><li>Registros, resultado publicado, ausente e progresso ao vivo</li><li>Testes com o exemplo desta página</li></ul></div>
+    <div class="step"><b class="id">1.61 · M</b><h3>Construtor</h3><ul><li>Quarto cartão e seções</li><li>Frase da regra e resumo</li><li>Editar prova gravada</li><li>Maquete 1 como referência</li></ul></div>
+    <div class="step"><b class="id">1.62 · G</b><h3>Súmula do judge</h3><ul><li>Fases, round e contagem regressiva</li><li>Quadro do máximo e dos fixos</li><li>Correção por round e resultado</li><li>Maquete 2 como referência</li></ul></div>
+    <div class="step"><b class="id">1.63 · P</b><h3>Telão</h3><ul><li>Rótulo e linha do máximo</li><li>Round e fase na bateria</li><li>Só depois de 1.53 a 1.58 estarem commitadas</li></ul></div>
+  </div>
+  <p class="small">Ordem: 1.60, 1.61 e 1.62 em sequência. A 1.60 começa depois da Story 1.59 (atleta ausente) ser commitada, porque as duas mexem em <code>scoresheet.ts</code>. Hoje há alterações não commitadas nesses arquivos e nos do telão.</p>
+</section>
+
+<section aria-labelledby="s-riscos">
+  <h2 id="s-riscos">Riscos e pontos de atenção</h2>
+  <div class="risks">
+    <div class="risk"><h3>O relógio do judge é a régua de ON e OFF</h3><p class="small">É a mesma limitação do AMRAP: o tempo vem do "Iniciar" de cada judge. Um toque 0,4 s depois da buzina cai no descanso e não conta. A correção por round e a revisão do gestor cobrem o erro, e o aviso "registros fora da janela" deixa a diferença visível antes do envio.</p></div>
+    <div class="risk"><h3>A troca de versão do contrato toca vários pontos</h3><p class="small">Cerca de 10 pontos do código e alguns testes citam <code>version: 2</code>. Os testes do projeto são de regressão estática, então um ajuste de texto pode quebrar um teste sem mudar comportamento. A story roda <code>npm test</code> e ajusta as asserções junto.</p></div>
+    <div class="risk"><h3>Súmulas abertas não são afetadas</h3><p class="small">Cada súmula guarda a cópia da estrutura de quando foi aberta, então provas e súmulas atuais seguem como estão. Se o código voltar atrás depois de uma prova intervalada ser salva, o servidor deixa de reconhecer a estrutura dela e a prova deixa de oferecer súmula. Por isso o deploy deve ser seguido de uma conferência.</p></div>
+    <div class="risk"><h3>Telão sem a onda dele</h3><p class="small">Antes da 1.63 o telão mostra a prova intervalada com o total de repetições, sem o round e a fase. A chamada não lista o movimento máximo. Vale decidir se essa fase intermediária é aceitável ou se a 1.63 entra junto (decisão 9).</p></div>
+    <div class="risk"><h3>Página pública mostra "Reps"</h3><p class="small">O tipo legado precisa ser um dos já aceitos pelo banco. Gravar como <code>reps</code> evita migration, e a página do evento mostra o selo "Reps". O nome "Intervalado" aparece no painel, na súmula e no telão (decisão 8).</p></div>
+  </div>
+</section>
+
+<section aria-labelledby="s-dec">
+  <h2 id="s-dec">Decisões que preciso de você</h2>
+  <p class="sec-lead">Cada decisão traz a minha recomendação. Se concorda com todas, basta responder "aprovado". Para mudar alguma, cite o número.</p>
+  <div class="dec">
+    <div class="row"><b class="n">1</b><div><h3>Nome e lugar na tela</h3><p><span class="rec">Recomendo</span>Quarto cartão "Intervalado" em "Formato da prova", com o texto "Rounds de trabalho e descanso; soma das repetições".</p></div></div>
+    <div class="row"><b class="n">2</b><div><h3>Duração da prova</h3><p><span class="rec">Recomendo</span>Sem descanso depois do último round: 5 × 2:00 + 4 × 2:00 = 18:00.</p><p><span class="alt">Alternativa</span>Contar o último descanso e fechar em 20:00. Muda só o fim da prova; o resultado é o mesmo.</p></div></div>
+    <div class="row"><b class="n">3</b><div><h3>Trabalho de cada round</h3><p><span class="rec">Recomendo</span>Movimentos fixos (de 0 a 9) e um único movimento máximo, sempre o último. Permitir zero fixos cobre o "máximo a cada intervalo" sem custo extra.</p><p><span class="alt">Alternativa</span>Exigir ao menos um movimento fixo.</p></div></div>
+    <div class="row"><b class="n">4</b><div><h3>Unidade do movimento máximo</h3><p><span class="rec">Recomendo</span>Só repetições nesta versão. Calorias ficam para uma próxima story, se aparecer o caso.</p></div></div>
+    <div class="row"><b class="n">5</b><div><h3>Round com fixos incompletos</h3><p><span class="rec">Recomendo</span>O máximo daquele round vale 0, com a contagem bruta guardada e visível para o gestor corrigir.</p></div></div>
+    <div class="row"><b class="n">6</b><div><h3>Toque fora da janela</h3><p><span class="rec">Recomendo</span>A tela recusa o toque na hora. Se um registro fora da janela chegar ao servidor, ele é ignorado e aparece no aviso "N registros fora da janela" antes do envio. A janela vai do início ao segundo anterior ao fim (01:59 conta, 02:00 não).</p></div></div>
+    <div class="row"><b class="n">7</b><div><h3>Desempate</h3><p><span class="rec">Recomendo</span>Nenhum nesta versão: empatados dividem a posição.</p><p><span class="alt">Para depois</span>"Maior round único" é o candidato mais provável, se os organizadores pedirem.</p></div></div>
+    <div class="row"><b class="n">8</b><div><h3>Tipo gravado na prova</h3><p><span class="rec">Recomendo</span><code>reps</code> (selo "Reps" na página pública). Não precisa de migration, e a pontuação por "maior vence" já funciona.</p><p><span class="alt">Alternativa</span><code>amrap</code>: o selo mostraria "AMRAP", que não descreve esta prova.</p></div></div>
+    <div class="row"><b class="n">9</b><div><h3>Telão</h3><p><span class="rec">Recomendo</span>Em onda separada (Story 1.63), depois das stories do telão estarem commitadas. Até lá ele mostra o total de repetições da bateria.</p><p><span class="alt">Alternativa</span>Esperar e liberar o formato só com o telão pronto.</p></div></div>
+    <div class="row"><b class="n">10</b><div><h3>Limites</h3><p><span class="rec">Recomendo</span>De 2 a 20 rounds; trabalho de 00:30 a 30:00; descanso de 00:00 a 30:00; duração total de até 99:59, o maior time cap que o sistema aceita hoje.</p></div></div>
+  </div>
+  <div class="card">
+    <h3>Depois da aprovação</h3>
+    <ul>
+      <li>Copio estas maquetes para <code>docs/design/intervalado/</code> e registro as decisões num README da pasta, como foi feito na súmula e no atleta ausente.</li>
+      <li>@sm cria as stories 1.60 a 1.63, citando a pasta nos critérios de aceite, e @po valida.</li>
+      <li>Só então o @dev começa, pela 1.60, depois da Story 1.59 estar commitada.</li>
+    </ul>
+  </div>
+</section>
+
+</div>
+
+<script>
+(function(){
+  var $ = function(id){ return document.getElementById(id); };
+  var fmt = function(s){ s = Math.max(0, Math.floor(s)); return String(Math.floor(s/60)).padStart(2,'0') + ':' + String(s%60).padStart(2,'0'); };
+  var total = function(R,on,off){ return R*on + (R-1)*off; };
+
+  function parseT(text){
+    var s = String(text).trim(), m;
+    if ((m = s.match(/^(\d{1,3})$/))) return Number(m[1]) * 60;
+    if ((m = s.match(/^(\d{1,3}):([0-5]\d)$/))) return Number(m[1]) * 60 + Number(m[2]);
+    return NaN;
+  }
+  function parseN(text){ return /^\d{1,2}$/.test(String(text).trim()) ? Number(text) : NaN; }
+
+  // Linha do tempo: um bloco de trabalho por round e um de descanso entre eles.
+  function renderTimeline(el, R, on, off){
+    if (!el) return;
+    var tot = total(R,on,off), C = on + off, h = '', r, step = Math.ceil(R / 8);
+    h += '<div class="tl-bar" role="img" aria-label="' + R + ' rounds de ' + fmt(on) + ' de trabalho, ' + fmt(off) + ' de descanso entre eles, ' + fmt(tot) + ' no total">';
+    for (r = 1; r <= R; r++) {
+      h += '<div class="tl-on" style="flex:' + on + ' 0 0"><i class="fx"></i><i class="mx"></i></div>';
+      if (r < R && off > 0) h += '<div class="tl-off" style="flex:' + off + ' 0 0"></div>';
+    }
+    h += '</div><div class="tl-ticks" aria-hidden="true">';
+    for (r = 1; r <= R; r += step) h += '<span style="left:' + (((r-1)*C)/tot*100) + '%">' + fmt((r-1)*C) + '</span>';
+    h += '<span style="left:100%">' + fmt(tot) + '</span></div>';
+    el.innerHTML = h;
+  }
+
+  renderTimeline($('tl-static'), 5, 120, 120);
+
+  // ---------- construtor ----------
+  var bR = $('b-r'), bOn = $('b-on'), bOff = $('b-off');
+  function buildUpdate(){
+    var R = parseN(bR.value), on = parseT(bOn.value), off = parseT(bOff.value), items = [], ok = true;
+    var tot = (isNaN(R) || isNaN(on) || isNaN(off)) ? NaN : total(R,on,off);
+    bR.setAttribute('aria-invalid', String(!(R >= 2 && R <= 20)));
+    bOn.setAttribute('aria-invalid', String(!(on >= 30 && on <= 1800)));
+    bOff.setAttribute('aria-invalid', String(!(off >= 0 && off <= 1800)));
+    if (!(R >= 2 && R <= 20)) { items.push(['er','Rounds: de 2 a 20.']); ok = false; }
+    if (!(on >= 30 && on <= 1800)) { items.push(['er','Trabalho: de 00:30 a 30:00 (MM:SS).']); ok = false; }
+    if (!(off >= 0 && off <= 1800)) { items.push(['er','Descanso: de 00:00 a 30:00 (MM:SS).']); ok = false; }
+    if (ok && tot > 5999) { items.push(['er','A prova passa de 99:59 (' + fmt(tot) + '). Reduza rounds ou tempos.']); ok = false; }
+    if (ok) {
+      items.push(['ok', R + ' rounds de ' + fmt(on) + ' de trabalho' + (off > 0 ? ' e ' + fmt(off) + ' de descanso' : ', sem descanso') + ' · ' + fmt(tot) + ' no total']);
+      items.push(['ok','2 movimentos fixos (21 repetições por round)']);
+      items.push(['ok','1 movimento máximo: Squat Clean 80 kg']);
+      items.push(['mu','Sem desempate (opcional)']);
+    }
+    $('b-tot').value = ok ? fmt(tot) : '—';
+    $('b-chk').innerHTML = items.map(function(i){ return '<li><span class="' + i[0] + '" aria-hidden="true">' + (i[0]==='ok'?'✓':i[0]==='er'?'!':'·') + '</span><span>' + i[1] + '</span></li>'; }).join('');
+    if (ok) {
+      renderTimeline($('tl-build'), R, on, off);
+      $('b-rule').innerHTML = 'São <strong>' + R + ' rounds</strong> de <strong>' + fmt(on) + '</strong> de trabalho' +
+        (off > 0 ? ', com <strong>' + fmt(off) + '</strong> de descanso entre eles' : ', sem descanso entre eles') +
+        ' (<strong>' + fmt(tot) + '</strong> no total). Em cada round o atleta faz <strong>6 Ring Muscle Ups</strong> e <strong>15 Box Jump Overs (24/20 in)</strong> e, com o tempo que sobrar, o máximo de <strong>Squat Clean 80 kg</strong>. Vale a <strong>soma das repetições de Squat Clean</strong> dos rounds. Round em que os movimentos fixos não terminam dentro da janela vale 0. Sem desempate: empates dividem a posição.';
+    } else {
+      $('tl-build').innerHTML = '';
+      $('b-rule').textContent = 'A regra aparece aqui quando os itens marcados com ! forem corrigidos.';
+    }
+  }
+  [bR,bOn,bOff].forEach(function(el){ el.addEventListener('input', buildUpdate); });
+  buildUpdate();
+
+  // ---------- simulador da súmula ----------
+  var CFG = { R:5, on:120, off:120, fx:[6,15], tot:1080 };
+  var rounds, ignored, stack, t = 0, msgTimer = null;
+  function reset(){ rounds = []; for (var i = 0; i < CFG.R; i++) rounds.push({ f:[0,0], o:0 }); ignored = 0; stack = []; }
+  reset();
+  function where(s){
+    var C = CFG.on + CFG.off;
+    if (s >= CFG.tot) return { phase:'end' };
+    var r = Math.floor(s / C), within = s - r * C;
+    return within < CFG.on ? { phase:'on', round:r+1, left:CFG.on - within } : { phase:'off', round:r+1, left:C - within };
+  }
+  var fixedDone = function(x){ return x.f[0] === CFG.fx[0] && x.f[1] === CFG.fx[1]; };
+  var counted = function(x){ return fixedDone(x) ? x.o : 0; };
+  function flash(text, good){
+    var m = $('p-msg'); m.textContent = text; m.className = 'msg' + (good ? ' okm' : ''); m.hidden = false;
+    clearTimeout(msgTimer); msgTimer = setTimeout(function(){ m.hidden = true; }, 2600);
+  }
+  function currentIndex(x){ return x.f[0] < CFG.fx[0] ? 0 : x.f[1] < CFG.fx[1] ? 1 : -1; }
+  function tap(){
+    var w = where(t);
+    if (w.phase !== 'on') { ignored++; flash(w.phase === 'off' ? 'Descanso: o toque não foi aceito.' : 'Prova encerrada: o toque não foi aceito.'); render(); return; }
+    var x = rounds[w.round-1], i = currentIndex(x);
+    if (i >= 0) { stack.push({ r:w.round-1, k:i, prev:x.f[i] }); x.f[i]++; }
+    else { stack.push({ r:w.round-1, k:'o', prev:x.o }); x.o++; }
+    render();
+  }
+  function fill(){
+    var w = where(t);
+    if (w.phase !== 'on') { ignored++; flash('Fora da janela de trabalho: o toque não foi aceito.'); render(); return; }
+    var x = rounds[w.round-1], i = currentIndex(x);
+    if (i < 0) return;
+    stack.push({ r:w.round-1, k:i, prev:x.f[i] }); x.f[i] = CFG.fx[i]; render();
+  }
+  function undo(){
+    var s = stack.pop(); if (!s) return;
+    var x = rounds[s.r]; if (s.k === 'o') x.o = s.prev; else x.f[s.k] = s.prev;
+    render();
+  }
+  function render(){
+    var w = where(t), pill = $('p-pill'), tile = $('p-tile'), fillBtn = $('p-fill');
+    $('sim-tl').textContent = fmt(t);
+    $('p-clock').textContent = fmt(t);
+    if (w.phase === 'on') {
+      pill.textContent = 'Trabalho'; pill.className = 'pl on';
+      $('p-round').textContent = 'Round ' + w.round + ' de ' + CFG.R;
+      $('p-left-l').textContent = 'Restam no round'; $('p-left').textContent = fmt(w.left);
+      var x = rounds[w.round-1], i = currentIndex(x);
+      tile.setAttribute('aria-disabled', 'false');
+      if (i >= 0) {
+        tile.innerHTML = '<span class="nm">' + (i === 0 ? 'Ring Muscle Ups' : 'Box Jump Overs (24/20 in)') + '</span><span class="big ct">' + x.f[i] + '</span><span class="of">de ' + CFG.fx[i] + ' repetições</span><span class="hn">Toque +1 · Segure para concluir</span>';
+        fillBtn.hidden = false;
+      } else {
+        tile.innerHTML = '<span class="nm">Máx. Squat Clean · 80 kg</span><span class="big ct">' + x.o + '</span><span class="of">repetições neste round</span><span class="hn">Sem meta · conte até o fim da janela</span>';
+        fillBtn.hidden = true;
+      }
+    } else if (w.phase === 'off') {
+      pill.textContent = 'Descanso'; pill.className = 'pl off';
+      $('p-round').textContent = 'Depois do round ' + w.round + ' de ' + CFG.R;
+      $('p-left-l').textContent = 'Próximo round em'; $('p-left').textContent = fmt(w.left);
+      tile.setAttribute('aria-disabled', 'true'); fillBtn.hidden = true;
+      tile.innerHTML = '<span class="nm">Descanso</span><span class="big ct">' + counted(rounds[w.round-1]) + '</span><span class="of">repetições contadas no round ' + w.round + '</span><span class="hn">Os registros agora não contam</span>';
+    } else {
+      pill.textContent = 'Prova encerrada'; pill.className = 'pl end';
+      $('p-round').textContent = CFG.R + ' rounds feitos';
+      $('p-left-l').textContent = 'Pare o relógio'; $('p-left').textContent = '00:00';
+      tile.setAttribute('aria-disabled', 'true'); fillBtn.hidden = true;
+      tile.innerHTML = '<span class="nm">Tempo esgotado</span><span class="big ct">' + rounds.reduce(function(a,x){ return a + counted(x); }, 0) + '</span><span class="of">repetições no total</span><span class="hn">Toque em Parar para revisar</span>';
+    }
+    var rows = '', sum = 0;
+    rounds.forEach(function(x, k){
+      var c = counted(x); sum += c;
+      var cur = w.phase !== 'end' && w.round === k + 1 && w.phase === 'on';
+      var bad = !fixedDone(x) && x.o > 0;
+      rows += '<tr class="' + (cur ? 'cur' : '') + (bad ? ' bad' : '') + '"><td>R' + (k+1) + '</td><td>' + x.f[0] + '/' + CFG.fx[0] + '</td><td>' + x.f[1] + '/' + CFG.fx[1] + '</td><td>' + x.o + '</td><td class="cn">' + c + '</td></tr>';
+    });
+    $('p-rows').innerHTML = rows; $('p-total').textContent = sum;
+    var ign = $('p-ign');
+    if (ignored > 0) { ign.hidden = false; ign.textContent = ignored + (ignored === 1 ? ' toque fora da janela foi recusado.' : ' toques fora da janela foram recusados.'); } else ign.hidden = true;
+    $('p-undo').disabled = stack.length === 0;
+    var ph = document.querySelector('#tl-phone .ph'); if (ph) ph.style.left = (Math.min(t, CFG.tot) / CFG.tot * 100) + '%';
+  }
+  renderTimeline($('tl-phone'), CFG.R, CFG.on, CFG.off);
+  (function(){ var ph = document.createElement('div'); ph.className = 'ph'; ph.style.left = '0%'; ph.setAttribute('aria-hidden','true'); $('tl-phone').appendChild(ph); })();
+
+  $('sim-t').addEventListener('input', function(e){ t = Number(e.target.value); render(); });
+  Array.prototype.forEach.call(document.querySelectorAll('.ctl [data-t]'), function(b){
+    b.addEventListener('click', function(){ t = Number(b.getAttribute('data-t')); $('sim-t').value = t; render(); });
+  });
+  $('sim-reset').addEventListener('click', function(){ reset(); render(); flash('Contagens zeradas.', true); });
+  $('p-tile').addEventListener('click', tap);
+  $('p-fill').addEventListener('click', fill);
+  $('p-undo').addEventListener('click', undo);
+  $('p-stop').addEventListener('click', function(){ flash('Na versão real, "Parar" abre a correção por round e o resultado (telas ao lado).', true); });
+  render();
+})();
+</script>
