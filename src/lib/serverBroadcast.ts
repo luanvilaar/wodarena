@@ -48,6 +48,9 @@ export class BroadcastError extends Error {
   }
 }
 
+/** Evento Fitness Race ou Qualifier no telão (mesa e link). */
+export const BROADCAST_EVENT_TYPE_MESSAGE = 'O telão ao vivo é exclusivo de eventos Functional Fitness presenciais.';
+
 const UNAVAILABLE_MESSAGE = 'O telão ainda não está disponível neste ambiente. Aplique a migration do telão antes de usar.';
 
 /** Tabela ou coluna do telão ainda não criada (migration 20261020120000 pendente). */
@@ -161,10 +164,18 @@ export const setBroadcastMode = async (
   return writeConfig(supabaseAdmin, actor, eventId, patch);
 };
 
+/** "Encerrar" numa bateria sem nenhum registro nas súmulas (só a Chamada). */
+export const FINISH_WITHOUT_RECORD_MESSAGE = 'Esta bateria ainda não tem nenhum registro nas súmulas, então não há o que encerrar. Se as súmulas foram abertas por engano, cancele-as na área de súmulas para tirar a chamada do ar.';
+
 /**
  * Marca a bateria (grupo de súmulas) na mesa do gestor: `start` acerta o relógio
- * do telão no sinal oficial, `finish` força o intervalo com súmula pendente e
- * `reopen` desfaz o encerramento.
+ * do telão no sinal oficial (e desfaz um encerramento anterior da mesma
+ * bateria), `finish` força o intervalo com súmula pendente e `reopen` desfaz o
+ * encerramento.
+ *
+ * `finish` só vale para bateria que já começou (alguma súmula com registro ou
+ * enviada). Encerrar uma bateria que ainda está na Chamada gravaria a marca
+ * antes do primeiro toque, e com ela a bateria nunca entraria ao vivo.
  */
 export const markBroadcastHeat = async (
   supabaseAdmin: SupabaseClient,
@@ -173,18 +184,28 @@ export const markBroadcastHeat = async (
   input: { heatId?: unknown; mark?: unknown }
 ) => {
   if (typeof input.heatId !== 'string' || !input.heatId || input.heatId.length > 200) throw new BroadcastError('Informe a bateria.');
+  const heatId = input.heatId;
   const at = nowIso();
   const patch = input.mark === 'start'
-    ? { started_at: at, started_by: actor.id }
+    ? { started_at: at, started_by: actor.id, finished_at: null, finished_by: null }
     : input.mark === 'finish'
       ? { finished_at: at, finished_by: actor.id }
       : input.mark === 'reopen'
         ? { finished_at: null, finished_by: null }
         : null;
   if (!patch) throw new BroadcastError('Ação desconhecida: use largada, encerrar ou reabrir.');
+  if (input.mark === 'finish') {
+    // Mesma regra do motor (broadcastMode.ts): o grupo é a bateria ou, sem
+    // bateria, a prova e a categoria; súmula cancelada não conta.
+    const sheets = await readBroadcastSheets(supabaseAdmin, eventId);
+    const started = sheets.some((sheet) => sheet.status !== 'cancelled'
+      && sheetGroupKey({ heatId: sheet.heat_id, workoutId: sheet.workout_id, divisionId: sheet.division_id }) === heatId
+      && (sheet.status === 'submitted' || sheetSeq(sheet) > 0));
+    if (!started) throw new BroadcastError(FINISH_WITHOUT_RECORD_MESSAGE, 409);
+  }
   check(await supabaseAdmin.from('broadcast_heat_states').upsert({
     event_id: eventId,
-    heat_id: input.heatId,
+    heat_id: heatId,
     ...patch,
     updated_at: at
   }, { onConflict: 'event_id,heat_id' }));
@@ -210,12 +231,13 @@ type SheetRow = {
   official_result: string | null;
   submitted_at: string | null;
   updated_at: string;
-  live_progress?: unknown;
+  /** Só o contador do log (`live_progress->seq`); o JSON inteiro é lido só para a bateria no ar. */
+  seq?: unknown;
 };
 type AthleteRow = { id: string; name: string; box: string | null; division_id: string; is_team: boolean | null };
 type HeatRow = { heat_id: string; started_at: string | null; finished_at: string | null };
 
-const SHEET_SELECT = 'id, workout_id, athlete_id, division_id, heat_id, lane, status, official_result, submitted_at, updated_at, live_progress';
+const SHEET_SELECT = 'id, workout_id, athlete_id, division_id, heat_id, lane, status, official_result, submitted_at, updated_at, seq:live_progress->seq';
 
 type ScheduleHeat = ModeHeat & { workoutId: string; heatNumber: number | null; date: string; time: string; title: string; athleteIds: string[] };
 
@@ -286,16 +308,69 @@ const minIso = (values: (string | null | undefined)[]) => {
 
 const fingerprint = (value: unknown) => createHash('sha1').update(JSON.stringify(value)).digest('base64url').slice(0, 16);
 
-const readSheets = async (supabaseAdmin: SupabaseClient, eventId: string) => (
-  (check(await supabaseAdmin.from('scoresheets').select(SHEET_SELECT).eq('event_id', eventId)) || []) as SheetRow[]
-);
+/** Linhas por página: o "Max rows" padrão do PostgREST no Supabase (acima disso ele corta sem erro). */
+export const SHEET_PAGE_SIZE = 1000;
+const MAX_PAGES = 100;
 
-/** Progresso das súmulas do grupo; as que ainda não têm o resumo gravado são calculadas do log. */
+/**
+ * Lê todas as páginas de uma consulta (`range` sobre uma ordem estável) até vir
+ * uma página incompleta. `fetchPage` recebe o intervalo inclusivo de linhas.
+ */
+export const readAllPages = async <T>(
+  fetchPage: (from: number, to: number) => PromiseLike<{ data: unknown; error: unknown }>,
+  pageSize = SHEET_PAGE_SIZE
+): Promise<T[]> => {
+  const rows: T[] = [];
+  for (let page = 0; page < MAX_PAGES; page += 1) {
+    const from = page * pageSize;
+    const data = (check(await fetchPage(from, from + pageSize - 1)) || []) as T[];
+    rows.push(...data);
+    if (data.length < pageSize) return rows;
+  }
+  console.warn(`Telão: leitura parada em ${MAX_PAGES * pageSize} linhas.`);
+  return rows;
+};
+
+/**
+ * Todas as súmulas do evento, só com as colunas leves (o progresso vem só como
+ * `seq`), paginadas pelo id. O motor de modo precisa de todas: `nextHeat` usa
+ * as baterias já tocadas para saber a próxima.
+ *
+ * A paginação é por posição: uma súmula aberta durante a leitura, com id menor
+ * que o da borda da página, empurra a linha da borda para a página seguinte, e
+ * ela viria duas vezes. Fica uma linha por id (a lida por último, na posição da
+ * primeira); a súmula nova entra na leitura seguinte.
+ */
+export const readBroadcastSheets = async (supabaseAdmin: SupabaseClient, eventId: string, pageSize = SHEET_PAGE_SIZE) => {
+  const rows = await readAllPages<SheetRow>((from, to) => supabaseAdmin
+    .from('scoresheets')
+    .select(SHEET_SELECT)
+    .eq('event_id', eventId)
+    .order('id', { ascending: true })
+    .range(from, to), pageSize);
+  const byId = new Map<string, SheetRow>();
+  for (const row of rows) byId.set(row.id, row);
+  return [...byId.values()];
+};
+
+const sheetSeq = (sheet: SheetRow) => (typeof sheet.seq === 'number' && Number.isFinite(sheet.seq) ? sheet.seq : 0);
+
+/**
+ * Progresso das súmulas do grupo; as que não têm o resumo completo gravado (só
+ * o contador `{ seq }`, quando o resumo falhou no lote) são calculadas do log.
+ * Se o cálculo falhar também aqui, a raia fica sem progresso, sem derrubar o telão.
+ */
 const readGroupProgress = async (supabaseAdmin: SupabaseClient, sheets: SheetRow[], structure: WorkoutStructure) => {
   const progress = new Map<string, LiveProgress | null>();
+  if (sheets.length === 0) return progress;
+  const storedRows = (check(await supabaseAdmin
+    .from('scoresheets')
+    .select('id, live_progress')
+    .in('id', sheets.map((sheet) => sheet.id))) || []) as { id: string; live_progress: unknown }[];
+  const storedById = new Map(storedRows.map((row) => [row.id, readLiveProgress(row.live_progress)]));
   const missing: string[] = [];
   for (const sheet of sheets) {
-    const stored = readLiveProgress(sheet.live_progress);
+    const stored = storedById.get(sheet.id) ?? null;
     progress.set(sheet.id, stored);
     if (!stored) missing.push(sheet.id);
   }
@@ -307,7 +382,13 @@ const readGroupProgress = async (supabaseAdmin: SupabaseClient, sheets: SheetRow
       .order('seq', { ascending: true })) || []) as { sheet_id: string; seq: number; client_event_id: string; event: SheetEvent; recorded_at: string | null }[];
     for (const sheetId of missing) {
       const events = rows.filter((row) => row.sheet_id === sheetId).sort((a, b) => a.seq - b.seq);
-      progress.set(sheetId, events.length > 0 ? buildLiveProgress(structure, events) : null);
+      let item: LiveProgress | null = null;
+      try {
+        item = events.length > 0 ? buildLiveProgress(structure, events) : null;
+      } catch (error) {
+        console.error('Telão: erro ao calcular o progresso da súmula pelo log:', error);
+      }
+      progress.set(sheetId, item);
     }
   }
   return progress;
@@ -381,9 +462,12 @@ const buildStandingsBoards = async (
     const freshInDivision = fresh ? divisionAthletes.filter((athlete) => fresh.athleteIds.has(athlete.id)).map((athlete) => athlete.id) : [];
     if (fresh && freshInDivision.length > 0) {
       const workout = workouts.find((item) => item.id === fresh.workoutId);
-      const divisionSize = athletes.filter((athlete) => athlete.division_id === division.id).length;
-      const remaining = scores.filter((score) => score.workoutId === fresh.workoutId && !freshInDivision.includes(score.athleteId));
-      const reranked = workout ? rankWorkoutScores(workout.type, workout.tieBreaker || '', remaining, divisionSize) : remaining;
+      // Mesmo conjunto da publicação (recalculateWorkoutRanking): a prova é
+      // classificada por categoria, com todos os atletas dela, mesmo quando é
+      // compartilhada entre categorias (division_id null).
+      const members = new Set(athletes.filter((athlete) => athlete.division_id === division.id).map((athlete) => athlete.id));
+      const remaining = scores.filter((score) => score.workoutId === fresh.workoutId && members.has(score.athleteId) && !freshInDivision.includes(score.athleteId));
+      const reranked = workout ? rankWorkoutScores(workout.type, workout.tieBreaker || '', remaining, members.size) : remaining;
       const beforeScores = [...scores.filter((score) => score.workoutId !== fresh.workoutId), ...reranked];
       before = computeDivisionStandings({ event: eventInput, divisionId: division.id, divisionAthletes, scores: beforeScores });
     }
@@ -438,13 +522,13 @@ export const buildBroadcastState = async (
     .maybeSingle()) as EventRow | null;
   if (!eventRow) throw new BroadcastError('Evento não encontrado.', 404);
   if (eventRow.event_type && eventRow.event_type !== 'functional_fitness') {
-    throw new BroadcastError('O telão ao vivo é exclusivo de eventos Functional Fitness presenciais.', 400);
+    throw new BroadcastError(BROADCAST_EVENT_TYPE_MESSAGE, 400);
   }
 
   const [divisionResult, workoutResult, sheets, markResult] = await Promise.all([
     supabaseAdmin.from('divisions').select('id, name, order_index').eq('event_id', eventId),
     supabaseAdmin.from('workouts').select('id, name, code, order_index, division_id, type, tie_breaker, time_cap, submission_closes_at, structure').eq('event_id', eventId),
-    readSheets(supabaseAdmin, eventId),
+    readBroadcastSheets(supabaseAdmin, eventId),
     supabaseAdmin.from('broadcast_heat_states').select('heat_id, started_at, finished_at').eq('event_id', eventId)
   ]);
   const divisions = (check(divisionResult) || []) as DivisionRow[];
@@ -459,20 +543,25 @@ export const buildBroadcastState = async (
       workoutId: sheet.workout_id,
       divisionId: sheet.division_id,
       status: sheet.status,
-      seq: readLiveProgress(sheet.live_progress)?.seq ?? 0,
+      seq: sheetSeq(sheet),
       updatedAt: sheet.updated_at,
       submittedAt: sheet.submitted_at
     } satisfies ModeSheet
   }));
+  const modeInput = { sheets: modeSheets.map((item) => item.mode), marks, nowMs };
+  const groups = buildGroups(modeInput);
   const resolution = resolveBroadcast({
     mode: config.mode,
     pinnedHeatId: config.pinned_heat_id,
     pinnedDivisionId: config.pinned_division_id,
     heats,
-    sheets: modeSheets.map((item) => item.mode),
-    marks,
-    nowMs
-  });
+    ...modeInput
+  }, groups);
+  const following = nextHeat(heats, groups);
+  // Próximas baterias: a partir da próxima de verdade (sem as passadas nem as
+  // já tocadas), no máximo 4. Servem à faixa "Próxima bateria" e à espera.
+  const touched = new Set(groups.map((group) => group.key));
+  const upcoming = following ? heats.filter((heat) => heat.order >= following.order && !touched.has(heat.id)).slice(0, 4) : [];
 
   const divisionName = new Map(divisions.map((division) => [division.id, division.name]));
   const workoutById = new Map(workoutRows.map((row) => [row.id, row]));
@@ -485,8 +574,7 @@ export const buildBroadcastState = async (
     groupSheets(wantedHeat).forEach((sheet) => athleteIds.add(sheet.athlete_id));
     heatById.get(wantedHeat)?.athleteIds.forEach((id) => id && athleteIds.add(id));
   }
-  const upcoming = heats.filter((heat) => !modeSheets.some((item) => item.sheet.heat_id === heat.id));
-  upcoming.slice(0, 4).forEach((heat) => heat.athleteIds.forEach((id) => id && athleteIds.add(id)));
+  upcoming.forEach((heat) => heat.athleteIds.forEach((id) => id && athleteIds.add(id)));
   const athletes = athleteIds.size > 0
     ? (check(await supabaseAdmin.from('athletes').select('id, name, box, division_id, is_team').in('id', [...athleteIds])) || []) as AthleteRow[]
     : [];
@@ -528,8 +616,6 @@ export const buildBroadcastState = async (
     time: heat.time,
     workoutName: workoutById.get(heat.workoutId)?.name ?? ''
   });
-  const groups = buildGroups({ sheets: modeSheets.map((item) => item.mode), marks, nowMs });
-  const following = nextHeat(heats, groups);
 
   const payload: Omit<BroadcastPayload, 'version' | 'serverTime'> = {
     appVersion: APP_VERSION,
@@ -565,7 +651,7 @@ export const buildBroadcastState = async (
         divisionName: divisionName.get(sheet.division_id ?? '') ?? '',
         status: sheet.status === 'submitted' || sheet.status === 'returned'
           ? sheet.status
-          : !item || item.seq === 0 ? 'waiting' : 'in_progress',
+          : (item?.seq ?? 0) === 0 && sheetSeq(sheet) === 0 ? 'waiting' : 'in_progress',
         repsDone: item?.repsDone ?? 0,
         roundsCompleted: item?.roundsCompleted ?? 0,
         segments: item?.segments ?? [],
@@ -619,8 +705,7 @@ export const buildBroadcastState = async (
   }
 
   if (resolution.screen === 'standby') {
-    const touched = new Set(groups.map((group) => group.key));
-    payload.standby = { upcoming: heats.filter((heat) => !touched.has(heat.id) && heat.order >= (following?.order ?? 0)).slice(0, 4).map(toNext) };
+    payload.standby = { upcoming: upcoming.map(toNext) };
   }
 
   return { ...payload, version: fingerprint(payload), serverTime: new Date(nowMs).toISOString() };

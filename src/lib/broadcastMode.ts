@@ -8,7 +8,7 @@
 // 2. Intervalo: terminada a bateria (todas as súmulas enviadas, ou "Encerrar"
 //    na mesa), o geral da categoria fica no ar por pelo menos 90 s.
 // 3. Chamada: súmulas abertas da próxima bateria (judges nas raias, nenhum
-//    toque ainda) ou chamada liberada no cronograma.
+//    toque ainda em nenhuma súmula do grupo) ou chamada liberada no cronograma.
 // 4. Sem chamada, o geral da última bateria continua no ar; sem nenhuma
 //    bateria terminada, a tela de espera.
 // O gestor pode fixar uma bateria, o geral de uma categoria ou a espera.
@@ -85,8 +85,15 @@ export const buildGroups = (input: Pick<ResolveInput, 'sheets' | 'marks' | 'nowM
     const running = sheets.filter((sheet) => sheet.status === 'in_progress' && fresh(sheet));
     const lastActivityMs = Math.max(0, ...sheets.map((sheet) => time(sheet.updatedAt) ?? 0));
     const live = manualFinish === null && running.some((sheet) => sheet.seq > 0);
-    const opened = manualFinish === null && !live && running.length > 0;
     const submitted = sheets.filter((sheet) => sheet.status === 'submitted');
+    // Chamada só antes do primeiro toque: se a bateria já tem registro ou envio,
+    // uma súmula aberta e sem toque (raia vazia, aberta por engano) não a segura
+    // como "aberta" nem impede o fim automático pelo último envio.
+    // Troca aceita: no grupo sem bateria (`loose:`, prova e categoria), depois do
+    // primeiro envio a próxima leva da mesma prova e categoria não ganha mais
+    // Chamada; o geral fica no ar até o primeiro registro dela, que vai ao vivo.
+    const touched = submitted.length > 0 || sheets.some((sheet) => sheet.seq > 0);
+    const opened = manualFinish === null && !live && !touched && running.length > 0;
     const autoFinish = !live && !opened && submitted.length > 0
       ? Math.max(...submitted.map((sheet) => time(sheet.submittedAt) ?? time(sheet.updatedAt) ?? 0))
       : null;
@@ -104,8 +111,8 @@ const latest = (groups: Group[], pick: (group: Group) => number | null) => group
   .filter((item): item is { group: Group; at: number } => item.at !== null)
   .sort((a, b) => b.at - a.at)[0]?.group;
 
-export const resolveBroadcast = (input: ResolveInput): BroadcastResolution => {
-  const groups = buildGroups(input);
+/** `groups` aceita o resultado de buildGroups já calculado pelo chamador (mesma entrada). */
+export const resolveBroadcast = (input: ResolveInput, groups: Group[] = buildGroups(input)): BroadcastResolution => {
   const byKey = new Map(groups.map((group) => [group.key, group]));
 
   if (input.mode === 'standby') return { screen: 'standby', reason: 'pinned' };

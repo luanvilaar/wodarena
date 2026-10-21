@@ -35,7 +35,7 @@ O resultado nasce na quadra: a súmula digital registra cada repetição no serv
 - Autenticação própria (cookie de sessão HMAC de 12h), papéis owner, manager, athlete e judge.
 - Dois tipos de evento: functional_fitness e fitness_racing.
 - Leaderboard por divisão em pontos por colocação (low-point); nomes públicos passam por sanitização de PII.
-- Migrations da súmula digital (estrutura da prova e súmulas) ainda dependem de aplicação autorizada no Supabase.
+- Migrations da súmula digital (estrutura da prova e súmulas) já aplicadas no Supabase (conferido em 2026-10-20). A migration do telão (`20261020120000_live_broadcast.sql`) ainda depende de aplicação autorizada.
 
 ## Brand Commitments
 

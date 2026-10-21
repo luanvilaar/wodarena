@@ -107,6 +107,10 @@ export function BroadcastPanel({ event }: { event: Event }) {
   const selectedHeat = heatChoice || state?.pinnedHeatId || state?.heats[0]?.id || '';
   const selectedDivision = divisionChoice || state?.pinnedDivisionId || state?.divisions[0]?.id || '';
   const reopenable = state?.marks.filter((mark) => mark.finishedAt) ?? [];
+  // "Encerrar" só com a bateria ao vivo. Na Chamada a bateria ainda não começou:
+  // a marca de encerramento a impediria de entrar ao vivo (o servidor recusa).
+  // Súmula aberta por engano se tira do ar cancelando a súmula.
+  const canFinish = preview?.screen === 'live' && !preview.live?.finished;
 
   const modeOptions: { value: BroadcastMode; title: string; text: string }[] = [
     { value: 'auto', title: 'Automático', text: 'Bateria ao vivo enquanto os judges marcam; geral da categoria no intervalo; chamada quando abrem as súmulas da próxima.' },
@@ -210,7 +214,7 @@ export function BroadcastPanel({ event }: { event: Event }) {
                   <button type="button" disabled={busy} onClick={() => void run({ action: 'mark_heat', heatId: current.key, mark: 'start' }, 'Largada marcada: o relógio do telão começou agora.')} className={smallButton}>
                     <Play className="h-3.5 w-3.5" aria-hidden="true" />{currentMark?.startedAt ? 'Marcar largada de novo' : 'Largada'}
                   </button>
-                  {preview.screen === 'live' && !preview.live?.finished && (
+                  {canFinish && (
                     <button type="button" disabled={busy} onClick={() => void run({ action: 'mark_heat', heatId: current.key, mark: 'finish' }, 'Bateria encerrada. O telão vai para o geral da categoria.')} className={smallButton}>
                       <Flag className="h-3.5 w-3.5" aria-hidden="true" />Encerrar bateria
                     </button>

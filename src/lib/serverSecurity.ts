@@ -272,6 +272,12 @@ export const checkRateLimit = ({ key, limit, windowMs }: RateLimitOptions) => {
   return null;
 };
 
+/** Consulta o limite sem contar a tentativa: true se a próxima chamada de checkRateLimit seria barrada. */
+export const isRateLimitExceeded = ({ key, limit }: Pick<RateLimitOptions, 'key' | 'limit'>) => {
+  const current = rateLimitStore.get(key);
+  return Boolean(current && current.resetAt > Date.now() && current.count >= limit);
+};
+
 // Erros de domínio lançados deliberadamente (`throw new Error('mensagem segura')`)
 // são seguros para o cliente. Erros crus do Postgres/Supabase (PostgrestError)
 // sempre carregam um campo `code` e não devem vazar `.message` (schema, SQL,

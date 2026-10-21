@@ -23,7 +23,12 @@ export class SheetAccessError extends Error {
 
 export const isPresentialEventType = (eventType: unknown) => !eventType || eventType === 'functional_fitness';
 
-export const readSheetEvent = async (supabaseAdmin: SupabaseClient, eventId: unknown): Promise<EventRow> => {
+const NOT_PRESENTIAL = 'A súmula digital é exclusiva de eventos Functional Fitness presenciais.';
+
+/** `notPresentialMessage` troca a mensagem do 400 para quem usa estas regras fora da súmula (telão). */
+export type SheetAccessOptions = { notPresentialMessage?: string };
+
+export const readSheetEvent = async (supabaseAdmin: SupabaseClient, eventId: unknown, options: SheetAccessOptions = {}): Promise<EventRow> => {
   if (typeof eventId !== 'string' || !eventId) throw new SheetAccessError('Informe o evento.', 400);
   const { data, error } = await supabaseAdmin
     .from('events')
@@ -33,7 +38,7 @@ export const readSheetEvent = async (supabaseAdmin: SupabaseClient, eventId: unk
   if (error) throw error;
   if (!data) throw new SheetAccessError('Evento não encontrado.', 404);
   if (!isPresentialEventType(data.event_type)) {
-    throw new SheetAccessError('A súmula digital é exclusiva de eventos Functional Fitness presenciais.', 400);
+    throw new SheetAccessError(options.notPresentialMessage ?? NOT_PRESENTIAL, 400);
   }
   return data;
 };
@@ -67,8 +72,8 @@ const readJudge = async (supabaseAdmin: SupabaseClient, actor: SessionUser) => {
 };
 
 /** Gestor dono do evento (com acesso válido) ou owner: quem revisa, corrige e cancela súmulas. */
-export const assertSheetManagerAccess = async (supabaseAdmin: SupabaseClient, actor: SessionUser, eventId: unknown) => {
-  const event = await readSheetEvent(supabaseAdmin, eventId);
+export const assertSheetManagerAccess = async (supabaseAdmin: SupabaseClient, actor: SessionUser, eventId: unknown, options: SheetAccessOptions = {}) => {
+  const event = await readSheetEvent(supabaseAdmin, eventId, options);
   if (actor.role === 'owner') return event;
   if (actor.role !== 'manager' || event.organizer_id !== actor.id) throw new SheetAccessError('Acesso negado para este evento.');
   await assertOrganizerIsOperational(supabaseAdmin, actor.id);

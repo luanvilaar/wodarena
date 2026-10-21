@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import {
+  BROADCAST_EVENT_TYPE_MESSAGE,
   BroadcastError,
   generateBroadcastLink,
   markBroadcastHeat,
@@ -19,6 +20,7 @@ export const dynamic = 'force-dynamic';
 
 const ROLES = ['manager', 'owner'] as const;
 const ACTIONS = new Set(['generate_link', 'revoke_link', 'set_mode', 'mark_heat']);
+const ACCESS = { notPresentialMessage: BROADCAST_EVENT_TYPE_MESSAGE };
 
 const errorResponse = (error: unknown) => {
   if (error instanceof BroadcastError || error instanceof SheetAccessError) {
@@ -33,7 +35,7 @@ export async function GET(request: Request) {
     const auth = requireSession(request, [...ROLES]);
     if (auth.response) return auth.response;
     const supabaseAdmin = createSupabaseAdmin();
-    const event = await assertSheetManagerAccess(supabaseAdmin, auth.user, new URL(request.url).searchParams.get('eventId'));
+    const event = await assertSheetManagerAccess(supabaseAdmin, auth.user, new URL(request.url).searchParams.get('eventId'), ACCESS);
     return NextResponse.json(await readBroadcastControl(supabaseAdmin, event.id), { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     return errorResponse(error);
@@ -53,7 +55,7 @@ export async function POST(request: Request) {
     if (limited) return limited;
 
     const supabaseAdmin = createSupabaseAdmin();
-    const event = await assertSheetManagerAccess(supabaseAdmin, actor, body.eventId);
+    const event = await assertSheetManagerAccess(supabaseAdmin, actor, body.eventId, ACCESS);
 
     if (action === 'generate_link') {
       const link = await generateBroadcastLink(supabaseAdmin, actor, event.id);

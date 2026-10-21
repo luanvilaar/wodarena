@@ -57,7 +57,7 @@ Decisões já tomadas com o usuário (2026-10-19):
 
 **d) O geral da categoria só existe no navegador.** Para o telão mostrar o mesmo geral do leaderboard público, a regra precisa sair do `AppContext` para uma função pura em `src/lib`, usada pelos dois. Não pode existir uma segunda regra de classificação.
 
-**e) As migrations da súmula ainda não foram aplicadas no Supabase** (`20261016120000_workout_structure.sql` e `20261017120000_scoresheets.sql`). O telão depende delas.
+**e) O telão depende das migrations da súmula** (`20261016120000_workout_structure.sql` e `20261017120000_scoresheets.sql`). Elas já foram aplicadas no Supabase (conferido em 2026-10-20).
 
 **f) Eventos Fitness Race não usam súmula.** O telão desta fase cobre Functional Fitness presencial. Fitness Race fica para o plano de live timing.
 
@@ -81,6 +81,7 @@ Regras de exibição:
 - O placar da bateria é **parcial** até o envio da súmula e diz isso na tela. Nada do que é parcial é gravado em `scores`.
 - Ordem parcial na bateria: **For Time**: quem terminou (menor tempo) → mais repetições → quem chegou primeiro à última repetição. **AMRAP**: mais repetições (rounds × round + parcial) → quem chegou primeiro. **Carga máxima**: soma ou maior carga válida, conforme a prova.
 - Raia sem súmula aberta aparece como "Aguardando súmula". Raia vazia não aparece.
+- Atleta sem bateria no cronograma: as súmulas formam um grupo pela prova e categoria. Depois do primeiro envio nesse grupo, a próxima leva da mesma prova e categoria não ganha Chamada: o geral fica no ar até o primeiro registro dela, que vai ao vivo. É a troca aceita para que uma raia aberta e sem toque não prenda a bateria terminada na Chamada (2026-10-21).
 - Sem conexão, o telão mantém a última tela e mostra um aviso discreto com a hora da última atualização. Link revogado mostra "Link do telão desativado. Peça um novo link ao organizador."
 - Nome sanitizado (`sanitizeNamePII`) e box; time mostra o nome do time (`teamDisplay.ts`).
 - Tela cheia por um toque, cursor some parado, pedido de wake lock para a TV não apagar, e recarga automática quando sai versão nova do app.
@@ -93,7 +94,7 @@ A variação de posição no intervalo compara com o que o leaderboard do site m
 
 - **Link do telão:** gerar, copiar e revogar. Gerar de novo revoga o anterior.
 - **Modo:** Automático (padrão) · Fixar bateria (escolhe qual) · Fixar geral (escolhe a categoria) · Tela de espera.
-- **Bateria:** "Largada" (marca o início do relógio do telão) e "Encerrar bateria" (vai para o intervalo mesmo com súmula pendente). Os dois ficam no histórico.
+- **Bateria:** "Largada" (marca o início do relógio do telão e desfaz um "Encerrar" anterior da mesma bateria) e "Encerrar bateria" (vai para o intervalo mesmo com súmula pendente). Os dois ficam no histórico. "Encerrar" só aparece com a bateria ao vivo, e o servidor recusa encerrar bateria sem nenhum registro nas súmulas (nenhuma com registro e nenhuma enviada): na Chamada a bateria ainda não começou, e a marca a impediria de entrar ao vivo depois. Súmula aberta por engano sai do ar cancelando a súmula.
 - **Prévia:** miniatura do que o telão mostra agora e o estado de cada raia.
 - Só `manager` dono do evento e `owner`, com `assertManagerOperationalAccess`. Gestor com acesso vencido não opera a mesa; o link já gerado continua só leitura, como o leaderboard público.
 
