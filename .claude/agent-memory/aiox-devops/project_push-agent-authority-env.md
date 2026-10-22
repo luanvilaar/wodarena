@@ -13,4 +13,6 @@ metadata:
 
 **Confirmed 2026-10-20:** the prefixed plain `git push origin main` went through from the @devops subagent (3d1e03e..d254480). The block the main session hit on 2026-10-15 came from a session with no devops identity, so try the prefixed push before you hand off to the user.
 
+**Stale caller state (seen 2026-10-22):** the spawn prompt said "13 commits ahead", but origin/main already equaled HEAD (82c002b, pushed earlier that morning). Check `git log origin/main..HEAD` and `git reflog show origin/main` first, and if nothing is ahead, report "already published" without pushing anything.
+
 **Force-push caveat (seen 2026-08-28):** the `-f` flag gets rejected by the Claude Code auto-mode permission classifier ("Blocked by classifier") before git ever runs. When local HEAD is already a strict descendant of `origin/main` (the normal case after committing on main), drop `-f` — the plain fast-forward push succeeds and is equivalent. Only escalate to the user for explicit `-f` approval when history actually diverged (e.g. after an `--amend` of an already-pushed commit).
