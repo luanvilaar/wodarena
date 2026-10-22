@@ -1,0 +1,691 @@
+<title>Distância na Súmula Digital</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@500;600;700&family=Inter:wght@400;500;600;700;800&display=swap">
+<style>
+/* Layout: leitura em uma coluna (resumo, achados, soluções, recomendação, decisões, convivência) com dois blocos largos no meio:
+   a maquete do construtor (painel escuro do WODArena) e a maquete da súmula do judge (quadra clara). Mesma linguagem do desenho do Intervalado. */
+:root{
+  --font-body:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --font-num:"IBM Plex Sans",ui-monospace,Menlo,monospace;
+  /* página: escura primeiro, como o painel do WODArena */
+  --bg:#0b0e11; --surface:#14181d; --surface-2:#1e2329; --line:#2b3139;
+  --fg:#eaecef; --muted:#929aa5; --accent:#fcd535; --accent-text:#fcd535; --ink:#181a20;
+  --up:#0ecb81; --down:#f6465d; --info:#7db4ff;
+  /* maquete do construtor: sempre o tema escuro do painel */
+  --a-bg:#0b0e11; --a-card:#1e2329; --a-line:#2b3139; --a-gray:#181a20; --a-fg:#eaecef; --a-muted:#929aa5;
+  --a-primary:#fcd535; --a-ink:#181a20; --a-up:#0ecb81; --a-down:#f6465d; --a-info:#7db4ff;
+  /* maquete da súmula: sempre a quadra clara de alto contraste (.court-light do app) */
+  --c-bg:#ffffff; --c-fg:#0b0e11; --c-card:#f3f4f6; --c-line:#b9c0cb; --c-elev:#dde1e7; --c-muted:#3f4652;
+  --c-primary:#f5c518; --c-primary-text:#7a5c00; --c-up:#0a7d52; --c-down:#b8243a; --c-info:#1f5fd1;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --bg:#f4f5f7; --surface:#ffffff; --surface-2:#eceef2; --line:#d6dae1;
+    --fg:#181a20; --muted:#566070; --accent-text:#7a5c00; --up:#07694a; --down:#b8243a; --info:#1f5fd1;
+    color-scheme:light;
+  }
+}
+:root[data-theme="light"]{
+  --bg:#f4f5f7; --surface:#ffffff; --surface-2:#eceef2; --line:#d6dae1;
+  --fg:#181a20; --muted:#566070; --accent-text:#7a5c00; --up:#07694a; --down:#b8243a; --info:#1f5fd1;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:15px;line-height:1.55;-webkit-text-size-adjust:100%;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:32px 72px}
+h1,h2,h3,h4{text-wrap:balance;line-height:1.2;margin:0}
+p{margin:0}
+a{color:var(--accent-text)}
+code{font-family:var(--font-num);font-size:.92em;background:var(--surface-2);border:1px solid var(--line);border-radius:4px;padding:0 5px}
+.wrap{max-width:1120px;margin:0 auto;display:grid;gap:56px}
+.num{font-family:var(--font-num);font-variant-numeric:tabular-nums}
+.eyebrow{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--accent-text)}
+h1{font-size:clamp(28px,5vw,40px);font-weight:800;letter-spacing:-.02em}
+h2{font-size:22px;font-weight:800;letter-spacing:-.01em}
+h3{font-size:15px;font-weight:700}
+.lead{max-width:68ch;color:var(--muted);font-size:16px}
+.head{display:grid;gap:14px}
+.pills{display:flex;flex-wrap:wrap;gap:8px}
+.pill{display:inline-block;font-size:12px;font-weight:600;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:999px;padding:4px 12px;text-decoration:none}
+a.pill:hover,a.pill:focus-visible{border-color:var(--accent-text)}
+.notice{border:1px solid var(--up);background:var(--surface);border-radius:8px;padding:12px 16px;max-width:76ch}
+.notice b{color:var(--up)}
+section{display:grid;gap:16px;min-width:0;scroll-margin-top:16px}
+.sec-lead{max-width:72ch;color:var(--muted)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;min-width:0}
+.card h3{margin-bottom:10px}
+.card.pick{border-color:var(--accent-text)}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:16px}
+.card ul{margin:0;padding-left:18px;display:grid;gap:4px}
+.small{font-size:13px;color:var(--muted)}
+.scroll{overflow-x:auto;max-width:100%}
+table.t{border-collapse:collapse;width:100%;min-width:640px;font-size:13.5px}
+table.t th,table.t td{text-align:left;vertical-align:top;padding:9px 12px;border-bottom:1px solid var(--line)}
+table.t th{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--surface-2)}
+table.t td:first-child{font-weight:600}
+table.t td.n,table.t th.n{text-align:right;font-family:var(--font-num);font-variant-numeric:tabular-nums}
+table.t tr.hl td{background:var(--surface-2)}
+.tag{display:inline-block;font-size:11px;font-weight:700;padding:1px 8px;border-radius:4px;background:var(--surface-2);border:1px solid var(--line);white-space:nowrap}
+.tag.ok{color:var(--up);border-color:var(--up)}
+.tag.warn{color:var(--accent-text);border-color:var(--accent-text)}
+.tag.bad{color:var(--down);border-color:var(--down)}
+.wod{font-family:var(--font-num);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px 16px;line-height:1.7;font-size:14px}
+.wod b{color:var(--accent-text)}
+.wod small{display:block;margin-top:8px;font-family:var(--font-body);color:var(--muted);font-size:12.5px;line-height:1.5}
+
+/* cartões das soluções */
+.sol{display:grid;gap:12px;align-content:start}
+.sol-head{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:baseline;justify-content:space-between}
+.sol-head h3{margin:0}
+.kv{display:grid;gap:10px;margin:0}
+.kv div{display:grid;gap:2px}
+.kv dt{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.kv dd{margin:0}
+
+/* decisões */
+.dcode{font-family:var(--font-num);font-weight:700;color:var(--accent-text);white-space:nowrap}
+
+details{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 16px}
+details summary{cursor:pointer;font-weight:700}
+details summary:focus-visible{outline:2px solid var(--accent-text);outline-offset:3px}
+details[open] summary{margin-bottom:10px}
+details ul{margin:0;padding-left:18px;display:grid;gap:5px}
+
+/* ---------- maquete 1: construtor (painel escuro) ---------- */
+.stage{border:1px solid var(--line);border-radius:12px;padding:16px;background:var(--surface-2);min-width:0}
+.stage-cap{font-size:12px;color:var(--muted);margin-bottom:12px}
+.panel{background:var(--a-bg);color:var(--a-fg);border:1px solid var(--a-line);border-radius:10px;padding:16px;display:grid;gap:18px;font-size:14px}
+.panel h4{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--a-muted)}
+.fmt{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.fmt div{background:var(--a-card);border:1px solid var(--a-line);border-radius:8px;padding:10px 12px;display:grid;gap:3px;align-content:start}
+.fmt b{font-size:13.5px}
+.fmt span{font-size:11.5px;color:var(--a-muted);line-height:1.4}
+.fmt .on{border-color:var(--a-primary);box-shadow:inset 0 0 0 1px var(--a-primary)}
+.fmt .on b{color:var(--a-primary)}
+.fmt .new{position:relative}
+.fmt .new em{position:absolute;top:8px;right:8px;font-style:normal;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;background:var(--a-primary);color:var(--a-ink);border-radius:3px;padding:1px 5px}
+.pf{display:grid;gap:6px}
+.pf label{font-size:12px;font-weight:600;color:var(--a-muted)}
+.pf input,.pf textarea{background:var(--a-gray);color:var(--a-fg);border:1px solid var(--a-line);border-radius:6px;padding:9px 11px;font:inherit;width:100%}
+.pf input.num{font-family:var(--font-num);font-size:18px;font-weight:700;max-width:160px}
+.pf textarea{resize:vertical;min-height:62px}
+.pf input:focus-visible,.pf textarea:focus-visible{outline:2px solid var(--a-primary);outline-offset:1px}
+.pf .hint{font-size:12px;color:var(--a-muted)}
+.pf .err{font-size:12px;color:var(--a-down);font-weight:600}
+.pf input[aria-invalid="true"]{border-color:var(--a-down)}
+.rule{background:var(--a-card);border:1px solid var(--a-line);border-radius:8px;padding:12px 14px;line-height:1.6}
+.rule b{color:var(--a-primary)}
+.check{list-style:none;margin:0;padding:0;display:grid;gap:5px;font-size:13px}
+.check li{display:flex;gap:8px;align-items:baseline}
+.check li::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--a-muted);flex:none;transform:translateY(-1px)}
+.check li.ok::before{background:var(--a-up)}
+.check li.er::before{background:var(--a-down)}
+.check li.er{color:var(--a-down)}
+.panel-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}
+@media (max-width:760px){.panel-grid{grid-template-columns:1fr}}
+
+/* ---------- maquete 2: súmula do judge (quadra clara) ---------- */
+.phones{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px;justify-items:center}
+.phone{width:100%;max-width:320px;background:var(--c-bg);color:var(--c-fg);border:3px solid #3a414b;border-radius:26px;padding:14px 14px 16px;display:grid;gap:12px;align-content:start;font-size:14px;min-width:0}
+.phone .top{display:flex;justify-content:space-between;gap:8px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--c-muted)}
+.phone .who{font-size:17px;font-weight:800;line-height:1.2}
+.phone .sub{font-size:12px;color:var(--c-muted)}
+.phone .state{font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;border-radius:4px;padding:2px 8px;width:max-content}
+.state.s-ready{background:var(--c-elev);color:var(--c-fg)}
+.state.s-run{background:var(--c-up);color:#fff}
+.state.s-end{background:var(--c-down);color:#fff}
+.phone .clock{font-family:var(--font-num);font-variant-numeric:tabular-nums;font-size:54px;font-weight:700;line-height:1;text-align:center;padding:6px 0}
+.phone .bar{height:8px;border-radius:4px;background:var(--c-elev);overflow:hidden}
+.phone .bar i{display:block;height:100%;background:var(--c-primary)}
+.phone .field{display:grid;gap:6px;background:var(--c-card);border:1px solid var(--c-line);border-radius:12px;padding:12px}
+.phone .field label{font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+.phone .field .row{display:flex;gap:8px}
+.phone .field input{flex:1;min-width:0;min-height:52px;border:2px solid var(--c-line);border-radius:8px;background:#fff;color:var(--c-fg);font-family:var(--font-num);font-size:26px;font-weight:700;padding:0 12px;font-variant-numeric:tabular-nums}
+.phone .field input:focus-visible{outline:3px solid var(--c-primary);outline-offset:1px;border-color:var(--c-fg)}
+.phone .field input[aria-invalid="true"]{border-color:var(--c-down)}
+.phone .field .help{font-size:12px;color:var(--c-muted)}
+.phone .field .bad{font-size:12.5px;font-weight:700;color:var(--c-down)}
+.pbtn{min-height:48px;border-radius:8px;border:2px solid var(--c-fg);background:var(--c-bg);color:var(--c-fg);font:inherit;font-weight:800;padding:0 14px}
+.pbtn.main{background:var(--c-primary);border-color:var(--c-primary);color:#181a20}
+.pbtn.ghost{border-color:var(--c-line)}
+.pbtn:disabled{opacity:.5}
+.pbtn:focus-visible{outline:3px solid var(--c-info);outline-offset:2px}
+.phone .sync{font-size:12px;font-weight:700;color:var(--c-up);border:1px solid var(--c-up);border-radius:6px;padding:6px 10px}
+.phone .big{font-family:var(--font-num);font-variant-numeric:tabular-nums;font-size:46px;font-weight:700;line-height:1.05}
+.phone .big small{font-size:20px;font-weight:600;color:var(--c-muted);margin-left:4px}
+.phone .res{display:grid;gap:4px;border:2px solid var(--c-up);border-radius:12px;padding:12px;background:var(--c-card)}
+.phone .res .lbl{font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--c-up)}
+.phone .chk{list-style:none;margin:0;padding:0;display:grid;gap:4px;font-size:12.5px}
+.phone .chk li::before{content:"✓ ";font-weight:800;color:var(--c-up)}
+.phone .link{font-size:12.5px;font-weight:700;text-align:center;color:var(--c-muted);text-decoration:underline}
+.cap{font-size:12.5px;color:var(--muted);text-align:center;margin-top:8px;max-width:300px}
+.phone-col{display:grid;justify-items:center;align-content:start;min-width:0;width:100%}
+
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+</style>
+
+<div class="wrap">
+
+<header class="head">
+  <p class="eyebrow">Desenho aprovado em 2026-10-22</p>
+  <h1>Distância na súmula digital</h1>
+  <p class="lead">Um quinto formato de prova para treinos em que o resultado é a distância percorrida no tempo. O judge digita um total em metros, o ranking dá a vitória a quem foi mais longe e os quatro formatos de hoje continuam como estão.</p>
+  <div class="notice"><b>Aprovado.</b> O usuário aprovou a solução S1 e as decisões D1 a D9 como sugeridas nesta página, em 2026-10-22. Esta é a cópia da proposta como foi apresentada (a análise foi feita sem alterar código, banco, autenticação ou infraestrutura). A fonte das decisões é o README desta pasta.</div>
+  <nav class="pills" aria-label="Seções">
+    <a class="pill" href="#problema">O problema</a>
+    <a class="pill" href="#achados">O que já existe</a>
+    <a class="pill" href="#solucoes">Soluções, riscos e impactos</a>
+    <a class="pill" href="#recomendacao">Recomendação</a>
+    <a class="pill" href="#decisoes">Decisões</a>
+    <a class="pill" href="#convivencia">Convivência com os formatos</a>
+    <a class="pill" href="#maquetes">Maquetes</a>
+    <a class="pill" href="#teste">Caso de teste</a>
+    <a class="pill" href="#riscos">Riscos gerais</a>
+    <a class="pill" href="#plano">Plano</a>
+  </nav>
+</header>
+
+<section id="resumo" aria-labelledby="t-resumo">
+  <h2 id="t-resumo">Resumo</h2>
+  <div class="cols">
+    <div class="card"><h3>O que falta</h3><p>A súmula tem For Time, AMRAP, Carga máxima e Intervalado. Nenhum deles guarda “quantos metros” como resultado. O tipo “Distância” já existe no ranking e no lançamento manual, mas não tem súmula: o judge não tem tela, o telão não mostra e o construtor não cria a prova.</p></div>
+    <div class="card pick"><h3>O que recomendo</h3><p><b>Solução S1:</b> o formato <b>Distância</b>, com o relógio da prova e <b>um campo</b> para o total em metros. O judge faz a conta por fora, como você pediu. Não precisa de migration e não toca nos outros formatos.</p></div>
+    <div class="card"><h3>O que preciso de você</h3><p>Aprovar a S1 (ou escolher outra) e responder as decisões <span class="dcode">D1</span> a <span class="dcode">D9</span>. Todas têm uma sugestão. Só três mudam o desenho de verdade: <span class="dcode">D7</span> (resumo da prova), <span class="dcode">D8</span> (calorias) e <span class="dcode">D9</span> (telão).</p></div>
+  </div>
+</section>
+
+<section id="problema" aria-labelledby="t-problema">
+  <h2 id="t-problema">O problema</h2>
+  <p class="sec-lead">Os dois treinos que você enviou têm a mesma lógica: o relógio fixa o tempo e o resultado é a distância total. A diferença é só o que acontece dentro da janela.</p>
+  <div class="cols">
+    <div>
+      <div class="wod"><b>AMRAP × 20 min</b><br>750 m Corrida<br>Máx. distância no Remo
+        <small>Dupla: o atleta A corre e o B rema, e trocam a cada volta da corrida. O resultado é a soma de tudo: voltas de 750 m mais os metros do remo.</small></div>
+    </div>
+    <div>
+      <div class="wod"><b>AMRAP × 15 min</b><br>Maior distância de corrida
+        <small>Um atleta. O resultado é o total percorrido em 15 minutos.</small></div>
+    </div>
+  </div>
+  <div class="card">
+    <h3>Por que os formatos de hoje não resolvem</h3>
+    <div class="scroll"><table class="t">
+      <thead><tr><th>Formato</th><th>O que ele guarda</th><th>Por que não serve para distância</th></tr></thead>
+      <tbody>
+        <tr><td>For Time</td><td>Tempo para cumprir metas</td><td>O resultado é tempo, não metros.</td></tr>
+        <tr><td>AMRAP</td><td>Rounds e repetições de uma lista de movimentos com meta</td><td>Cada movimento precisa de meta. “Maior distância” não tem meta. Em metros, o judge só conclui o bloco, não informa quanto foi feito.</td></tr>
+        <tr><td>Carga máxima</td><td>Tentativas com carga em kg</td><td>O resultado é peso.</td></tr>
+        <tr><td>Intervalado</td><td>Soma de repetições do movimento máximo em rounds ON/OFF</td><td>Exige 2 a 20 rounds, descanso e unidade só em repetições (decisões 4 e 10 do Intervalado).</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</section>
+
+<section id="achados" aria-labelledby="t-achados">
+  <h2 id="t-achados">O que já existe no sistema</h2>
+  <p class="sec-lead">Achados da leitura do código. Eles mudam o tamanho do trabalho para menos.</p>
+  <div class="cols">
+    <div class="card"><h3>O tipo “Distância” já está pronto no ranking</h3>
+      <ul>
+        <li>O banco já aceita <code>distance</code> em <code>workouts.type</code> (migration <code>20260602164100</code>).</li>
+        <li>O ranking já trata como “maior vence” e empates dividem a posição.</li>
+        <li>O painel já tem o lançamento manual em metros (“Mts”).</li>
+      </ul></div>
+    <div class="card"><h3>Equipe é uma raia só</h3>
+      <p>Atleta ou equipe é um registro, uma raia e uma súmula. A dupla do primeiro treino é um resultado só, e o judge informa a soma dos dois. A estrutura da prova não precisa saber quantas pessoas formam a equipe.</p></div>
+    <div class="card"><h3>Estrutura em JSONB, sem migration</h3>
+      <p><code>workouts.structure</code> e <code>scoresheets.structure</code> só exigem “objeto JSON”. O formato novo entra sem mexer no banco, como o Intervalado (Story 1.60).</p></div>
+    <div class="card"><h3>Achado colateral: selo “Reps”</h3>
+      <p>Na página pública do evento, uma prova do tipo Distância aparece como “Tipo: Reps” (<code>EventView.tsx</code>, linha 1410: só conhece 3 tipos, o resto cai em “Reps”). Já acontece hoje no lançamento manual e entra na correção.</p></div>
+    <div class="card"><h3>Ranking público sem unidade</h3>
+      <p>A tabela mostra o resultado como texto puro, sem “kg” ou “reps”. A distância apareceria como <span class="num">6330</span>, igual aos outros tipos. Mostrar “m” exigiria a tabela conhecer o tipo da prova. Fica fora desta proposta.</p></div>
+    <div class="card"><h3>Ponto de partida seguro</h3>
+      <p>981 testes passam hoje. A maior parte lê o código-fonte e compara texto, então qualquer formato novo exige ajustar asserções de versão (a Story 1.60 ajustou duas).</p></div>
+  </div>
+</section>
+
+<section id="solucoes" aria-labelledby="t-solucoes">
+  <h2 id="t-solucoes">Possíveis soluções, riscos e impactos</h2>
+  <p class="sec-lead">Seis caminhos, do mais barato ao mais amplo. O tamanho é relativo (P pequeno, M médio, G grande), na mesma escala das stories do Intervalado.</p>
+
+  <div class="card">
+    <h3>Comparação rápida</h3>
+    <div class="scroll"><table class="t">
+      <thead><tr><th></th><th>S0<br>Manual</th><th>S1<br>Formato Distância</th><th>S2<br>Total genérico</th><th>S3<br>Via AMRAP</th><th>S4<br>Via Intervalado</th><th>S5<br>Soma por voltas</th></tr></thead>
+      <tbody>
+        <tr><td>Resolve o exemplo 1 (dupla)</td><td><span class="tag warn">Só digitando</span></td><td><span class="tag ok">Sim</span></td><td><span class="tag ok">Sim</span></td><td><span class="tag bad">Não</span></td><td><span class="tag warn">Forçado</span></td><td><span class="tag ok">Sim</span></td></tr>
+        <tr><td>Resolve o exemplo 2 (um atleta)</td><td><span class="tag warn">Só digitando</span></td><td><span class="tag ok">Sim</span></td><td><span class="tag ok">Sim</span></td><td><span class="tag bad">Não</span></td><td><span class="tag warn">Forçado</span></td><td><span class="tag ok">Sim</span></td></tr>
+        <tr><td>Judge usa a súmula</td><td><span class="tag bad">Não</span></td><td><span class="tag ok">Sim</span></td><td><span class="tag ok">Sim</span></td><td><span class="tag warn">Parcial</span></td><td><span class="tag warn">Parcial</span></td><td><span class="tag ok">Sim</span></td></tr>
+        <tr><td>Mexe em formato que já funciona</td><td><span class="tag ok">Não</span></td><td><span class="tag ok">Não</span></td><td><span class="tag ok">Não</span></td><td><span class="tag warn">Sim</span></td><td><span class="tag bad">Sim, reabre decisões</span></td><td><span class="tag ok">Não</span></td></tr>
+        <tr><td>Migration</td><td>Não</td><td>Não</td><td>Não</td><td>Não</td><td>Não</td><td>Não</td></tr>
+        <tr><td>Tamanho</td><td>Nenhum</td><td>M + P + M + P</td><td>Maior que a S1</td><td>P</td><td>M a G</td><td>S1 + M</td></tr>
+        <tr class="hl"><td>Veredito</td><td><span class="tag">Plano B</span></td><td><span class="tag ok">Recomendada</span></td><td><span class="tag warn">Evolução futura</span></td><td><span class="tag bad">Descartada</span></td><td><span class="tag bad">Descartada</span></td><td><span class="tag warn">Não agora</span></td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="cols">
+    <article class="card sol">
+      <div class="sol-head"><h3>S0 · Não mudar o sistema</h3><span class="tag">Plano B</span></div>
+      <dl class="kv">
+        <div><dt>O que é</dt><dd>Criar a prova com o tipo “Distância” e o gestor digita o total de cada atleta no painel, como já é possível.</dd></div>
+        <div><dt>Impacto</dt><dd>Nenhum código novo. O judge continua com papel ou outro meio e alguém lança depois.</dd></div>
+        <div><dt>Riscos</dt><dd>Sem súmula, não há relógio da prova, registro de quem lançou nem fila offline. Depende de digitação em lote no fim da bateria. Telão sem andamento. O selo “Reps” na página pública continua errado.</dd></div>
+      </dl>
+    </article>
+
+    <article class="card sol pick">
+      <div class="sol-head"><h3>S1 · Novo formato “Distância”</h3><span class="tag ok">Recomendada</span></div>
+      <dl class="kv">
+        <div><dt>O que é</dt><dd>Quinto cartão em “Formato da prova”. O gestor define a duração. O judge inicia o relógio, soma por fora e digita o total em metros. O resultado entra no ranking de “maior vence”.</dd></div>
+        <div><dt>Impacto</dt><dd>Contrato da estrutura passa à versão 4 (padrão das Stories 1.47 e 1.60), um motor pequeno (último total válido), uma tela nova do judge e um cartão no construtor. Provas gravadas nas versões 1 a 3 continuam abrindo.</dd></div>
+        <div><dt>Riscos</dt><dd>Judge com a tela antiga em cache não entende o formato novo (mitigado em “Riscos gerais”). Único campo sem trilha de toques: erro de digitação só se pega na conferência. Ajuste de asserções de teste.</dd></div>
+      </dl>
+    </article>
+
+    <article class="card sol">
+      <div class="sol-head"><h3>S2 · Formato genérico “Total numérico”</h3><span class="tag warn">Evolução futura</span></div>
+      <dl class="kv">
+        <div><dt>O que é</dt><dd>Um formato único em que o gestor escolhe a unidade (metros, calorias, repetições, kg) e o judge digita o total.</dd></div>
+        <div><dt>Impacto</dt><dd>Tudo da S1, mais um seletor de unidade, textos que variam por unidade (ranking, telão, ausente, correção do gestor) e tipo legado condicional à unidade.</dd></div>
+        <div><dt>Riscos</dt><dd>Cria casos que ninguém pediu (calorias e repetições), com sobreposição ao AMRAP e ao Intervalado. Mais testes e mais ambiguidade para o gestor escolher. A S1 já guarda a unidade na estrutura, então abrir esse caminho depois não exige outra versão.</dd></div>
+      </dl>
+    </article>
+
+    <article class="card sol">
+      <div class="sol-head"><h3>S3 · Reaproveitar o AMRAP</h3><span class="tag bad">Descartada</span></div>
+      <dl class="kv">
+        <div><dt>O que é</dt><dd>Montar um AMRAP com um movimento em metros e usar “Max” como meta.</dd></div>
+        <div><dt>Impacto</dt><dd>Pouco código, mas o AMRAP conta rounds de metas e mostra “rounds + repetições”.</dd></div>
+        <div><dt>Riscos</dt><dd>“Maior distância” não tem meta. Em metros, o judge só segura para concluir o bloco e não informa quanto foi feito. O exemplo 2 não cabe. Uma meta enorme como atalho dá resultado errado no ranking e na súmula.</dd></div>
+      </dl>
+    </article>
+
+    <article class="card sol">
+      <div class="sol-head"><h3>S4 · Reaproveitar o Intervalado</h3><span class="tag bad">Descartada</span></div>
+      <dl class="kv">
+        <div><dt>O que é</dt><dd>Um round único com ON igual à duração, liberando metros no movimento máximo.</dd></div>
+        <div><dt>Impacto</dt><dd>Reabre as decisões 3, 4 e 10 aprovadas em 2026-10-21 (máximo só em repetições, 2 a 20 rounds) e a tela com fase, round e correção por round.</dd></div>
+        <div><dt>Riscos</dt><dd>Regressão num formato entregue há um dia. A súmula do judge ficaria cheia de conceitos que não existem na prova (descanso, round).</dd></div>
+      </dl>
+    </article>
+
+    <article class="card sol">
+      <div class="sol-head"><h3>S5 · S1 com soma por voltas</h3><span class="tag warn">Não agora</span></div>
+      <dl class="kv">
+        <div><dt>O que é</dt><dd>Além do campo, botões “+750 m” a cada volta para o sistema somar.</dd></div>
+        <div><dt>Impacto</dt><dd>Evento novo, regras de desfazer, tela maior e teste de cada combinação (remo em metros livres e voltas fixas).</dd></div>
+        <div><dt>Riscos</dt><dd>Vai contra o pedido (“basta um campo, o judge faz a conta por fora”). Mais toques na quadra, mais chance de erro. O registro de lançamentos da S1 permite acrescentar isso depois sem refazer nada.</dd></div>
+      </dl>
+    </article>
+  </div>
+</section>
+
+<section id="recomendacao" aria-labelledby="t-rec">
+  <h2 id="t-rec">Recomendação: S1, o formato Distância</h2>
+  <div class="cols">
+    <div class="card pick"><h3>Por que ela</h3>
+      <ul>
+        <li>Resolve os dois treinos do jeito pedido: um campo, o judge soma por fora.</li>
+        <li>Não mexe nos quatro formatos que já funcionam.</li>
+        <li>Sem migration: o ranking já entende o tipo <code>distance</code>.</li>
+        <li>Segue o caminho já provado pelo Intervalado, com menos telas e menos regras.</li>
+        <li>Mantém aberta a evolução para calorias (S2) e soma por voltas (S5).</li>
+      </ul></div>
+    <div class="card"><h3>Como o judge usa</h3>
+      <ul>
+        <li>Abre a súmula da raia (a dupla é uma raia) e toca “Iniciar” no sinal.</li>
+        <li>O relógio corre até a duração da prova, como no AMRAP. O campo “Distância total (m)” fica à vista, e ele pode lançar ou corrigir quando quiser.</li>
+        <li>No fim, para o relógio, confere o número grande e toca “Enviar e publicar”.</li>
+        <li>O gestor corrige, devolve ou cancela depois, como nos outros formatos.</li>
+      </ul></div>
+    <div class="card"><h3>O que fica igual</h3>
+      <ul>
+        <li>Relógio por súmula, fila offline no aparelho e aviso de sincronização.</li>
+        <li>Publicação na hora, com correção do gestor e histórico.</li>
+        <li>Trava da estrutura depois da primeira súmula aberta.</li>
+        <li>Atleta ausente, conferência antes do envio e ranking calculado no servidor.</li>
+      </ul></div>
+  </div>
+</section>
+
+<section id="decisoes" aria-labelledby="t-dec">
+  <h2 id="t-dec">Decisões para aprovar</h2>
+  <p class="sec-lead">Cada linha traz a sugestão. Responder “aprovado” vale para todas as sugestões. Os códigos servem para você apontar uma só (“D8: quero calorias”).</p>
+  <div class="scroll"><table class="t">
+    <thead><tr><th>Cód.</th><th>Decisão</th><th>Sugestão</th><th>Alternativa e efeito</th></tr></thead>
+    <tbody>
+      <tr><td class="dcode">D1</td><td>Nome e lugar</td><td>Quinto cartão “Distância” em “Formato da prova”, com o texto “Maior distância no tempo; o judge informa o total”.</td><td>Outro nome (“Max Distância”). Só texto.</td></tr>
+      <tr><td class="dcode">D2</td><td>Duração e relógio</td><td>Duração obrigatória de 00:30 a 99:59 (como o AMRAP). A súmula mostra o relógio, a duração e a barra de progresso, e avisa “Tempo esgotado. Pare o relógio.”</td><td>Contagem regressiva em vez do relógio crescente: mais natural para corrida, mas diferente do AMRAP. Muda só a tela. Sem relógio na súmula: perde o horário de cada lançamento e o tempo da bateria no telão.</td></tr>
+      <tr><td class="dcode">D3</td><td>O que o judge digita</td><td>Um total em metros inteiros, de 0 a 99.999. Aceita <span class="num">6330</span> e <span class="num">6.330</span> (ponto de milhar). Recusa vírgula e decimais com mensagem. Pode lançar de novo a qualquer momento: vale o último, o desfazer funciona e o histórico fica guardado.</td><td>Aceitar decimais ou quilômetros: abre confusão entre “3,5” (km) e “3.5” (m). O teto de 99.999 fica abaixo do valor que a tabela pública usa para “sem resultado” (999.999).</td></tr>
+      <tr><td class="dcode">D4</td><td>Envio e ausente</td><td>Só envia com ao menos um total lançado (0 vale se digitado). Sem lançamento, o envio é recusado. Atleta ausente publica 0 m, depois de qualquer resultado real.</td><td>Enviar sem nada publicando 0: um esquecimento viraria zero no ranking.</td></tr>
+      <tr><td class="dcode">D5</td><td>Ranking e desempate</td><td>Maior distância vence. Empates dividem a posição, sem desempate nesta versão (mesma regra do Intervalado). O ajuste de tempo oficial não vale.</td><td>Desempate por quem lançou primeiro: fraco, porque o lançamento depende do judge, não da prova.</td></tr>
+      <tr><td class="dcode">D6</td><td>Tipo legado e selo público</td><td>Tipo <code>distance</code> (já aceito no banco). O selo da página pública passa a dizer “Distância”, em português e inglês.</td><td>Reaproveitar <code>reps</code>: o selo sairia “Reps”.</td></tr>
+      <tr><td class="dcode">D7</td><td>Resumo da prova (opcional)</td><td>Campo de texto de até 300 caracteres no construtor, mostrado ao judge e na chamada do telão (“750 m corrida; máx. distância no remo; troca a cada volta”).</td><td>Sem o campo: a súmula mostra só o nome da prova e a chamada do telão fica sem linhas.</td></tr>
+      <tr><td class="dcode">D8</td><td>Unidade</td><td>Só metros nesta versão. A estrutura já guarda a unidade, então calorias entram depois sem nova versão do contrato.</td><td>Calorias já agora (Bike, Ski, Remo por caloria): textos, limites e tipo legado variam por unidade. Aproxima a S2.</td></tr>
+      <tr><td class="dcode">D9</td><td>Telão</td><td>Onda separada, depois do motor, como no Intervalado. Mostra o total em metros e ordena pelo maior. Enquanto o judge não lançar, a raia aparece com “–”.</td><td>Junto com a súmula do judge: uma entrega só, mas a onda do telão tem arquivos próprios e mais risco.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="convivencia" aria-labelledby="t-conv">
+  <h2 id="t-conv">Como convive com os outros protocolos</h2>
+  <p class="sec-lead">A prova escolhe um formato e só ele vale para ela. Nada migra sozinho: provas já gravadas seguem no formato que têm.</p>
+  <div class="scroll"><table class="t">
+    <thead><tr><th></th><th>For Time</th><th>AMRAP</th><th>Carga máxima</th><th>Intervalado</th><th>Distância (novo)</th></tr></thead>
+    <tbody>
+      <tr><td>Pergunta que responde</td><td>Quem termina antes?</td><td>Quem faz mais no tempo?</td><td>Qual a maior carga?</td><td>Quantas repetições do máximo nos rounds?</td><td>Quem vai mais longe no tempo?</td></tr>
+      <tr><td>Resultado</td><td>Tempo (menor vence)</td><td>Rounds e repetições, ou total</td><td>kg (soma ou melhor)</td><td>Soma das repetições do máximo</td><td>Metros totais</td></tr>
+      <tr><td>Relógio</td><td>Time cap</td><td>Duração</td><td>Janela opcional</td><td>ON e OFF por round</td><td>Duração (relógio e barra, como o AMRAP)</td></tr>
+      <tr><td>O judge faz</td><td>Toca e segura por movimento</td><td>Toca e segura por movimento</td><td>Registra tentativas</td><td>Toca, por round</td><td>Digita um total</td></tr>
+      <tr><td>Desempate</td><td>Último marco ou split</td><td>Último round ou split</td><td>Última tentativa ou menos tentativas</td><td>Nenhum</td><td>Nenhum</td></tr>
+      <tr><td>Tipo legado</td><td class="num">fortime</td><td class="num">amrap</td><td class="num">maxweight</td><td class="num">reps</td><td class="num">distance</td></tr>
+      <tr><td>Atleta ausente</td><td>Cap mais penalidade</td><td>0 repetições</td><td>0 kg</td><td>0 repetições</td><td>0 m</td></tr>
+      <tr><td>Ajuste de tempo oficial</td><td>Sim</td><td>Só o desempate</td><td>Não</td><td>Não</td><td>Não</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="card">
+    <h3>Qual formato usar</h3>
+    <div class="scroll"><table class="t">
+      <thead><tr><th>Treino</th><th>Formato</th></tr></thead>
+      <tbody>
+        <tr><td>AMRAP 20 min: 750 m corrida e máx. distância no remo, dupla alternando</td><td>Distância</td></tr>
+        <tr><td>15 min: a maior distância de corrida</td><td>Distância</td></tr>
+        <tr><td>AMRAP 12 min: 500 m de remo e 20 wall balls, contando rounds</td><td>AMRAP, com o remo em metros (já existe)</td></tr>
+        <tr><td>5 rounds de 2 min ON e 2 min OFF, máximo de repetições</td><td>Intervalado</td></tr>
+        <tr><td>Máx. calorias no Bike em 10 min</td><td>Ainda sem formato (ver D8)</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <details>
+    <summary>Onde o código muda (para a story, não para decidir)</summary>
+    <ul>
+      <li><code>src/lib/workoutStructure.ts</code>: formato <code>distance</code>, campo <code>distance</code> (unidade e resumo), limites, normalização das versões 1 a 3, motor do último total válido e resultado.</li>
+      <li><code>src/lib/scoresheet.ts</code>: evento novo do total em <code>validateClientEvent</code>, <code>computeSheetOutcome</code> e <code>computeAbsentOutcome</code>.</li>
+      <li><code>src/lib/liveProgress.ts</code> e <code>liveHeatRanking.ts</code>: total ao vivo e ordem parcial pelo maior.</li>
+      <li><code>src/app/api/admin/persistence/route.ts</code>: <code>LEGACY_TYPE_LABELS</code> ganha <code>distance</code>.</li>
+      <li><code>workoutStructureEditor.ts</code> e <code>SheetBuilderForm.tsx</code>: cartão, seção da duração, resumo, frase da regra e conferência.</li>
+      <li><code>SheetView.tsx</code> e nova tela da distância, mais o modelo de tela em <code>sheetView.ts</code>.</li>
+      <li><code>CourtSheet.tsx</code>: palavra “m” junto do resultado e do ausente. <code>ScoresheetsPanel.tsx</code>: rótulo “Distância em metros” na correção do gestor (hoje sem entrada para <code>distance</code>).</li>
+      <li><code>EventView.tsx</code> e <code>messages/pt-br.json</code> e <code>en-gb.json</code>: selo “Distância”.</li>
+      <li><code>serverBroadcast.ts</code> e <code>BroadcastScreen.tsx</code> (onda do telão): rótulo, linha da chamada, total em metros.</li>
+      <li>Banco, autenticação e infraestrutura: nenhuma mudança.</li>
+    </ul>
+  </details>
+</section>
+
+<section id="maquetes" aria-labelledby="t-maq">
+  <h2 id="t-maq">Maquetes</h2>
+  <p class="sec-lead">As duas telas da S1, na linguagem do painel e da quadra de hoje. Os campos funcionam: mude a duração, ou digite o total (teste <span class="num">6.330</span>, <span class="num">3,5</span> e <span class="num">100000</span>).</p>
+
+  <div class="stage">
+    <p class="stage-cap"><b>Maquete 1 · Construtor da prova</b> (painel escuro, aba Provas)</p>
+    <div class="panel">
+      <div>
+        <h4 style="margin-bottom:8px">Formato da prova</h4>
+        <div class="fmt">
+          <div><b>For Time</b><span>Menor tempo para cumprir as metas</span></div>
+          <div><b>AMRAP</b><span>Mais repetições no tempo</span></div>
+          <div><b>Carga máxima</b><span>Maior carga válida, por tentativas</span></div>
+          <div><b>Intervalado</b><span>Rounds de trabalho e descanso; soma das repetições</span></div>
+          <div class="on new"><em>Novo</em><b>Distância</b><span>Maior distância no tempo; o judge informa o total</span></div>
+        </div>
+      </div>
+      <div class="panel-grid">
+        <div style="display:grid;gap:14px;align-content:start">
+          <div class="pf">
+            <label for="m-dur">Duração da prova (MM:SS)</label>
+            <input id="m-dur" class="num" type="text" inputmode="numeric" autocomplete="off" value="20:00" aria-describedby="m-dur-msg">
+            <span class="hint" id="m-dur-msg">De 00:30 a 99:59. A súmula avisa quando a duração termina.</span>
+          </div>
+          <div class="pf">
+            <label for="m-resumo">Resumo da prova para o judge (opcional)</label>
+            <textarea id="m-resumo" maxlength="300">750 m corrida; máx. distância no remo. Os parceiros trocam a cada volta da corrida.</textarea>
+            <span class="hint"><span id="m-count" class="num">0</span>/300 caracteres</span>
+          </div>
+        </div>
+        <div style="display:grid;gap:14px;align-content:start">
+          <div>
+            <h4 style="margin-bottom:8px">Pontuação</h4>
+            <div class="rule" id="m-rule"></div>
+          </div>
+          <div>
+            <h4 style="margin-bottom:8px">Conferência</h4>
+            <ul class="check" id="m-check"></ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stage">
+    <p class="stage-cap"><b>Maquete 2 · Súmula do judge</b> (quadra clara). Três momentos da mesma raia: dupla Fênix, bateria 2, raia 4.</p>
+    <div class="phones">
+
+      <div class="phone-col">
+        <div class="phone">
+          <div class="top"><span>Bateria 2 · Raia 4</span><span>Prova 3</span></div>
+          <div><p class="who">Dupla Fênix</p><p class="sub">Distância · 20:00 · maior vence</p></div>
+          <span class="state s-ready">Pronta</span>
+          <div class="clock" aria-label="Relógio parado em zero">00:00</div>
+          <p class="sub" style="text-align:center">Duração <span class="num">20:00</span></p>
+          <p class="sub">750 m corrida; máx. distância no remo. Os parceiros trocam a cada volta da corrida.</p>
+          <button type="button" class="pbtn main">Iniciar</button>
+          <span class="link">Atleta ausente</span>
+        </div>
+        <p class="cap">1 · Antes do sinal. O judge toca “Iniciar” na largada.</p>
+      </div>
+
+      <div class="phone-col">
+        <div class="phone">
+          <div class="top"><span>Bateria 2 · Raia 4</span><span>Prova 3</span></div>
+          <div><p class="who">Dupla Fênix</p><p class="sub">Distância · maior vence</p></div>
+          <span class="state s-run">Em andamento</span>
+          <div class="clock" aria-label="Relógio em 15 minutos e 48 segundos">15:48</div>
+          <p class="sub" style="text-align:center">Duração <span class="num">20:00</span></p>
+          <div class="bar" role="img" aria-label="79% da duração já passou"><i style="width:79%"></i></div>
+          <div class="field">
+            <label for="j-dist">Distância total (m)</label>
+            <div class="row">
+              <input id="j-dist" type="text" inputmode="numeric" autocomplete="off" value="6330" aria-describedby="j-msg">
+              <button type="button" class="pbtn main" id="j-save">Registrar</button>
+            </div>
+            <p class="help" id="j-msg">Some tudo por fora (voltas e remo) e informe o total em metros.</p>
+          </div>
+          <p class="sync">Salvo no aparelho e no servidor</p>
+        </div>
+        <p class="cap">2 · O campo fica à vista. O judge pode registrar de novo quando o total mudar. Vale o último.</p>
+      </div>
+
+      <div class="phone-col">
+        <div class="phone">
+          <div class="top"><span>Bateria 2 · Raia 4</span><span>Prova 3</span></div>
+          <div><p class="who">Dupla Fênix</p><p class="sub">Conferir e enviar</p></div>
+          <span class="state s-end">Tempo esgotado</span>
+          <div class="res">
+            <span class="lbl">Resultado a publicar</span>
+            <p class="big"><span id="j-big">6.330</span><small>m</small></p>
+            <p class="sub" id="j-km">= 6,33 km · 1 lançamento</p>
+          </div>
+          <ul class="chk">
+            <li>Relógio parado em 20:00</li>
+            <li>Total informado</li>
+            <li>Salvo no servidor</li>
+          </ul>
+          <button type="button" class="pbtn main">Enviar e publicar</button>
+          <button type="button" class="pbtn ghost">Voltar e corrigir</button>
+        </div>
+        <p class="cap">3 · O número aparece grande, com a unidade, antes de publicar. O gestor ainda pode corrigir depois.</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<section id="teste" aria-labelledby="t-teste">
+  <h2 id="t-teste">Caso de teste proposto</h2>
+  <p class="sec-lead">Para a story de motor usar nos testes. Prova de 20:00, quatro raias da mesma categoria.</p>
+  <div class="cols">
+    <div class="card">
+      <h3>Ranking</h3>
+      <div class="scroll"><table class="t" style="min-width:420px">
+        <thead><tr><th>Raia</th><th class="n">Lançado</th><th class="n">Resultado</th><th class="n">Posição</th><th>Observação</th></tr></thead>
+        <tbody>
+          <tr><td>Dupla A</td><td class="n">6330</td><td class="n">6330</td><td class="n">1</td><td>6 voltas × 750 m (4.500) + 1.830 m de remo</td></tr>
+          <tr><td>Dupla B</td><td class="n">6330</td><td class="n">6330</td><td class="n">1</td><td>Empata com A, sem desempate</td></tr>
+          <tr><td>Dupla C</td><td class="n">5915</td><td class="n">5915</td><td class="n">3</td><td>Posição 3: dois acima dela</td></tr>
+          <tr><td>Dupla D</td><td class="n">–</td><td class="n">0</td><td class="n">4</td><td>Ausente, depois de qualquer resultado real</td></tr>
+        </tbody>
+      </table></div>
+      <p class="small" style="margin-top:8px">Pontos (low-point): 1, 1, 3, 4.</p>
+    </div>
+    <div class="card">
+      <h3>Digitação do total</h3>
+      <div class="scroll"><table class="t" style="min-width:380px">
+        <thead><tr><th>Digitado</th><th>Resultado</th></tr></thead>
+        <tbody>
+          <tr><td class="num">3250</td><td>3.250 m</td></tr>
+          <tr><td class="num">3.250</td><td>3.250 m (ponto de milhar)</td></tr>
+          <tr><td class="num">0</td><td>0 m (vale, foi digitado)</td></tr>
+          <tr><td class="num">3,5</td><td>Recusado: “Use só metros inteiros (ex.: 3250).”</td></tr>
+          <tr><td class="num">100000</td><td>Recusado: acima de 99.999 m</td></tr>
+          <tr><td class="num">(vazio)</td><td>Recusado: “Informe o total em metros.”</td></tr>
+        </tbody>
+      </table></div>
+      <p class="small" style="margin-top:8px">Correção: registrar 6330 e depois 6350 resulta em 6.350 m. Desfazer volta a 6.330 m. O histórico mantém os dois lançamentos.</p>
+    </div>
+  </div>
+</section>
+
+<section id="riscos" aria-labelledby="t-riscos">
+  <h2 id="t-riscos">Riscos gerais da S1</h2>
+  <div class="scroll"><table class="t">
+    <thead><tr><th>Risco</th><th>Nível</th><th>Como reduzir</th></tr></thead>
+    <tbody>
+      <tr><td>Judge com a tela antiga em cache não entende o formato novo</td><td><span class="tag warn">Médio</span></td><td>Liberar as quatro peças juntas e só criar prova de Distância depois do deploy. O servidor recusa o que não conhece com mensagem clara, sem gravar nada errado. Pedir aos judges que recarreguem a página no dia.</td></tr>
+      <tr><td>Erro de digitação do total (um campo, sem trilha de toques)</td><td><span class="tag warn">Médio</span></td><td>Número grande com unidade e quilômetros na conferência, parser que recusa formato duvidoso e correção do gestor com justificativa e histórico (já existe). Cada lançamento fica no registro.</td></tr>
+      <tr><td>“3.250” lido como 3,25 por quem pensa em ponto decimal</td><td><span class="tag warn">Médio</span></td><td>Ponto seguido de exatamente três dígitos vale como milhar (D3). Teste dedicado.</td></tr>
+      <tr><td>Telão sem andamento até o judge lançar</td><td><span class="tag">Baixo</span></td><td>Raia com “–” e ordem pelo maior assim que houver total (D9). O judge pode registrar totais parciais durante a prova.</td></tr>
+      <tr><td>Asserções de teste presas à versão 3 da estrutura</td><td><span class="tag">Baixo</span></td><td>Ajustar junto, como na Story 1.60 (<code>npm test</code> antes e depois).</td></tr>
+      <tr><td>Estrutura travada na primeira súmula aberta</td><td><span class="tag">Baixo</span></td><td>Vale como hoje. Mudar a duração depois exige cancelar as súmulas da prova, com registro.</td></tr>
+      <tr><td>Banco, autenticação e infraestrutura</td><td><span class="tag ok">Sem risco novo</span></td><td>Nenhuma mudança: sem migration, sem rota nova, sem permissão nova. Os lançamentos usam a rota e a fila que já existem.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="plano" aria-labelledby="t-plano">
+  <h2 id="t-plano">Plano</h2>
+  <div class="scroll"><table class="t">
+    <thead><tr><th>Etapa</th><th>Escopo</th><th>Tamanho</th></tr></thead>
+    <tbody>
+      <tr><td>A · Contrato e motor</td><td>Versão 4, formato <code>distance</code>, motor do último total, evento novo, resultado, ausente, progresso ao vivo, tipo legado</td><td>M</td></tr>
+      <tr><td>B · Construtor</td><td>Cartão, duração, resumo, frase da regra, conferência, editar prova gravada, selo “Distância” na página pública</td><td>P</td></tr>
+      <tr><td>C · Súmula do judge</td><td>Tela do total, conferir e enviar, ausente, rótulo na correção do gestor</td><td>M</td></tr>
+      <tr><td>D · Telão</td><td>Rótulo, linha da chamada, total em metros, ordem ao vivo</td><td>P</td></tr>
+    </tbody>
+  </table></div>
+  <div class="cols">
+    <div class="card"><h3>Como seria conduzido</h3>
+      <ul>
+        <li>Fluxo das stories: @sm cria, @po valida, @dev implementa, @qa dá o gate. A próxima numeração livre é a 1.66.</li>
+        <li>Esta maquete e as decisões ficam em <code>docs/design/distancia/</code>, e as stories citam essa pasta.</li>
+        <li>Cada etapa roda <code>npm test</code>, <code>lint</code>, <code>typecheck</code> e <code>build</code>. O push continua só com o @devops.</li>
+      </ul></div>
+    <div class="card"><h3>Fora do escopo</h3>
+      <ul>
+        <li>Calorias (D8) e formato genérico (S2).</li>
+        <li>Soma assistida por voltas (S5).</li>
+        <li>Desempate e unidade “m” na tabela pública.</li>
+        <li>Qualquer mudança nos quatro formatos atuais.</li>
+        <li>Migration, autenticação e infraestrutura.</li>
+      </ul></div>
+  </div>
+</section>
+
+<section id="aprovar" aria-labelledby="t-aprovar">
+  <h2 id="t-aprovar">Resposta do usuário</h2>
+  <div class="card pick">
+    <p><b>Aprovado:</b> solução S1, D1 e D9, e todas as sugestões de D2 a D8 (confirmado em 2026-10-22). Avanço combinado: stories A a C implementadas; o telão (etapa D) fica para a onda seguinte.</p>
+  </div>
+</section>
+
+</div>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+
+  // Duração do construtor: MM:SS entre 00:30 e 99:59.
+  function parseTime(text) {
+    var m = /^(\d{1,2}):([0-5]\d)$/.exec(String(text).trim());
+    if (!m) return null;
+    var s = Number(m[1]) * 60 + Number(m[2]);
+    return s >= 30 && s <= 5999 ? s : null;
+  }
+  function fmtTime(s) {
+    var mm = Math.floor(s / 60), ss = s % 60;
+    return String(mm).padStart(2, '0') + ':' + String(ss).padStart(2, '0');
+  }
+  function renderBuilder() {
+    var dur = $('m-dur'), rule = $('m-rule'), check = $('m-check'), count = $('m-count'), res = $('m-resumo');
+    var seconds = parseTime(dur.value);
+    var bad = seconds === null;
+    dur.setAttribute('aria-invalid', bad ? 'true' : 'false');
+    count.textContent = String(res.value.length);
+    rule.innerHTML = bad
+      ? 'Informe a duração para ver a regra.'
+      : 'Vale a <b>maior distância total</b> em <b>' + fmtTime(seconds) + '</b>. O judge informa o total em metros. Empates dividem a posição, sem desempate.';
+    check.innerHTML = '';
+    function add(cls, text) { var li = document.createElement('li'); li.className = cls; li.textContent = text; check.appendChild(li); }
+    add(bad ? 'er' : 'ok', bad ? 'Duração: use MM:SS entre 00:30 e 99:59.' : 'Duração: ' + fmtTime(seconds));
+    add('ok', 'Resultado em metros, maior vence');
+    add('ok', 'Sem desempate nesta versão');
+    add(res.value.trim() ? 'ok' : '', res.value.trim() ? 'Resumo para o judge preenchido' : 'Resumo para o judge: opcional, vazio');
+  }
+
+  // Total do judge: metros inteiros, 0 a 99.999; "3.250" vale 3250 (ponto de milhar).
+  function parseMeters(text) {
+    var t = String(text).replace(/\s/g, '');
+    if (!t) return { error: 'Informe o total em metros.' };
+    var digits = null;
+    if (/^\d+$/.test(t)) digits = t;
+    else if (/^\d{1,3}(\.\d{3})+$/.test(t)) digits = t.replace(/\./g, '');
+    if (digits === null) return { error: 'Use só metros inteiros (ex.: 3250).' };
+    var n = Number(digits);
+    if (n > 99999) return { error: 'O total passa de 99.999 m. Confira o número.' };
+    return { value: n };
+  }
+  function fmtNumber(n) { return n.toLocaleString('pt-BR'); }
+  function fmtKm(n) { return (n / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 3 }); }
+
+  var saved = 6330;
+  function renderJudge(showError) {
+    var input = $('j-dist'), msg = $('j-msg');
+    var r = parseMeters(input.value);
+    var invalid = Boolean(r.error);
+    input.setAttribute('aria-invalid', invalid && showError ? 'true' : 'false');
+    msg.className = invalid && showError ? 'bad' : 'help';
+    msg.textContent = invalid && showError ? r.error : 'Some tudo por fora (voltas e remo) e informe o total em metros.';
+    $('j-big').textContent = fmtNumber(saved);
+    $('j-km').textContent = '= ' + fmtKm(saved) + ' km · 1 lançamento';
+  }
+
+  $('m-dur').addEventListener('input', renderBuilder);
+  $('m-resumo').addEventListener('input', renderBuilder);
+  $('j-dist').addEventListener('input', function () { renderJudge(false); });
+  $('j-save').addEventListener('click', function () {
+    var r = parseMeters($('j-dist').value);
+    if (!r.error) saved = r.value;
+    renderJudge(true);
+  });
+  $('j-dist').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('j-save').click(); });
+
+  renderBuilder();
+  renderJudge(false);
+})();
+</script>
