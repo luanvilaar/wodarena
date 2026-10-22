@@ -13,7 +13,8 @@ import { importServerModule } from './support/serverModuleHarness.mjs';
 // integração no painel, o tipo e o mapper de `structure`, o bootstrap de gestor
 // com fallback e as páginas de desenvolvimento. Os componentes rodam em
 // renderização de servidor; o comportamento interativo foi conferido no
-// navegador (ver as stories).
+// navegador (ver as stories). Story 1.61: o quarto formato, Intervalado
+// (Maquete 1 de docs/design/intervalado/).
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
@@ -33,7 +34,9 @@ const types = read('../src/types/index.ts');
 const bootstrapRoute = read('../src/app/api/app/bootstrap/route.ts');
 const bootstrapPayload = read('../src/lib/bootstrapPayload.ts');
 
-const { addLine, analyzeDraft, createDraft, setDraftFormat, toggleStepMark, updateLift, updateLine } = editorLib;
+const {
+  addLine, analyzeDraft, createDraft, removeLine, setDraftFormat, toggleStepMark, updateIntervalMax, updateIntervalTiming, updateLift, updateLine
+} = editorLib;
 
 const franDraft = () => {
   let draft = createDraft('for_time');
@@ -83,6 +86,7 @@ test('construtor For Time: formato, linhas com repetições, movimento e carga, 
   assert.match(html, /<button[^>]*id="b-format-for_time"[^>]*role="radio"[^>]*aria-checked="true"/);
   assert.match(html, /<button[^>]*id="b-format-amrap"[^>]*aria-checked="false"/);
   assert.match(html, /<button[^>]*id="b-format-max_load"[^>]*aria-checked="false"/);
+  assert.match(html, /<button[^>]*id="b-format-interval"[^>]*aria-checked="false"[^>]*tabindex="-1"/i);
   // Revisão QA (QA-146-3): um ponto de Tab no grupo (o formato escolhido); as setas trocam a escolha.
   assert.match(html, /id="b-format-for_time"[^>]*aria-checked="true"[^>]*tabindex="0"/i);
   assert.match(html, /id="b-format-amrap"[^>]*aria-checked="false"[^>]*tabindex="-1"/i);
@@ -304,6 +308,12 @@ test('as páginas de pré-visualização só existem em desenvolvimento', () => 
   }
   assert.match(read('../src/components/sheet/SheetPreview.tsx'), /<SheetDemo/);
   assert.match(read('../src/components/sheet/EditorPreview.tsx'), /<WorkoutStructureEditor/);
+  // Story 1.61: o exemplo do Intervalado para conferir "Editar súmula" no navegador.
+  const preview = read('../src/components/sheet/EditorPreview.tsx');
+  assert.match(preview, /Carregar o exemplo do Intervalado \(5 × 02:00 \/ 02:00\)/);
+  assert.match(preview, /onClick=\{\(\) => setValue\(INTERVAL_EXAMPLE\)\}/);
+  const example = preview.match(/const INTERVAL_EXAMPLE: WorkoutStructure = (\{[\s\S]*?\n\});/)[1];
+  assert.equal(validateWorkoutStructure(Function(`return (${example});`)()).ok, true, 'o exemplo é uma estrutura v3 válida');
 });
 
 test('o motor, a persistência, o judge e as dependências seguem como estavam', () => {
@@ -312,4 +322,153 @@ test('o motor, a persistência, o judge e as dependências seguem como estavam',
   assert.doesNotMatch(read('../src/app/judge/page.tsx'), /WorkoutStructureEditor|SheetDemo|SheetView/);
   assert.doesNotMatch(read('../package.json'), /"mapbox-gl"[\s\S]*"zod"|"zod"|"react-hook-form"/);
   assert.match(editorLib.describeStructureProblem.toString(), /validateWorkoutStructure/);
+});
+
+// ---------------------------------------------------------------------------
+// Story 1.61: Intervalado no construtor (Maquete 1 de docs/design/intervalado/)
+// ---------------------------------------------------------------------------
+
+const intervalDraft = () => {
+  let draft = setDraftFormat(createDraft('for_time'), 'interval');
+  draft = updateLine(draft, 'interval', draft.interval.lines[0].key, { reps: '6', name: 'Ring Muscle Ups' });
+  draft = addLine(draft, 'interval');
+  draft = updateLine(draft, 'interval', draft.interval.lines[1].key, { reps: '15', name: 'Box Jump Overs (24/20 in)' });
+  return updateIntervalMax(draft, { name: 'Squat Clean', load: '80' });
+};
+const sectionOf = (html, title) => html.slice(html.indexOf(`</span>${title}</h3>`), html.indexOf('</section>', html.indexOf(`</span>${title}</h3>`)));
+
+test('Intervalado: quarto cartão depois de Carga máxima, um ponto de Tab e setas circulares entre os quatro formatos', () => {
+  const html = renderPanel(intervalDraft());
+  const cards = [...html.matchAll(/id="b-format-([a-z_]+)"[^>]*role="radio"[^>]*aria-checked="(true|false)"[^>]*tabindex="(-?\d)"/g)].map((match) => match.slice(1));
+  assert.deepEqual(cards, [['for_time', 'false', '-1'], ['amrap', 'false', '-1'], ['max_load', 'false', '-1'], ['interval', 'true', '0']]);
+  assert.match(html, /id="b-format-interval"[^>]*>.*?<svg[^>]*lucide-check[\s\S]*?<\/svg>Intervalado<\/span><span[^>]*>Rounds de trabalho e descanso; soma das repetições<\/span><\/button>/s);
+  assert.equal((html.match(/role="radio"/g) || []).length, 4);
+  assert.equal((html.match(/lucide-check/g) || []).length, 1, 'só o cartão escolhido leva o Check');
+
+  const formats = block(formSource, /const FORMATS: [\s\S]*?\n\];/);
+  assert.equal((formats.match(/\{ value: '/g) || []).length, 4);
+  assert.match(formats, /\{ value: 'max_load', title: 'Carga máxima', detail: 'Maior carga válida, por tentativas' \},\s*\{ value: 'interval', title: 'Intervalado', detail: 'Rounds de trabalho e descanso; soma das repetições' \}/);
+  assert.match(formSource, /const next = FORMATS\[\(index \+ step \+ FORMATS\.length\) % FORMATS\.length\]\.value;/);
+  assert.match(formSource, /role="radiogroup" aria-labelledby=\{id\('format-title'\)\} onKeyDown=\{handleFormatKeys\} className="grid grid-cols-2 gap-2 xl:grid-cols-4"/);
+  assert.doesNotMatch(formSource, /sm:grid-cols-3/, 'a grade dos formatos não fica em três colunas');
+  assert.match(formSource, /onClick=\{\(\) => onChange\(setDraftFormat\(draft, option\.value\)\)\}/);
+});
+
+test('Intervalado: seções 2 a 5, campos, linha do tempo, dicas e textos da maquete', () => {
+  const html = renderPanel(intervalDraft());
+  const titles = [...html.matchAll(/<h3 id="b-[a-z-]+"[^>]*><span class="font-number text-primary">(\d)<\/span>([^<]+)<\/h3>/g)].map((match) => `${match[1]} ${match[2]}`);
+  assert.deepEqual(titles, ['1 Formato da prova', '2 Rounds e tempos', '3 Trabalho de cada round', '4 Pontuação', '5 Regra da prova']);
+
+  // 2 Rounds e tempos: rótulos associados, duração somente leitura e calculada.
+  const time = sectionOf(html, 'Rounds e tempos');
+  for (const [field, label, value] of [['rounds', 'Rounds', '5'], ['on', 'Trabalho · ON \\(MM:SS\\)', '02:00'], ['off', 'Descanso · OFF \\(MM:SS\\)', '02:00']]) {
+    assert.match(time, new RegExp(`<label for="b-iv-${field}"[^>]*>${label}</label><input id="b-iv-${field}"[^>]*aria-invalid="false"[^>]*value="${value}"`), field);
+  }
+  assert.match(time, /<label for="b-iv-duration"[^>]*>Duração da prova<\/label><input id="b-iv-duration" type="text" readOnly=""[^>]*value="18:00"/);
+  assert.match(time, /role="img" aria-label="5 rounds de 02:00 de trabalho, 02:00 de descanso entre eles, 18:00 no total"/);
+  assert.equal((time.match(/flex:120 0 0/g) || []).length, 9, '5 blocos de trabalho e 4 de descanso: sem descanso depois do último');
+  assert.equal((time.match(/class="block h-full bg-info"/g) || []).length, 5);
+  assert.equal((time.match(/class="block h-full bg-primary"/g) || []).length, 5);
+  assert.match(time, /<div aria-hidden="true" class="relative mt-1[^"]*"><span[^>]*left:0%[^>]*>00:00<\/span>.*>16:00<\/span><span[^>]*left:100%[^>]*>18:00<\/span><\/div>/s);
+  assert.match(time, /<\/span>Fixos<\/span>.*<\/span>Máximo<\/span>.*<\/span>\s*Descanso<\/span>/s, 'legenda com texto ao lado das cores');
+  assert.match(time, /Sem descanso depois do último round\. Com OFF em 00:00 os rounds ficam colados \(EMOM\)\./);
+
+  // 3 Trabalho de cada round: fixos como as linhas do AMRAP e a linha do máximo, fixa e por último.
+  const work = sectionOf(html, 'Trabalho de cada round');
+  assert.match(work, />Repetições<\/span><span[^>]*>Movimento<\/span><span[^>]*>Carga \(kg\)<\/span>/);
+  assert.match(work, /aria-label="Repetições do movimento 1"[^>]*value="6"/);
+  assert.match(work, /placeholder="10"/, 'um número por movimento, sem sequência');
+  assert.match(work, /aria-label="Movimento 2"[^>]*value="Box Jump Overs \(24\/20 in\)"/);
+  assert.match(work, /<input id="b-iv-k5-reps" type="text" disabled="" readOnly="" aria-label="Repetições do movimento máximo: sem meta"[^>]*value="Máx\."\/>/);
+  assert.match(work, /aria-label="Movimento máximo"[^>]*value="Squat Clean"/);
+  assert.match(work, /aria-label="Carga do movimento máximo em kg"[^>]*value="80"/);
+  assert.ok(work.indexOf('Movimento 2"') < work.indexOf('Movimento máximo"'), 'o máximo vem depois dos fixos');
+  assert.doesNotMatch(work, /Remover o movimento máximo|Subir o movimento máximo|Descer o movimento máximo/);
+  assert.match(work, /aria-label="Mais opções do movimento máximo"/);
+  assert.match(work, /<button[^>]*id="b-iv-add"[^>]*>.*Movimento<\/button>/s);
+  assert.doesNotMatch(work, /<button[^>]*id="b-iv-add"[^>]*disabled=""/);
+  assert.match(work, /aria-label="Remover o movimento 1"/);
+  assert.match(work, /O movimento máximo fica sempre por último e não tem meta: o judge conta até o fim da janela\. A carga é uma por linha; 80 kg e 55 kg viram duas provas, uma por categoria \(campo &quot;Categoria vinculada&quot;\), como hoje\./);
+  assert.match(formSource, /disabled=\{iv\.lines\.length >= MAX_INTERVAL_FIXED_LINES\}/, 'o botão "Movimento" para no limite de 9');
+  assert.match(formSource, /minCount=\{list === 'interval' \? 0 : 1\}/, 'o último fixo pode sair (0 fixos)');
+
+  // 4 Pontuação: Score e Desempate fixos, desabilitados.
+  const score = sectionOf(html, 'Pontuação');
+  assert.match(score, /<label for="b-iv-score"[^>]*>Score<\/label><input id="b-iv-score" type="text" disabled=""[^>]*value="Soma das repetições do máximo"/);
+  assert.match(score, /<label for="b-iv-tiebreak"[^>]*>Desempate<\/label><input id="b-iv-tiebreak" type="text" disabled=""[^>]*value="Sem desempate"/);
+  assert.match(score, /Round em que os movimentos fixos não terminam dentro da janela vale 0 no máximo\. Empates dividem a posição\./);
+
+  // 5 Regra da prova: a frase com destaques e a lista de conferência.
+  const rule = sectionOf(html, 'Regra da prova');
+  assert.match(rule, /São <\/span><strong[^>]*>5 rounds<\/strong><span> de <\/span><strong[^>]*>02:00<\/strong><span> de trabalho<\/span><span>, com <\/span><strong[^>]*>02:00<\/strong>/);
+  assert.match(rule, /<strong[^>]*>soma das repetições de Squat Clean<\/strong>/);
+  assert.match(rule, /<ul class="space-y-1 text-xs" aria-live="polite">/);
+  for (const text of ['5 rounds de 02:00 de trabalho e 02:00 de descanso · 18:00 no total', '2 movimentos fixos (21 repetições por round)', '1 movimento máximo: Squat Clean 80 kg', 'Sem desempate (opcional)']) {
+    assert.ok(rule.includes(text), text);
+  }
+
+  // Ids únicos por idPrefix.
+  const ids = [...html.matchAll(/ id="([^"]+)"/g)].map((match) => match[1]);
+  assert.equal(new Set(ids).size, ids.length, 'ids únicos');
+  assert.ok(ids.filter((value) => value.startsWith('b-iv-')).length > 10);
+});
+
+test('Intervalado: erros marcados no campo, duração "—", sem linha do tempo e "Usar esta súmula" desligado', () => {
+  const broken = updateIntervalMax(updateIntervalTiming(intervalDraft(), { rounds: '1', on: '00:10' }), { name: '' });
+  const html = renderPanel(broken);
+  assert.match(html, /<input id="b-iv-rounds"[^>]*aria-invalid="true" aria-describedby="b-iv-rounds-problem"/);
+  assert.match(html, /<input id="b-iv-on"[^>]*aria-invalid="true" aria-describedby="b-iv-on-problem"/);
+  assert.match(html, /<input id="b-iv-off"[^>]*aria-invalid="false"/);
+  assert.match(html, /<p id="b-iv-rounds-problem"[^>]*>Rounds: de 2 a 20\.<\/p>/);
+  assert.match(html, /<p id="b-iv-on-problem"[^>]*>Trabalho: de 00:30 a 30:00 \(MM:SS\)\.<\/p>/);
+  assert.match(html, /<input id="b-iv-duration"[^>]*value="—"/);
+  assert.doesNotMatch(html, /role="img"/, 'a linha do tempo some enquanto houver erro');
+  assert.match(html, /aria-label="Movimento máximo" aria-invalid="true" aria-describedby="b-iv-k5-problem"/);
+  assert.match(html, /<p id="b-iv-k5-problem"[^>]*>Movimento máximo: informe o movimento\.<\/p>/);
+  assert.match(html, /<span class="sr-only">Corrigir: <\/span>Rounds: de 2 a 20\./, 'mensagem em texto, não só cor');
+  assert.match(html, /3 itens para corrigir na regra da prova\./);
+  assert.match(html, /<button[^>]*id="b-use"[^>]*disabled=""/);
+  assert.match(html, /A regra aparece aqui quando os itens marcados com ! forem corrigidos\./);
+
+  const long = renderPanel(updateIntervalTiming(intervalDraft(), { rounds: '20', on: '03:00', off: '03:00' }));
+  assert.match(long, /<input id="b-iv-duration"[^>]*aria-invalid="true" aria-describedby="b-iv-duration-problem"[^>]*value="—"/);
+  assert.match(long, /<p id="b-iv-duration-problem"[^>]*>A prova passa de 99:59 \(117:00\)\. Reduza rounds ou tempos\.<\/p>/);
+
+  // Sem fixos e sem descanso: aceito, sem a cor dos fixos e sem bloco de descanso.
+  let emom = updateIntervalTiming(intervalDraft(), { off: '00:00' });
+  emom = removeLine(removeLine(emom, 'interval', emom.interval.lines[1].key), 'interval', emom.interval.lines[0].key);
+  const emomHtml = renderPanel(emom);
+  assert.match(emomHtml, /role="img" aria-label="5 rounds de 02:00 de trabalho, sem descanso entre eles, 10:00 no total"/);
+  assert.doesNotMatch(emomHtml, /bg-info" style/);
+  assert.match(emomHtml, /Nenhum movimento fixo/);
+  assert.doesNotMatch(emomHtml, /<button[^>]*id="b-use"[^>]*disabled=""/);
+});
+
+test('Intervalado: a prévia mostra o aviso até a súmula do judge existir (Story 1.62), sem bloquear "Usar esta súmula"', () => {
+  const html = renderPanel(intervalDraft());
+  assert.match(html, /<p role="status"[^>]*>A prévia da súmula do Intervalado chega com a próxima etapa\.<\/p>/);
+  assert.doesNotMatch(html, /aria-label="Súmula digital/, 'nada da súmula de For Time ao lado');
+  assert.match(html, /Súmula pronta\. Ela é gravada quando você salvar a prova\./);
+  assert.doesNotMatch(html, /<button[^>]*id="b-use"[^>]*disabled=""/);
+  // Também com problemas: o aviso no lugar de "Corrija os itens".
+  assert.match(renderPanel(createDraft('interval')), /A prévia da súmula do Intervalado chega com a próxima etapa\./);
+  assert.match(dialogSource, /\{analysis\.format === 'interval' \? \(/);
+  // Os outros formatos seguem com a súmula ao lado.
+  assert.match(renderPanel(franDraft()), /aria-label="Súmula digital"/);
+});
+
+test('Intervalado no formulário da prova: resumo, frase da regra e "Editar súmula" a partir da estrutura gravada', () => {
+  const structure = validateWorkoutStructure(analyzeDraft(intervalDraft()).structure).structure;
+  const html = renderEditor({ value: structure });
+  assert.match(html, /Intervalado · 5 rounds · 02:00 ON \/ 02:00 OFF · 18:00/);
+  assert.match(html, /São 5 rounds de 02:00 de trabalho, com 02:00 de descanso entre eles \(18:00 no total\)\. Em cada round o atleta faz 6 Ring Muscle Ups e 15 Box Jump Overs \(24\/20 in\) e, com o tempo que sobrar, o máximo de Squat Clean 80 kg\./);
+  assert.match(html, /id="t-open"[^>]*>.*Editar súmula/s);
+  assert.doesNotMatch(html, /<button[^>]*id="t-open"[^>]*disabled=""/);
+  // Trava da regra do motor 8, sem mudança: com súmula aberta, "Editar súmula" fica desabilitado com o aviso de hoje.
+  const locked = renderEditor({ value: structure, lockedSheets: 1 });
+  assert.match(locked, /<button[^>]*id="t-open"[^>]*disabled=""/);
+  assert.match(locked, /Estrutura travada: 1 súmula já foi aberta na arbitragem\./);
+  // O painel deriva o tipo legado "reps" ao usar a estrutura; o editor continua aparecendo porque wodStructure existe.
+  assert.match(admin, /\{workoutStructureSupported && \(wodStructure \|\| wodType === 'fortime' \|\| wodType === 'amrap' \|\| wodType === 'maxweight'\) && \(/);
+  assert.match(editorSource, /notice: loaded && !loaded\.ok \? `\$\{loaded\.error\} Monte de novo em linhas; a súmula gravada só muda quando você usar a nova e salvar a prova\.` : null,/);
 });

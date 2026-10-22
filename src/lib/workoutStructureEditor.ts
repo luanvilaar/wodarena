@@ -10,6 +10,7 @@ import type {
   AmrapScoreDisplay,
   WorkoutGenerator,
   WorkoutGeneratorKind,
+  WorkoutInterval,
   WorkoutSegment,
   WorkoutSegmentMark,
   WorkoutSegmentUnit,
@@ -28,15 +29,37 @@ import type {
 // unidade no fim (500 m, 30 cal). O rascunho guarda o texto digitado; a
 // estrutura (lista de segmentos do contrato) é gerada a partir dele e validada
 // por validateWorkoutStructure, o mesmo validador do servidor.
+//
+// Intervalado (Story 1.61, decisões em docs/design/intervalado/): rounds,
+// trabalho (ON) e descanso (OFF) digitados, de 0 a 9 movimentos fixos (as
+// mesmas linhas do AMRAP, um número por movimento) e o movimento máximo, sempre
+// o último e sem meta. A duração é calculada (sem descanso depois do último
+// round) e vira o time cap da estrutura v3.
 
 export const DEFAULT_PENALTY_SECONDS_PER_REP = 1;
 export const DEFAULT_TIME_CAP_SECONDS: Record<'for_time' | 'amrap', number> = { for_time: 600, amrap: 720 };
 export const DEFAULT_LOAD_STEP_KG = 2.5;
+/** Valores iniciais do Intervalado: os do treino de referência (5 × 02:00 ON / 02:00 OFF). */
+export const DEFAULT_INTERVAL = { rounds: 5, onSeconds: 120, offSeconds: 120 } as const;
 
 const LIMITS = WORKOUT_STRUCTURE_LIMITS;
 const ENTRY_DEFAULTS = { mode: 'both', marking: 'reps', publish: 'after_review' } as const;
 /** Linhas por prova no construtor (o contrato limita as etapas geradas a 30). */
 export const MAX_BUILDER_LINES = 10;
+/** Movimentos fixos do Intervalado (o máximo é uma linha à parte). */
+export const MAX_INTERVAL_FIXED_LINES = LIMITS.maxIntervalFixedSegments;
+/** Id do movimento máximo na estrutura gerada (os fixos são s1, s2...). */
+export const INTERVAL_MAX_ID = 'mx';
+/**
+ * Chaves de `lineProblems` dos campos de rounds e tempos do Intervalado (as
+ * linhas usam a própria chave, "k1", "k2"...).
+ */
+export const INTERVAL_FIELDS = {
+  rounds: 'interval-rounds',
+  on: 'interval-on',
+  off: 'interval-off',
+  duration: 'interval-duration'
+} as const;
 
 // ---------------------------------------------------------------------------
 // Rascunho
@@ -101,11 +124,31 @@ export type MaxLoadDraft = {
   tieBreak: MaxLoadTieBreakMode;
 };
 
+/** Movimento máximo do Intervalado: sem repetições (não tem meta). */
+export type BuilderIntervalMax = {
+  key: string;
+  name: string;
+  /** Carga em kg como digitada; vazio = sem carga. */
+  load: string;
+  note: string;
+};
+
+export type IntervalDraft = {
+  rounds: string;
+  /** Trabalho (ON) e descanso (OFF) em MM:SS, como digitados. */
+  on: string;
+  off: string;
+  /** Movimentos fixos de um round (de 0 a 9). */
+  lines: BuilderLine[];
+  max: BuilderIntervalMax;
+};
+
 export type SheetDraft = {
   format: WorkoutStructureFormat;
   forTime: ForTimeDraft;
   amrap: AmrapDraft;
   maxLoad: MaxLoadDraft;
+  interval: IntervalDraft;
   /** Próximo número para a chave de uma linha nova. */
   nextKey: number;
 };
@@ -239,7 +282,14 @@ export const createDraft = (format: WorkoutStructureFormat = 'for_time', options
       step: formatKg(DEFAULT_LOAD_STEP_KG),
       tieBreak: 'finish_time'
     },
-    nextKey: 4
+    interval: {
+      rounds: String(DEFAULT_INTERVAL.rounds),
+      on: formatTimeInput(DEFAULT_INTERVAL.onSeconds),
+      off: formatTimeInput(DEFAULT_INTERVAL.offSeconds),
+      lines: [emptyLine('k4')],
+      max: { key: 'k5', name: '', load: '', note: '' }
+    },
+    nextKey: 6
   };
 };
 
@@ -299,6 +349,35 @@ export const draftFromStructure = (structure: WorkoutStructure): DraftResult => 
     return { ok: true, draft: { ...draft, nextKey: next } };
   }
 
+  if (structure.format === 'interval') {
+    const interval = structure.interval;
+    // O construtor só gera fixos de um round e obrigatórios (o contrato aceita `required: false`).
+    const fits = interval
+      && structure.segments.length <= MAX_INTERVAL_FIXED_LINES
+      && structure.segments.every((segment) => segment.round === 1 && segment.required);
+    if (!interval || !fits) return { ok: false, error: NOT_IN_LINES };
+    draft.interval = {
+      rounds: String(interval.rounds),
+      on: formatTimeInput(interval.onSeconds),
+      off: formatTimeInput(interval.offSeconds),
+      lines: structure.segments.map((segment) => ({
+        key: key(),
+        reps: formatRepsField([segment.reps], segment.unit),
+        name: segment.name,
+        load: segment.load ? formatKg(segment.load.value) : '',
+        mark: segment.mark,
+        note: segment.note
+      })),
+      max: {
+        key: key(),
+        name: interval.max.name,
+        load: interval.max.load ? formatKg(interval.max.load.value) : '',
+        note: interval.max.note
+      }
+    };
+    return { ok: true, draft: { ...draft, nextKey: next } };
+  }
+
   const rounds = splitRounds(structure.segments);
   if (!rounds || (structure.format === 'amrap' && rounds.length !== 1)) return { ok: false, error: NOT_IN_LINES };
 
@@ -349,11 +428,11 @@ export const draftFromStructure = (structure: WorkoutStructure): DraftResult => 
 
 export const setDraftFormat = (draft: SheetDraft, format: WorkoutStructureFormat): SheetDraft => ({ ...draft, format });
 
-type LineList = 'forTime' | 'amrap';
+type LineList = 'forTime' | 'amrap' | 'interval';
 
 export const addLine = (draft: SheetDraft, list: LineList): SheetDraft => {
   const lines = draft[list].lines;
-  if (lines.length >= MAX_BUILDER_LINES) return draft;
+  if (lines.length >= (list === 'interval' ? MAX_INTERVAL_FIXED_LINES : MAX_BUILDER_LINES)) return draft;
   // Em For Time a linha nova copia as repetições da anterior (21-15-9 costuma valer para todas).
   const reps = list === 'forTime' && lines.length > 0 ? lines[lines.length - 1].reps : '';
   return {
@@ -372,8 +451,11 @@ export const updateLine = (draft: SheetDraft, list: LineList, key: string, patch
 
 export const removeLine = (draft: SheetDraft, list: LineList, key: string): SheetDraft => {
   const lines = draft[list].lines;
-  if (lines.length <= 1 || !lines.some((line) => line.key === key)) return draft;
+  if (!lines.some((line) => line.key === key)) return draft;
   const remaining = lines.filter((line) => line.key !== key);
+  // No Intervalado os fixos podem chegar a zero (o máximo é uma linha à parte).
+  if (list === 'interval') return { ...draft, interval: { ...draft.interval, lines: remaining } };
+  if (lines.length <= 1) return draft;
   if (list === 'forTime') {
     return { ...draft, forTime: { ...draft.forTime, lines: remaining, marks: draft.forTime.marks.filter((mark) => mark.line !== key) } };
   }
@@ -388,6 +470,21 @@ export const moveLine = (draft: SheetDraft, list: LineList, key: string, directi
   [lines[index], lines[target]] = [lines[target], lines[index]];
   return { ...draft, [list]: { ...draft[list], lines } };
 };
+
+export type IntervalMaxPatch = Partial<Pick<BuilderIntervalMax, 'name' | 'load' | 'note'>>;
+
+/** Movimento máximo do Intervalado (uma linha só, que não se move nem se remove). */
+export const updateIntervalMax = (draft: SheetDraft, patch: IntervalMaxPatch): SheetDraft => ({
+  ...draft,
+  interval: { ...draft.interval, max: { ...draft.interval.max, ...patch } }
+});
+
+export type IntervalTimingPatch = Partial<Pick<IntervalDraft, 'rounds' | 'on' | 'off'>>;
+
+export const updateIntervalTiming = (draft: SheetDraft, patch: IntervalTimingPatch): SheetDraft => ({
+  ...draft,
+  interval: { ...draft.interval, ...patch }
+});
 
 export const addLift = (draft: SheetDraft): SheetDraft => {
   if (draft.maxLoad.lifts.length >= LIMITS.maxLifts) return draft;
@@ -471,9 +568,17 @@ export type DraftAnalysis = {
   rounds: number;
   /** Rounds definidos pela sequência de repetições; null quando vale o campo "Rounds". */
   derivedRounds: number | null;
-  /** Problema por linha (chave da linha → mensagem), para marcar o campo. */
+  /**
+   * Problema por linha (chave da linha → mensagem), para marcar o campo. No
+   * Intervalado também os campos de rounds e tempos (chaves de INTERVAL_FIELDS)
+   * e a linha do máximo (a chave dela).
+   */
   lineProblems: Record<string, string>;
+  /** Intervalado: rounds, tempos e duração lidos; null enquanto algum deles tiver problema. */
+  intervalTiming?: IntervalTiming | null;
 };
+
+export type IntervalTiming = { rounds: number; onSeconds: number; offSeconds: number; totalSeconds: number };
 
 type LineReading = {
   line: BuilderLine;
@@ -806,10 +911,162 @@ const analyzeMaxLoad = (draft: SheetDraft): DraftAnalysis => {
   });
 };
 
+/** Duração do Intervalado: sem descanso depois do último round. */
+export const intervalDurationSeconds = (rounds: number, onSeconds: number, offSeconds: number) =>
+  rounds * onSeconds + (rounds - 1) * offSeconds;
+
+/**
+ * Duração do Intervalado sempre em MM:SS, com os minutos passando de 60
+ * ("78:00", "117:00"), como na maquete; formatTimeInput passaria a H:MM:SS a
+ * partir de uma hora.
+ */
+export const formatMinutes = (seconds: number) =>
+  `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+
+const readSeconds = (text: string, min: number, max: number) => {
+  const parsed = parseTimeInput(text);
+  return parsed.ok && parsed.seconds >= min && parsed.seconds <= max ? parsed.seconds : null;
+};
+
+const kgLabel = (kg: number | null) => (kg === null ? '' : ` ${formatKg(kg)} kg`);
+
+const analyzeInterval = (draft: SheetDraft): DraftAnalysis => {
+  const iv = draft.interval;
+  const items: ChecklistItem[] = [];
+  const lineProblems: Record<string, string> = {};
+  const fieldProblem = (field: string, text: string) => {
+    items.push({ tone: 'error', text });
+    lineProblems[field] = text;
+  };
+
+  // Rounds e tempos (decisão 10: 2 a 20 rounds, ON de 00:30 a 30:00, OFF de 00:00 a 30:00, até 99:59).
+  const roundsText = iv.rounds.trim();
+  const typedRounds = /^\d{1,2}$/.test(roundsText) ? Number(roundsText) : Number.NaN;
+  const rounds = typedRounds >= LIMITS.minIntervalRounds && typedRounds <= LIMITS.maxIntervalRounds ? typedRounds : null;
+  const on = readSeconds(iv.on, LIMITS.minIntervalOnSeconds, LIMITS.maxIntervalOnSeconds);
+  const off = readSeconds(iv.off, LIMITS.minIntervalOffSeconds, LIMITS.maxIntervalOffSeconds);
+  if (rounds === null) fieldProblem(INTERVAL_FIELDS.rounds, `Rounds: de ${LIMITS.minIntervalRounds} a ${LIMITS.maxIntervalRounds}.`);
+  if (on === null) {
+    fieldProblem(INTERVAL_FIELDS.on, `Trabalho: de ${formatTimeInput(LIMITS.minIntervalOnSeconds)} a ${formatTimeInput(LIMITS.maxIntervalOnSeconds)} (MM:SS).`);
+  }
+  if (off === null) {
+    fieldProblem(INTERVAL_FIELDS.off, `Descanso: de ${formatTimeInput(LIMITS.minIntervalOffSeconds)} a ${formatTimeInput(LIMITS.maxIntervalOffSeconds)} (MM:SS).`);
+  }
+  let timing: IntervalTiming | null = null;
+  if (rounds !== null && on !== null && off !== null) {
+    const total = intervalDurationSeconds(rounds, on, off);
+    if (total > LIMITS.maxTimeCapSeconds) {
+      fieldProblem(INTERVAL_FIELDS.duration, `A prova passa de ${formatMinutes(LIMITS.maxTimeCapSeconds)} (${formatMinutes(total)}). Reduza rounds ou tempos.`);
+    } else {
+      timing = { rounds, onSeconds: on, offSeconds: off, totalSeconds: total };
+      const rest = off > 0 ? ` e ${formatTimeInput(off)} de descanso` : ', sem descanso';
+      items.push({ tone: 'ok', text: `${rounds} rounds de ${formatTimeInput(on)} de trabalho${rest} · ${formatMinutes(total)} no total` });
+    }
+  }
+
+  // Movimentos fixos: as linhas do AMRAP (um número por movimento), de 0 a 9.
+  const readings = readLines(iv.lines);
+  lineChecks(readings, items, lineProblems);
+  for (const reading of readings) {
+    if (reading.reps.ok && reading.reps.list.length > 1 && !lineProblems[reading.line.key]) {
+      const text = `Linha ${reading.index + 1}: no Intervalado use uma quantidade por movimento (o round se repete).`;
+      items.push({ tone: 'error', text });
+      lineProblems[reading.line.key] = text;
+    }
+  }
+  const fixedOk = readings.every((reading) => !lineProblems[reading.line.key]);
+  if (readings.length > MAX_INTERVAL_FIXED_LINES) {
+    items.push({ tone: 'error', text: `Movimentos fixos: de 0 a ${MAX_INTERVAL_FIXED_LINES}.` });
+  }
+  const steps: BuilderStep[] = readings.flatMap((reading) => (reading.reps.ok && reading.reps.list.length === 1 ? [{
+    key: `${reading.line.key}-1`,
+    ref: { line: reading.line.key, round: 1 },
+    lineIndex: reading.index,
+    reps: reading.reps.list[0],
+    unit: reading.reps.unit,
+    name: reading.name || 'Sem nome',
+    loadKg: reading.load.ok ? reading.load.kg : null,
+    marked: false
+  }] : []));
+  const perRound = steps.reduce((sum, step) => sum + step.reps, 0);
+  if (fixedOk && readings.length <= MAX_INTERVAL_FIXED_LINES) {
+    const count = steps.length;
+    items.push({
+      tone: 'ok',
+      text: count === 0
+        ? 'Nenhum movimento fixo'
+        : `${count} ${count === 1 ? 'movimento fixo' : 'movimentos fixos'} (${perRound} ${workWord(steps.map((step) => step.unit), perRound)} por round)`
+    });
+  }
+
+  // Movimento máximo: nome obrigatório, carga opcional (unidade sempre repetições).
+  const maxName = iv.max.name.trim();
+  const maxLoad = parseLoadInput(iv.max.load);
+  const maxProblems: string[] = [];
+  if (!maxName) maxProblems.push('informe o movimento');
+  else if (maxName.length > LIMITS.maxNameLength) maxProblems.push(`o movimento tem até ${LIMITS.maxNameLength} caracteres`);
+  if (!maxLoad.ok) maxProblems.push(maxLoad.error);
+  if (maxProblems.length > 0) {
+    const text = `Movimento máximo: ${maxProblems.join('; ')}.`;
+    items.push({ tone: 'error', text });
+    lineProblems[iv.max.key] = text;
+  } else {
+    items.push({ tone: 'ok', text: `1 movimento máximo: ${maxName}${kgLabel(maxLoad.ok ? maxLoad.kg : null)}` });
+  }
+  items.push({ tone: 'muted', text: 'Sem desempate (opcional)' });
+
+  const analysis: DraftAnalysis = {
+    format: 'interval', items, problems: [], structure: null, steps, rounds: 1, derivedRounds: null, lineProblems, intervalTiming: timing
+  };
+  if (!timing || !maxLoad.ok) return finish(analysis, null);
+
+  const segments: WorkoutSegment[] = steps.map((step, index) => {
+    const reading = readings[step.lineIndex];
+    return {
+      id: `s${index + 1}`,
+      round: 1,
+      name: reading.name,
+      reps: step.reps,
+      unit: step.unit,
+      load: step.loadKg === null ? null : { value: step.loadKg, unit: 'kg' },
+      note: reading.line.note.trim(),
+      required: true,
+      mark: step.unit === 'm' ? 'end' : reading.line.mark
+    };
+  });
+
+  return finish(analysis, {
+    version: 3,
+    format: 'interval',
+    totalReps: perRound,
+    timeCapSeconds: timing.totalSeconds,
+    incomplete: null,
+    tieBreak: null,
+    generator: null,
+    customized: true,
+    entry: { ...ENTRY_DEFAULTS },
+    segments,
+    maxLoad: null,
+    scoreDisplay: null,
+    interval: {
+      rounds: timing.rounds,
+      onSeconds: timing.onSeconds,
+      offSeconds: timing.offSeconds,
+      max: {
+        id: INTERVAL_MAX_ID,
+        name: maxName,
+        load: maxLoad.kg === null ? null : { value: maxLoad.kg, unit: 'kg' },
+        note: iv.max.note.trim()
+      }
+    }
+  });
+};
+
 /** Etapas, lista de conferência e a estrutura gerada para o formato escolhido. */
 export const analyzeDraft = (draft: SheetDraft): DraftAnalysis => {
   if (draft.format === 'amrap') return analyzeAmrap(draft);
   if (draft.format === 'max_load') return analyzeMaxLoad(draft);
+  if (draft.format === 'interval') return analyzeInterval(draft);
   return analyzeForTime(draft);
 };
 
@@ -832,8 +1089,40 @@ const segmentLabel = (segment: WorkoutSegment, withRound: boolean) => (
   `${segment.reps} ${segment.unit === 'reps' ? '' : `${UNIT_WORDS[segment.unit].short} de `}${segment.name}${withRound ? ` do round ${segment.round}` : ''}`
 );
 
+/** "A", "A e B", "A, B e C". */
+const joinParts = (labels: readonly string[]): RulePart[] => labels.flatMap((label, index) => {
+  const separator = index === 0 ? [] : [plain(index === labels.length - 1 ? ' e ' : ', ')];
+  return [...separator, strong(label)];
+});
+
+const intervalRule = (structure: WorkoutStructure, interval: WorkoutInterval): RulePart[] => {
+  const total = formatMinutes(structure.timeCapSeconds ?? intervalDurationSeconds(interval.rounds, interval.onSeconds, interval.offSeconds));
+  const max = interval.max;
+  const parts: RulePart[] = [
+    plain('São '), strong(`${interval.rounds} rounds`), plain(' de '), strong(formatTimeInput(interval.onSeconds)), plain(' de trabalho'),
+    ...(interval.offSeconds > 0
+      ? [plain(', com '), strong(formatTimeInput(interval.offSeconds)), plain(' de descanso entre eles')]
+      : [plain(', sem descanso entre eles')]),
+    plain(' ('), strong(total), plain(' no total). ')
+  ];
+  const maxLabel = `${max.name}${kgLabel(max.load ? max.load.value : null)}`;
+  if (structure.segments.length > 0) {
+    const fixed = structure.segments.map((segment) => `${segmentLabel(segment, false)}${kgLabel(segment.load ? segment.load.value : null)}`);
+    parts.push(plain('Em cada round o atleta faz '), ...joinParts(fixed), plain(' e, com o tempo que sobrar, o máximo de '), strong(maxLabel), plain('. '));
+  } else {
+    // Sem fixos (AUTO-DECISION 3 da Story 1.61): o round inteiro é do máximo.
+    parts.push(plain('Em cada round o atleta faz o máximo de '), strong(maxLabel), plain('. '));
+  }
+  parts.push(plain('Vale a '), strong(`soma das repetições de ${max.name}`), plain(' dos rounds.'));
+  if (structure.segments.length > 0) parts.push(plain(' Round em que os movimentos fixos não terminam dentro da janela vale 0.'));
+  parts.push(plain(' Sem desempate: empates dividem a posição.'));
+  return parts;
+};
+
 /** A regra da prova em uma frase, para o gestor conferir (partes em destaque marcadas). */
 export const describeStructureRule = (structure: WorkoutStructure): RulePart[] => {
+  if (structure.format === 'interval' && structure.interval) return intervalRule(structure, structure.interval);
+
   if (structure.format === 'max_load' && structure.maxLoad) {
     const ml = structure.maxLoad;
     const limits = ml.lifts.map((lift) => lift.maxAttempts);
@@ -901,6 +1190,11 @@ export const describeStructureRule = (structure: WorkoutStructure): RulePart[] =
 
 /** "For Time · 6 etapas · 90 repetições · cap 10:00" (selo da lista e resumo do formulário). */
 export const summarizeStructure = (structure: WorkoutStructure) => {
+  if (structure.format === 'interval') {
+    const interval = structure.interval;
+    if (!interval) return 'Intervalado';
+    return `Intervalado · ${interval.rounds} rounds · ${formatTimeInput(interval.onSeconds)} ON / ${formatTimeInput(interval.offSeconds)} OFF · ${formatMinutes(structure.timeCapSeconds ?? 0)}`;
+  }
   if (structure.format === 'max_load') {
     const count = structure.maxLoad?.lifts.length ?? 0;
     const window = structure.timeCapSeconds === null ? 'sem janela' : `janela ${formatTimeInput(structure.timeCapSeconds)}`;

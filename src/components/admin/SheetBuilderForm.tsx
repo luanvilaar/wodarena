@@ -1,13 +1,17 @@
 'use client';
 
-import type { KeyboardEvent, ReactNode } from 'react';
+import { Fragment, type KeyboardEvent, type ReactNode } from 'react';
 import { ArrowDown, ArrowUp, Check, Flag, MoreHorizontal, Plus, X } from 'lucide-react';
 
 import {
+  INTERVAL_FIELDS,
   MAX_BUILDER_LINES,
+  MAX_INTERVAL_FIXED_LINES,
   addLift,
   addLine,
   describeStructureRule,
+  formatMinutes,
+  formatTimeInput,
   moveLine,
   parseRepsField,
   removeLift,
@@ -15,6 +19,8 @@ import {
   setDraftFormat,
   setForTimeTieBreak,
   toggleStepMark,
+  updateIntervalMax,
+  updateIntervalTiming,
   updateLift,
   updateLine,
   type AmrapTieBreakMode,
@@ -24,6 +30,7 @@ import {
   type ChecklistItem,
   type DraftAnalysis,
   type ForTimeTieBreakMode,
+  type IntervalTiming,
   type MaxLoadTieBreakMode,
   type SheetDraft
 } from '@/lib/workoutStructureEditor';
@@ -35,6 +42,7 @@ import { UNIT_WORDS, WORKOUT_STRUCTURE_LIMITS, type WorkoutStructureFormat } fro
 // rascunho é controlado por quem usa (o painel largo do construtor); a análise
 // (etapas, conferência e estrutura gerada) vem de analyzeDraft. Sem rede e sem
 // armazenamento; texto em português fixo, como o restante do painel.
+// O Intervalado (Story 1.61) segue a Maquete 1 de docs/design/intervalado/.
 
 type SheetBuilderFormProps = {
   draft: SheetDraft;
@@ -55,7 +63,8 @@ const errorInputClass = 'border-trading-down/70';
 const FORMATS: { value: WorkoutStructureFormat; title: string; detail: string }[] = [
   { value: 'for_time', title: 'For Time', detail: 'Menor tempo para um trabalho definido' },
   { value: 'amrap', title: 'AMRAP', detail: 'Mais repetições dentro do tempo' },
-  { value: 'max_load', title: 'Carga máxima', detail: 'Maior carga válida, por tentativas' }
+  { value: 'max_load', title: 'Carga máxima', detail: 'Maior carga válida, por tentativas' },
+  { value: 'interval', title: 'Intervalado', detail: 'Rounds de trabalho e descanso; soma das repetições' }
 ];
 
 function Section({ step, title, children, id }: { step: number; title: string; children: ReactNode; id: string }) {
@@ -117,6 +126,7 @@ function WorkLine({
   open,
   idPrefix,
   allowSequences,
+  minCount = 1,
   onPatch,
   onRemove,
   onMove,
@@ -125,6 +135,8 @@ function WorkLine({
   line: BuilderLine;
   index: number;
   count: number;
+  /** Linhas que não podem ser removidas (no Intervalado os fixos chegam a zero). */
+  minCount?: number;
   problem: string | undefined;
   open: boolean;
   idPrefix: string;
@@ -189,7 +201,7 @@ function WorkLine({
         <button
           type="button"
           onClick={onRemove}
-          disabled={count <= 1}
+          disabled={count <= minCount}
           aria-label={`Remover o movimento ${index + 1}`}
           className={iconButtonClass}
         >
@@ -292,6 +304,71 @@ function StepsList({ analysis, onToggle, idPrefix }: { analysis: DraftAnalysis; 
   );
 }
 
+// Descanso: listras, como na maquete (a cor vem do tema do painel).
+const restStyle = { background: 'repeating-linear-gradient(135deg, var(--card-border) 0 5px, transparent 5px 10px)' };
+const restSwatchStyle = { background: 'repeating-linear-gradient(135deg, var(--card-border) 0 3px, transparent 3px 6px)' };
+
+// Linha do tempo do Intervalado (Maquete 1, renderTimeline): um bloco de
+// trabalho por round e um de descanso entre eles, sem descanso depois do
+// último. A divisão entre fixos e máximo dentro do bloco é só ilustrativa.
+function IntervalTimeline({ timing, hasFixed }: { timing: IntervalTiming; hasFixed: boolean }) {
+  const { rounds, onSeconds, offSeconds, totalSeconds } = timing;
+  const cycle = onSeconds + offSeconds;
+  const every = Math.ceil(rounds / 8);
+  const ticks: number[] = [];
+  for (let round = 1; round <= rounds; round += every) ticks.push((round - 1) * cycle);
+  const rest = offSeconds > 0 ? `${formatTimeInput(offSeconds)} de descanso entre eles` : 'sem descanso entre eles';
+  return (
+    <div>
+      <div
+        role="img"
+        aria-label={`${rounds} rounds de ${formatTimeInput(onSeconds)} de trabalho, ${rest}, ${formatMinutes(totalSeconds)} no total`}
+        className="flex h-[34px] overflow-hidden rounded-md border border-card-border bg-dark-gray"
+      >
+        {Array.from({ length: rounds }, (_, index) => (
+          <Fragment key={index}>
+            <span className="flex min-w-0" style={{ flex: `${onSeconds} 0 0` }}>
+              {hasFixed && <span className="block h-full bg-info" style={{ flex: '45 0 0' }} />}
+              <span className="block h-full bg-primary" style={{ flex: '55 0 0' }} />
+            </span>
+            {index < rounds - 1 && offSeconds > 0 && <span className="block" style={{ flex: `${offSeconds} 0 0`, ...restStyle }} />}
+          </Fragment>
+        ))}
+      </div>
+      <div aria-hidden="true" className="relative mt-1 h-[18px] font-number text-[11px] text-muted">
+        {ticks.map((at, index) => {
+          const left = (at / totalSeconds) * 100;
+          // Perto do fim, a marca encostaria na do total em telas estreitas: só aparece a partir de sm.
+          const nearEnd = index > 0 && left > 85;
+          return (
+            <span
+              key={at}
+              className={`absolute top-0 whitespace-nowrap ${index === 0 ? '' : '-translate-x-1/2'} ${nearEnd ? 'hidden sm:inline' : ''}`}
+              style={{ left: `${left}%` }}
+            >
+              {formatMinutes(at)}
+            </span>
+          );
+        })}
+        <span className="absolute top-0 -translate-x-full whitespace-nowrap" style={{ left: '100%' }}>{formatMinutes(totalSeconds)}</span>
+      </div>
+    </div>
+  );
+}
+
+function TimelineLegend() {
+  return (
+    <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-muted">
+      <span className="flex items-center gap-1.5"><span aria-hidden="true" className="h-3 w-3 rounded-[3px] bg-info" />Fixos</span>
+      <span className="flex items-center gap-1.5"><span aria-hidden="true" className="h-3 w-3 rounded-[3px] bg-primary" />Máximo</span>
+      <span className="flex items-center gap-1.5">
+        <span aria-hidden="true" className="h-3 w-3 rounded-[3px] border border-card-border" style={restSwatchStyle} />
+        Descanso
+      </span>
+    </div>
+  );
+}
+
 export function SheetBuilderForm({ draft, analysis, onChange, openLines, onToggleLine, idPrefix }: SheetBuilderFormProps) {
   const id = (name: string) => `${idPrefix}-${name}`;
   const format = draft.format;
@@ -312,7 +389,7 @@ export function SheetBuilderForm({ draft, analysis, onChange, openLines, onToggl
 
   const formatSection = (
     <Section step={1} title="Formato da prova" id={id('format-title')}>
-      <div role="radiogroup" aria-labelledby={id('format-title')} onKeyDown={handleFormatKeys} className="grid gap-2 sm:grid-cols-3">
+      <div role="radiogroup" aria-labelledby={id('format-title')} onKeyDown={handleFormatKeys} className="grid grid-cols-2 gap-2 xl:grid-cols-4">
         {FORMATS.map((option) => {
           const selected = format === option.value;
           return (
@@ -346,7 +423,7 @@ export function SheetBuilderForm({ draft, analysis, onChange, openLines, onToggl
     </Section>
   );
 
-  const lineList = (list: 'forTime' | 'amrap', lines: BuilderLine[]) => (
+  const lineList = (list: 'forTime' | 'amrap' | 'interval', lines: BuilderLine[]) => (
     <ul className="space-y-2">
       {lines.map((line, index) => (
         <WorkLine
@@ -356,8 +433,9 @@ export function SheetBuilderForm({ draft, analysis, onChange, openLines, onToggl
           count={lines.length}
           problem={analysis.lineProblems[line.key]}
           open={openLines.includes(line.key)}
-          idPrefix={id(list === 'forTime' ? 'ft' : 'am')}
+          idPrefix={id(list === 'forTime' ? 'ft' : list === 'amrap' ? 'am' : 'iv')}
           allowSequences={list === 'forTime'}
+          minCount={list === 'interval' ? 0 : 1}
           onPatch={(patch) => onChange(updateLine(draft, list, line.key, patch))}
           onRemove={() => onChange(removeLine(draft, list, line.key))}
           onMove={(direction) => onChange(moveLine(draft, list, line.key, direction))}
@@ -366,6 +444,160 @@ export function SheetBuilderForm({ draft, analysis, onChange, openLines, onToggl
       ))}
     </ul>
   );
+
+  if (format === 'interval') {
+    const iv = draft.interval;
+    const timing = analysis.intervalTiming ?? null;
+    const timeFields: { name: 'rounds' | 'on' | 'off'; label: string; value: string }[] = [
+      { name: 'rounds', label: 'Rounds', value: iv.rounds },
+      { name: 'on', label: 'Trabalho · ON (MM:SS)', value: iv.on },
+      { name: 'off', label: 'Descanso · OFF (MM:SS)', value: iv.off }
+    ];
+    const durationProblem = analysis.lineProblems[INTERVAL_FIELDS.duration];
+    const fieldProblems = [
+      ...timeFields.map((field) => ({ id: id(`iv-${field.name}-problem`), text: analysis.lineProblems[INTERVAL_FIELDS[field.name]] })),
+      { id: id('iv-duration-problem'), text: durationProblem }
+    ].filter((item): item is { id: string; text: string } => Boolean(item.text));
+    const max = iv.max;
+    const maxBase = id(`iv-${max.key}`);
+    const maxProblem = analysis.lineProblems[max.key];
+    const maxOpen = openLines.includes(max.key);
+    return (
+      <div className="space-y-4">
+        {formatSection}
+        <Section step={2} title="Rounds e tempos" id={id('iv-time-title')}>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {timeFields.map((field) => {
+              const fieldId = id(`iv-${field.name}`);
+              const problem = analysis.lineProblems[INTERVAL_FIELDS[field.name]];
+              return (
+                <div key={field.name}>
+                  <label htmlFor={fieldId} className={labelClass}>{field.label}</label>
+                  <input
+                    id={fieldId}
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    value={field.value}
+                    aria-invalid={Boolean(problem)}
+                    aria-describedby={problem ? `${fieldId}-problem` : undefined}
+                    onChange={(event) => onChange(updateIntervalTiming(draft, { [field.name]: event.target.value }))}
+                    className={`${inputClass} text-center font-number ${problem ? errorInputClass : ''}`}
+                  />
+                </div>
+              );
+            })}
+            <div>
+              <label htmlFor={id('iv-duration')} className={labelClass}>Duração da prova</label>
+              <input
+                id={id('iv-duration')}
+                type="text"
+                readOnly
+                value={timing ? formatMinutes(timing.totalSeconds) : '—'}
+                aria-invalid={Boolean(durationProblem)}
+                aria-describedby={durationProblem ? id('iv-duration-problem') : undefined}
+                className={`${inputClass} cursor-default text-center font-number text-muted ${durationProblem ? errorInputClass : ''}`}
+              />
+            </div>
+          </div>
+          {fieldProblems.map((problem) => (
+            <p key={problem.id} id={problem.id} className="text-[11px] font-semibold text-trading-down">{problem.text}</p>
+          ))}
+          {timing && <IntervalTimeline timing={timing} hasFixed={iv.lines.length > 0} />}
+          <TimelineLegend />
+          <p className="text-[11px] leading-relaxed text-muted">Sem descanso depois do último round. Com OFF em 00:00 os rounds ficam colados (EMOM).</p>
+        </Section>
+        <Section step={3} title="Trabalho de cada round" id={id('iv-work-title')}>
+          <LinesHeader columns={['Repetições', 'Movimento', 'Carga (kg)', '', '']} />
+          {lineList('interval', iv.lines)}
+          <div className="space-y-1.5">
+            <div className="grid grid-cols-4 gap-2 sm:grid-cols-[6.5rem_minmax(0,1fr)_5.5rem_2.5rem_2.5rem]">
+              <input
+                id={`${maxBase}-reps`}
+                type="text"
+                value="Máx."
+                disabled
+                readOnly
+                aria-label="Repetições do movimento máximo: sem meta"
+                className="w-full min-w-0 cursor-not-allowed rounded-md border border-primary bg-dark-gray px-3 py-2 text-center font-number text-sm font-bold text-primary"
+              />
+              <input
+                id={`${maxBase}-name`}
+                type="text"
+                autoComplete="off"
+                placeholder="Movimento máximo"
+                maxLength={WORKOUT_STRUCTURE_LIMITS.maxNameLength}
+                aria-label="Movimento máximo"
+                aria-invalid={Boolean(maxProblem)}
+                aria-describedby={maxProblem ? `${maxBase}-problem` : undefined}
+                value={max.name}
+                onChange={(event) => onChange(updateIntervalMax(draft, { name: event.target.value }))}
+                className={`${inputClass} order-first col-span-4 sm:order-none sm:col-span-1 ${maxProblem && !max.name.trim() ? errorInputClass : ''}`}
+              />
+              <input
+                id={`${maxBase}-load`}
+                type="text"
+                autoComplete="off"
+                inputMode="decimal"
+                placeholder="kg"
+                aria-label="Carga do movimento máximo em kg"
+                value={max.load}
+                onChange={(event) => onChange(updateIntervalMax(draft, { load: event.target.value }))}
+                className={`${inputClass} text-center font-number`}
+              />
+              <button
+                type="button"
+                onClick={() => onToggleLine(max.key)}
+                aria-expanded={maxOpen}
+                aria-controls={`${maxBase}-more`}
+                aria-label="Mais opções do movimento máximo"
+                title="Mais opções"
+                className={`${iconButtonClass} ${maxOpen ? 'border-primary/60 text-primary' : ''}`}
+              >
+                <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+            {maxProblem && <p id={`${maxBase}-problem`} className="text-[11px] font-semibold text-trading-down">{maxProblem}</p>}
+            {maxOpen && (
+              <div id={`${maxBase}-more`} className="rounded-md border border-dashed border-card-border p-3">
+                <label htmlFor={`${maxBase}-note`} className={labelClass}>Padrão do movimento (opcional)</label>
+                <input
+                  id={`${maxBase}-note`}
+                  type="text"
+                  autoComplete="off"
+                  maxLength={WORKOUT_STRUCTURE_LIMITS.maxNoteLength}
+                  value={max.note}
+                  onChange={(event) => onChange(updateIntervalMax(draft, { note: event.target.value }))}
+                  className={inputClass}
+                />
+              </div>
+            )}
+          </div>
+          <button type="button" id={id('iv-add')} onClick={() => onChange(addLine(draft, 'interval'))} disabled={iv.lines.length >= MAX_INTERVAL_FIXED_LINES} className={textButtonClass}>
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            Movimento
+          </button>
+          <p className="text-[11px] leading-relaxed text-muted">
+            O movimento máximo fica sempre por último e não tem meta: o judge conta até o fim da janela. A carga é uma por linha; 80 kg e 55 kg viram duas provas, uma por categoria (campo &quot;Categoria vinculada&quot;), como hoje.
+          </p>
+        </Section>
+        <Section step={4} title="Pontuação" id={id('iv-score-title')}>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label htmlFor={id('iv-score')} className={labelClass}>Score</label>
+              <input id={id('iv-score')} type="text" disabled readOnly value="Soma das repetições do máximo" className={inputClass} />
+            </div>
+            <div>
+              <label htmlFor={id('iv-tiebreak')} className={labelClass}>Desempate</label>
+              <input id={id('iv-tiebreak')} type="text" disabled readOnly value="Sem desempate" className={inputClass} />
+            </div>
+          </div>
+          <p className="text-[11px] leading-relaxed text-muted">Round em que os movimentos fixos não terminam dentro da janela vale 0 no máximo. Empates dividem a posição.</p>
+        </Section>
+        {ruleSection(5)}
+      </div>
+    );
+  }
 
   if (format === 'max_load') {
     return (

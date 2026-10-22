@@ -15,7 +15,9 @@ const { validateWorkoutStructure, deriveLegacyWorkoutFields } = await importServ
 const {
   addLift, addLine, analyzeDraft, createDraft, describeStructureRule, detectGeneratorKind, draftFromStructure,
   formatKg, formatRepsField, MAX_BUILDER_LINES, moveLine, parseLoadInput, parseRepsField, parseTimeInput, formatTimeInput,
-  removeLift, removeLine, setDraftFormat, setForTimeTieBreak, summarizeStructure, toggleStepMark, updateLift, updateLine
+  removeLift, removeLine, setDraftFormat, setForTimeTieBreak, summarizeStructure, toggleStepMark, updateLift, updateLine,
+  DEFAULT_INTERVAL, INTERVAL_FIELDS, INTERVAL_MAX_ID, MAX_INTERVAL_FIXED_LINES, formatMinutes, intervalDurationSeconds,
+  updateIntervalMax, updateIntervalTiming
 } = editor;
 
 const deepFreeze = (value) => {
@@ -478,4 +480,338 @@ test('tudo que o construtor gera passa no validador do servidor (rascunhos aleat
     }
   }
   assert.ok(produced > 80, `rascunhos válidos: ${produced}`);
+});
+
+// ---------------------------------------------------------------------------
+// Intervalado (Story 1.61, decisões e Maquete 1 em docs/design/intervalado/)
+// ---------------------------------------------------------------------------
+
+const ivKey = (draft, index) => draft.interval.lines[index].key;
+// O treino de referência: 5 rounds, 02:00 ON / 02:00 OFF, 6 Ring Muscle Ups, 15 Box Jump Overs, máximo de Squat Clean 80 kg.
+const reference = () => {
+  let draft = setDraftFormat(createDraft('for_time'), 'interval');
+  draft = updateLine(draft, 'interval', ivKey(draft, 0), { reps: '6', name: 'Ring Muscle Ups' });
+  draft = addLine(draft, 'interval');
+  draft = updateLine(draft, 'interval', ivKey(draft, 1), { reps: '15', name: 'Box Jump Overs (24/20 in)' });
+  return updateIntervalMax(draft, { name: 'Squat Clean', load: '80' });
+};
+const strongText = (structure) => describeStructureRule(structure).map((part) => (part.strong ? `[${part.text}]` : part.text)).join('');
+
+test('Intervalado: rascunho novo com 5 rounds, 02:00 / 02:00, uma linha de fixo vazia e o máximo vazio', () => {
+  assert.deepEqual(DEFAULT_INTERVAL, { rounds: 5, onSeconds: 120, offSeconds: 120 });
+  const draft = createDraft('interval');
+  assert.equal(draft.format, 'interval');
+  assert.deepEqual([draft.interval.rounds, draft.interval.on, draft.interval.off], ['5', '02:00', '02:00']);
+  assert.equal(draft.interval.lines.length, 1);
+  assert.deepEqual(draft.interval.lines[0], { key: draft.interval.lines[0].key, reps: '', name: '', load: '', mark: 'reps', note: '' });
+  assert.deepEqual(draft.interval.max, { key: draft.interval.max.key, name: '', load: '', note: '' });
+  const keys = [draft.forTime.lines[0].key, draft.amrap.lines[0].key, draft.maxLoad.lifts[0].key, draft.interval.lines[0].key, draft.interval.max.key];
+  assert.equal(new Set(keys).size, 5, 'chaves únicas no rascunho');
+  assert.ok(keys.every((key) => Number(key.slice(1)) < draft.nextKey));
+  assert.equal(MAX_INTERVAL_FIXED_LINES, 9);
+
+  // Trocar de formato preserva os rascunhos dos outros formatos (e o do Intervalado).
+  const ft = fran();
+  const switched = setDraftFormat(ft, 'interval');
+  assert.equal(switched.forTime, ft.forTime);
+  assert.equal(switched.amrap, ft.amrap);
+  assert.equal(switched.maxLoad, ft.maxLoad);
+  const filled = reference();
+  assert.equal(setDraftFormat(setDraftFormat(filled, 'for_time'), 'interval').interval, filled.interval);
+
+  const empty = analyzeDraft(draft);
+  assert.equal(empty.structure, null);
+  assert.deepEqual(errors(empty), ['Linha 1: informe o movimento; informe as repetições.', 'Movimento máximo: informe o movimento.']);
+  assert.deepEqual(empty.intervalTiming, { rounds: 5, onSeconds: 120, offSeconds: 120, totalSeconds: 1080 }, 'os tempos padrão já valem');
+});
+
+test('Intervalado: o treino de referência gera a estrutura v3 válida (18:00, 21 repetições por round, máximo com id próprio)', () => {
+  const analysis = analyzeDraft(reference());
+  assert.deepEqual(analysis.problems, []);
+  assert.deepEqual(analysis.items, [
+    { tone: 'ok', text: '5 rounds de 02:00 de trabalho e 02:00 de descanso · 18:00 no total' },
+    { tone: 'ok', text: '2 movimentos fixos (21 repetições por round)' },
+    { tone: 'ok', text: '1 movimento máximo: Squat Clean 80 kg' },
+    { tone: 'muted', text: 'Sem desempate (opcional)' }
+  ]);
+  const structure = analysis.structure;
+  assert.deepEqual(structure, {
+    version: 3,
+    format: 'interval',
+    totalReps: 21,
+    timeCapSeconds: 1080,
+    incomplete: null,
+    tieBreak: null,
+    generator: null,
+    customized: true,
+    entry: { mode: 'both', marking: 'reps', publish: 'after_review' },
+    segments: [
+      { id: 's1', round: 1, name: 'Ring Muscle Ups', reps: 6, unit: 'reps', load: null, note: '', required: true, mark: 'reps' },
+      { id: 's2', round: 1, name: 'Box Jump Overs (24/20 in)', reps: 15, unit: 'reps', load: null, note: '', required: true, mark: 'reps' }
+    ],
+    maxLoad: null,
+    scoreDisplay: null,
+    interval: { rounds: 5, onSeconds: 120, offSeconds: 120, max: { id: INTERVAL_MAX_ID, name: 'Squat Clean', load: { value: 80, unit: 'kg' }, note: '' } }
+  });
+  const checked = validateWorkoutStructure(structure);
+  assert.equal(checked.ok, true, checked.error);
+  assert.deepEqual(checked.structure, structure, 'já sai normalizada');
+  assert.deepEqual(analysis.intervalTiming, { rounds: 5, onSeconds: 120, offSeconds: 120, totalSeconds: 1080 });
+  // Decisão 8: o painel grava o tipo legado reps, com a duração como time cap e sem desempate.
+  assert.deepEqual(deriveLegacyWorkoutFields(structure), { type: 'reps', timeCap: '18:00', tieBreaker: '' });
+  assert.equal(intervalDurationSeconds(5, 120, 120), 1080);
+  assert.equal(intervalDurationSeconds(20, 120, 120), 4680, '20 × 02:00 / 02:00 = 78:00 (R4)');
+});
+
+test('Intervalado: fixos com unidade, contagem, observação e carga; máximo com observação', () => {
+  let draft = reference();
+  draft = updateLine(draft, 'interval', ivKey(draft, 0), { reps: '30 cal', name: 'Bike', load: '', mark: 'end', note: 'no monitor' });
+  draft = updateLine(draft, 'interval', ivKey(draft, 1), { reps: '200 m', name: 'Run', mark: 'reps' });
+  draft = addLine(draft, 'interval');
+  draft = updateLine(draft, 'interval', ivKey(draft, 2), { reps: '5', name: 'Thruster', load: '42,5' });
+  draft = updateIntervalMax(draft, { note: ' peito no chão ' });
+  const structure = analyzeDraft(draft).structure;
+  assert.deepEqual(structure.segments.map((item) => [item.id, item.unit, item.reps, item.mark, item.note, item.load?.value ?? null]), [
+    ['s1', 'cal', 30, 'end', 'no monitor', null], ['s2', 'm', 200, 'end', '', null], ['s3', 'reps', 5, 'reps', '', 42.5]
+  ]);
+  assert.equal(structure.totalReps, 235);
+  assert.equal(structure.interval.max.note, 'peito no chão');
+  assert.equal(validateWorkoutStructure(structure).ok, true);
+  assert.match(analyzeDraft(draft).items[1].text, /^3 movimentos fixos \(235 unidades de trabalho por round\)$/);
+});
+
+test('Intervalado: erros de rounds, trabalho, descanso e duração, com os textos da maquete e o campo marcado', () => {
+  const timing = (patch) => analyzeDraft(updateIntervalTiming(reference(), patch));
+  for (const rounds of ['1', '21', '', 'cinco', '2.5']) {
+    const analysis = timing({ rounds });
+    assert.deepEqual(errors(analysis), ['Rounds: de 2 a 20.'], rounds);
+    assert.equal(analysis.lineProblems[INTERVAL_FIELDS.rounds], 'Rounds: de 2 a 20.');
+    assert.equal(analysis.structure, null);
+    assert.equal(analysis.intervalTiming, null);
+  }
+  for (const on of ['00:29', '30:01', '', '2:5']) {
+    const analysis = timing({ on });
+    assert.deepEqual(errors(analysis), ['Trabalho: de 00:30 a 30:00 (MM:SS).'], on);
+    assert.ok(analysis.lineProblems[INTERVAL_FIELDS.on]);
+  }
+  for (const off of ['30:01', '', 'x']) {
+    const analysis = timing({ off });
+    assert.deepEqual(errors(analysis), ['Descanso: de 00:00 a 30:00 (MM:SS).'], off);
+    assert.ok(analysis.lineProblems[INTERVAL_FIELDS.off]);
+  }
+  assert.deepEqual(errors(timing({ rounds: '1', on: '00:10', off: '31:00' })), [
+    'Rounds: de 2 a 20.', 'Trabalho: de 00:30 a 30:00 (MM:SS).', 'Descanso: de 00:00 a 30:00 (MM:SS).'
+  ]);
+
+  // A duração passa de 99:59 (decisão 10, R4): a mensagem traz o valor calculado, em minutos.
+  const long = timing({ rounds: '20', on: '03:00', off: '03:00' });
+  assert.deepEqual(errors(long), ['A prova passa de 99:59 (117:00). Reduza rounds ou tempos.']);
+  assert.ok(long.lineProblems[INTERVAL_FIELDS.duration]);
+  assert.equal(long.intervalTiming, null);
+  assert.equal(long.structure, null);
+
+  // Os limites exatos valem: 2 rounds, 00:30 de trabalho, 30:00 de trabalho e de descanso, 99:59 no total.
+  assert.equal(timing({ rounds: '2', on: '00:30', off: '00:00' }).structure.timeCapSeconds, 60);
+  assert.equal(timing({ rounds: '2', on: '30:00', off: '30:00' }).structure.timeCapSeconds, 5400);
+  assert.equal(timing({ rounds: '20', on: '02:00', off: '02:00' }).structure.timeCapSeconds, 4680);
+  assert.equal(timing({ rounds: '3', on: '33:19', off: '00:01' }).structure, null, 'trabalho acima de 30:00');
+  const exact = timing({ rounds: '20', on: '04:59', off: '00:00' });
+  assert.equal(exact.structure.timeCapSeconds, 5980);
+  assert.match(exact.items[0].text, /^20 rounds de 04:59 de trabalho, sem descanso · 99:40 no total$/);
+  assert.equal(timing({ on: '2' }).structure.interval.onSeconds, 120, 'minutos sozinhos, como nos outros tempos');
+  assert.equal(formatMinutes(4680), '78:00');
+});
+
+test('Intervalado: erros dos fixos e do máximo; 0 fixos e OFF em 00:00 são aceitos', () => {
+  let draft = reference();
+  draft = updateLine(draft, 'interval', ivKey(draft, 0), { name: '' });
+  draft = updateLine(draft, 'interval', ivKey(draft, 1), { reps: 'abc', load: '600' });
+  draft = updateIntervalMax(draft, { name: ' ', load: '501' });
+  let analysis = analyzeDraft(draft);
+  assert.deepEqual(errors(analysis), [
+    'Linha 1: informe o movimento.',
+    'Linha 2: repetições: use 50, 21-15-9, 3x10, 500 m ou 30 cal; a carga vai de 0 a 500 kg (ex.: 43 ou 42,5).',
+    'Movimento máximo: informe o movimento; a carga vai de 0 a 500 kg (ex.: 43 ou 42,5).'
+  ]);
+  assert.match(analysis.lineProblems[ivKey(draft, 0)], /^Linha 1: /);
+  assert.match(analysis.lineProblems[draft.interval.max.key], /^Movimento máximo: /);
+  assert.equal(analysis.structure, null);
+  assert.equal(analysis.items.some((item) => /movimentos? fixos? \(/.test(item.text)), false, 'sem o item certo dos fixos enquanto houver erro');
+
+  // Um número por movimento, como no AMRAP: sequência e 3x10 são recusadas.
+  for (const reps of ['5-10', '3x10']) {
+    analysis = analyzeDraft(updateLine(reference(), 'interval', ivKey(reference(), 0), { reps }));
+    assert.deepEqual(errors(analysis), ['Linha 1: no Intervalado use uma quantidade por movimento (o round se repete).'], reps);
+  }
+  assert.deepEqual(errors(analyzeDraft(updateLine(reference(), 'interval', ivKey(reference(), 0), { reps: '100' }))), ['Linha 1: cada quantidade vai de 1 a 99 repetições.']);
+
+  // 10 fixos (só por fora do botão, que para em 9): erro de limite.
+  const ten = reference();
+  const lines = Array.from({ length: 10 }, (_, index) => ({ key: `x${index}`, reps: '1', name: `M${index}`, load: '', mark: 'reps', note: '' }));
+  assert.deepEqual(errors(analyzeDraft({ ...ten, interval: { ...ten.interval, lines } })), ['Movimentos fixos: de 0 a 9.']);
+  const nine = analyzeDraft({ ...ten, interval: { ...ten.interval, lines: lines.slice(0, 9) } });
+  assert.equal(nine.structure.segments.length, 9);
+  assert.equal(nine.items[1].text, '9 movimentos fixos (9 repetições por round)');
+
+  // 0 fixos: o "máximo a cada intervalo".
+  let none = reference();
+  none = removeLine(removeLine(none, 'interval', ivKey(none, 1)), 'interval', ivKey(none, 0));
+  analysis = analyzeDraft(none);
+  assert.deepEqual(analysis.problems, []);
+  assert.equal(analysis.items[1].text, 'Nenhum movimento fixo');
+  assert.deepEqual([analysis.structure.segments, analysis.structure.totalReps], [[], 0]);
+  assert.equal(validateWorkoutStructure(analysis.structure).ok, true);
+
+  // Um fixo, sem carga no máximo, OFF em 00:00 (EMOM).
+  let emom = updateIntervalTiming(removeLine(reference(), 'interval', ivKey(reference(), 1)), { rounds: '10', on: '01:00', off: '00:00' });
+  emom = updateIntervalMax(emom, { load: '' });
+  analysis = analyzeDraft(emom);
+  assert.deepEqual(analysis.items.map((item) => item.text), [
+    '10 rounds de 01:00 de trabalho, sem descanso · 10:00 no total',
+    '1 movimento fixo (6 repetições por round)',
+    '1 movimento máximo: Squat Clean',
+    'Sem desempate (opcional)'
+  ]);
+  assert.deepEqual([analysis.structure.timeCapSeconds, analysis.structure.interval.offSeconds, analysis.structure.interval.max.load], [600, 0, null]);
+  assert.equal(validateWorkoutStructure(analysis.structure).ok, true);
+});
+
+test('Intervalado: frase da regra (exemplo, OFF em 00:00 e 0 fixos) e resumo da prova', () => {
+  const structure = analyzeDraft(reference()).structure;
+  assert.equal(
+    strongText(structure),
+    'São [5 rounds] de [02:00] de trabalho, com [02:00] de descanso entre eles ([18:00] no total). Em cada round o atleta faz [6 Ring Muscle Ups] e [15 Box Jump Overs (24/20 in)] e, com o tempo que sobrar, o máximo de [Squat Clean 80 kg]. Vale a [soma das repetições de Squat Clean] dos rounds. Round em que os movimentos fixos não terminam dentro da janela vale 0. Sem desempate: empates dividem a posição.'
+  );
+  assert.equal(summarizeStructure(structure), 'Intervalado · 5 rounds · 02:00 ON / 02:00 OFF · 18:00');
+
+  const emom = analyzeDraft(updateIntervalTiming(reference(), { rounds: '20', on: '04:00', off: '00:00' })).structure;
+  assert.match(strongText(emom), /^São \[20 rounds\] de \[04:00\] de trabalho, sem descanso entre eles \(\[80:00\] no total\)\. /);
+  assert.equal(summarizeStructure(emom), 'Intervalado · 20 rounds · 04:00 ON / 00:00 OFF · 80:00');
+
+  let none = reference();
+  none = removeLine(removeLine(none, 'interval', ivKey(none, 1)), 'interval', ivKey(none, 0));
+  assert.equal(
+    strongText(analyzeDraft(none).structure),
+    'São [5 rounds] de [02:00] de trabalho, com [02:00] de descanso entre eles ([18:00] no total). Em cada round o atleta faz o máximo de [Squat Clean 80 kg]. Vale a [soma das repetições de Squat Clean] dos rounds. Sem desempate: empates dividem a posição.'
+  );
+
+  // Três fixos, com unidade e carga, separados por vírgula e "e".
+  let three = addLine(reference(), 'interval');
+  three = updateLine(three, 'interval', ivKey(three, 2), { reps: '10 cal', name: 'Bike' });
+  three = updateLine(three, 'interval', ivKey(three, 0), { load: '20' });
+  assert.match(strongText(analyzeDraft(three).structure), /faz \[6 Ring Muscle Ups 20 kg\], \[15 Box Jump Overs \(24\/20 in\)\] e \[10 cal de Bike\] e, com o tempo/);
+
+  // A frase e o resumo saem da estrutura gravada (do servidor), não do rascunho.
+  const stored = validateWorkoutStructure(structuredClone(structure)).structure;
+  assert.deepEqual(describeStructureRule(stored), describeStructureRule(structure));
+  assert.equal(summarizeStructure(stored), summarizeStructure(structure));
+});
+
+test('Intervalado: editar a prova gravada volta ao rascunho e gera a mesma estrutura; o que não cabe é avisado', () => {
+  const cases = [reference()];
+  let none = reference();
+  none = removeLine(removeLine(none, 'interval', ivKey(none, 1)), 'interval', ivKey(none, 0));
+  cases.push(updateIntervalTiming(none, { off: '00:00', rounds: '12', on: '00:45' }));
+  let units = updateLine(reference(), 'interval', ivKey(reference(), 0), { reps: '500 m', name: 'Remo', note: 'damper 5' });
+  units = updateLine(units, 'interval', ivKey(units, 1), { reps: '12 cal', name: 'Bike', mark: 'end' });
+  cases.push(updateIntervalMax(units, { load: '42,5', note: 'até a coxa paralela' }));
+
+  for (const draft of cases) {
+    const original = analyzeDraft(draft).structure;
+    assert.ok(original, JSON.stringify(analyzeDraft(draft).problems));
+    const loaded = draftFromStructure(original);
+    assert.equal(loaded.ok, true);
+    assert.equal(loaded.draft.format, 'interval');
+    assert.deepEqual(analyzeDraft(loaded.draft).structure, original, 'ida e volta idempotente');
+    const again = draftFromStructure(analyzeDraft(loaded.draft).structure);
+    assert.deepEqual(analyzeDraft(again.draft).structure, original);
+  }
+
+  const loaded = draftFromStructure(analyzeDraft(reference()).structure).draft;
+  assert.deepEqual([loaded.interval.rounds, loaded.interval.on, loaded.interval.off], ['5', '02:00', '02:00']);
+  assert.deepEqual(loaded.interval.lines.map((line) => [line.reps, line.name, line.load]), [['6', 'Ring Muscle Ups', ''], ['15', 'Box Jump Overs (24/20 in)', '']]);
+  assert.deepEqual([loaded.interval.max.name, loaded.interval.max.load, loaded.interval.max.note], ['Squat Clean', '80', '']);
+  const keys = [...loaded.interval.lines.map((line) => line.key), loaded.interval.max.key];
+  assert.equal(new Set(keys).size, keys.length);
+  assert.ok(keys.every((key) => Number(key.slice(1)) < loaded.nextKey), 'a próxima linha não repete chave');
+  const unitsLoaded = draftFromStructure(analyzeDraft(cases[2]).structure).draft;
+  assert.deepEqual(unitsLoaded.interval.lines.map((line) => [line.reps, line.mark, line.note]), [['500 m', 'end', 'damper 5'], ['12 cal', 'end', '']]);
+  assert.equal(unitsLoaded.interval.max.load, '42,5');
+  assert.equal(draftFromStructure(analyzeDraft(cases[1]).structure).draft.interval.off, '00:00');
+
+  // O servidor aceita mais do que o construtor gera (R3): um fixo opcional (required false) não cabe nas linhas.
+  const structure = analyzeDraft(reference()).structure;
+  const optional = { ...structure, segments: structure.segments.map((item, index) => (index === 0 ? { ...item, required: false } : item)) };
+  assert.equal(validateWorkoutStructure(optional).ok, true, 'o servidor aceita');
+  const result = draftFromStructure(optional);
+  assert.equal(result.ok, false);
+  assert.match(result.error, /montada etapa por etapa e não cabe em linhas/);
+  // Ids gravados diferentes dos do construtor (f1, f2...) ainda cabem: o rascunho guarda o conteúdo.
+  const otherIds = { ...structure, segments: structure.segments.map((item, index) => ({ ...item, id: `f${index + 1}` })) };
+  assert.equal(validateWorkoutStructure(otherIds).ok, true);
+  assert.equal(draftFromStructure(otherIds).ok, true);
+});
+
+test('Intervalado: operações das linhas (limite de 9 fixos, remover até zero, mover) e do máximo, sem mutar', () => {
+  const draft = deepFreeze(reference());
+  let full = draft;
+  for (let index = 0; index < 12; index += 1) full = addLine(full, 'interval');
+  assert.equal(full.interval.lines.length, MAX_INTERVAL_FIXED_LINES, 'o botão "Movimento" para em 9');
+  assert.equal(addLine(full, 'interval'), full);
+  assert.equal(addLine(draft, 'interval').interval.lines[2].reps, '', 'a linha nova vem vazia, como no AMRAP');
+
+  const one = removeLine(draft, 'interval', ivKey(draft, 0));
+  assert.deepEqual(one.interval.lines.map((line) => line.name), ['Box Jump Overs (24/20 in)']);
+  const zero = removeLine(one, 'interval', ivKey(one, 0));
+  assert.equal(zero.interval.lines.length, 0);
+  assert.equal(removeLine(zero, 'interval', 'inexistente'), zero);
+  assert.equal(removeLine(draft, 'interval', draft.interval.max.key), draft, 'o máximo não sai pela lista dos fixos');
+
+  const moved = moveLine(draft, 'interval', ivKey(draft, 1), 'up');
+  assert.deepEqual(analyzeDraft(moved).structure.segments.map((item) => item.name), ['Box Jump Overs (24/20 in)', 'Ring Muscle Ups']);
+  assert.equal(moveLine(draft, 'interval', ivKey(draft, 1), 'down'), draft, 'o último fixo não desce para depois do máximo');
+
+  const renamed = updateIntervalMax(draft, { name: 'Power Clean' });
+  assert.equal(renamed.interval.max.name, 'Power Clean');
+  assert.equal(renamed.interval.lines, draft.interval.lines);
+  assert.equal(renamed.forTime, draft.forTime);
+  assert.equal(updateIntervalTiming(draft, { rounds: '7' }).interval.rounds, '7');
+  assert.equal(draft.interval.max.name, 'Squat Clean', 'não muta');
+});
+
+test('Intervalado: tudo que o construtor gera passa no validador do servidor (rascunhos aleatórios)', () => {
+  const words = ['Thruster', 'Pull-up', 'Burpee', 'Remo', 'Bike', 'Wall ball', 'Squat Clean'];
+  const repsTexts = ['10', '6', '15', '500 m', '30 cal', '1', '99', '21-15-9', ''];
+  const times = ['00:30', '01:00', '02:00', '00:00', '03:30', '30:00', '10', '00:20'];
+  let seed = 11;
+  const random = (max) => {
+    seed = (seed * 48271) % 2147483647;
+    return seed % max;
+  };
+  let produced = 0;
+  for (let round = 0; round < 200; round += 1) {
+    let draft = updateIntervalTiming(createDraft('interval'), {
+      rounds: String(1 + random(22)), on: times[random(times.length)], off: times[random(times.length)]
+    });
+    const fixed = random(5);
+    if (fixed === 0) draft = removeLine(draft, 'interval', ivKey(draft, 0));
+    for (let index = 0; index < fixed; index += 1) {
+      if (index > 0) draft = addLine(draft, 'interval');
+      draft = updateLine(draft, 'interval', ivKey(draft, index), {
+        name: words[random(words.length)], reps: repsTexts[random(repsTexts.length)], load: random(2) ? `${random(120)},5` : '', mark: random(4) ? 'reps' : 'end'
+      });
+    }
+    draft = updateIntervalMax(draft, { name: random(8) ? words[random(words.length)] : '', load: random(2) ? String(random(200)) : '' });
+    const analysis = analyzeDraft(draft);
+    if (analysis.structure) {
+      produced += 1;
+      const checked = validateWorkoutStructure(analysis.structure);
+      assert.equal(checked.ok, true, checked.error);
+      assert.deepEqual(checked.structure, analysis.structure, 'já sai normalizada');
+      assert.deepEqual(analyzeDraft(draftFromStructure(analysis.structure).draft).structure, analysis.structure, 'ida e volta');
+    } else {
+      assert.ok(analysis.problems.length > 0, 'sem estrutura, há um problema a corrigir');
+    }
+  }
+  assert.ok(produced > 40, `rascunhos válidos: ${produced}`);
 });

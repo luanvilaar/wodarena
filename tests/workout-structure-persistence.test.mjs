@@ -738,3 +738,39 @@ test('intervalado: o selo da página pública segue vindo do tipo legado (Reps),
   assert.match(read('../src/messages/pt-br.json'), /"typeReps": "Reps"/);
   assert.match(read('../src/app/[locale]/event/[id]/EventView.tsx'), /wod\.type === 'maxweight' \? 'typeMaxWeight' : 'typeReps'/);
 });
+
+// Story 1.61 (AC6): o que o construtor monta para o Intervalado passa na rota com os legados derivados
+// (tipo reps), e a prova gravada reabre no construtor, é editada e salva de novo.
+test('intervalado pelo construtor: criar com os legados derivados, reabrir, editar e salvar de novo', async (t) => {
+  quietConsole(t);
+  seed();
+  const editor = await importServerModule('lib/workoutStructureEditor.ts');
+  let draft = editor.setDraftFormat(editor.createDraft('for_time'), 'interval');
+  draft = editor.updateLine(draft, 'interval', draft.interval.lines[0].key, { reps: '6', name: 'Ring Muscle Ups' });
+  draft = editor.addLine(draft, 'interval');
+  draft = editor.updateLine(draft, 'interval', draft.interval.lines[1].key, { reps: '15', name: 'Box Jump Overs (24/20 in)' });
+  draft = editor.updateIntervalMax(draft, { name: 'Squat Clean', load: '80' });
+  const structure = editor.analyzeDraft(draft).structure;
+  const legacy = deriveLegacyWorkoutFields(structure);
+  assert.deepEqual(legacy, { type: 'reps', timeCap: '18:00', tieBreaker: '' });
+
+  // addWorkout (AppContext): time_cap: timeCap || null, tie_breaker: tieBreaker || ''.
+  const created = await persist(MANAGER, 'createWorkout', createWorkoutPayload({
+    id: 'wod-iv-painel', name: 'Intervalado 5 × 2′', description: '5 rounds 2 ON / 2 OFF', type: legacy.type, time_cap: legacy.timeCap || null,
+    code: 'W9', order_index: 9, division_id: null, tie_breaker: legacy.tieBreaker || '', structure, submission_opens_at: null, submission_closes_at: null
+  }));
+  assert.equal(created.status, 200, created.body.error);
+  assert.deepEqual(rowOf('wod-iv-painel').structure, structure);
+  assert.deepEqual([rowOf('wod-iv-painel').type, rowOf('wod-iv-painel').time_cap, rowOf('wod-iv-painel').tie_breaker], ['reps', '18:00', '']);
+
+  // "Editar súmula": a estrutura gravada volta ao rascunho; 4 rounds de 03:00 / 01:00 = 15:00.
+  const reopened = editor.draftFromStructure(rowOf('wod-iv-painel').structure);
+  assert.equal(reopened.ok, true);
+  assert.deepEqual([reopened.draft.interval.rounds, reopened.draft.interval.on, reopened.draft.interval.off], ['5', '02:00', '02:00']);
+  const edited = editor.analyzeDraft(editor.updateIntervalTiming(reopened.draft, { rounds: '4', on: '03:00', off: '01:00' })).structure;
+  const editedLegacy = deriveLegacyWorkoutFields(edited);
+  const updated = await persist(MANAGER, 'updateWorkout', updateWorkoutPayload({ structure: edited, type: editedLegacy.type, time_cap: editedLegacy.timeCap, tie_breaker: null }, 'wod-iv-painel'));
+  assert.equal(updated.status, 200, updated.body.error);
+  assert.deepEqual([rowOf('wod-iv-painel').time_cap, rowOf('wod-iv-painel').structure.timeCapSeconds, rowOf('wod-iv-painel').structure.interval.rounds], ['15:00', 900, 4]);
+  assert.equal(editor.summarizeStructure(rowOf('wod-iv-painel').structure), 'Intervalado · 4 rounds · 03:00 ON / 01:00 OFF · 15:00');
+});
