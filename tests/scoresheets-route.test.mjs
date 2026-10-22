@@ -1089,4 +1089,27 @@ test('distância: abrir, gravar o total (o último vale) e enviar publica os met
     Object.fromEntries(['A', 'B', 'C', 'D'].map((id) => [id, [scoreOf(id, 'wod-dist').rank, scoreOf(id, 'wod-dist').points]])),
     { A: [1, 1], B: [1, 1], C: [3, 3], D: [4, 4] }
   );
+
+  // Correção do gestor (revisão do @qa): metros inteiros, com o ponto de milhar. "6.350" é 6350, nunca 6,35.
+  const correct = (result) => post(MANAGER, { action: 'review', sheetId: sheetA, review: 'correct', reason: 'Conferi o total com a súmula de papel', result });
+  for (const [typed, message] of [
+    ['6,5', /^Use só metros inteiros \(ex\.: 3250\)\.$/],
+    ['6.35', /^Use só metros inteiros \(ex\.: 3250\)\.$/],
+    ['100000', /^O total passa de 99\.999 m\. Confira o número\.$/],
+    ['', /^Informe o total em metros\.$/]
+  ]) {
+    const refused = await correct(typed);
+    assert.equal(refused.status, 400, JSON.stringify(typed));
+    assert.match(refused.body.error, message, JSON.stringify(typed));
+  }
+  assert.equal(scoreOf('A', 'wod-dist').value, 6330, 'nada mudou nas recusas');
+  const fixed = await correct('6.350');
+  assert.equal(fixed.status, 200, fixed.body.error);
+  assert.deepEqual([scoreOf('A', 'wod-dist').result, scoreOf('A', 'wod-dist').value, fixed.body.sheet.corrected], ['6350', 6350, true]);
+  assert.equal((await correct('6.330')).status, 200);
+  assert.deepEqual([scoreOf('A', 'wod-dist').result, scoreOf('A', 'wod-dist').value], ['6330', 6330], 'o ponto de milhar vale como milhar');
+  assert.deepEqual(
+    Object.fromEntries(['A', 'B', 'C', 'D'].map((id) => [id, [scoreOf(id, 'wod-dist').rank, scoreOf(id, 'wod-dist').points]])),
+    { A: [1, 1], B: [1, 1], C: [3, 3], D: [4, 4] }
+  );
 });

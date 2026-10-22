@@ -13,7 +13,7 @@ import {
 import { SCORE_TIE_BREAKER_SPLIT_KEY, parseScoreForWorkout, rankWorkoutScores, secondsToTime, timeToSeconds, type WorkoutScoreForRanking } from '@/lib/scoring';
 import { estimateClockStart, summarizeLiveProgress, type LiveProgress } from '@/lib/liveProgress';
 import type { SessionUser } from '@/lib/serverSecurity';
-import { validateWorkoutStructure, type SheetEvent, type WorkoutStructure } from '@/lib/workoutStructure';
+import { parseMetersInput, validateWorkoutStructure, type SheetEvent, type WorkoutStructure } from '@/lib/workoutStructure';
 import type { Score, WorkoutType } from '@/types';
 
 // Súmula gravada no servidor (Stories 1.49 a 1.52, etapa E3). Abrir a súmula
@@ -1003,10 +1003,17 @@ export const reviewSheet = async (
     const workout = check(await supabaseAdmin.from('workouts').select('id, type').eq('id', row.workout_id).maybeSingle()) as { type: WorkoutType } | null;
     if (!workout) throw new SheetError('Prova não encontrada.', 404);
     let parsed;
-    try {
-      parsed = parseScoreForWorkout(workout.type, input.result);
-    } catch (error) {
-      throw new SheetError(error instanceof Error ? error.message : 'Resultado inválido.');
+    if (row.structure.format === 'distance') {
+      // Distância (Story 1.68): metros inteiros, como o judge digita. O parser legado leria "6.330" como 6,33.
+      const meters = parseMetersInput(input.result);
+      if (!meters.ok) throw new SheetError(meters.error);
+      parsed = { result: String(meters.meters), value: meters.meters };
+    } else {
+      try {
+        parsed = parseScoreForWorkout(workout.type, input.result);
+      } catch (error) {
+        throw new SheetError(error instanceof Error ? error.message : 'Resultado inválido.');
+      }
     }
     let tieBreak: string | null = null;
     if (typeof input.tieBreak === 'string' && input.tieBreak.trim()) {

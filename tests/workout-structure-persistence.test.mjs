@@ -836,3 +836,35 @@ test('distância: estrutura v4 só entra em evento Functional Fitness, como as o
   const refused = await persist(MANAGER, 'createWorkout', createWorkoutPayload({ id: 'wod-dist-race', name: 'Prova', type: 'distance', time_cap: '20:00', structure: distanceStructure() }, EVENT_RACE));
   assert.equal(refused.status, 400);
 });
+
+// Story 1.67 (AC6, revisão do @qa): o que o construtor monta para a Distância passa na rota com os legados
+// derivados (tipo distance), e a prova gravada reabre no construtor, é editada e salva de novo.
+test('distância pelo construtor: criar com os legados derivados, reabrir, editar e salvar de novo', async (t) => {
+  quietConsole(t);
+  seed();
+  const editor = await importServerModule('lib/workoutStructureEditor.ts');
+  const draft = editor.setDraftFormat(editor.createDraft('for_time'), 'distance');
+  const structure = editor.analyzeDraft({ ...draft, distance: { duration: '20:00', note: '750 m corrida; máx. distância no remo.' } }).structure;
+  const legacy = deriveLegacyWorkoutFields(structure);
+  assert.deepEqual(legacy, { type: 'distance', timeCap: '20:00', tieBreaker: '' });
+
+  // addWorkout (AppContext): time_cap: timeCap || null, tie_breaker: tieBreaker || ''.
+  const created = await persist(MANAGER, 'createWorkout', createWorkoutPayload({
+    id: 'wod-di-painel', name: 'Remo e corrida', description: 'AMRAP 20 min', type: legacy.type, time_cap: legacy.timeCap || null,
+    code: 'W8', order_index: 8, division_id: null, tie_breaker: legacy.tieBreaker || '', structure, submission_opens_at: null, submission_closes_at: null
+  }));
+  assert.equal(created.status, 200, created.body.error);
+  assert.deepEqual(rowOf('wod-di-painel').structure, structure);
+  assert.deepEqual([rowOf('wod-di-painel').type, rowOf('wod-di-painel').time_cap, rowOf('wod-di-painel').tie_breaker], ['distance', '20:00', '']);
+
+  // "Editar súmula": a estrutura gravada volta ao rascunho; a duração muda para 15:00 e o resumo para outro texto.
+  const reopened = editor.draftFromStructure(rowOf('wod-di-painel').structure);
+  assert.equal(reopened.ok, true);
+  assert.deepEqual(reopened.draft.distance, { duration: '20:00', note: '750 m corrida; máx. distância no remo.' });
+  const edited = editor.analyzeDraft({ ...reopened.draft, distance: { duration: '15:00', note: 'Corrida' } }).structure;
+  const editedLegacy = deriveLegacyWorkoutFields(edited);
+  const updated = await persist(MANAGER, 'updateWorkout', updateWorkoutPayload({ structure: edited, type: editedLegacy.type, time_cap: editedLegacy.timeCap, tie_breaker: null }, 'wod-di-painel'));
+  assert.equal(updated.status, 200, updated.body.error);
+  assert.deepEqual([rowOf('wod-di-painel').time_cap, rowOf('wod-di-painel').structure.timeCapSeconds, rowOf('wod-di-painel').structure.distance.note], ['15:00', 900, 'Corrida']);
+  assert.equal(editor.summarizeStructure(rowOf('wod-di-painel').structure), 'Distância · 15:00 · maior vence');
+});
