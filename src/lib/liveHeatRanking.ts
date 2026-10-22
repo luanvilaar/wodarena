@@ -7,7 +7,8 @@ import type { WorkoutStructureFormat } from '@/lib/workoutStructure';
 //
 // - For Time: quem terminou (menor tempo) → mais repetições → chegou antes ao
 //   último registro;
-// - AMRAP: mais repetições → chegou antes ao último registro;
+// - AMRAP e Intervalado (Story 1.60): mais repetições → chegou antes ao último
+//   registro (no intervalado, o último que conta, dentro da janela);
 // - Carga máxima: maior carga → menos tentativas → chegou antes.
 
 export type LiveRankInput = {

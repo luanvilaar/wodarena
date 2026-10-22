@@ -157,11 +157,13 @@ test('versão 1 vira 2: segmentos em repetições, sem carga máxima e AMRAP em 
     segments: [{ id: 'a', round: 1, name: 'Thruster', reps: 21, load: null, note: '', required: true, mark: 'reps' }]
   };
   const upgraded = valid(v1ForTime);
-  assert.equal(upgraded.version, 2);
+  // Story 1.60: a versão 1 sai normalizada na 3, com interval vazio.
+  assert.equal(upgraded.version, 3);
+  assert.equal(upgraded.interval, null);
   assert.equal(upgraded.segments[0].unit, 'reps');
   assert.equal(upgraded.maxLoad, null);
   assert.equal(upgraded.scoreDisplay, null);
-  assert.deepEqual(valid(upgraded), upgraded, 'normalizar a versão 2 de novo não muda nada');
+  assert.deepEqual(valid(upgraded), upgraded, 'normalizar a versão 3 de novo não muda nada');
 
   const v1Amrap = { ...v1ForTime, format: 'amrap', incomplete: null, tieBreak: null };
   assert.equal(valid(v1Amrap).scoreDisplay, 'rounds_reps');
@@ -175,7 +177,10 @@ test('versão 1 vira 2: segmentos em repetições, sem carga máxima e AMRAP em 
 test('versão 2: idempotente e com as chaves do contrato na ordem', () => {
   for (const structure of [FRAN, CINDY, TOTAL, valid(unitsInput())]) {
     assert.deepEqual(valid(JSON.parse(JSON.stringify(structure))), structure);
-    assert.deepEqual(Object.keys(structure), ['version', 'format', 'totalReps', 'timeCapSeconds', 'incomplete', 'tieBreak', 'generator', 'customized', 'entry', 'segments', 'maxLoad', 'scoreDisplay']);
+    // Story 1.60: a versão 2 sai normalizada na 3, com a chave interval (vazia) no fim.
+    assert.deepEqual(Object.keys(structure), ['version', 'format', 'totalReps', 'timeCapSeconds', 'incomplete', 'tieBreak', 'generator', 'customized', 'entry', 'segments', 'maxLoad', 'scoreDisplay', 'interval']);
+    assert.equal(structure.version, 3);
+    assert.equal(structure.interval, null);
   }
 });
 

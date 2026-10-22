@@ -915,3 +915,88 @@ test('AC14: ausência só naquela prova (exemplo do README, L ausente na prova 1
   });
   assert.equal(standings.find((item) => item.athlete.id === 'L').totalPoints, 17);
 });
+
+// ---------------------------------------------------------------------------
+// Story 1.60: Intervalado pelo caminho real (caso aprovado do README: A 23, B e C 40, D ausente)
+// ---------------------------------------------------------------------------
+
+test('intervalado: abrir, gravar (com um registro fora da janela) e enviar publica as repetições; ausente 0; posições 1, 1, 3, 4', async (t) => {
+  quiet(t);
+  const fixedSegment = (id, name, reps) => ({ ...segment(id, 1, name, reps) });
+  const INTERVAL = validateWorkoutStructure({
+    version: 3, format: 'interval', totalReps: 21, timeCapSeconds: 1080, incomplete: null, tieBreak: null, generator: null, customized: true,
+    entry: { mode: 'both', marking: 'reps', publish: 'after_review' },
+    segments: [fixedSegment('f1', 'Ring Muscle Up', 6), fixedSegment('f2', 'Box Jump Over', 15)],
+    maxLoad: null, scoreDisplay: null,
+    interval: { rounds: 5, onSeconds: 120, offSeconds: 120, max: { id: 'mx', name: 'Squat Clean', load: { value: 80, unit: 'kg' }, note: '' } }
+  }).structure;
+  const athletes = ['A', 'B', 'C', 'D'];
+  seed();
+  database = createFakeSupabase({
+    users: [MANAGER, JUDGE],
+    events: [{ id: 'ev-int', name: 'Intervalado', date: '2026-11-01', location: 'Recife', organizer_id: MANAGER.id, event_type: 'functional_fitness', status: 'upcoming',
+      event_schedule: [{ id: 'h-int', kind: 'heat', workoutId: 'wod-int', heatNumber: 1, athleteIds: athletes }] }],
+    event_judges: [{ event_id: 'ev-int', judge_user_id: JUDGE.id }],
+    divisions: [{ id: 'd-int', event_id: 'ev-int', name: 'RX' }],
+    athletes: athletes.map((id) => ({ id, name: `Atleta ${id}`, box: 'Box', division_id: 'd-int' })),
+    workouts: [{ id: 'wod-int', event_id: 'ev-int', name: 'Intervalado', code: 'W1', order_index: 1, type: 'reps', time_cap: '18:00', tie_breaker: '', division_id: null, structure: INTERVAL }],
+    scores: [],
+    registrations: []
+  });
+
+  const roundLog = (index, maxReps, f2 = 15) => {
+    const start = index * 240;
+    return [
+      e({ t: 'fill', seg: 'f1', n: 6, at: start + 15 }),
+      e({ t: 'fill', seg: 'f2', n: f2, at: start + 45 }),
+      ...Array.from({ length: maxReps }, (_, k) => e({ t: 'rep', seg: 'mx', at: start + 50 + k * 5 }))
+    ];
+  };
+  const logs = {
+    // Round 5 de A com Box Jump Overs 11/15 (3 Squat Cleans que não contam) e um toque no descanso do round 1.
+    A: [...[9, 8, 5, 1].flatMap((max, index) => roundLog(index, max)), ...roundLog(4, 3, 11), e({ t: 'rep', seg: 'mx', at: 130 })],
+    B: [10, 9, 8, 7, 6].flatMap((max, index) => roundLog(index, max)),
+    C: [8, 8, 8, 8, 8].flatMap((max, index) => roundLog(index, max))
+  };
+  const open = (athleteId, lane) => post(JUDGE, { action: 'open', eventId: 'ev-int', workoutId: 'wod-int', athleteId, heatId: 'h-int', lane });
+
+  const openedA = await open('A', 1);
+  assert.equal(openedA.status, 200, openedA.body.error);
+  assert.deepEqual(openedA.body.sheet.structure, INTERVAL, 'a súmula guarda a cópia da estrutura v3');
+  const sheetA = openedA.body.sheet.id;
+  const appended = await post(JUDGE, { action: 'append', sheetId: sheetA, fromSeq: 0, events: logs.A });
+  assert.deepEqual(appended.body, { count: logs.A.length });
+  assert.equal(rows('scoresheet_events').filter((row) => row.sheet_id === sheetA).length, logs.A.length, 'o registro fora da janela fica no log');
+  // Correção no intervalado exige o round.
+  const noRound = await post(JUDGE, { action: 'append', sheetId: sheetA, fromSeq: logs.A.length, events: [e({ t: 'set', seg: 'mx', v: 1, at: 1100 })] });
+  assert.equal(noRound.status, 400);
+  assert.match(noRound.body.error, /informe o round da correção \(de 1 a 5\)/);
+  const timeRefused = await post(JUDGE, { action: 'append', sheetId: sheetA, fromSeq: logs.A.length, events: [e({ t: 'time', target: 'final', v: 600, at: 1100 })] });
+  assert.equal(timeRefused.status, 400);
+  assert.match(timeRefused.body.error, /o ajuste do tempo não vale para esta prova/);
+
+  const submittedA = await post(JUDGE, { action: 'submit', sheetId: sheetA, expectedCount: logs.A.length });
+  assert.equal(submittedA.status, 200, submittedA.body.error);
+  assert.deepEqual([submittedA.body.sheet.officialResult, submittedA.body.sheet.officialTieBreak, submittedA.body.summary], ['23', null, '23 repetições em 5 rounds (4 pontuaram)']);
+  assert.deepEqual(scoreOf('A', 'wod-int'), { athlete_id: 'A', workout_id: 'wod-int', result: '23', value: 23, splits: {}, scoresheet_id: sheetA, result_status: null, rank: 1, points: 1 });
+
+  for (const [athleteId, lane] of [['B', 2], ['C', 3]]) {
+    const sheetId = (await open(athleteId, lane)).body.sheet.id;
+    await post(JUDGE, { action: 'append', sheetId, fromSeq: 0, events: logs[athleteId] });
+    const submitted = await post(JUDGE, { action: 'submit', sheetId, expectedCount: logs[athleteId].length });
+    assert.equal(submitted.status, 200, submitted.body.error);
+    assert.deepEqual([scoreOf(athleteId, 'wod-int').result, scoreOf(athleteId, 'wod-int').value, scoreOf(athleteId, 'wod-int').result_status], ['40', 40, null]);
+  }
+
+  const sheetD = (await open('D', 4)).body.sheet.id;
+  const absent = await post(JUDGE, { action: 'absent', sheetId: sheetD });
+  assert.equal(absent.status, 200, absent.body.error);
+  assert.deepEqual([absent.body.sheet.officialResult, absent.body.sheet.absent], ['0', true]);
+  assert.deepEqual([scoreOf('D', 'wod-int').result, scoreOf('D', 'wod-int').value, scoreOf('D', 'wod-int').result_status, scoreOf('D', 'wod-int').splits], ['0', 0, 'absent', {}]);
+
+  // Ranking e pontos recalculados pelo caminho existente (tipo legado reps, "maior vence", sem desempate).
+  assert.deepEqual(
+    Object.fromEntries(athletes.map((id) => [id, [scoreOf(id, 'wod-int').rank, scoreOf(id, 'wod-int').points]])),
+    { A: [3, 3], B: [1, 1], C: [1, 1], D: [4, 4] }
+  );
+});

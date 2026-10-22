@@ -640,7 +640,7 @@ const analyzeForTime = (draft: SheetDraft): DraftAnalysis => {
   const generator = buildGenerator(lists, steps.map((step) => step.unit));
 
   return finish(analysis, {
-    version: 2,
+    version: 3,
     format: 'for_time',
     totalReps: total,
     timeCapSeconds: cap,
@@ -651,7 +651,8 @@ const analyzeForTime = (draft: SheetDraft): DraftAnalysis => {
     entry: { ...ENTRY_DEFAULTS },
     segments,
     maxLoad: null,
-    scoreDisplay: null
+    scoreDisplay: null,
+    interval: null
   });
 };
 
@@ -714,7 +715,7 @@ const analyzeAmrap = (draft: SheetDraft): DraftAnalysis => {
   const generator = buildGenerator(steps.map((step) => [step.reps]), steps.map((step) => step.unit));
 
   return finish(analysis, {
-    version: 2,
+    version: 3,
     format: 'amrap',
     totalReps: perRound,
     timeCapSeconds: duration,
@@ -725,7 +726,8 @@ const analyzeAmrap = (draft: SheetDraft): DraftAnalysis => {
     entry: { ...ENTRY_DEFAULTS },
     segments,
     maxLoad: null,
-    scoreDisplay: am.scoreDisplay
+    scoreDisplay: am.scoreDisplay,
+    interval: null
   });
 };
 
@@ -788,7 +790,7 @@ const analyzeMaxLoad = (draft: SheetDraft): DraftAnalysis => {
   if (!windowOk || Number.isNaN(step)) return finish(analysis, null);
 
   return finish(analysis, {
-    version: 2,
+    version: 3,
     format: 'max_load',
     totalReps: 0,
     timeCapSeconds: window,
@@ -799,7 +801,8 @@ const analyzeMaxLoad = (draft: SheetDraft): DraftAnalysis => {
     entry: { ...ENTRY_DEFAULTS },
     segments: [],
     maxLoad: { lifts, order: ml.order, scoring: ml.scoring, loadStepKg: step },
-    scoreDisplay: null
+    scoreDisplay: null,
+    interval: null
   });
 };
 

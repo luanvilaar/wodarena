@@ -193,3 +193,65 @@ test('computeAbsentOutcome: estrutura extrema (tempo acima de 99:59:59) devolve 
 test('histórico: a ação absent tem o rótulo "Atleta ausente"', () => {
   assert.equal(SCORESHEET_REVIEW_LABELS.absent, 'Atleta ausente');
 });
+
+// ---------------------------------------------------------------------------
+// Story 1.60: Intervalado (5 × 02:00 ON / 02:00 OFF, fixos 6 + 15, máximo Squat Clean)
+// ---------------------------------------------------------------------------
+
+const INTERVAL = valid({
+  ...base, version: 3, format: 'interval', totalReps: 21, timeCapSeconds: 1080, incomplete: null, tieBreak: null,
+  segments: [segment('f1', 1, 'Ring Muscle Up', 6), segment('f2', 1, 'Box Jump Over', 15)],
+  interval: { rounds: 5, onSeconds: 120, offSeconds: 120, max: { id: 'mx', name: 'Squat Clean', load: { value: 80, unit: 'kg' }, note: '' } }
+});
+
+test('validateClientEvent no intervalado: fixos e máximo, rd nas correções, fill só nos fixos, time recusado, fora da janela aceito', () => {
+  assert.deepEqual(accepts(INTERVAL, ev('i1', { t: 'rep', seg: 'f1', at: 35 })).event, { t: 'rep', seg: 'f1', at: 35 });
+  assert.deepEqual(accepts(INTERVAL, ev('i2', { t: 'rep', seg: 'mx', at: 119 })).event, { t: 'rep', seg: 'mx', at: 119 });
+  assert.deepEqual(accepts(INTERVAL, ev('i3', { t: 'fill', seg: 'f2', n: 15, at: 60 })).event, { t: 'fill', seg: 'f2', n: 15, at: 60 });
+  // Fora da janela (descanso, depois do fim) é aceito e gravado: o motor ignora e a súmula avisa.
+  assert.deepEqual(accepts(INTERVAL, ev('i4', { t: 'rep', seg: 'mx', at: 210 })).event, { t: 'rep', seg: 'mx', at: 210 });
+  assert.deepEqual(accepts(INTERVAL, ev('i5', { t: 'fill', seg: 'f1', n: 6, at: 1080 })).event, { t: 'fill', seg: 'f1', n: 6, at: 1080 });
+  // set e adj levam o round da correção no evento normalizado.
+  assert.deepEqual(accepts(INTERVAL, ev('i6', { t: 'set', seg: 'mx', v: 7, at: 1100, rd: 3, extra: 1 })).event, { t: 'set', seg: 'mx', v: 7, at: 1100, rd: 3 });
+  assert.deepEqual(accepts(INTERVAL, ev('i7', { t: 'adj', seg: 'f2', d: -1, at: 1100, rd: 5 })).event, { t: 'adj', seg: 'f2', d: -1, at: 1100, rd: 5 });
+  assert.deepEqual(accepts(INTERVAL, ev('i8', { t: 'undo', of: 0, at: 40 }), 1).event, { t: 'undo', of: 0, at: 40 });
+
+  for (const rd of [undefined, 0, 6, 2.5, '3', null]) {
+    rejects(INTERVAL, ev('x', { t: 'set', seg: 'mx', v: 7, at: 1100, rd }), /^Registro 1: informe o round da correção \(de 1 a 5\)\.$/);
+    rejects(INTERVAL, ev('x', { t: 'adj', seg: 'f1', d: 1, at: 1100, rd }), /informe o round da correção/);
+  }
+  rejects(INTERVAL, ev('x', { t: 'fill', seg: 'mx', n: 5, at: 30 }), /^Registro 1: o movimento máximo não tem meta a concluir\.$/);
+  rejects(INTERVAL, ev('x', { t: 'rep', seg: 's1', at: 30 }), /etapa inexistente na prova/);
+  rejects(INTERVAL, ev('x', { t: 'time', target: 'final', v: 600, at: 1080 }), /^Registro 1: o ajuste do tempo não vale para esta prova\.$/);
+  rejects(INTERVAL, ev('x', { t: 'time', target: 'tiebreak', v: 600, at: 1080 }), /não vale para esta prova/);
+  rejects(INTERVAL, ev('x', { t: 'attempt', lift: 'mx', load: 80, ok: true, at: 30 }), /movimento inexistente/);
+
+  // Nos outros formatos o rd recebido é descartado.
+  assert.deepEqual(accepts(FRAN, ev('f1', { t: 'set', seg: 's2', v: 3, at: 61, rd: 2 })).event, { t: 'set', seg: 's2', v: 3, at: 61 });
+  assert.deepEqual(accepts(CINDY, ev('f2', { t: 'adj', seg: 'c1', d: 1, at: 61, rd: 'x' })).event, { t: 'adj', seg: 'c1', d: 1, at: 61 });
+  // O id do máximo não vale fora do intervalado, nem o máximo de outra prova.
+  rejects(FRAN, ev('x', { t: 'rep', seg: 'mx', at: 1 }), /etapa inexistente/);
+});
+
+test('computeSheetOutcome e computeAbsentOutcome no intervalado: repetições, sem desempate; o ausente coincide com o log vazio', () => {
+  const log = [
+    { t: 'fill', seg: 'f1', n: 6, at: 10 }, { t: 'fill', seg: 'f2', n: 15, at: 40 },
+    { t: 'rep', seg: 'mx', at: 60 }, { t: 'rep', seg: 'mx', at: 70 }, { t: 'rep', seg: 'mx', at: 119 },
+    { t: 'rep', seg: 'mx', at: 120 },
+    { t: 'fill', seg: 'f1', n: 6, at: 250 }, { t: 'rep', seg: 'mx', at: 300 },
+    { t: 'set', seg: 'f2', v: 15, at: 1100, rd: 2 }
+  ];
+  const outcome = computeSheetOutcome(INTERVAL, log);
+  assert.deepEqual(outcome, { ok: true, result: '4', value: 4, tieBreak: null, summary: '4 repetições em 5 rounds (2 pontuaram)' });
+  assert.deepEqual(scoring.parseScoreForWorkout('reps', outcome.result), { result: '4', value: 4 });
+  assert.notEqual(outcome.result, '18:00', 'não cai no caminho de For Time');
+
+  const one = computeSheetOutcome(INTERVAL, [{ t: 'fill', seg: 'f1', n: 6, at: 10 }, { t: 'fill', seg: 'f2', n: 15, at: 40 }, { t: 'rep', seg: 'mx', at: 60 }]);
+  assert.equal(one.summary, '1 repetição em 5 rounds (1 pontuou)');
+  assert.deepEqual(computeSheetOutcome(INTERVAL, []), { ok: true, result: '0', value: 0, tieBreak: null, summary: '0 repetições em 5 rounds (0 pontuaram)' });
+
+  const absent = computeAbsentOutcome(INTERVAL);
+  assert.deepEqual(absent, { ok: true, result: '0', value: 0, tieBreak: null, summary: 'Atleta ausente · 0 repetições' });
+  const empty = computeSheetOutcome(INTERVAL, []);
+  assert.deepEqual([absent.result, absent.value, absent.tieBreak], [empty.result, empty.value, empty.tieBreak]);
+});

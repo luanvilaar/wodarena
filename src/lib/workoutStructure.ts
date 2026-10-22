@@ -12,16 +12,20 @@
 // log de eventos (rep, fill, set, adj, undo, time e attempt), sem nunca
 // apagar nada.
 //
-// Versões: a 1 (Story 1.43) continua aceita na entrada e é normalizada para a
-// 2, que acrescenta carga máxima (max_load), a unidade de cada segmento
-// (repetições, calorias ou metros), os desempates "último marco concluído" e
-// "último round completo" e a forma de exibir o score do AMRAP.
+// Versões: a 1 (Story 1.43) e a 2 (Stories 1.47 e 1.48) continuam aceitas na
+// entrada e são normalizadas para a 3. A 2 acrescentou carga máxima
+// (max_load), a unidade de cada segmento (repetições, calorias ou metros), os
+// desempates "último marco concluído" e "último round completo" e a forma de
+// exibir o score do AMRAP. A 3 (Story 1.60) acrescenta o Intervalado
+// (`interval`): rounds de trabalho (ON) e descanso (OFF), de 0 a 9 movimentos
+// fixos por round em `segments` e um movimento máximo no campo `interval`; o
+// resultado é a soma das repetições do máximo nos rounds que pontuaram.
 
 // ---------------------------------------------------------------------------
 // Contrato
 // ---------------------------------------------------------------------------
 
-export const WORKOUT_STRUCTURE_VERSION = 2;
+export const WORKOUT_STRUCTURE_VERSION = 3;
 
 export const WORKOUT_STRUCTURE_LIMITS = {
   minSegments: 1,
@@ -49,10 +53,21 @@ export const WORKOUT_STRUCTURE_LIMITS = {
   maxLiftReps: 10,
   maxLiftAttempts: 3,
   minLoadStepKg: 0.25,
-  maxLoadStepKg: 25
+  maxLoadStepKg: 25,
+  // Intervalado (Story 1.60). A duração total (rounds × ON + descansos entre
+  // rounds) fica até maxTimeCapSeconds (99:59).
+  minIntervalRounds: 2,
+  maxIntervalRounds: 20,
+  minIntervalOnSeconds: 30,
+  maxIntervalOnSeconds: 1800,
+  minIntervalOffSeconds: 0,
+  maxIntervalOffSeconds: 1800,
+  maxIntervalFixedSegments: 9,
+  /** Teto de segurança das repetições do movimento máximo num round. */
+  maxIntervalMaxRepsPerRound: 999
 } as const;
 
-export type WorkoutStructureFormat = 'for_time' | 'amrap' | 'max_load';
+export type WorkoutStructureFormat = 'for_time' | 'amrap' | 'max_load' | 'interval';
 /** Formatos contados por segmentos (toque e segure). */
 export type SegmentWorkoutFormat = 'for_time' | 'amrap';
 export type WorkoutSegmentMark = 'reps' | 'end';
@@ -123,24 +138,43 @@ export type WorkoutMaxLoad = {
 
 export type AmrapScoreDisplay = 'rounds_reps' | 'total';
 
+/** Movimento máximo do intervalado: sem meta, contado em repetições até o fim da janela. */
+export type WorkoutIntervalMax = {
+  id: string;
+  name: string;
+  load: WorkoutSegmentLoad | null;
+  note: string;
+};
+
+export type WorkoutInterval = {
+  rounds: number;
+  /** Janela de trabalho de cada round, em segundos. */
+  onSeconds: number;
+  /** Descanso entre rounds, em segundos (0 = sem descanso; não há descanso depois do último). */
+  offSeconds: number;
+  max: WorkoutIntervalMax;
+};
+
 export type WorkoutStructure = {
-  version: 2;
+  version: 3;
   format: WorkoutStructureFormat;
-  /** Soma das quantidades dos segmentos (no AMRAP, as de um round; em carga máxima, 0). */
+  /** Soma das quantidades dos segmentos (no AMRAP e no intervalado, as de um round; em carga máxima, 0). */
   totalReps: number;
-  /** Time cap, duração do AMRAP ou janela da carga máxima; null só em carga máxima sem janela. */
+  /** Time cap, duração do AMRAP ou do intervalado, ou janela da carga máxima; null só em carga máxima sem janela. */
   timeCapSeconds: number | null;
   incomplete: WorkoutIncompleteRule | null;
   tieBreak: WorkoutTieBreak | null;
   generator: WorkoutGenerator | null;
   customized: boolean;
   entry: WorkoutEntry;
-  /** For Time e AMRAP; vazia em carga máxima. */
+  /** For Time e AMRAP; no intervalado, os movimentos fixos de um round (de 0 a 9); vazia em carga máxima. */
   segments: WorkoutSegment[];
   /** Só em carga máxima. */
   maxLoad: WorkoutMaxLoad | null;
   /** Só no AMRAP: como a súmula mostra o score (o valor guardado é sempre o total). */
   scoreDisplay: AmrapScoreDisplay | null;
+  /** Só no intervalado. */
+  interval: WorkoutInterval | null;
 };
 
 export type WorkoutStructureValidation =
@@ -148,7 +182,7 @@ export type WorkoutStructureValidation =
   | { ok: false; error: string };
 
 /** Campos legados da linha de `workouts` derivados da estrutura (camelCase). */
-export type LegacyWorkoutFields = { type: 'fortime' | 'amrap' | 'maxweight'; timeCap: string; tieBreaker: '' | 'Tempo' };
+export type LegacyWorkoutFields = { type: 'fortime' | 'amrap' | 'maxweight' | 'reps'; timeCap: string; tieBreaker: '' | 'Tempo' };
 
 export type SheetTimeTarget = 'final' | 'tiebreak';
 
@@ -157,14 +191,15 @@ export type SheetTimeTarget = 'final' | 'tiebreak';
  * carga; `at` são segundos do relógio da prova (o motor aplica Math.floor);
  * `undo.of` é a posição de um evento anterior no array. O `time` é o ajuste
  * manual com o cronômetro oficial (REQ-9), sem justificativa; `attempt` é uma
- * tentativa de carga máxima (carga em kg, válida ou não). Campos extras são
- * ignorados.
+ * tentativa de carga máxima (carga em kg, válida ou não). No intervalado,
+ * `set` e `adj` levam `rd`, o round corrigido (a correção é feita com o
+ * relógio parado, então o `at` não diz o round). Campos extras são ignorados.
  */
 export type SheetEvent =
   | { t: 'rep'; seg: string; at: number }
   | { t: 'fill'; seg: string; n: number; at: number }
-  | { t: 'set'; seg: string; v: number; at: number }
-  | { t: 'adj'; seg: string; d: number; at: number }
+  | { t: 'set'; seg: string; v: number; at: number; rd?: number }
+  | { t: 'adj'; seg: string; d: number; at: number; rd?: number }
   | { t: 'undo'; of: number; at: number }
   | { t: 'time'; target: SheetTimeTarget; v: number; at: number }
   | { t: 'attempt'; lift: string; load: number; ok: boolean; at: number };
@@ -291,6 +326,9 @@ const STRUCTURE_KEYS_V1 = [
   'generator', 'customized', 'entry', 'segments'
 ] as const;
 const STRUCTURE_KEYS_V2 = [...STRUCTURE_KEYS_V1, 'maxLoad', 'scoreDisplay'] as const;
+const STRUCTURE_KEYS_V3 = [...STRUCTURE_KEYS_V2, 'interval'] as const;
+const INTERVAL_KEYS = ['rounds', 'onSeconds', 'offSeconds', 'max'] as const;
+const INTERVAL_MAX_KEYS = ['id', 'name', 'load', 'note'] as const;
 const SEGMENT_KEYS_V1 = ['id', 'round', 'name', 'reps', 'load', 'note', 'required', 'mark'] as const;
 const SEGMENT_KEYS_V2 = [...SEGMENT_KEYS_V1, 'unit'] as const;
 const LOAD_KEYS = ['value', 'unit'] as const;
@@ -302,7 +340,7 @@ const ENTRY_KEYS = ['mode', 'marking', 'publish'] as const;
 const MAX_LOAD_KEYS = ['lifts', 'order', 'scoring', 'loadStepKg'] as const;
 const LIFT_KEYS = ['id', 'name', 'reps', 'maxAttempts', 'startLoadKg', 'note'] as const;
 
-const FORMATS: readonly string[] = ['for_time', 'amrap', 'max_load'];
+const FORMATS: readonly string[] = ['for_time', 'amrap', 'max_load', 'interval'];
 const MARKS: readonly string[] = ['reps', 'end'];
 const UNITS: readonly string[] = ['reps', 'cal', 'm'];
 const GENERATOR_KINDS: readonly string[] = ['fixed', 'descending', 'ascending'];
@@ -322,9 +360,21 @@ const L = WORKOUT_STRUCTURE_LIMITS;
 const MESSAGES = {
   notObject: 'A estrutura da prova deve ser um objeto.',
   unknownKey: 'A estrutura da prova tem um campo que não faz parte do contrato.',
-  version: 'A versão da estrutura da prova deve ser 1 ou 2.',
-  format: 'O formato da prova deve ser for_time (For Time), amrap (AMRAP) ou max_load (Carga máxima).',
+  version: 'A versão da estrutura da prova deve ser 1, 2 ou 3.',
+  format: 'O formato da prova deve ser for_time (For Time), amrap (AMRAP), max_load (Carga máxima) ou interval (Intervalado).',
   formatV1: 'A versão 1 da estrutura só aceita for_time (For Time) ou amrap (AMRAP); carga máxima exige a versão 2.',
+  intervalVersion: 'O formato intervalado (interval) e o campo interval exigem a versão 3 da estrutura.',
+  intervalShape: 'No intervalado, informe o campo interval com os rounds (rounds), o tempo de trabalho (onSeconds), o tempo de descanso (offSeconds) e o movimento máximo (max).',
+  intervalUnknownKey: 'O campo interval tem um campo que não faz parte do contrato.',
+  intervalRounds: `No intervalado, os rounds devem ser um número inteiro entre ${L.minIntervalRounds} e ${L.maxIntervalRounds}.`,
+  intervalOn: `No intervalado, o tempo de trabalho (onSeconds) deve ser um número inteiro de segundos entre ${L.minIntervalOnSeconds} e ${L.maxIntervalOnSeconds} (de 00:30 a 30:00).`,
+  intervalOff: `No intervalado, o tempo de descanso (offSeconds) deve ser um número inteiro de segundos entre ${L.minIntervalOffSeconds} e ${L.maxIntervalOffSeconds} (de 00:00 a 30:00).`,
+  intervalDuration: `No intervalado, a duração total (rounds × trabalho + descansos entre os rounds) deve ser de até ${L.maxTimeCapSeconds} segundos (99:59).`,
+  intervalOnlyThere: 'O campo interval só existe em provas intervaladas: fora delas fica vazio (null).',
+  intervalSegments: `No intervalado, a prova tem de 0 a ${L.maxIntervalFixedSegments} movimentos fixos por round.`,
+  incompleteInterval: 'No intervalado, a regra de não conclusão deve ficar vazia (null).',
+  tieBreakInterval: 'O intervalado não tem desempate nesta versão: o campo fica vazio (null).',
+  generatorInterval: 'No intervalado o gerador deve ficar vazio (null).',
   timeCap: `O time cap da prova deve ser um número inteiro de segundos entre ${L.minTimeCapSeconds} e ${L.maxTimeCapSeconds}.`,
   window: `A janela da prova de carga máxima deve ficar vazia (null) ou ser um número inteiro de segundos entre ${L.minTimeCapSeconds} e ${L.maxTimeCapSeconds}.`,
   segmentsCount: `A prova deve ter entre ${L.minSegments} e ${L.maxSegments} segmentos.`,
@@ -515,17 +565,69 @@ const validateMaxLoad = (input: unknown): MaxLoadCheck => {
   };
 };
 
+const intervalMaxMessage = (text: string) => `Movimento máximo: ${text}`;
+
+type IntervalCheck = { ok: true; interval: WorkoutInterval } | { ok: false; error: string };
+
+/** Duração do intervalado: sem descanso depois do último round. */
+const intervalDurationSeconds = (rounds: number, onSeconds: number, offSeconds: number) =>
+  rounds * onSeconds + (rounds - 1) * offSeconds;
+
+const validateIntervalMax = (input: unknown): { ok: true; max: WorkoutIntervalMax } | { ok: false; error: string } => {
+  const say = (text: string) => fail(intervalMaxMessage(text));
+  if (!isPlainObject(input)) return say('o movimento máximo deve ser um objeto.');
+  if (!hasOnlyKeys(input, INTERVAL_MAX_KEYS)) return say('o movimento tem um campo que não faz parte do contrato.');
+  for (const key of ['id', 'name', 'note'] as const) {
+    if (hasNullCharacter(input[key])) return say('o texto não pode conter o caractere nulo (U+0000).');
+  }
+  const id = typeof input.id === 'string' ? input.id.trim() : '';
+  if (!id || id.length > L.maxIdLength || !SEGMENT_ID_PATTERN.test(id)) {
+    return say(`o identificador deve ter de 1 a ${L.maxIdLength} caracteres, só letras sem acento, números, _ e -.`);
+  }
+  const name = typeof input.name === 'string' ? input.name.trim() : '';
+  if (!name || name.length > L.maxNameLength) return say(`informe o nome do movimento, com até ${L.maxNameLength} caracteres.`);
+  let load: WorkoutSegmentLoad | null = null;
+  if (input.load !== null) {
+    const raw = input.load;
+    const valid = isPlainObject(raw)
+      && hasOnlyKeys(raw, LOAD_KEYS)
+      && raw.unit === 'kg'
+      && isFiniteBetween(raw.value, L.minLoadKg, L.maxLoadKg);
+    if (!valid) return say(`a carga deve ser vazia (null) ou um valor entre ${L.minLoadKg} e ${L.maxLoadKg} kg.`);
+    load = { value: raw.value as number, unit: 'kg' };
+  }
+  if (typeof input.note !== 'string' || input.note.trim().length > L.maxNoteLength) {
+    return say(`a observação deve ser um texto de até ${L.maxNoteLength} caracteres (pode ficar vazia).`);
+  }
+  return { ok: true, max: { id, name, load, note: input.note.trim() } };
+};
+
+const validateInterval = (input: unknown): IntervalCheck => {
+  if (!isPlainObject(input)) return fail(MESSAGES.intervalShape);
+  if (!hasOnlyKeys(input, INTERVAL_KEYS)) return fail(MESSAGES.intervalUnknownKey);
+  if (!isIntegerBetween(input.rounds, L.minIntervalRounds, L.maxIntervalRounds)) return fail(MESSAGES.intervalRounds);
+  if (!isIntegerBetween(input.onSeconds, L.minIntervalOnSeconds, L.maxIntervalOnSeconds)) return fail(MESSAGES.intervalOn);
+  if (!isIntegerBetween(input.offSeconds, L.minIntervalOffSeconds, L.maxIntervalOffSeconds)) return fail(MESSAGES.intervalOff);
+  if (intervalDurationSeconds(input.rounds, input.onSeconds, input.offSeconds) > L.maxTimeCapSeconds) return fail(MESSAGES.intervalDuration);
+  const max = validateIntervalMax(input.max);
+  if (!max.ok) return max;
+  return { ok: true, interval: { rounds: input.rounds, onSeconds: input.onSeconds, offSeconds: input.offSeconds, max: max.max } };
+};
+
 type TieBreakCheck = { ok: true; tieBreak: WorkoutTieBreak | null } | { ok: false; error: string };
 
 const TIE_BREAK_MESSAGES: Record<WorkoutStructureFormat, string> = {
   for_time: MESSAGES.tieBreakForTime,
   amrap: MESSAGES.tieBreakAmrap,
-  max_load: MESSAGES.tieBreakMaxLoad
+  max_load: MESSAGES.tieBreakMaxLoad,
+  interval: MESSAGES.tieBreakInterval
 };
+// O intervalado não tem desempate nesta versão (decisão 7 do README): nenhum tipo é aceito.
 const TIE_BREAK_KINDS: Record<WorkoutStructureFormat, readonly string[]> = {
   for_time: ['split_time', 'last_split'],
   amrap: ['split_time', 'last_round'],
-  max_load: ['finish_time', 'fewest_attempts']
+  max_load: ['finish_time', 'fewest_attempts'],
+  interval: []
 };
 
 const validateTieBreak = (
@@ -567,14 +669,28 @@ const validateTieBreak = (
 
 const validateStructureObject = (input: unknown): WorkoutStructureValidation => {
   if (!isPlainObject(input)) return fail(MESSAGES.notObject);
-  if (!hasOnlyKeys(input, STRUCTURE_KEYS_V2)) return fail(MESSAGES.unknownKey);
-  if (input.version !== 1 && input.version !== 2) return fail(MESSAGES.version);
+  if (!hasOnlyKeys(input, STRUCTURE_KEYS_V3)) return fail(MESSAGES.unknownKey);
+  if (input.version !== 1 && input.version !== 2 && input.version !== 3) return fail(MESSAGES.version);
   const legacy = input.version === 1;
+  // A versão 1 e a 2 não conhecem o intervalado, nem no formato nem na chave.
+  if (input.version !== 3 && (Object.prototype.hasOwnProperty.call(input, 'interval') || input.format === 'interval')) {
+    return fail(MESSAGES.intervalVersion);
+  }
   if (legacy && !hasOnlyKeys(input, STRUCTURE_KEYS_V1)) return fail(MESSAGES.unknownKey);
   if (!isOneOf(input.format, FORMATS)) return fail(MESSAGES.format);
   const format = input.format as WorkoutStructureFormat;
   if (legacy && format === 'max_load') return fail(MESSAGES.formatV1);
   const isMaxLoad = format === 'max_load';
+  const isInterval = format === 'interval';
+
+  let interval: WorkoutInterval | null = null;
+  if (isInterval) {
+    const checked = validateInterval(input.interval);
+    if (!checked.ok) return checked;
+    interval = checked.interval;
+  } else if (input.version === 3 && input.interval !== null) {
+    return fail(MESSAGES.intervalOnlyThere);
+  }
 
   let timeCapSeconds: number | null = null;
   if (isMaxLoad) {
@@ -582,6 +698,13 @@ const validateStructureObject = (input: unknown): WorkoutStructureValidation => 
       return fail(MESSAGES.window);
     }
     timeCapSeconds = input.timeCapSeconds as number | null;
+  } else if (interval) {
+    // A duração é derivada dos rounds e precisa bater com o time cap gravado.
+    const expected = intervalDurationSeconds(interval.rounds, interval.onSeconds, interval.offSeconds);
+    if (input.timeCapSeconds !== expected) {
+      return fail(`No intervalado, o time cap deve ser igual à duração da prova (${formatWorkoutTime(expected)}): rounds × trabalho + (rounds − 1) × descanso, sem descanso depois do último round.`);
+    }
+    timeCapSeconds = expected;
   } else {
     if (!isIntegerBetween(input.timeCapSeconds, L.minTimeCapSeconds, L.maxTimeCapSeconds)) return fail(MESSAGES.timeCap);
     timeCapSeconds = input.timeCapSeconds;
@@ -592,8 +715,9 @@ const validateStructureObject = (input: unknown): WorkoutStructureValidation => 
   if (isMaxLoad) {
     if (!Array.isArray(rawSegments) || rawSegments.length !== 0) return fail(MESSAGES.maxLoadSegments);
   } else {
-    if (!Array.isArray(rawSegments) || rawSegments.length < L.minSegments || rawSegments.length > L.maxSegments) {
-      return fail(MESSAGES.segmentsCount);
+    const [minSegments, maxSegments] = isInterval ? [0, L.maxIntervalFixedSegments] : [L.minSegments, L.maxSegments];
+    if (!Array.isArray(rawSegments) || rawSegments.length < minSegments || rawSegments.length > maxSegments) {
+      return fail(isInterval ? MESSAGES.intervalSegments : MESSAGES.segmentsCount);
     }
     const ids = new Set<string>();
     for (const [index, rawSegment] of rawSegments.entries()) {
@@ -602,8 +726,15 @@ const validateStructureObject = (input: unknown): WorkoutStructureValidation => 
       if (ids.has(checked.segment.id)) {
         return fail(segmentMessage(index + 1, 'o identificador repete o de outro segmento.'));
       }
+      // No intervalado os fixos descrevem um round só (o mesmo trabalho em todos os rounds).
+      if (isInterval && checked.segment.round !== 1) {
+        return fail(segmentMessage(index + 1, 'no intervalado os movimentos fixos descrevem um round: a rodada (round) deve ser 1.'));
+      }
       ids.add(checked.segment.id);
       segments.push(checked.segment);
+    }
+    if (interval && ids.has(interval.max.id)) {
+      return fail(intervalMaxMessage('o identificador repete o de um movimento fixo.'));
     }
   }
 
@@ -624,7 +755,7 @@ const validateStructureObject = (input: unknown): WorkoutStructureValidation => 
     if (!valid) return fail(MESSAGES.incompleteForTime);
     incomplete = { rule: 'penalty_per_rep', secondsPerRep: raw.secondsPerRep as number, base: 'time_cap' };
   } else if (input.incomplete !== null) {
-    return fail(isMaxLoad ? MESSAGES.incompleteMaxLoad : MESSAGES.incompleteAmrap);
+    return fail(isMaxLoad ? MESSAGES.incompleteMaxLoad : isInterval ? MESSAGES.incompleteInterval : MESSAGES.incompleteAmrap);
   }
 
   const tieBreakCheck = validateTieBreak(input.tieBreak, format, segments, legacy);
@@ -633,6 +764,7 @@ const validateStructureObject = (input: unknown): WorkoutStructureValidation => 
   let generator: WorkoutGenerator | null = null;
   if (input.generator !== null) {
     if (isMaxLoad) return fail(MESSAGES.generatorMaxLoad);
+    if (isInterval) return fail(MESSAGES.generatorInterval);
     const raw = input.generator;
     const valid = isPlainObject(raw)
       && hasOnlyKeys(raw, GENERATOR_KEYS)
@@ -691,16 +823,18 @@ const validateStructureObject = (input: unknown): WorkoutStructureValidation => 
       },
       segments,
       maxLoad,
-      scoreDisplay
+      scoreDisplay,
+      interval
     }
   };
 };
 
 /**
  * Valida a estrutura recebida (do cliente ou do banco) e devolve um objeto
- * novo e normalizado na versão 2 (textos sem espaços nas pontas, só as chaves
+ * novo e normalizado na versão 3 (textos sem espaços nas pontas, só as chaves
  * do contrato), nunca a referência recebida. A versão 1 é aceita e convertida
- * (segmentos em repetições, sem carga máxima, AMRAP em rounds + repetições).
+ * (segmentos em repetições, sem carga máxima, AMRAP em rounds + repetições), e
+ * a 2 também; as duas saem com `interval: null`.
  * Nunca lança: a mensagem diz o campo e o limite, sem devolver o JSON enviado.
  * Não reconcilia: total diferente da soma ou desempate num segmento inexistente
  * são recusados.
@@ -745,6 +879,12 @@ export const reconcileWorkoutStructure = (structure: WorkoutStructure): WorkoutS
     segments,
     maxLoad: structure.maxLoad
       ? { ...structure.maxLoad, lifts: structure.maxLoad.lifts.map((lift) => ({ ...lift })) }
+      : null,
+    interval: structure.interval
+      ? {
+        ...structure.interval,
+        max: { ...structure.interval.max, load: structure.interval.max.load ? { ...structure.interval.max.load } : null }
+      }
       : null
   };
 };
@@ -752,14 +892,16 @@ export const reconcileWorkoutStructure = (structure: WorkoutStructure): WorkoutS
 const LEGACY_TYPES: Record<WorkoutStructureFormat, LegacyWorkoutFields['type']> = {
   for_time: 'fortime',
   amrap: 'amrap',
-  max_load: 'maxweight'
+  max_load: 'maxweight',
+  interval: 'reps'
 };
 
 /**
  * Campos legados da prova (`type`, `time_cap`, `tie_breaker`) derivados da
  * estrutura, no formato que scoring.ts e o painel atual já entendem. Carga
  * máxima sem janela não tem time cap (''). O desempate por menos tentativas
- * não é um tempo, então o legado fica sem desempate ('').
+ * não é um tempo, então o legado fica sem desempate (''). O intervalado é
+ * `reps` ("maior vence"), com a duração da prova como time cap e sem desempate.
  */
 export const deriveLegacyWorkoutFields = (structure: WorkoutStructure): LegacyWorkoutFields => ({
   type: LEGACY_TYPES[structure.format] ?? 'fortime',
@@ -1052,6 +1194,7 @@ const OFFICIAL_TIME_MESSAGES = {
   target: 'Informe qual tempo ajustar: o tempo final (final) ou o tempo do desempate (tiebreak).',
   integer: 'O tempo oficial deve ser um número inteiro de segundos.',
   maxLoad: 'O ajuste manual do tempo ainda não vale para provas de carga máxima.',
+  interval: 'O ajuste manual do tempo não vale para provas intervaladas: o resultado são as repetições e o tempo é o dos rounds.',
   finalAmrap: 'O ajuste do tempo final não se aplica a provas AMRAP: o tempo da prova é a duração.',
   finalNotCompleted: 'O tempo final só pode ser ajustado em prova concluída. Sem concluir, o tempo é o time cap.',
   noTieBreak: 'Esta prova não tem desempate por tempo.',
@@ -1075,6 +1218,8 @@ export const checkOfficialTime = (
   try {
     if (target !== 'final' && target !== 'tiebreak') return fail(OFFICIAL_TIME_MESSAGES.target);
     if (typeof seconds !== 'number' || !Number.isInteger(seconds)) return fail(OFFICIAL_TIME_MESSAGES.integer);
+    // O intervalado tem time cap numérico (a duração), mas não tem tempo a ajustar.
+    if (structure.format === 'interval') return fail(OFFICIAL_TIME_MESSAGES.interval);
     if (structure.format === 'max_load' || typeof structure.timeCapSeconds !== 'number') return fail(OFFICIAL_TIME_MESSAGES.maxLoad);
     const timeCap = structure.timeCapSeconds;
     if (seconds < 1 || seconds > timeCap) {
@@ -1341,5 +1486,254 @@ export const checkAttempt = (
     return { ok: true };
   } catch {
     return fail(ATTEMPT_MESSAGES.invalid);
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Motor da súmula do intervalado (Story 1.60)
+// ---------------------------------------------------------------------------
+
+export type IntervalRoundState = {
+  /** Número do round (1 a `rounds`). */
+  round: number;
+  /** Feito em cada movimento fixo, na ordem de `segments` (de 0 à meta). */
+  fixed: number[];
+  /** Repetições do máximo registradas no round (contagem bruta, de 0 ao teto). */
+  maxRaw: number;
+  /** Todos os fixos chegaram à meta no estado final (sem fixos, todo round pontua). */
+  scored: boolean;
+  /** O máximo que conta: o bruto se o round pontuou; senão 0. */
+  maxCounted: number;
+  /** Movimento da vez no round: o primeiro fixo abaixo da meta ou, com os fixos feitos, o máximo. */
+  currentId: string;
+};
+
+export type IntervalSheetState = {
+  format: 'interval';
+  rounds: IntervalRoundState[];
+  /** Posições de `rep` e `fill` fora da janela de trabalho: não contaram (aviso "N registros fora da janela"). */
+  ignored: number[];
+  roundsScored: number;
+  /** Soma do máximo dos rounds que pontuaram. */
+  total: number;
+  /** Round do último registro que contou, na ordem do log; null sem registro. */
+  lastRound: number | null;
+  /** Maior instante entre os registros que contaram; null sem registro. */
+  lastCountedAt: number | null;
+};
+
+export type IntervalSheetResult = {
+  format: 'interval';
+  /** Repetições do máximo somadas nos rounds que pontuaram; o mesmo número que vai para `scores.value`. */
+  value: number;
+  /** Texto aceito por parseScoreForWorkout('reps', …): o número (ex.: "23"). */
+  display: string;
+  /** Sem desempate nesta versão (decisão 7 do README). */
+  tieBreak: null;
+  roundsScored: number;
+  /** Detalhe por round, para a súmula e o resumo. */
+  rounds: { round: number; fixed: number[]; maxRaw: number; maxCounted: number; scored: boolean }[];
+  ignoredCount: number;
+};
+
+/**
+ * Fase da prova num segundo do relógio: `work` com o round e os segundos que
+ * faltam para a janela fechar; `rest` com o round que acabou de fechar e os
+ * segundos até o próximo; `ended` a partir da duração.
+ */
+export type IntervalPhase =
+  | { phase: 'work'; round: number; secondsLeft: number }
+  | { phase: 'rest'; round: number; secondsLeft: number }
+  | { phase: 'ended' };
+
+export type IntervalEntryCheck = { ok: true; round: number } | { ok: false; error: string };
+
+type IntervalClock = { rounds: number; on: number; cycle: number; end: number };
+
+// Lê rounds, ON e OFF da estrutura sem confiar nela: com valores que não fazem
+// sentido, nenhum registro conta e a prova está encerrada.
+const readIntervalClock = (structure: WorkoutStructure | null | undefined): IntervalClock | null => {
+  const interval = structure?.interval;
+  if (!interval || typeof interval !== 'object') return null;
+  const { rounds, onSeconds, offSeconds } = interval;
+  if (!Number.isInteger(rounds) || rounds < 1 || !Number.isInteger(onSeconds) || onSeconds < 1
+    || !Number.isInteger(offSeconds) || offSeconds < 0) {
+    return null;
+  }
+  return { rounds, on: onSeconds, cycle: onSeconds + offSeconds, end: intervalDurationSeconds(rounds, onSeconds, offSeconds) };
+};
+
+/** Round cuja janela [início, início + ON) contém o segundo `at`; null no descanso ou depois do fim. */
+const windowRound = (clock: IntervalClock, at: number) => {
+  const index = Math.floor(at / clock.cycle);
+  if (index >= clock.rounds) return null;
+  return at - index * clock.cycle < clock.on ? index + 1 : null;
+};
+
+type ParsedIntervalCount = { kind: 'count'; t: CountEventType; item: number; amount: number; at: number; round: number | null };
+
+// `item` é a posição do fixo em `segments` ou, para o máximo, o número de
+// fixos. Evento malformado é ignorado por inteiro (null): movimento
+// inexistente, `fill` no máximo, n/v/d não inteiros, `set`/`adj` sem `rd` de
+// 1 a `rounds`, `at` inválido, e `time`, `attempt` e tipos desconhecidos.
+// `rep` e `fill` fora da janela ficam com `round: null`.
+const parseIntervalEvent = (
+  raw: unknown,
+  itemIndexById: Map<string, number>,
+  maxIndex: number,
+  clock: IntervalClock
+): ParsedIntervalCount | UndoEvent | null => {
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const event = raw as PlainObject;
+  const at = readAt(event.at);
+  if (at === null) return null;
+  if (event.t === 'undo') return readUndo(event, at);
+  if (event.t !== 'rep' && event.t !== 'fill' && event.t !== 'set' && event.t !== 'adj') return null;
+  const item = typeof event.seg === 'string' ? itemIndexById.get(event.seg) : undefined;
+  if (item === undefined) return null;
+  if (event.t === 'rep') return { kind: 'count', t: 'rep', item, amount: 1, at, round: windowRound(clock, at) };
+  if (event.t === 'fill') {
+    if (item === maxIndex || !Number.isInteger(event.n)) return null;
+    return { kind: 'count', t: 'fill', item, amount: event.n as number, at, round: windowRound(clock, at) };
+  }
+  const amount = event.t === 'set' ? event.v : event.d;
+  if (!Number.isInteger(amount) || !isIntegerBetween(event.rd, 1, clock.rounds)) return null;
+  return { kind: 'count', t: event.t, item, amount: amount as number, at, round: event.rd as number };
+};
+
+/**
+ * Estado da súmula do intervalado derivado do log. Pura, determinística, sem
+ * lançar e sem mutar as entradas. `rep` e `fill` valem no round da janela que
+ * contém o `at` (round = ⌊at ÷ (ON + OFF)⌋ + 1, se at mod (ON + OFF) < ON e o
+ * round existe); fora da janela vão para `ignored`. `set` e `adj` valem no
+ * round `rd`. Cada fixo fica entre 0 e a meta e o máximo entre 0 e o teto por
+ * round; `undo` anula um evento, como nos outros formatos. O round pontua se
+ * os fixos estão todos na meta no estado final; senão o máximo vale 0, e a
+ * contagem bruta fica guardada.
+ */
+export const deriveIntervalState = (structure: WorkoutStructure, events: readonly unknown[]): IntervalSheetState => {
+  const clock = readIntervalClock(structure);
+  const definitions = Array.isArray(structure?.segments) ? structure.segments : [];
+  const maxIndex = definitions.length;
+  const maxId = String(structure?.interval?.max?.id ?? '');
+  const targets = definitions.map((segment) => (Number.isInteger(segment?.reps) && segment.reps > 0 ? segment.reps : 0));
+
+  const itemIndexById = new Map<string, number>();
+  definitions.forEach((segment, index) => {
+    if (typeof segment?.id === 'string' && !itemIndexById.has(segment.id)) itemIndexById.set(segment.id, index);
+  });
+  if (maxId && !itemIndexById.has(maxId)) itemIndexById.set(maxId, maxIndex);
+
+  const parsed = clock
+    ? (Array.isArray(events) ? events : []).map((event) => parseIntervalEvent(event, itemIndexById, maxIndex, clock))
+    : [];
+  const voided = collectVoided(parsed);
+
+  // Por round: os fixos na ordem de `segments` e, na última posição, o máximo.
+  const counts = Array.from({ length: clock ? clock.rounds : 0 }, () => [...targets.map(() => 0), 0]);
+  const ignored: number[] = [];
+  let lastRound: number | null = null;
+  let lastCountedAt: number | null = null;
+
+  for (const [position, event] of parsed.entries()) {
+    if (!event || event.kind === 'undo' || voided.has(position)) continue;
+    if (event.round === null) {
+      ignored.push(position);
+      continue;
+    }
+    const row = counts[event.round - 1];
+    const cap = event.item === maxIndex ? L.maxIntervalMaxRepsPerRound : targets[event.item];
+    const raw = event.t === 'set' ? event.amount : row[event.item] + event.amount;
+    row[event.item] = clamp(raw, 0, cap);
+    lastRound = event.round;
+    lastCountedAt = lastCountedAt === null ? event.at : Math.max(lastCountedAt, event.at);
+  }
+
+  const rounds: IntervalRoundState[] = counts.map((row, index) => {
+    const fixed = row.slice(0, maxIndex);
+    const pending = fixed.findIndex((done, position) => done < targets[position]);
+    const scored = pending < 0;
+    const maxRaw = row[maxIndex];
+    return {
+      round: index + 1,
+      fixed,
+      maxRaw,
+      scored,
+      maxCounted: scored ? maxRaw : 0,
+      currentId: pending >= 0 ? String(definitions[pending]?.id ?? '') : maxId
+    };
+  });
+
+  return {
+    format: 'interval',
+    rounds,
+    ignored,
+    roundsScored: rounds.filter((round) => round.scored).length,
+    total: rounds.reduce((sum, round) => sum + round.maxCounted, 0),
+    lastRound,
+    lastCountedAt
+  };
+};
+
+/**
+ * Resultado do intervalado: a soma do máximo dos rounds que pontuaram, como
+ * número (`value`) e como texto (`display`), sem desempate, com o detalhe por
+ * round. Sem registros, 0.
+ */
+export const computeIntervalResult = (state: IntervalSheetState): IntervalSheetResult => ({
+  format: 'interval',
+  value: state.total,
+  display: String(state.total),
+  tieBreak: null,
+  roundsScored: state.roundsScored,
+  rounds: state.rounds.map((round) => ({
+    round: round.round,
+    fixed: [...round.fixed],
+    maxRaw: round.maxRaw,
+    maxCounted: round.maxCounted,
+    scored: round.scored
+  })),
+  ignoredCount: state.ignored.length
+});
+
+/**
+ * Fase da prova intervalada no segundo `seconds` do relógio da súmula (o motor
+ * aplica Math.floor; negativo vale 0). Com OFF = 0 nunca há descanso. Estrutura
+ * sem intervalado válido: `ended`. Nunca lança.
+ */
+export const intervalPhaseAt = (structure: WorkoutStructure, seconds: unknown): IntervalPhase => {
+  const clock = readIntervalClock(structure);
+  if (!clock) return { phase: 'ended' };
+  const at = readAt(seconds) ?? 0;
+  if (at >= clock.end) return { phase: 'ended' };
+  const index = Math.floor(at / clock.cycle);
+  const within = at - index * clock.cycle;
+  return within < clock.on
+    ? { phase: 'work', round: index + 1, secondsLeft: clock.on - within }
+    : { phase: 'rest', round: index + 1, secondsLeft: clock.cycle - within };
+};
+
+const INTERVAL_ENTRY_MESSAGES = {
+  format: 'Esta prova não é intervalada.',
+  rest: 'Descanso: o toque não foi aceito.',
+  ended: 'Prova encerrada: o toque não foi aceito.',
+  invalid: 'Não foi possível conferir o toque.'
+} as const;
+
+/**
+ * Porta que a súmula usa antes de gravar um toque (`rep` ou `fill`) no
+ * intervalado: aceita só dentro da janela de trabalho, com o round, e recusa
+ * no descanso e depois do fim com a mensagem para a tela. Aceita se, e
+ * somente se, deriveIntervalState contaria o registro. Nunca lança.
+ */
+export const checkIntervalEntry = (structure: WorkoutStructure, at: unknown): IntervalEntryCheck => {
+  try {
+    if (structure?.format !== 'interval' || !readIntervalClock(structure)) return fail(INTERVAL_ENTRY_MESSAGES.format);
+    if (readAt(at) === null) return fail(INTERVAL_ENTRY_MESSAGES.invalid);
+    const phase = intervalPhaseAt(structure, at);
+    if (phase.phase === 'work') return { ok: true, round: phase.round };
+    return fail(phase.phase === 'rest' ? INTERVAL_ENTRY_MESSAGES.rest : INTERVAL_ENTRY_MESSAGES.ended);
+  } catch {
+    return fail(INTERVAL_ENTRY_MESSAGES.invalid);
   }
 };

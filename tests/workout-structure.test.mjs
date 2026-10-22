@@ -140,8 +140,9 @@ test('módulo puro: sem imports, sem enum, sem alias @/ e sem depender de scorin
   assert.doesNotMatch(moduleSource, /\benum\b/);
   assert.doesNotMatch(moduleSource, /@\//);
   assert.doesNotMatch(moduleSource, /require\(/);
-  // Story 1.47: a versão do contrato passou a 2; a 1 continua aceita na entrada (ver tests/workout-structure-v2.test.mjs).
-  assert.equal(WORKOUT_STRUCTURE_VERSION, 2);
+  // Story 1.47: a versão do contrato passou a 2; Story 1.60: passou a 3. A 1 e a 2 continuam aceitas na
+  // entrada (ver tests/workout-structure-v2.test.mjs e tests/workout-structure-v3.test.mjs).
+  assert.equal(WORKOUT_STRUCTURE_VERSION, 3);
   assert.deepEqual(
     [WORKOUT_STRUCTURE_LIMITS.minReps, WORKOUT_STRUCTURE_LIMITS.maxReps, WORKOUT_STRUCTURE_LIMITS.maxSegments, WORKOUT_STRUCTURE_LIMITS.maxTimeCapSeconds],
     [1, 99, 30, 5999]
@@ -518,12 +519,14 @@ test('validação: total diferente da soma, desempate inexistente, versão, form
   rejects({ ...forTimeInput(), tieBreak: { kind: 'split_time', at: 's9', order: 'asc' } }, /^O desempate aponta para um segmento que não existe na prova\.$/);
   rejects({ ...forTimeInput(), tieBreak: { kind: 'split_time', at: 's2', order: 'desc' } }, /desempate deve ser vazio/);
   rejects({ ...forTimeInput(), tieBreak: { kind: 'reps', at: 's2', order: 'asc' } }, /desempate deve ser vazio/);
-  rejects({ ...forTimeInput(), version: 3 }, /^A versão da estrutura da prova deve ser 1 ou 2\.$/);
-  rejects({ ...forTimeInput(), version: 0 }, /^A versão da estrutura da prova deve ser 1 ou 2\.$/);
+  rejects({ ...forTimeInput(), version: 4 }, /^A versão da estrutura da prova deve ser 1, 2 ou 3\.$/);
+  rejects({ ...forTimeInput(), version: 0 }, /^A versão da estrutura da prova deve ser 1, 2 ou 3\.$/);
+  // Story 1.60: a forma da versão 1 com version 3 é recusada (a versão 3 exige o campo interval, vazio fora do intervalado).
+  rejects({ ...forTimeInput(), version: 3 }, /^O campo interval só existe em provas intervaladas: fora delas fica vazio \(null\)\.$/);
   rejects({ ...forTimeInput(), version: '1' }, /versão/);
   // Story 1.47: a forma da versão 1 com version 2 é recusada (a versão 2 exige a unidade de cada segmento).
   rejects({ ...forTimeInput(), version: 2 }, /^Segmento 1: a unidade \(unit\) deve ser reps, cal ou m\.$/);
-  rejects({ ...forTimeInput(), format: 'emom' }, /^O formato da prova deve ser for_time \(For Time\), amrap \(AMRAP\) ou max_load \(Carga máxima\)\.$/);
+  rejects({ ...forTimeInput(), format: 'emom' }, /^O formato da prova deve ser for_time \(For Time\), amrap \(AMRAP\), max_load \(Carga máxima\) ou interval \(Intervalado\)\.$/);
   rejects({ ...forTimeInput(), format: 'max_load' }, /^A versão 1 da estrutura só aceita for_time \(For Time\) ou amrap \(AMRAP\)/);
   rejects({ ...forTimeInput(), incomplete: null }, /Em For Time, a regra de não conclusão/);
   rejects({ ...forTimeInput(), incomplete: { rule: 'penalty_per_rep', secondsPerRep: 1, base: 'actual' } }, /Em For Time/);
@@ -615,9 +618,11 @@ test('validação: resultado normalizado, novo e sem a referência recebida', ()
   assert.notEqual(structure.generator.reps, input.generator.reps);
   assert.notEqual(structure.entry, input.entry);
   assert.equal(input.segments[0].name, '  Thruster  ', 'a entrada não muda');
-  // Story 1.47: a entrada na versão 1 sai normalizada na versão 2 (unidade reps, sem carga máxima).
-  assert.deepEqual(Object.keys(structure), ['version', 'format', 'totalReps', 'timeCapSeconds', 'incomplete', 'tieBreak', 'generator', 'customized', 'entry', 'segments', 'maxLoad', 'scoreDisplay']);
-  assert.equal(structure.version, 2);
+  // Story 1.47: a entrada na versão 1 sai normalizada na versão 2 (unidade reps, sem carga máxima);
+  // Story 1.60: sai na versão 3, com interval vazio.
+  assert.deepEqual(Object.keys(structure), ['version', 'format', 'totalReps', 'timeCapSeconds', 'incomplete', 'tieBreak', 'generator', 'customized', 'entry', 'segments', 'maxLoad', 'scoreDisplay', 'interval']);
+  assert.equal(structure.version, 3);
+  assert.equal(structure.interval, null);
   assert.ok(structure.segments.every((item) => item.unit === 'reps'));
   assert.equal(structure.maxLoad, null);
   assert.equal(structure.scoreDisplay, null);

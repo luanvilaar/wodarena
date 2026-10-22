@@ -1,7 +1,9 @@
 import {
   WORKOUT_STRUCTURE_LIMITS,
+  computeIntervalResult,
   computeMaxLoadResult,
   computeSheetResult,
+  deriveIntervalState,
   deriveMaxLoadState,
   deriveSheetState,
   formatWorkoutTime
@@ -67,6 +69,10 @@ const isKg = (value: unknown): value is number => (
  * Confere um evento vindo do aparelho contra a estrutura da súmula e devolve a
  * forma normalizada (só os campos do contrato) que vai para o log. `position`
  * é a posição que ele vai ocupar no log: um `undo` só pode apontar para trás.
+ * No intervalado, `set` e `adj` exigem `rd` (o round corrigido) e o levam no
+ * evento normalizado; nos outros formatos o `rd` recebido é descartado. `rep` e
+ * `fill` fora da janela de trabalho são aceitos e gravados: o motor os ignora
+ * e a súmula avisa (decisão 6 do intervalado).
  */
 export const validateClientEvent = (raw: unknown, structure: WorkoutStructure, position: number): ClientEventCheck => {
   const fail = (error: string): ClientEventCheck => ({ ok: false, error: `Registro ${position + 1}: ${error}` });
@@ -77,9 +83,19 @@ export const validateClientEvent = (raw: unknown, structure: WorkoutStructure, p
   if (!isInt(event.at, 0, MAX_EVENT_SECONDS)) return fail('instante do relógio inválido.');
   const at = event.at;
   const isMaxLoad = structure.format === 'max_load';
+  const isInterval = structure.format === 'interval';
+  const maxId = isInterval ? structure.interval?.max.id ?? null : null;
   const segmentIds = new Set(structure.segments.map((segment) => segment.id));
+  if (maxId) segmentIds.add(maxId);
   const liftIds = new Set((structure.maxLoad?.lifts ?? []).map((lift) => lift.id));
   const segment = (value: unknown) => typeof value === 'string' && segmentIds.has(value);
+  const rounds = structure.interval?.rounds ?? 0;
+  // Round da correção no intervalado; nos outros formatos não existe.
+  const correctionRound = (): { ok: true; rd?: number } | { ok: false } => {
+    if (!isInterval) return { ok: true };
+    return isInt(event.rd, 1, rounds) ? { ok: true, rd: event.rd } : { ok: false };
+  };
+  const roundError = `informe o round da correção (de 1 a ${rounds}).`;
 
   switch (event.t) {
     case 'rep':
@@ -87,22 +103,29 @@ export const validateClientEvent = (raw: unknown, structure: WorkoutStructure, p
       return { ok: true, id: raw.id, event: { t: 'rep', seg: event.seg as string, at } };
     case 'fill':
       if (isMaxLoad || !segment(event.seg)) return fail('etapa inexistente na prova.');
+      if (event.seg === maxId) return fail('o movimento máximo não tem meta a concluir.');
       if (!isInt(event.n, 0, MAX_AMOUNT)) return fail('quantidade inválida.');
       return { ok: true, id: raw.id, event: { t: 'fill', seg: event.seg as string, n: event.n, at } };
-    case 'set':
+    case 'set': {
       if (isMaxLoad || !segment(event.seg)) return fail('etapa inexistente na prova.');
       if (!isInt(event.v, 0, MAX_AMOUNT)) return fail('quantidade inválida.');
-      return { ok: true, id: raw.id, event: { t: 'set', seg: event.seg as string, v: event.v, at } };
-    case 'adj':
+      const round = correctionRound();
+      if (!round.ok) return fail(roundError);
+      return { ok: true, id: raw.id, event: { t: 'set', seg: event.seg as string, v: event.v, at, ...(round.rd ? { rd: round.rd } : {}) } };
+    }
+    case 'adj': {
       if (isMaxLoad || !segment(event.seg)) return fail('etapa inexistente na prova.');
       if (!isInt(event.d, -MAX_AMOUNT, MAX_AMOUNT) || event.d === 0) return fail('correção inválida.');
-      return { ok: true, id: raw.id, event: { t: 'adj', seg: event.seg as string, d: event.d, at } };
+      const round = correctionRound();
+      if (!round.ok) return fail(roundError);
+      return { ok: true, id: raw.id, event: { t: 'adj', seg: event.seg as string, d: event.d, at, ...(round.rd ? { rd: round.rd } : {}) } };
+    }
     case 'undo':
       if (!isInt(event.of, 0, position - 1)) return fail('o desfazer aponta para um registro inexistente.');
       return { ok: true, id: raw.id, event: { t: 'undo', of: event.of, at } };
     case 'time': {
       const cap = structure.timeCapSeconds;
-      if (isMaxLoad || typeof cap !== 'number') return fail('o ajuste do tempo não vale para esta prova.');
+      if (isMaxLoad || isInterval || typeof cap !== 'number') return fail('o ajuste do tempo não vale para esta prova.');
       if (event.target !== 'final' && event.target !== 'tiebreak') return fail('ajuste de tempo sem alvo.');
       if (!isInt(event.v, 1, cap)) return fail(`o tempo oficial deve ficar entre 00:01 e ${formatWorkoutTime(cap)}.`);
       return { ok: true, id: raw.id, event: { t: 'time', target: event.target, v: event.v, at } };
@@ -127,9 +150,22 @@ const plural = (count: number, one: string, many: string) => (count === 1 ? one 
  * O resultado a publicar, calculado do log pelo motor: o texto no formato de
  * parseScoreForWorkout (tempo, total de repetições ou kg), o valor numérico e o
  * desempate por tempo (o que vai em splits.tieBreaker). Recusa o que não pode
- * ser publicado, com a mensagem para o judge.
+ * ser publicado, com a mensagem para o judge. No intervalado, o total de
+ * repetições do máximo nos rounds que pontuaram, sem desempate; enviar sem
+ * registros publica 0.
  */
 export const computeSheetOutcome = (structure: WorkoutStructure, events: readonly SheetEvent[]): SheetOutcome => {
+  if (structure.format === 'interval') {
+    const result = computeIntervalResult(deriveIntervalState(structure, events));
+    const rounds = result.rounds.length;
+    return {
+      ok: true,
+      result: result.display,
+      value: result.value,
+      tieBreak: null,
+      summary: `${result.value} ${plural(result.value, 'repetição', 'repetições')} em ${rounds} ${plural(rounds, 'round', 'rounds')} (${result.roundsScored} ${plural(result.roundsScored, 'pontuou', 'pontuaram')})`
+    };
+  }
   if (structure.format === 'max_load') {
     const state = deriveMaxLoadState(structure, events);
     if (state.attemptsUsed === 0) return { ok: false, error: 'Registre ao menos uma tentativa antes de enviar.' };
@@ -179,12 +215,17 @@ export const ABSENT_OUTCOME_TOO_LONG = 'O resultado de ausência desta prova pas
  * copiada na súmula, nunca do aparelho. For Time e AMRAP saem do motor com o
  * log vazio (o mesmo de computeSheetOutcome(structure, [])): For Time = time
  * cap + total de repetições × segundos por repetição; AMRAP = 0 repetições.
- * Carga máxima = 0 kg. Sem desempate nos três formatos. O ranking põe o
- * ausente depois de qualquer resultado real (result_status = 'absent').
+ * Carga máxima = 0 kg. Intervalado = 0 repetições (o motor com o log vazio).
+ * Sem desempate em nenhum formato. O ranking põe o ausente depois de qualquer
+ * resultado real (result_status = 'absent').
  */
 export const computeAbsentOutcome = (structure: WorkoutStructure): SheetOutcome => {
   if (structure.format === 'max_load') {
     return { ok: true, result: '0', value: 0, tieBreak: null, summary: 'Atleta ausente · 0 kg' };
+  }
+  if (structure.format === 'interval') {
+    const result = computeIntervalResult(deriveIntervalState(structure, []));
+    return { ok: true, result: result.display, value: result.value, tieBreak: null, summary: `Atleta ausente · ${result.display} repetições` };
   }
   const result = computeSheetResult(structure, deriveSheetState(structure, []));
   if (result.format === 'amrap') {

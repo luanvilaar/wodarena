@@ -678,3 +678,63 @@ test('carga máxima sem janela com o payload real do painel (time_cap null): cri
   const forTime = derive(editor.analyzeDraft(editor.updateLine(editor.createDraft('for_time'), 'forTime', 'k1', { reps: '21-15-9', name: 'Thruster' })).structure);
   assert.equal(forTime.timeCap, '10:00');
 });
+
+// ---------------------------------------------------------------------------
+// Story 1.60: prova intervalada (contrato v3), sem migration
+// ---------------------------------------------------------------------------
+
+const intervalStructure = (overrides = {}) => ({
+  version: 3, format: 'interval', totalReps: 21, timeCapSeconds: 1080, incomplete: null, tieBreak: null, generator: null, customized: true,
+  entry: { mode: 'both', marking: 'reps', publish: 'after_review' },
+  segments: [
+    { id: 'f1', round: 1, name: 'Ring Muscle Up', reps: 6, unit: 'reps', load: null, note: '', required: true, mark: 'reps' },
+    { id: 'f2', round: 1, name: 'Box Jump Over', reps: 15, unit: 'reps', load: null, note: '24/20 in', required: true, mark: 'reps' }
+  ],
+  maxLoad: null, scoreDisplay: null,
+  interval: { rounds: 5, onSeconds: 120, offSeconds: 120, max: { id: 'mx', name: 'Squat Clean', load: { value: 80, unit: 'kg' }, note: '' } },
+  ...overrides
+});
+
+test('intervalado: a rota grava e edita a estrutura v3, deriva reps, 18:00 e sem desempate, e recusa divergência dos legados', async (t) => {
+  quietConsole(t);
+  seed();
+  const created = await persist(MANAGER, 'createWorkout', createWorkoutPayload({ id: 'wod-int', name: 'Intervalado', description: 'x', code: 'W2', order_index: 2, structure: intervalStructure() }));
+  assert.deepEqual(created, { status: 200, body: { success: true } });
+  const saved = rowOf('wod-int');
+  assert.deepEqual(saved.structure, validateWorkoutStructure(intervalStructure()).structure);
+  assert.equal(saved.structure.version, 3);
+  assert.deepEqual([saved.type, saved.time_cap, saved.tie_breaker], ['reps', '18:00', '']);
+  assert.deepEqual(deriveLegacyWorkoutFields(saved.structure), { type: 'reps', timeCap: '18:00', tieBreaker: '' });
+
+  // Legado igual ao derivado passa; divergente é recusado com a mesma mensagem de hoje, com o rótulo do intervalado.
+  assert.equal((await persist(MANAGER, 'createWorkout', createWorkoutPayload({ id: 'wod-int-2', name: 'Intervalado 2', structure: intervalStructure(), type: 'reps', time_cap: '18:00', tie_breaker: '' }))).status, 200);
+  const before = database.snapshot();
+  const cases = [
+    [{ type: 'fortime' }, /^O tipo da prova vem da estrutura \(Intervalado\) e não pode ser alterado separadamente\.$/],
+    [{ time_cap: '20:00' }, /^O time cap da prova vem da estrutura \(18:00\) e não pode ser alterado separadamente\.$/],
+    [{ tie_breaker: 'Tempo' }, /^O desempate da prova vem da estrutura \(sem desempate\) e não pode ser alterado separadamente\.$/]
+  ];
+  for (const [legacy, message] of cases) {
+    const create = await persist(MANAGER, 'createWorkout', createWorkoutPayload({ id: 'wod-int-3', name: 'Prova', structure: intervalStructure(), ...legacy }));
+    assert.equal(create.status, 400, JSON.stringify(legacy));
+    assert.match(create.body.error, message);
+    const update = await persist(MANAGER, 'updateWorkout', updateWorkoutPayload(legacy, 'wod-int'));
+    assert.equal(update.status, 400, JSON.stringify(legacy));
+    assert.match(update.body.error, message);
+  }
+  assert.deepEqual(database.snapshot(), before, 'nada gravado nas recusas');
+
+  // Editar: a prova intervalada muda de rounds e a duração derivada acompanha; inválida (duração ≠ soma) é recusada.
+  const edited = intervalStructure({ timeCapSeconds: 840, interval: { ...intervalStructure().interval, rounds: 4 } });
+  assert.equal((await persist(MANAGER, 'updateWorkout', updateWorkoutPayload({ structure: edited }, 'wod-int'))).status, 200);
+  assert.deepEqual([rowOf('wod-int').structure.interval.rounds, rowOf('wod-int').time_cap, rowOf('wod-int').type], [4, '14:00', 'reps']);
+  const wrongCap = await persist(MANAGER, 'updateWorkout', updateWorkoutPayload({ structure: intervalStructure({ timeCapSeconds: 1200 }) }, 'wod-int'));
+  assert.equal(wrongCap.status, 400);
+  assert.match(wrongCap.body.error, /deve ser igual à duração da prova \(18:00\)/);
+  assert.doesNotMatch(wrongCap.body.error, /\{|"version"/);
+});
+
+test('intervalado: o selo da página pública segue vindo do tipo legado (Reps), sem mudança de componente', () => {
+  assert.match(read('../src/messages/pt-br.json'), /"typeReps": "Reps"/);
+  assert.match(read('../src/app/[locale]/event/[id]/EventView.tsx'), /wod\.type === 'maxweight' \? 'typeMaxWeight' : 'typeReps'/);
+});

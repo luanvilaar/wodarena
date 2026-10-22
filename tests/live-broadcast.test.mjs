@@ -781,3 +781,84 @@ test('página do telão: fora dos buscadores, sem referer e com o desenho aprova
   const admin = read('../src/app/admin/page.tsx');
   assert.match(admin, /\{activeEventTab === 'broadcast' && \(selectedEventToManage\.eventType \|\| 'functional_fitness'\) === 'functional_fitness' && <BroadcastPanel event=\{selectedEventToManage\} \/>\}/);
 });
+
+// ---------------------------------------------------------------------------
+// Story 1.60: progresso ao vivo do intervalado (para o telão da Story 1.63)
+// ---------------------------------------------------------------------------
+
+const { describeWorkoutForBoard } = await importServerModule('lib/serverBroadcast.ts');
+const INTERVAL = validateWorkoutStructure({
+  version: 3, format: 'interval', totalReps: 21, timeCapSeconds: 1080, incomplete: null, tieBreak: null, generator: null, customized: true,
+  entry: { mode: 'both', marking: 'reps', publish: 'after_review' },
+  segments: [segment('f1', 1, 'Ring Muscle Up', 6), segment('f2', 1, 'Box Jump Over', 15)],
+  maxLoad: null, scoreDisplay: null,
+  interval: { rounds: 5, onSeconds: 120, offSeconds: 120, max: { id: 'mx', name: 'Squat Clean', load: { value: 80, unit: 'kg' }, note: '' } }
+}).structure;
+
+test('progresso ao vivo do intervalado: parcial pelo motor, round do último registro que conta e lastMarkAt sem os de fora da janela', () => {
+  const start = '2026-11-01T13:00:00.000Z';
+  const empty = summarizeLiveProgress(INTERVAL, [], start);
+  assert.deepEqual(
+    [empty.seq, empty.repsDone, empty.roundsCompleted, empty.segments, empty.currentSegmentId, empty.round, empty.lastMarkAt],
+    [0, 0, 0, [0, 0], 'f1', null, null]
+  );
+
+  const round1 = [
+    { t: 'fill', seg: 'f1', n: 6, at: 15 }, { t: 'fill', seg: 'f2', n: 15, at: 45 },
+    { t: 'rep', seg: 'mx', at: 60 }, { t: 'rep', seg: 'mx', at: 70 }, { t: 'rep', seg: 'mx', at: 119 }
+  ];
+  const afterRound1 = summarizeLiveProgress(INTERVAL, round1, start);
+  assert.deepEqual(
+    [afterRound1.repsDone, afterRound1.roundsCompleted, afterRound1.segments, afterRound1.currentSegmentId, afterRound1.round, afterRound1.lastMarkAt],
+    [3, 1, [6, 15], 'mx', 1, 119]
+  );
+
+  // Um toque no descanso não conta: nem no parcial, nem no round, nem na chegada.
+  const withRest = summarizeLiveProgress(INTERVAL, [...round1, { t: 'rep', seg: 'mx', at: 130 }], start);
+  assert.deepEqual([withRest.seq, withRest.repsDone, withRest.round, withRest.lastMarkAt], [6, 3, 1, 119]);
+
+  // O round muda no primeiro registro do round seguinte.
+  const round2 = summarizeLiveProgress(INTERVAL, [...round1, { t: 'rep', seg: 'mx', at: 130 }, { t: 'rep', seg: 'f1', at: 250 }], start);
+  assert.deepEqual(
+    [round2.repsDone, round2.roundsCompleted, round2.segments, round2.currentSegmentId, round2.round, round2.lastMarkAt],
+    [3, 1, [1, 0], 'f1', 2, 250]
+  );
+  assert.deepEqual(
+    [round2.completedAt, round2.scoreKg, round2.attemptsUsed, round2.currentLiftId, round2.clockStartAt],
+    [null, null, null, null, start]
+  );
+  assert.deepEqual(readLiveProgress(JSON.parse(JSON.stringify(round2))), round2, 'o JSON gravado volta igual, com o round');
+
+  // Fora do intervalado o round fica vazio e o resto não muda.
+  assert.equal(summarizeLiveProgress(FRAN, [{ t: 'rep', seg: 's1', at: 3 }], start).round, null);
+});
+
+test('readLiveProgress: resumo antigo sem round vale null; round só passa quando é inteiro positivo', () => {
+  const old = { seq: 3, repsDone: 23, roundsCompleted: 0, segments: [21, 2, 0, 0, 0, 0], currentSegmentId: 's2', completedAt: null, lastMarkAt: 133, scoreKg: null, attemptsUsed: null, currentLiftId: null, clockStartAt: null };
+  assert.equal(readLiveProgress(old).round, null);
+  assert.deepEqual({ ...readLiveProgress(old), round: undefined }, { ...old, round: undefined }, 'o resto segue como era');
+  assert.equal(readLiveProgress({ ...old, round: 3 }).round, 3);
+  for (const round of [0, -1, 2.5, '2', null]) assert.equal(readLiveProgress({ ...old, round }).round, null, String(round));
+});
+
+test('ordem parcial do intervalado: mais repetições, depois quem chegou antes ao último registro que conta', () => {
+  const p = (repsDone, lastMarkAt, extra = {}) => ({ seq: 1, repsDone, roundsCompleted: 0, segments: [], currentSegmentId: null, completedAt: null, lastMarkAt, scoreKg: null, attemptsUsed: null, currentLiftId: null, clockStartAt: null, round: 1, ...extra });
+  const ranked = rankLiveEntries('interval', [
+    { id: 'a', lane: 1, progress: p(23, 900) },
+    { id: 'b', lane: 2, progress: p(40, 1000) },
+    { id: 'c', lane: 3, progress: p(40, 990) },
+    { id: 'd', lane: 4, progress: null },
+    { id: 'e', lane: 5, progress: p(23, 900, { completedAt: 100 }) }
+  ]);
+  assert.deepEqual(ranked.map((entry) => [entry.id, entry.position]), [['c', 1], ['b', 2], ['a', 3], ['e', 3], ['d', null]], 'completedAt não conta fora do For Time');
+
+  // Os resumos do motor entram direto.
+  const fast = summarizeLiveProgress(INTERVAL, [{ t: 'fill', seg: 'f1', n: 6, at: 10 }, { t: 'fill', seg: 'f2', n: 15, at: 30 }, { t: 'rep', seg: 'mx', at: 40 }], null);
+  const slow = summarizeLiveProgress(INTERVAL, [{ t: 'fill', seg: 'f1', n: 6, at: 10 }, { t: 'fill', seg: 'f2', n: 15, at: 30 }, { t: 'rep', seg: 'mx', at: 80 }], null);
+  assert.deepEqual(rankLiveEntries('interval', [{ id: 's', lane: 1, progress: slow }, { id: 'f', lane: 2, progress: fast }]).map((entry) => entry.id), ['f', 's']);
+});
+
+test('telão: describeWorkoutForBoard aceita a prova intervalada sem lançar (os rótulos são da Story 1.63)', () => {
+  const board = describeWorkoutForBoard({ name: 'Intervalado', code: 'W1' }, INTERVAL);
+  assert.deepEqual([board.format, board.timeCapSeconds, board.segments.map((item) => item.id)], ['interval', 1080, ['f1', 'f2']]);
+});

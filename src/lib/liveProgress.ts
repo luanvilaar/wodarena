@@ -1,4 +1,4 @@
-import { deriveMaxLoadState, deriveSheetState } from '@/lib/workoutStructure';
+import { deriveIntervalState, deriveMaxLoadState, deriveSheetState } from '@/lib/workoutStructure';
 import type { WorkoutStructure } from '@/lib/workoutStructure';
 
 // Progresso ao vivo da súmula para o telão (Story 1.54). Puro e sem DOM: o
@@ -9,12 +9,15 @@ import type { WorkoutStructure } from '@/lib/workoutStructure';
 export type LiveProgress = {
   /** Registros no log quando o resumo foi feito. */
   seq: number;
-  /** Total feito (no AMRAP, rounds completos × round + parcial). */
+  /** Total feito (no AMRAP, rounds completos × round + parcial; no intervalado, a soma do máximo dos rounds que pontuaram). */
   repsDone: number;
+  /** No intervalado, os rounds que pontuaram. */
   roundsCompleted: number;
-  /** Feito em cada segmento (no AMRAP, no round em andamento), na ordem da prova. */
+  /** Feito em cada segmento (no AMRAP, no round em andamento; no intervalado, os fixos do round de `round`), na ordem da prova. */
   segments: number[];
   currentSegmentId: string | null;
+  /** Só no intervalado: o round a que `segments` e `currentSegmentId` se referem (o do último registro que conta); null fora dele e sem registro. Opcional: resumos antigos não têm. */
+  round?: number | null;
   /** For Time concluído: segundos do relógio da súmula. */
   completedAt: number | null;
   /** Instante (s) do último registro que conta: a "chegada" para desempatar o parcial. */
@@ -63,7 +66,28 @@ export const summarizeLiveProgress = (
   clockStartAt: string | null
 ): LiveProgress => {
   const timed = events as readonly TimedEvent[];
-  const base = { seq: events.length, lastMarkAt: lastMark(timed), clockStartAt };
+  if (structure?.format === 'interval') {
+    // Pelo motor do intervalado: registro fora da janela não conta nem como chegada.
+    const state = deriveIntervalState(structure, events);
+    const current = state.lastRound !== null ? state.rounds[state.lastRound - 1] : null;
+    const fixed = Array.isArray(structure.segments) ? structure.segments : [];
+    const firstId = fixed[0]?.id ?? structure.interval?.max?.id ?? null;
+    return {
+      seq: events.length,
+      lastMarkAt: state.lastCountedAt,
+      clockStartAt,
+      repsDone: state.total,
+      roundsCompleted: state.roundsScored,
+      segments: current ? [...current.fixed] : fixed.map(() => 0),
+      currentSegmentId: current ? current.currentId : firstId,
+      round: state.lastRound,
+      completedAt: null,
+      scoreKg: null,
+      attemptsUsed: null,
+      currentLiftId: null
+    };
+  }
+  const base = { seq: events.length, lastMarkAt: lastMark(timed), clockStartAt, round: null };
   if (structure?.format === 'max_load') {
     const state = deriveMaxLoadState(structure, events);
     return {
@@ -113,6 +137,8 @@ export const readLiveProgress = (raw: unknown): LiveProgress | null => {
     scoreKg: (value.scoreKg ?? null) as number | null,
     attemptsUsed: (value.attemptsUsed ?? null) as number | null,
     currentLiftId: typeof value.currentLiftId === 'string' ? value.currentLiftId : null,
-    clockStartAt: typeof value.clockStartAt === 'string' ? value.clockStartAt : null
+    clockStartAt: typeof value.clockStartAt === 'string' ? value.clockStartAt : null,
+    // Campo opcional do intervalado (Story 1.60): resumo antigo, sem ele, vale null.
+    round: Number.isInteger(value.round) && (value.round as number) > 0 ? value.round as number : null
   };
 };

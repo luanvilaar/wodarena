@@ -31,7 +31,7 @@ const segment = (
 const ENTRY = { mode: 'both', marking: 'reps', publish: 'after_review' } as const;
 
 const FOR_TIME: WorkoutStructure = {
-  version: 2,
+  version: 3,
   format: 'for_time',
   totalReps: 90,
   timeCapSeconds: 600,
@@ -49,11 +49,12 @@ const FOR_TIME: WorkoutStructure = {
     segment('s6', 3, 'Pull-up', 9, null)
   ],
   maxLoad: null,
-  scoreDisplay: null
+  scoreDisplay: null,
+  interval: null
 };
 
 const UNITS: WorkoutStructure = {
-  version: 2,
+  version: 3,
   format: 'for_time',
   totalReps: 550,
   timeCapSeconds: 900,
@@ -68,11 +69,12 @@ const UNITS: WorkoutStructure = {
     segment('u3', 1, 'Burpee', 20, null)
   ],
   maxLoad: null,
-  scoreDisplay: null
+  scoreDisplay: null,
+  interval: null
 };
 
 const AMRAP: WorkoutStructure = {
-  version: 2,
+  version: 3,
   format: 'amrap',
   totalReps: 30,
   timeCapSeconds: 720,
@@ -87,11 +89,12 @@ const AMRAP: WorkoutStructure = {
     segment('s3', 1, 'Burpee', 10, null)
   ],
   maxLoad: null,
-  scoreDisplay: 'rounds_reps'
+  scoreDisplay: 'rounds_reps',
+  interval: null
 };
 
 const MAX_LOAD: WorkoutStructure = {
-  version: 2,
+  version: 3,
   format: 'max_load',
   totalReps: 0,
   timeCapSeconds: 1200,
@@ -111,7 +114,8 @@ const MAX_LOAD: WorkoutStructure = {
     scoring: 'sum',
     loadStepKg: 2.5
   },
-  scoreDisplay: null
+  scoreDisplay: null,
+  interval: null
 };
 
 const FIXTURES = {
