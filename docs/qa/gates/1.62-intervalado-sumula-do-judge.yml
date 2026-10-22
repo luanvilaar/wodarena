@@ -66,7 +66,7 @@ evidence:
       AC10: 'Tile com min-h-36 (9 rem). Todos os botões visíveis da súmula têm 44 px ou mais, e o − e o + têm 48 px (medido em 390 e 1280 px). O foco por teclado no tile mostra outline sólido de 2px #1e5ccb, com contraste 6,09:1 contra o fundo. Contraste no court-light: selo de trabalho 5,16:1, de descanso 14,74:1, de encerrada 6,27:1, e textos muted com cerca de 8,6:1. Com prefers-reduced-motion: reduce, a transição do marcador cai de 0,2 s para 0. Não há som nem chamada de vibração no componente (teste estático). O useTapHold já vibrava antes desta story.'
       AC11: 'O QA rodou npm test (944/944), lint (0 erros), typecheck (verde) e de novo os 4 arquivos de teste da súmula (79/79). O npm run build não foi rodado pelo QA. Na conferência no navegador, o caso do atleta A dá 23, com recusa no descanso e correção por round (58/58 verificações em 390 e em 1280 px).'
   gate_commands:
-    npm_test: '944/944, rodado pelo QA. Durante a revisão, a 1.63 apareceu na árvore (broadcast*, live-broadcast.test.mjs) e depois foi commitada (38d36a5). Os arquivos da 1.62 estão idênticos ao 97775b8, e os testes da súmula (sheet-view-interval, sheet-view, court-ui, workout-structure-editor-ui) foram rodados de novo: 79/79.'
+    npm_test: '944/944, rodado pelo QA. Durante a revisão, a 1.63 apareceu na árvore (broadcast*, live-broadcast.test.mjs) e depois foi commitada (9dfd8a0). Os arquivos da 1.62 estão idênticos ao 97775b8, e os testes da súmula (sheet-view-interval, sheet-view, court-ui, workout-structure-editor-ui) foram rodados de novo: 79/79.'
     npm_run_lint: '0 erros e 209 warnings, todos antigos. npx eslint nos 9 arquivos de código e teste da story: 0 problemas.'
     npm_run_typecheck: 'verde, rodado pelo QA.'
     npm_run_build: 'Não rodado pelo QA: o npm run dev do usuário estava no ar em :3000. O @dev registrou build verde.'
@@ -104,7 +104,7 @@ test_quality:
 
 observations_for_next_stories:
   - story: '1.63'
-    note: 'A 1.62 fecha o REL-001 da 1.61: 1.60, 1.61 e 1.62 podem ir juntas. A 1.63 (telão) foi commitada durante esta revisão (38d36a5) e ainda não passou pelo gate. Antes dela, o BroadcastScreen rotulava o intervalado como "For Time". Por isso o melhor é publicar 1.60 a 1.63 juntas, depois do gate da 1.63.'
+    note: 'A 1.62 fecha o REL-001 da 1.61: 1.60, 1.61 e 1.62 podem ir juntas. A 1.63 (telão) foi commitada durante esta revisão (9dfd8a0) e ainda não passou pelo gate. Antes dela, o BroadcastScreen rotulava o intervalado como "For Time". Por isso o melhor é publicar 1.60 a 1.63 juntas, depois do gate da 1.63.'
   - story: 'a11y'
     note: 'REQ-001 vale para a súmula de For Time também (SheetView.tsx:356). Resolver nas duas de uma vez.'
 

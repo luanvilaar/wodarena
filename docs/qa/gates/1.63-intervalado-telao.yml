@@ -1,0 +1,117 @@
+schema: 1
+story: '1.63'
+story_title: 'Intervalado: Telão'
+gate: PASS
+status_reason: 'Os ACs 1 a 8 têm evidência no código, nos testes e no navegador. Round e fase vêm do intervalPhaseAt da 1.60, e a paridade com a súmula foi testada em 0, 119, 120, 250, 1079 e 1080. O motor e a súmula não mudaram, e os outros formatos não regrediram. Os cinco achados são LOW: título cortado no cabeçalho, teste sem efeito, lacuna da 1.59, cast duplo e hash errado em documento.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-10-22T12:00:00-03:00'
+expires: '2026-11-05T12:00:00-03:00'
+quality_score: 92
+
+top_issues:
+  - id: REQ-001
+    severity: low
+    finding: 'Na bateria ao vivo do intervalado, a contagem regressiva (3cqw) e a linha "Depois do round 4 de 5 · Descanso" (1.15cqw, nowrap) ocupam cerca de 25cqw a mais no cabeçalho, e quem perde espaço é o título da prova (.title com ellipsis). No navegador, em 1920x1080 e 1280x720, com evento "Open de Verão Litoral Norte 2026", prova "Squat Clean Intervalado" e bateria com duas categorias ("RX Masculino · RX Feminino"), o título aparece como "W1 · Squat Clean Int…". Com os mesmos nomes no For Time, o título cabe inteiro. Com nomes curtos ("W1 · Intervalado", "RX"), nada é cortado. A fase, o round e a contagem nunca são cortados. É o risco R3 da story; o @dev conferiu só com nomes curtos.'
+    refs: ['src/components/broadcast/Broadcast.module.css:55', 'src/components/broadcast/Broadcast.module.css:56', 'src/components/broadcast/BroadcastScreen.tsx:585', 'src/components/broadcast/BroadcastScreen.tsx:586']
+    suggested_owner: ux-design-expert
+    suggested_action: 'Decidir o arranjo do cabeçalho no intervalado. Opções: a contagem dentro da coluna do relógio (sem bloco próprio), a linha da fase em duas linhas, ou o título com prioridade sobre a categoria. É uma mudança só de CSS e marcação.'
+  - id: TEST-001
+    severity: low
+    finding: 'O trecho "Telão sem a coluna absent" do teste pelas rotas apaga row.absent das súmulas em memória e confere que o telão responde. Não testa nada: o SHEET_SELECT do telão não lê absent, e o fakeSupabase descarta coluna ausente em silêncio, sem o erro 42703. Quando a T7 da 1.59 puser absent no SELECT do telão, este teste não vai pegar a falha de coluna ausente. A própria 1.59 avisa que esse caso precisa do erro injetado por um invólucro.'
+    refs: ['tests/live-broadcast.test.mjs:1048', 'src/lib/serverBroadcast.ts:242', 'docs/stories/1.59.story.md:224']
+    suggested_owner: dev
+    suggested_action: 'Na T7 da 1.59, trocar por um teste com o erro de coluna ausente injetado (o invólucro já usado nos testes da súmula). Até lá, deixar claro no comentário que hoje o telão não lê absent.'
+  - id: REQ-002
+    severity: low
+    finding: 'Achado do @dev confirmado, e é lacuna da Story 1.59, não da 1.63. A raia "Ausente" e o selo "Ausente" no geral do telão (AC9 e T7 da 1.59) não existem no código: não há nenhuma ocorrência de absent em serverBroadcast.ts, BroadcastScreen.tsx, broadcastPayload.ts ou broadcastMode.ts, e o 875ec2c não tocou nesses arquivos. A 1.59 está InProgress, com AC9 e T7 abertos. Por isso o REQ-7 e o AC6 da 1.63 ("o selo Ausente do telão já existe / segue valendo") partem de uma premissa falsa. Efeito no intervalado: o ausente aparece na bateria como "0 · Oficial" e no geral como "Nº 0", sem selo, como um atleta que fez 0.'
+    refs: ['docs/stories/1.59.story.md:116', 'docs/stories/1.59.story.md:279', 'docs/stories/1.63.story.md:36', 'docs/stories/1.63.story.md:71']
+    suggested_owner: po
+    suggested_action: '@po/@sm: manter AC9 e T7 na 1.59 (ou separar numa story do telão) e corrigir o texto do REQ-7 da 1.63. Nenhuma correção é pedida na 1.63.'
+  - id: MNT-001
+    severity: low
+    finding: 'broadcastIntervalPhase monta uma WorkoutStructure parcial (só o bloco interval) com cast duplo (as Pick<…> as WorkoutStructure) para chamar intervalPhaseAt. Hoje funciona porque readIntervalClock só lê structure.interval. Se o motor passar a exigir format === ''interval'', o telão mostraria "Prova encerrada" o tempo todo. O teste de paridade com intervalPhaseAt(REF) pega essa regressão.'
+    refs: ['src/lib/broadcastPayload.ts:150', 'src/lib/broadcastPayload.ts:151']
+    suggested_owner: dev
+    suggested_action: 'Opcional. Numa story que já mexa no motor, exportar uma variante de intervalPhaseAt que receba só o bloco do intervalado e tirar o cast. Até lá, manter o teste de paridade.'
+  - id: DOC-001
+    severity: low
+    finding: 'O gate da 1.62 (observations_for_next_stories) cita o commit da 1.63 como 38d36a5, que não existe no repositório. O commit certo é 9dfd8a0.'
+    refs: ['docs/qa/gates/1.62-intervalado-sumula-do-judge.yml:69', 'docs/qa/gates/1.62-intervalado-sumula-do-judge.yml:107']
+    suggested_owner: qa
+    suggested_action: 'Corrigir o hash no próximo toque nesse gate. Não afeta código.'
+waiver: { active: false }
+
+evidence:
+  tests_reviewed: 7
+  risks_identified: 5
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8]
+    ac_gaps: []
+    ac_evidence:
+      AC1: 'serverBroadcast.ts:283 describeIntervalSpec devolve o bloco só no formato interval: rounds, onSeconds, offSeconds e max {id, name, loadKg}. Fora dele devolve null. capBoardLines (:276) reserva a última linha para o máximo. Com 9 fixos, saem 6 linhas, "+ 3 etapas" e "Máx. Squat Clean 80 kg". O corte dos outros formatos continua em 7 linhas e "+ N etapas" (teste com 10 fixos no For Time). Os segmentos são só os fixos. timeCapSeconds é 1080. O round entra na raia só no intervalado (:688). Pelas rotas, o JSON público não traz telefone, e-mail, ids de atleta nem judge. No navegador, a chamada mostra o máximo depois do corte.'
+      AC2: 'formatLabel tem "Intervalado". capWord dá "Duração" para AMRAP e intervalado, e "Janela" e "Time cap" como antes. intervalSchemeText produz "5 rounds · 02:00 ON / 02:00 OFF". No navegador: chamada com "W1 · INTERVALADO" e "Duração 18:00". "time cap" nunca aparece no intervalado: antes da largada sai "de 18:00", e depois do fim, "Prova encerrada". For Time segue com "Time cap 10:00", AMRAP com "Duração 20:00" e carga máxima com "Janela 20:00".'
+      AC3: 'CallBoard mostra rótulo, esquema (.scheme), linhas dos fixos, linha do máximo e "Duração 18:00". Lista de raias, "4 de 6 judges prontos" e "Horário previsto no cronograma: 09:00" não mudaram, conferido no navegador em 1920 e 1280.'
+      AC4: 'BroadcastScreen.tsx:513 calcula broadcastIntervalPhase(liveSpec, elapsed) com o elapsed do cabeçalho (startedAt e hora do servidor), que chama intervalPhaseAt (broadcastPayload.ts:151). O telão não faz conta própria: o teste estático exige a ausência de onSeconds e offSeconds no BroadcastScreen. A paridade com intervalPhaseAt(REF) foi testada em 0, 119, 120, 250, 1079, 1080, 5000 e 119,75. No navegador, com o relógio congelado no segundo exato: 00:00 "Round 1 de 5 · Trabalho" com 02:00; 01:59 com 00:01; 02:00 "Depois do round 1 de 5 · Descanso" com 02:00; 04:10 "Round 2 de 5" com 01:50; 15:00 "Depois do round 4 de 5 · Descanso"; 17:59 "Round 5 de 5" com 00:01; 18:00 "Prova encerrada", sem contagem, e o relógio parado em 18:00 também aos 25:00. Com OFF 00:00, o teste varre de 0 a 599 s e nunca aparece "Descanso"; no navegador, 02:00 dá "Round 2 de 5 · Trabalho". Antes da largada, "--:--" e "de 18:00".'
+      AC5: 'describeEntry: valor parcial com "reps", e "–" sem unidade na raia aguardando. Mostra "Máx. {movimento}" quando o movimento da vez é o máximo e "{fixo} · faltam N" nos fixos, sem linha de round por raia. intervalLaneProgress esvazia a barra quando o round da raia é menor que o da fase (em trabalho ou descanso). No navegador, aos 04:10 com resumos do round 1, a barra fica vazia e aparece "6 Ring Muscle Ups · faltam 6". No descanso, a barra é a do round que fechou; aos 17:54, a raia do round 4 fica com a barra vazia. Sem fixos não há barra. Depois do fim, o valor final; a raia enviada mostra "35 · Oficial".'
+      AC6: 'rankLiveEntries no ramo padrão: repsDone e depois o último registro (teste pelas rotas: Inês 59 s à frente de Iara 60 s). Vantagem "+N reps" (navegador: +2, +3, +5). No geral, "1º 35 / 1º 35 / 3º 17", com o empate dividindo a posição (teste e navegador). O telão responde sem a coluna absent, mas veja o TEST-001. "Selo Ausente segue valendo" não tem o que preservar: veja o REQ-002, que é lacuna da 1.59.'
+      AC7: 'A contagem tem 3cqw (57,6 px em 1920; 38,4 px em 1280), amarela, com rótulo em texto ("RESTAM NO ROUND" e "PRÓXIMO ROUND EM"). A fase tem 1.15cqw, peso 700 e cor foreground (22 px em 1920), maior que o subtítulo antigo (0.95cqw). O painel continua com aria-live="off". Com o relógio local andando e a hora do servidor avançando, o cabeçalho passou 01:59 → 02:00 → 02:01 … 02:05, segundo a segundo. Em 6 s houve 6 requisições a /api/telao, que é o LIVE_POLL_MS de 1 s, e nenhuma outra requisição de rede. Não há som nem vibração. Com prefers-reduced-motion: reduce, a animação do selo AO VIVO cai de 1,4 s para 0,01 ms (regra de .stage), e os blocos novos não têm animação.'
+      AC8: 'O QA rodou npm test (950/950), npm run lint (0 erros e 209 warnings antigos; npx eslint nos 4 arquivos da story deu 0) e npm run typecheck (verde). npm run build não foi rodado pelo QA; o @dev registrou build verde. O navegador conferiu a prova de referência: chamada, round 1 em trabalho, descanso, round 5 perto do fim, fim e geral.'
+  gate_commands:
+    npm_test: '950/950, rodado pelo QA. tests/live-broadcast.test.mjs: 35/35, com 6 testes novos da 1.63.'
+    npm_run_lint: '0 erros e 209 warnings, todos antigos. npx eslint em broadcastPayload.ts, serverBroadcast.ts, BroadcastScreen.tsx e live-broadcast.test.mjs: 0 problemas.'
+    npm_run_typecheck: 'verde, rodado pelo QA.'
+    npm_run_build: 'Não rodado pelo QA: o npm run dev do usuário estava no ar em :3000, e o next build escreveria na mesma .next. O @dev registrou build verde.'
+    coderabbit: 'Não rodado de novo pelo QA. O @dev registrou review_completed, 0 findings e os 6 arquivos (base-commit 9fada9a).'
+    migration: 'nenhuma'
+  contract_untouched: 'git diff 9dfd8a0~1 9dfd8a0 em workoutStructure.ts, scoresheet.ts, IntervalSheetView.tsx, liveProgress.ts, liveHeatRanking.ts e broadcastMode.ts: vazio. O commit toca só broadcastPayload.ts, serverBroadcast.ts, BroadcastScreen.tsx, Broadcast.module.css, o teste e a story.'
+  browser_check: 'Chrome headless pelo DevTools Protocol na página real /pt-br/telao/qa-demo-token-163, com o npm run dev do usuário. GET /api/telao/* foi respondido no próprio navegador (Fetch.fulfillRequest) com payloads de demonstração no formato BroadcastPayload; nada chegou à API nem ao banco. Date.now foi congelado para cair no segundo exato. Testado em 1920x1080 e 1280x720: chamada (normal e com 9 fixos), antes da largada, 0, 79, 119,75, 120, 204, 250, 900, 1074, 1079, 1080 e 1500 s, OFF 00:00 (119 e 120 s), 12 rounds com nomes longos, prova só com o máximo e geral. Regressão: For Time (ao vivo, cap e chamada), AMRAP (ao vivo e chamada) e Carga máxima (ao vivo e chamada). Também: relógio andando com 6 requisições em 6 s, reduced motion e console. Sem o congelamento, o console fica limpo. Com o Date.now congelado aparece um erro de hidratação, que é artefato do teste (o horário do SSR difere do relógio congelado).'
+  not_verified: 'O telão pelo link real de um evento com súmulas no banco: o banco único é o de produção. O caminho do servidor ficou só com o teste pelas rotas, que usa o banco em memória. Também não foram conferidos: TV física e distância real de leitura; leitor de tela real (o aria-live="off" foi visto só na marcação); npm run build; CodeRabbit (não rodado de novo); comparação lado a lado com a maquete do telão (docs/design/telao-ao-vivo), já que a maquete do intervalado só lista o que muda, sem desenho próprio da fase.'
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: 'O payload público ganha só dados da prova (rounds, ON, OFF, nome, id e carga do máximo) e o round inteiro de cada raia. Nenhum dado de pessoa novo: o teste pelas rotas confere a ausência de telefone, e-mail, ids de atleta e judge. Sem rota, migration ou RLS nova.'
+  performance:
+    status: PASS
+    notes: 'A fase é O(1) por passo de 250 ms e intervalLaneProgress é O(raias × fixos), sem rede. O intervalo de atualização não mudou (1 requisição por segundo ao vivo, conferido). Como o payload dos outros formatos ganha intervalSpec null e round null, o version (sha1 do payload) muda uma vez no deploy. Isso não tem efeito além de um novo render.'
+  reliability:
+    status: PASS
+    notes: 'O telão usa a mesma função de fase da súmula, sem conta própria, com paridade testada. Resumo antigo sem round dá null, e a raia fica como veio. Antes da largada não há fase. Depois do fim, o relógio fica parado em 18:00.'
+  maintainability:
+    status: PASS
+    notes: 'As funções puras ficam em broadcastPayload.ts, testáveis pelo node --test. O nome intervalSpec e os comentários separam o formato da tela de intervalo, como pede a AUTO-DECISION 7. O cast duplo está no MNT-001.'
+
+regression_review:
+  binaries_checked:
+    - 'describeEntry: o ramo do intervalado é um else-if novo antes dos ramos for_time e amrap, que são mutuamente exclusivos. Max_load, for_time e amrap seguem o mesmo caminho, e no navegador "40/90", "08:32", "CAP 70", "2+10 … round 3" e "220 kg" saem iguais.'
+    - 'clockSub: o ramo antigo ("de {cap}", "time cap", "tempo de prova") fica no else. No navegador: For Time com "DE 10:00" e "TIME CAP"; AMRAP e carga máxima com "DE 20:00".'
+    - 'capBoardLines(lines, null) produz o mesmo corte de antes (teste com 10 fixos: 7 linhas e "+ 3 etapas").'
+    - 'O LiveBoard só remapeia as raias quando há spec; nos outros formatos usa live.entries como antes.'
+  old_tests_changed: 'Nenhuma asserção existente foi tocada: o diff de tests/live-broadcast.test.mjs só adiciona linhas (@@ -862,3 +862,228 @@). O teste da 1.60 "describeWorkoutForBoard aceita a prova intervalada" continua igual e passando.'
+
+test_quality:
+  notes: 'Os testes são fortes no essencial. A paridade de fase é comparada direto com intervalPhaseAt(REF) nos instantes do caso aprovado e em frações. A varredura de 600 s com OFF 0 nunca encontra "Descanso". O corte de 8 linhas é testado com o máximo. Há testes da barra com resumo de round anterior, de "sem fixos" e de "sem relógio", e um teste pelas rotas com ordem, desempate pelo último registro, PII e geral com empate. Os estáticos protegem "sem conta própria" (sem onSeconds e offSeconds na tela) e "uma só chamada fetch". Ponto fraco: o trecho sem a coluna absent não exercita nada (TEST-001).'
+
+observations_for_next_stories:
+  - story: '1.59'
+    note: 'AC9 e T7 (raia "Ausente", ordem e selo no geral do telão) continuam sem código. Quando entrarem, a leitura tolerante de absent precisa de teste com erro injetado (TEST-001), e o intervalado deve mostrar "Ausente" no lugar de "0 · Oficial".'
+  - story: 'release'
+    note: '1.60, 1.61, 1.62 e 1.63 já podem ser publicadas juntas (REL-001 da 1.61 e da 1.60). Depois do deploy, roll-forward e conferência da prova intervalada no painel, na quadra e no telão.'
+  - story: 'pré-existente'
+    note: 'No For Time, a linha "Time cap · 70 reps · aguardando a súmula" sai cortada com ellipsis na coluna de progresso da raia, em 1920 e 1280. Não é desta story.'
+
+recommendations:
+  immediate: []
+  future:
+    - action: 'Arranjo do cabeçalho do intervalado para não cortar o título da prova (REQ-001).'
+      refs: ['src/components/broadcast/Broadcast.module.css:55', 'src/components/broadcast/BroadcastScreen.tsx:585']
+    - action: 'Na T7 da 1.59: raia e selo "Ausente" no telão e teste com erro de coluna ausente injetado (REQ-002, TEST-001).'
+      refs: ['src/lib/serverBroadcast.ts:242', 'tests/live-broadcast.test.mjs:1048']
+    - action: 'Tirar o cast duplo de broadcastIntervalPhase quando o motor for tocado (MNT-001).'
+      refs: ['src/lib/broadcastPayload.ts:150']
+
+history:
+  - date: '2026-10-22'
+    gate: PASS
+    quality_score: 92
+    issues: 'REQ-001, TEST-001, REQ-002 (lacuna da 1.59), MNT-001 e DOC-001 (todos low)'
