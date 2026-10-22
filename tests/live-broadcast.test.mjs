@@ -1070,8 +1070,9 @@ test('telão 1.63 pelas rotas: chamada com o bloco do intervalado, bateria ao vi
 
 test('telão 1.63: a tela mostra "Intervalado", "Duração", o esquema e a fase pela função da súmula, sem rede nova', () => {
   const screen = read('../src/components/broadcast/BroadcastScreen.tsx');
-  assert.match(screen, /format === 'interval' \? 'Intervalado' : 'For Time'/);
-  assert.match(screen, /format === 'amrap' \|\| format === 'interval' \? 'Duração'/);
+  // Story 1.69: a distância entra nas duas funções (o intervalado, o AMRAP, a carga máxima e o For Time seguem como antes).
+  assert.match(screen, /format === 'interval' \? 'Intervalado' : format === 'distance' \? 'Distância' : 'For Time'/);
+  assert.match(screen, /format === 'amrap' \|\| format === 'interval' \|\| format === 'distance' \? 'Duração'/);
   assert.match(screen, /capWord\(workout\.format\)/);
   assert.match(screen, /intervalSchemeText\(workout\.intervalSpec\)/);
   assert.match(screen, /broadcastIntervalPhase\(liveSpec, elapsed\)/, 'fase do relógio da bateria no cabeçalho');
@@ -1086,4 +1087,136 @@ test('telão 1.63: a tela mostra "Intervalado", "Duração", o esquema e a fase 
   const payload = read('../src/lib/broadcastPayload.ts');
   assert.match(payload, /return intervalPhaseAt\(structure, Math\.max\(0, elapsed\)\)/);
   assert.match(payload, /intervalSpec: BroadcastIntervalSpec \| null/);
+});
+
+// ---------------------------------------------------------------------------
+// Story 1.69: Distância no telão (rótulo, chamada, total em metros, ordem ao vivo)
+// ---------------------------------------------------------------------------
+
+const { describeDistanceEntry, distanceGapText } = await importServerModule('lib/broadcastPayload.ts');
+const DISTANCE_NOTE = '750 m corrida; máx. distância no remo\nOs parceiros trocam a cada volta';
+const distanceStructure = (note = DISTANCE_NOTE, timeCapSeconds = 1200) => {
+  const checked = validateWorkoutStructure({
+    version: 4, format: 'distance', totalReps: 0, timeCapSeconds, incomplete: null, tieBreak: null, generator: null, customized: true,
+    entry: { mode: 'both', marking: 'reps', publish: 'after_review' },
+    segments: [], maxLoad: null, scoreDisplay: null, interval: null,
+    distance: { unit: 'm', note }
+  });
+  assert.equal(checked.ok, true, checked.error);
+  return checked.structure;
+};
+
+test('telão 1.69: payload da prova de distância com as linhas do resumo (";" e quebra de linha), sem resumo e com corte', () => {
+  const board = describeWorkoutForBoard({ name: 'Remo e corrida', code: 'W3' }, distanceStructure());
+  assert.deepEqual(
+    [board.format, board.timeCapSeconds, board.scheme, board.segments, board.totalReps, board.intervalSpec],
+    ['distance', 1200, null, [], 0, null]
+  );
+  assert.deepEqual(board.lines, ['750 m corrida', 'máx. distância no remo', 'Os parceiros trocam a cada volta']);
+
+  // Sem resumo: a linha da prova com a duração (aparece também com o resumo só de espaços).
+  assert.deepEqual(describeWorkoutForBoard({ name: 'Corrida', code: '' }, distanceStructure('', 900)).lines, ['Maior distância em 15:00']);
+  assert.deepEqual(describeWorkoutForBoard({ name: 'Corrida', code: '' }, distanceStructure(' ; \n ; ')).lines, ['Maior distância em 20:00']);
+
+  // Linha longa: 60 caracteres com reticências; mais de 6 linhas: só as 6 primeiras.
+  const long = describeWorkoutForBoard({ name: 'Longa', code: '' }, distanceStructure('a'.repeat(100))).lines;
+  assert.equal(long.length, 1);
+  assert.equal(long[0].length, 60);
+  assert.match(long[0], /^a{59}…$/);
+  const many = describeWorkoutForBoard({ name: 'Muitas', code: '' }, distanceStructure(Array.from({ length: 9 }, (_, index) => `linha ${index + 1}`).join(';'))).lines;
+  assert.deepEqual(many, ['linha 1', 'linha 2', 'linha 3', 'linha 4', 'linha 5', 'linha 6']);
+  assert.doesNotMatch(JSON.stringify(board), /@|\bnote\b/, 'só dados da prova');
+});
+
+test('telão 1.69: a raia da distância mostra o total em metros com a unidade, "–" sem lançamento e o selo Oficial', () => {
+  const entry = (patch) => ({ status: 'in_progress', repsDone: 0, officialResult: null, ...patch });
+  assert.deepEqual(describeDistanceEntry(entry({ repsDone: 6330 })), { value: '6.330', unit: 'm', line: 'Total lançado pelo judge', lineStrong: '', official: false });
+  assert.deepEqual(describeDistanceEntry(entry({})), { value: '–', unit: '', line: 'Sem lançamento ainda', lineStrong: '', official: false });
+  assert.deepEqual(describeDistanceEntry(entry({ status: 'waiting' })), { value: '–', unit: '', line: 'Aguardando o primeiro registro', lineStrong: '', official: false });
+  assert.deepEqual(describeDistanceEntry(entry({ status: 'waiting', repsDone: 900 })), { value: '–', unit: '', line: 'Aguardando o primeiro registro', lineStrong: '', official: false });
+  assert.deepEqual(describeDistanceEntry(entry({ status: 'submitted', repsDone: 6330, officialResult: '6350' })), { value: '6.350', unit: 'm', line: '', lineStrong: 'Oficial', official: true }, 'o oficial vale mais que o ao vivo');
+  assert.deepEqual(describeDistanceEntry(entry({ status: 'submitted', officialResult: '0' })), { value: '0', unit: 'm', line: '', lineStrong: 'Oficial', official: true }, 'o ausente publica 0 m');
+  assert.deepEqual(describeDistanceEntry(entry({ status: 'submitted', repsDone: 5000 })), { value: '5.000', unit: 'm', line: 'Enviada', lineStrong: '', official: false });
+  assert.deepEqual(describeDistanceEntry(entry({ status: 'returned', repsDone: 5000 })), { value: '5.000', unit: 'm', line: 'Súmula em correção', lineStrong: '', official: false });
+  assert.equal(describeDistanceEntry(entry({ status: 'submitted', officialResult: 'abc' })).value, '–', 'resultado ilegível não vira número');
+  assert.equal(distanceGapText(6330, 5915), '+415 m');
+  assert.equal(distanceGapText(6330, 6330), '+0 m');
+  assert.equal(distanceGapText(12000, 4500), '+7.500 m');
+  assert.equal(distanceGapText(100, 500), '+0 m', 'nunca negativa');
+});
+
+test('telão 1.69: a tela escolhe os rótulos, o valor e a vantagem da distância pelas funções puras, sem rede nova', () => {
+  const screen = read('../src/components/broadcast/BroadcastScreen.tsx');
+  assert.match(screen, /if \(workout\?\.format === 'distance'\) return \{ \.\.\.describeDistanceEntry\(entry\), capped: false \};/);
+  assert.match(screen, /workout\?\.format === 'distance'\) \{ gapLabel = 'Vantagem sobre o 2º'; gapValue = distanceGapText\(leader\.repsDone, second\.repsDone\); \}/);
+  assert.match(screen, /format === 'distance' \? 'tempo esgotado' : 'time cap'/);
+  assert.equal(screen.match(/fetch\(/g).length, 1, 'nenhuma requisição nova');
+  assert.match(screen, /capWord\(workout\.format\)/);
+  const payload = read('../src/lib/broadcastPayload.ts');
+  assert.match(payload, /export const describeDistanceEntry/);
+  assert.match(payload, /export const distanceGapText/);
+});
+
+test('telão 1.69 pelas rotas: chamada com as linhas do resumo, bateria ao vivo com os metros (maior primeiro, empate por quem lançou antes) e geral com o resultado publicado', async (t) => {
+  quiet(t);
+  seed();
+  const EV = 'ev-distancia';
+  const people = [['ath-da', 'Dupla Atlas'], ['ath-db', 'Dupla Boreal 85911112222'], ['ath-dc', 'Dupla Cometa']];
+  database.rows('events').push({ id: EV, name: 'Distância Litoral', date: '2026-11-01', organizer_id: MANAGER.id, event_type: 'functional_fitness', status: 'upcoming', logo_url: null,
+    event_schedule: [{ id: 'heat-d1', kind: 'heat', workoutId: 'wod-dist', heatNumber: 1, date: '2026-11-01', time: '09:00', title: 'BATERIA 1', athleteIds: people.map(([id]) => id) }] });
+  database.rows('event_judges').push({ event_id: EV, judge_user_id: JUDGE.id });
+  database.rows('divisions').push({ id: 'div-dist', event_id: EV, name: 'RX', order_index: 1 });
+  database.rows('athletes').push(...people.map(([id, name]) => ({ id, name, box: 'Box Sul', division_id: 'div-dist', is_team: false })));
+  database.rows('leaderboard_entries').push(...people.map(([id]) => ({ id: `le-${id}`, event_id: EV, division_id: 'div-dist', athlete_id: id })));
+  database.rows('workouts').push({ id: 'wod-dist', event_id: EV, name: 'Remo e corrida', code: 'W1', order_index: 1, type: 'distance', time_cap: '20:00', tie_breaker: '', division_id: null, structure: distanceStructure() });
+  const { token } = (await control(MANAGER, { action: 'generate_link', eventId: EV })).body;
+  const openLane = async (athleteId, lane) => {
+    const opened = await sheets({ action: 'open', eventId: EV, workoutId: 'wod-dist', athleteId, heatId: 'heat-d1', lane });
+    assert.equal(opened.status, 200, opened.body.error);
+    return opened.body.sheet.id;
+  };
+  const [da, db, dc] = [await openLane('ath-da', 1), await openLane('ath-db', 2), await openLane('ath-dc', 3)];
+
+  const call = await telao(token);
+  assert.equal(call.body.screen, 'call');
+  const workout = call.body.call.heat.workout;
+  assert.deepEqual(
+    [workout.format, workout.timeCapSeconds, workout.lines, workout.intervalSpec, workout.segments],
+    ['distance', 1200, ['750 m corrida', 'máx. distância no remo', 'Os parceiros trocam a cada volta'], null, []]
+  );
+
+  // Atlas lança 4.500 aos 10:00 e 5.915 aos 19:50; Boreal 6.330 aos 16:40; Cometa 6.330 aos 15:00 (chegou antes).
+  await append(da, [e({ t: 'dist', v: 4500, at: 600 }), e({ t: 'dist', v: 5915, at: 1190 })]);
+  await append(db, [e({ t: 'dist', v: 6330, at: 1000 })]);
+  await append(dc, [e({ t: 'dist', v: 6330, at: 900 })]);
+  const live = await telao(token);
+  assert.equal(live.body.screen, 'live');
+  assert.equal(live.body.live.heat.workout.format, 'distance');
+  assert.deepEqual(
+    live.body.live.entries.map((entry) => [entry.name, entry.position, entry.repsDone, entry.status, entry.round, entry.segments, entry.currentSegmentId]),
+    [
+      ['Dupla Cometa', 1, 6330, 'in_progress', null, [], null],
+      ['Dupla Boreal', 2, 6330, 'in_progress', null, [], null],
+      ['Dupla Atlas', 3, 5915, 'in_progress', null, [], null]
+    ]
+  );
+  assert.doesNotMatch(JSON.stringify(live.body), /85911112222|@example\.com|ath-d[abc]|judge-telao/, 'sem dado pessoal novo');
+
+  // Desfazer o último lançamento do Atlas devolve os 4.500 (o telão segue o log, não o último toque).
+  await append(da, [e({ t: 'undo', of: 1, at: 1195 })]);
+  assert.deepEqual((await telao(token)).body.live.entries.map((entry) => entry.repsDone), [6330, 6330, 4500]);
+  await append(da, [e({ t: 'dist', v: 5915, at: 1196 })]);
+
+  // Envio das três súmulas: o geral mostra o resultado publicado, empate dividindo a posição.
+  for (const sheetId of [da, db, dc]) await submit(sheetId);
+  const interval = await telao(token);
+  assert.equal(interval.body.screen, 'interval');
+  const [standings] = interval.body.interval.boards;
+  assert.deepEqual(standings.columns, [{ label: 'W1', fresh: true }]);
+  const cellOf = (name) => standings.rows.find((row) => row.name === name).cells[0];
+  assert.deepEqual(
+    [cellOf('Dupla Cometa'), cellOf('Dupla Boreal'), cellOf('Dupla Atlas')],
+    [{ rank: 1, result: '6330' }, { rank: 1, result: '6330' }, { rank: 3, result: '5915' }],
+    'empate divide a posição, sem desempate'
+  );
 });

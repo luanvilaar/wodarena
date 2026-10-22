@@ -33,7 +33,7 @@ import { buildLiveProgress } from '@/lib/serverScoresheets';
 import type { SessionUser } from '@/lib/serverSecurity';
 import { getTeamDisplayName } from '@/lib/teamDisplay';
 import { sortWorkouts } from '@/lib/workoutOrder';
-import { validateWorkoutStructure, type SheetEvent, type WorkoutStructure } from '@/lib/workoutStructure';
+import { formatWorkoutTime, validateWorkoutStructure, type SheetEvent, type WorkoutStructure } from '@/lib/workoutStructure';
 import type { Athlete, Score, Workout, WorkoutType } from '@/types';
 
 // Telão ao vivo no servidor (Stories 1.53 a 1.58). O link do telão é um token
@@ -279,6 +279,26 @@ const capBoardLines = (lines: string[], last: string | null) => {
   return last === null ? head : [...head, last];
 };
 
+/** Maior largura de uma linha da chamada da distância (a tela corta com reticências de qualquer jeito). */
+const DISTANCE_LINE_LIMIT = 60;
+/** A chamada da distância mostra no máximo estas linhas do resumo (o gestor separa com ";" ou quebra de linha). */
+const DISTANCE_MAX_LINES = 6;
+
+/**
+ * Linhas da chamada da distância (Story 1.69): o resumo da prova separado por
+ * ";" e por quebra de linha, cada uma limitada a 60 caracteres; sem resumo, a
+ * linha "Maior distância em 20:00". Só dados da prova, nada de pessoa.
+ */
+const distanceBoardLines = (structure: WorkoutStructure) => {
+  const lines = (structure.distance?.note ?? '')
+    .split(/[;\n]+/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .slice(0, DISTANCE_MAX_LINES)
+    .map((part) => (part.length > DISTANCE_LINE_LIMIT ? `${part.slice(0, DISTANCE_LINE_LIMIT - 1).trimEnd()}…` : part));
+  return lines.length > 0 ? lines : [`Maior distância em ${formatWorkoutTime(structure.timeCapSeconds ?? 0)}`];
+};
+
 /** Bloco do formato Intervalado (Story 1.63); null nos outros formatos. Só dados da prova, nada de pessoa. */
 const describeIntervalSpec = (structure: WorkoutStructure): BroadcastIntervalSpec | null => {
   const interval = structure.format === 'interval' ? structure.interval : null;
@@ -301,11 +321,13 @@ export const describeWorkoutForBoard = (row: Pick<WorkoutRow, 'name' | 'code'>, 
   const scheme = generator && generator.reps.length > 1
     ? (generator.kind === 'fixed' ? `${generator.reps.length} rounds` : generator.reps.join('-'))
     : null;
-  const lines = structure.format === 'max_load'
-    ? (structure.maxLoad?.lifts ?? []).map((lift) => (lift.reps > 1 ? `${lift.name} · ${lift.reps}RM` : lift.name))
-    : scheme
-      ? [...new Set(structure.segments.map((segment) => `${segment.name}${segment.load ? ` ${segment.load.value} kg` : ''}`))]
-      : segments.map((segment) => segment.label);
+  let lines: string[];
+  if (structure.format === 'distance') lines = distanceBoardLines(structure);
+  else if (structure.format === 'max_load') {
+    lines = (structure.maxLoad?.lifts ?? []).map((lift) => (lift.reps > 1 ? `${lift.name} · ${lift.reps}RM` : lift.name));
+  } else if (scheme) {
+    lines = [...new Set(structure.segments.map((segment) => `${segment.name}${segment.load ? ` ${segment.load.value} kg` : ''}`))];
+  } else lines = segments.map((segment) => segment.label);
   // Intervalado: os fixos como nos outros formatos e, por último, a linha do máximo (que não tem meta nem entra na barra).
   const intervalSpec = describeIntervalSpec(structure);
   return {

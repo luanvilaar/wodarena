@@ -1,5 +1,6 @@
 import type { BroadcastMode } from '@/lib/broadcastMode';
 import {
+  formatMeters,
   formatWorkoutTime,
   intervalPhaseAt,
   type AmrapScoreDisplay,
@@ -192,3 +193,41 @@ export const intervalLaneProgress = (
     previousRound
   };
 };
+
+// ---------------------------------------------------------------------------
+// Formato Distância na tela do telão (Story 1.69). Puro: o BroadcastScreen usa
+// estas funções para a raia e para a vantagem do líder. Os metros vêm do resumo
+// ao vivo (`repsDone`, Story 1.66) ou do resultado oficial da súmula.
+// ---------------------------------------------------------------------------
+
+export type BroadcastDistanceEntry = {
+  /** "6.330", ou "–" enquanto o judge não lançou o total. */
+  value: string;
+  /** "m" com total; vazio sem. */
+  unit: string;
+  line: string;
+  lineStrong: string;
+  official: boolean;
+};
+
+/**
+ * A raia da distância: o total em metros com a unidade, o texto auxiliar e o
+ * selo "Oficial". Sem lançamento (e sem resultado oficial) o valor é "–": o
+ * resumo ao vivo não separa "nenhum lançamento" de "0 lançado".
+ */
+export const describeDistanceEntry = (entry: Pick<BroadcastLiveEntry, 'status' | 'repsDone' | 'officialResult'>): BroadcastDistanceEntry => {
+  const official = entry.status === 'submitted' && Boolean(entry.officialResult);
+  const meters = official ? Number(entry.officialResult) : entry.repsDone;
+  const hasTotal = entry.status !== 'waiting' && Number.isFinite(meters) && (official || meters > 0);
+  let line = '';
+  let lineStrong = '';
+  if (entry.status === 'waiting') line = 'Aguardando o primeiro registro';
+  else if (official) lineStrong = 'Oficial';
+  else if (entry.status === 'returned') line = 'Súmula em correção';
+  else if (entry.status === 'submitted') line = 'Enviada';
+  else line = meters > 0 ? 'Total lançado pelo judge' : 'Sem lançamento ainda';
+  return { value: hasTotal ? formatMeters(meters) : '–', unit: hasTotal ? 'm' : '', line, lineStrong, official };
+};
+
+/** Vantagem do líder sobre o 2º, em metros: "+1.200 m". */
+export const distanceGapText = (leaderMeters: number, secondMeters: number) => `+${formatMeters(Math.max(0, leaderMeters - secondMeters))} m`;
