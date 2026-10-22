@@ -536,7 +536,7 @@ test('Intervalado: o treino de referência gera a estrutura v3 válida (18:00, 2
   ]);
   const structure = analysis.structure;
   assert.deepEqual(structure, {
-    version: 3,
+    version: 4,
     format: 'interval',
     totalReps: 21,
     timeCapSeconds: 1080,
@@ -551,7 +551,8 @@ test('Intervalado: o treino de referência gera a estrutura v3 válida (18:00, 2
     ],
     maxLoad: null,
     scoreDisplay: null,
-    interval: { rounds: 5, onSeconds: 120, offSeconds: 120, max: { id: INTERVAL_MAX_ID, name: 'Squat Clean', load: { value: 80, unit: 'kg' }, note: '' } }
+    interval: { rounds: 5, onSeconds: 120, offSeconds: 120, max: { id: INTERVAL_MAX_ID, name: 'Squat Clean', load: { value: 80, unit: 'kg' }, note: '' } },
+    distance: null
   });
   const checked = validateWorkoutStructure(structure);
   assert.equal(checked.ok, true, checked.error);
@@ -814,4 +815,112 @@ test('Intervalado: tudo que o construtor gera passa no validador do servidor (ra
     }
   }
   assert.ok(produced > 40, `rascunhos válidos: ${produced}`);
+});
+
+// ---------------------------------------------------------------------------
+// Story 1.67: Distância (docs/design/distancia/): duração e resumo opcional
+// ---------------------------------------------------------------------------
+
+const distanceDraft = (patch = {}) => {
+  const draft = setDraftFormat(createDraft('for_time'), 'distance');
+  return { ...draft, distance: { ...draft.distance, ...patch } };
+};
+
+test('Distância: o rascunho novo abre com 20:00 e resumo vazio; o time cap legível do formulário vira a duração', () => {
+  const draft = createDraft('distance');
+  assert.deepEqual(draft.distance, { duration: '20:00', note: '' });
+  assert.equal(editor.DEFAULT_TIME_CAP_SECONDS.distance, 1200);
+  assert.equal(createDraft('distance', { timeCap: '15:00' }).distance.duration, '15:00');
+  assert.equal(createDraft('distance', { timeCap: '99:99' }).distance.duration, '20:00', 'ilegível: fica o padrão');
+  assert.equal(createDraft('for_time', { timeCap: '15:00' }).distance.duration, '20:00', 'só vale quando o formato é a distância');
+  assert.equal(setDraftFormat(createDraft('amrap'), 'distance').format, 'distance');
+});
+
+test('Distância: a estrutura gerada é a v4 válida, sem segmentos e sem desempate, e a conferência diz o que foi lido', () => {
+  const analysis = analyzeDraft(distanceDraft({ note: '  750 m corrida; máx. distância no remo.  ' }));
+  assert.deepEqual(analysis.problems, []);
+  assert.deepEqual(analysis.items, [
+    { tone: 'ok', text: 'Duração: 20:00' },
+    { tone: 'ok', text: 'Resultado em metros, maior vence' },
+    { tone: 'muted', text: 'Sem desempate nesta versão' },
+    { tone: 'ok', text: 'Resumo para o judge preenchido' }
+  ]);
+  assert.deepEqual(analysis.steps, []);
+  const { structure } = analysis;
+  assert.deepEqual(structure, {
+    version: 4,
+    format: 'distance',
+    totalReps: 0,
+    timeCapSeconds: 1200,
+    incomplete: null,
+    tieBreak: null,
+    generator: null,
+    customized: true,
+    entry: { mode: 'both', marking: 'reps', publish: 'after_review' },
+    segments: [],
+    maxLoad: null,
+    scoreDisplay: null,
+    interval: null,
+    distance: { unit: 'm', note: '750 m corrida; máx. distância no remo.' }
+  });
+  const checked = validateWorkoutStructure(structure);
+  assert.equal(checked.ok, true, checked.error);
+  assert.deepEqual(checked.structure, structure, 'já sai normalizada');
+  // Decisão 6: o painel grava o tipo legado distance, com a duração como time cap e sem desempate.
+  assert.deepEqual(deriveLegacyWorkoutFields(structure), { type: 'distance', timeCap: '20:00', tieBreaker: '' });
+
+  const empty = analyzeDraft(distanceDraft());
+  assert.deepEqual(empty.items.at(-1), { tone: 'muted', text: 'Resumo para o judge: opcional, vazio' });
+  assert.equal(empty.structure.distance.note, '');
+});
+
+test('Distância: duração fora de 00:30 a 99:59 e resumo acima de 300 caracteres são problemas marcados no campo, sem estrutura', () => {
+  for (const duration of ['00:29', '100:00', '', 'abc', '2000', '20:60']) {
+    const analysis = analyzeDraft(distanceDraft({ duration }));
+    assert.equal(analysis.structure, null, duration);
+    assert.deepEqual(errors(analysis), ['Duração: use MM:SS entre 00:30 e 99:59.'], duration);
+    assert.equal(analysis.lineProblems[editor.DISTANCE_FIELDS.duration], 'Duração: use MM:SS entre 00:30 e 99:59.', duration);
+  }
+  assert.equal(analyzeDraft(distanceDraft({ duration: '20' })).structure.timeCapSeconds, 1200, 'só minutos vale como no AMRAP');
+  for (const duration of ['00:30', '99:59', '1:00:00']) {
+    const analysis = analyzeDraft(distanceDraft({ duration }));
+    assert.notEqual(analysis.structure, null, duration);
+  }
+  assert.equal(analyzeDraft(distanceDraft({ note: 'x'.repeat(300) })).structure.distance.note.length, 300);
+  const long = analyzeDraft(distanceDraft({ note: 'x'.repeat(301) }));
+  assert.equal(long.structure, null);
+  assert.deepEqual(errors(long), ['Resumo da prova: até 300 caracteres (tem 301).']);
+  assert.equal(long.lineProblems[editor.DISTANCE_FIELDS.note], 'Resumo da prova: até 300 caracteres (tem 301).');
+  // Espaços nas pontas não contam para o limite.
+  assert.notEqual(analyzeDraft(distanceDraft({ note: `  ${'x'.repeat(300)}  ` })).structure, null);
+});
+
+test('Distância: frase da regra, resumo da lista e ida e volta pela estrutura gravada', () => {
+  const structure = analyzeDraft(distanceDraft({ duration: '15:00', note: 'Corrida' })).structure;
+  assert.equal(ruleText(structure), 'Vale a maior distância total em 15:00. O judge informa o total em metros. Empates dividem a posição, sem desempate.');
+  const parts = describeStructureRule(structure);
+  assert.deepEqual(parts.filter((part) => part.strong).map((part) => part.text), ['maior distância total', '15:00']);
+  assert.equal(summarizeStructure(structure), 'Distância · 15:00 · maior vence');
+
+  const reopened = draftFromStructure(structure);
+  assert.equal(reopened.ok, true);
+  assert.equal(reopened.draft.format, 'distance');
+  assert.deepEqual(reopened.draft.distance, { duration: '15:00', note: 'Corrida' });
+  assert.deepEqual(analyzeDraft(reopened.draft).structure, structure, 'ida e volta');
+  // A estrutura de outro formato segue como estava, e uma distância sem o campo não cabe em linhas.
+  assert.equal(draftFromStructure({ ...structure, distance: null }).ok, false);
+  assert.equal(draftFromStructure(fran().structure ?? analyzeDraft(fran()).structure).ok, true);
+  // Editar a duração gera outra estrutura válida com o time cap novo.
+  const edited = analyzeDraft({ ...reopened.draft, distance: { ...reopened.draft.distance, duration: '12:30' } }).structure;
+  assert.deepEqual([edited.timeCapSeconds, deriveLegacyWorkoutFields(edited).timeCap], [750, '12:30']);
+});
+
+test('Distância: o rascunho dos outros formatos não muda ao trocar de formato e voltar', () => {
+  let draft = fran();
+  const before = JSON.stringify(analyzeDraft(draft).structure);
+  draft = setDraftFormat(draft, 'distance');
+  draft = { ...draft, distance: { duration: '10:00', note: 'x' } };
+  draft = setDraftFormat(draft, 'for_time');
+  assert.equal(JSON.stringify(analyzeDraft(draft).structure), before);
+  assert.deepEqual(draft.distance, { duration: '10:00', note: 'x' }, 'o rascunho da distância fica guardado');
 });

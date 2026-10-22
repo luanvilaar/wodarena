@@ -1,11 +1,14 @@
 import {
   WORKOUT_STRUCTURE_LIMITS,
+  computeDistanceResult,
   computeIntervalResult,
   computeMaxLoadResult,
   computeSheetResult,
+  deriveDistanceState,
   deriveIntervalState,
   deriveMaxLoadState,
   deriveSheetState,
+  formatMeters,
   formatWorkoutTime
 } from '@/lib/workoutStructure';
 import type { SheetEvent, WorkoutStructure } from '@/lib/workoutStructure';
@@ -72,7 +75,9 @@ const isKg = (value: unknown): value is number => (
  * No intervalado, `set` e `adj` exigem `rd` (o round corrigido) e o levam no
  * evento normalizado; nos outros formatos o `rd` recebido é descartado. `rep` e
  * `fill` fora da janela de trabalho são aceitos e gravados: o motor os ignora
- * e a súmula avisa (decisão 6 do intervalado).
+ * e a súmula avisa (decisão 6 do intervalado). Na distância (Story 1.66), o
+ * único registro de contagem é `dist` (o total em metros, de 0 a 99.999); `dist`
+ * fora dela é recusado.
  */
 export const validateClientEvent = (raw: unknown, structure: WorkoutStructure, position: number): ClientEventCheck => {
   const fail = (error: string): ClientEventCheck => ({ ok: false, error: `Registro ${position + 1}: ${error}` });
@@ -84,6 +89,7 @@ export const validateClientEvent = (raw: unknown, structure: WorkoutStructure, p
   const at = event.at;
   const isMaxLoad = structure.format === 'max_load';
   const isInterval = structure.format === 'interval';
+  const isDistance = structure.format === 'distance';
   const maxId = isInterval ? structure.interval?.max.id ?? null : null;
   const segmentIds = new Set(structure.segments.map((segment) => segment.id));
   if (maxId) segmentIds.add(maxId);
@@ -125,7 +131,7 @@ export const validateClientEvent = (raw: unknown, structure: WorkoutStructure, p
       return { ok: true, id: raw.id, event: { t: 'undo', of: event.of, at } };
     case 'time': {
       const cap = structure.timeCapSeconds;
-      if (isMaxLoad || isInterval || typeof cap !== 'number') return fail('o ajuste do tempo não vale para esta prova.');
+      if (isMaxLoad || isInterval || isDistance || typeof cap !== 'number') return fail('o ajuste do tempo não vale para esta prova.');
       if (event.target !== 'final' && event.target !== 'tiebreak') return fail('ajuste de tempo sem alvo.');
       if (!isInt(event.v, 1, cap)) return fail(`o tempo oficial deve ficar entre 00:01 e ${formatWorkoutTime(cap)}.`);
       return { ok: true, id: raw.id, event: { t: 'time', target: event.target, v: event.v, at } };
@@ -135,6 +141,12 @@ export const validateClientEvent = (raw: unknown, structure: WorkoutStructure, p
       if (!isKg(event.load)) return fail(`a carga deve ficar entre ${WORKOUT_STRUCTURE_LIMITS.minLoadKg} e ${WORKOUT_STRUCTURE_LIMITS.maxLoadKg} kg.`);
       if (typeof event.ok !== 'boolean') return fail('a tentativa precisa ser válida ou no-rep.');
       return { ok: true, id: raw.id, event: { t: 'attempt', lift: event.lift, load: event.load, ok: event.ok, at } };
+    case 'dist':
+      if (!isDistance) return fail('o total de distância não vale para esta prova.');
+      if (!isInt(event.v, 0, WORKOUT_STRUCTURE_LIMITS.maxDistanceMeters)) {
+        return fail(`o total deve ser um número inteiro de metros entre 0 e ${formatMeters(WORKOUT_STRUCTURE_LIMITS.maxDistanceMeters)}.`);
+      }
+      return { ok: true, id: raw.id, event: { t: 'dist', v: event.v, at } };
     default:
       return fail('tipo de registro desconhecido.');
   }
@@ -152,9 +164,16 @@ const plural = (count: number, one: string, many: string) => (count === 1 ? one 
  * desempate por tempo (o que vai em splits.tieBreaker). Recusa o que não pode
  * ser publicado, com a mensagem para o judge. No intervalado, o total de
  * repetições do máximo nos rounds que pontuaram, sem desempate; enviar sem
- * registros publica 0.
+ * registros publica 0. Na distância, o último total lançado e não desfeito, em
+ * metros, sem desempate; enviar sem nenhum lançamento é recusado (0 vale só se
+ * foi digitado).
  */
 export const computeSheetOutcome = (structure: WorkoutStructure, events: readonly SheetEvent[]): SheetOutcome => {
+  if (structure.format === 'distance') {
+    const result = computeDistanceResult(deriveDistanceState(structure, events));
+    if (!result.entered) return { ok: false, error: 'Informe a distância total antes de enviar.' };
+    return { ok: true, result: result.display, value: result.value, tieBreak: null, summary: `${formatMeters(result.value)} m` };
+  }
   if (structure.format === 'interval') {
     const result = computeIntervalResult(deriveIntervalState(structure, events));
     const rounds = result.rounds.length;
@@ -216,10 +235,13 @@ export const ABSENT_OUTCOME_TOO_LONG = 'O resultado de ausência desta prova pas
  * log vazio (o mesmo de computeSheetOutcome(structure, [])): For Time = time
  * cap + total de repetições × segundos por repetição; AMRAP = 0 repetições.
  * Carga máxima = 0 kg. Intervalado = 0 repetições (o motor com o log vazio).
- * Sem desempate em nenhum formato. O ranking põe o ausente depois de qualquer
+ * Distância = 0 m. Sem desempate em nenhum formato. O ranking põe o ausente depois de qualquer
  * resultado real (result_status = 'absent').
  */
 export const computeAbsentOutcome = (structure: WorkoutStructure): SheetOutcome => {
+  if (structure.format === 'distance') {
+    return { ok: true, result: '0', value: 0, tieBreak: null, summary: 'Atleta ausente · 0 m' };
+  }
   if (structure.format === 'max_load') {
     return { ok: true, result: '0', value: 0, tieBreak: null, summary: 'Atleta ausente · 0 kg' };
   }

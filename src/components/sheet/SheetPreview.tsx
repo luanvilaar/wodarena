@@ -31,7 +31,7 @@ const segment = (
 const ENTRY = { mode: 'both', marking: 'reps', publish: 'after_review' } as const;
 
 const FOR_TIME: WorkoutStructure = {
-  version: 3,
+  version: 4,
   format: 'for_time',
   totalReps: 90,
   timeCapSeconds: 600,
@@ -50,11 +50,12 @@ const FOR_TIME: WorkoutStructure = {
   ],
   maxLoad: null,
   scoreDisplay: null,
-  interval: null
+  interval: null,
+  distance: null
 };
 
 const UNITS: WorkoutStructure = {
-  version: 3,
+  version: 4,
   format: 'for_time',
   totalReps: 550,
   timeCapSeconds: 900,
@@ -70,11 +71,12 @@ const UNITS: WorkoutStructure = {
   ],
   maxLoad: null,
   scoreDisplay: null,
-  interval: null
+  interval: null,
+  distance: null
 };
 
 const AMRAP: WorkoutStructure = {
-  version: 3,
+  version: 4,
   format: 'amrap',
   totalReps: 30,
   timeCapSeconds: 720,
@@ -90,11 +92,12 @@ const AMRAP: WorkoutStructure = {
   ],
   maxLoad: null,
   scoreDisplay: 'rounds_reps',
-  interval: null
+  interval: null,
+  distance: null
 };
 
 const MAX_LOAD: WorkoutStructure = {
-  version: 3,
+  version: 4,
   format: 'max_load',
   totalReps: 0,
   timeCapSeconds: 1200,
@@ -115,12 +118,13 @@ const MAX_LOAD: WorkoutStructure = {
     loadStepKg: 2.5
   },
   scoreDisplay: null,
-  interval: null
+  interval: null,
+  distance: null
 };
 
 // Story 1.62: o treino de referência do Intervalado (docs/design/intervalado/).
 const INTERVAL: WorkoutStructure = {
-  version: 3,
+  version: 4,
   format: 'interval',
   totalReps: 21,
   timeCapSeconds: 1080,
@@ -135,7 +139,26 @@ const INTERVAL: WorkoutStructure = {
   ],
   maxLoad: null,
   scoreDisplay: null,
-  interval: { rounds: 5, onSeconds: 120, offSeconds: 120, max: { id: 'mx', name: 'Squat Clean', load: { value: 80, unit: 'kg' }, note: '' } }
+  interval: { rounds: 5, onSeconds: 120, offSeconds: 120, max: { id: 'mx', name: 'Squat Clean', load: { value: 80, unit: 'kg' }, note: '' } },
+  distance: null
+};
+
+// Story 1.68: o treino de referência da Distância (docs/design/distancia/).
+const DISTANCE: WorkoutStructure = {
+  version: 4,
+  format: 'distance',
+  totalReps: 0,
+  timeCapSeconds: 1200,
+  incomplete: null,
+  tieBreak: null,
+  generator: null,
+  customized: true,
+  entry: ENTRY,
+  segments: [],
+  maxLoad: null,
+  scoreDisplay: null,
+  interval: null,
+  distance: { unit: 'm', note: '750 m corrida; máx. distância no remo. Os parceiros trocam a cada volta da corrida.' }
 };
 
 const FIXTURES = {
@@ -143,7 +166,8 @@ const FIXTURES = {
   units: { label: 'Metros e calorias', structure: UNITS, workoutName: 'Remo, bike e burpee · For Time' },
   amrap: { label: 'AMRAP 12 min', structure: AMRAP, workoutName: 'Cindy 30 · AMRAP' },
   maxload: { label: 'Carga máxima', structure: MAX_LOAD, workoutName: 'CrossFit Total · Carga máxima' },
-  interval: { label: 'Intervalado 5 × 02:00 / 02:00', structure: INTERVAL, workoutName: 'Intervalado 5 × 2′' }
+  interval: { label: 'Intervalado 5 × 02:00 / 02:00', structure: INTERVAL, workoutName: 'Intervalado 5 × 2′' },
+  distance: { label: 'Distância 20:00', structure: DISTANCE, workoutName: 'Remo e corrida · Distância' }
 } as const;
 
 type FixtureId = keyof typeof FIXTURES;

@@ -9,6 +9,8 @@ import type { WorkoutStructureFormat } from '@/lib/workoutStructure';
 //   último registro;
 // - AMRAP e Intervalado (Story 1.60): mais repetições → chegou antes ao último
 //   registro (no intervalado, o último que conta, dentro da janela);
+// - Distância (Story 1.66): `repsDone` leva os metros do último lançamento →
+//   maior total → lançou antes (o instante do último lançamento que conta);
 // - Carga máxima: maior carga → menos tentativas → chegou antes.
 
 export type LiveRankInput = {

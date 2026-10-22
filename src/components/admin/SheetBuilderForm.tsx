@@ -4,6 +4,7 @@ import { Fragment, type KeyboardEvent, type ReactNode } from 'react';
 import { ArrowDown, ArrowUp, Check, Flag, MoreHorizontal, Plus, X } from 'lucide-react';
 
 import {
+  DISTANCE_FIELDS,
   INTERVAL_FIELDS,
   MAX_BUILDER_LINES,
   MAX_INTERVAL_FIXED_LINES,
@@ -42,7 +43,8 @@ import { UNIT_WORDS, WORKOUT_STRUCTURE_LIMITS, type WorkoutStructureFormat } fro
 // rascunho é controlado por quem usa (o painel largo do construtor); a análise
 // (etapas, conferência e estrutura gerada) vem de analyzeDraft. Sem rede e sem
 // armazenamento; texto em português fixo, como o restante do painel.
-// O Intervalado (Story 1.61) segue a Maquete 1 de docs/design/intervalado/.
+// O Intervalado (Story 1.61) segue a Maquete 1 de docs/design/intervalado/ e a
+// Distância (Story 1.67) a Maquete 1 de docs/design/distancia/.
 
 type SheetBuilderFormProps = {
   draft: SheetDraft;
@@ -64,7 +66,8 @@ const FORMATS: { value: WorkoutStructureFormat; title: string; detail: string }[
   { value: 'for_time', title: 'For Time', detail: 'Menor tempo para um trabalho definido' },
   { value: 'amrap', title: 'AMRAP', detail: 'Mais repetições dentro do tempo' },
   { value: 'max_load', title: 'Carga máxima', detail: 'Maior carga válida, por tentativas' },
-  { value: 'interval', title: 'Intervalado', detail: 'Rounds de trabalho e descanso; soma das repetições' }
+  { value: 'interval', title: 'Intervalado', detail: 'Rounds de trabalho e descanso; soma das repetições' },
+  { value: 'distance', title: 'Distância', detail: 'Maior distância no tempo; o judge informa o total' }
 ];
 
 function Section({ step, title, children, id }: { step: number; title: string; children: ReactNode; id: string }) {
@@ -389,8 +392,8 @@ export function SheetBuilderForm({ draft, analysis, onChange, openLines, onToggl
 
   const formatSection = (
     <Section step={1} title="Formato da prova" id={id('format-title')}>
-      <div role="radiogroup" aria-labelledby={id('format-title')} onKeyDown={handleFormatKeys} className="grid grid-cols-2 gap-2 xl:grid-cols-4">
-        {FORMATS.map((option) => {
+      <div role="radiogroup" aria-labelledby={id('format-title')} onKeyDown={handleFormatKeys} className="grid grid-cols-2 gap-2 sm:grid-cols-6">
+        {FORMATS.map((option, index) => {
           const selected = format === option.value;
           return (
             <button
@@ -402,8 +405,9 @@ export function SheetBuilderForm({ draft, analysis, onChange, openLines, onToggl
               tabIndex={selected ? 0 : -1}
               onClick={() => onChange(setDraftFormat(draft, option.value))}
               className={`flex min-h-16 flex-col items-start justify-center gap-0.5 rounded-md border px-3 py-2 text-left transition-colors ${
-                selected ? 'border-primary bg-primary/10' : 'border-card-border bg-dark-gray hover:border-primary/60'
-              }`}
+                // Cinco cartões preenchem a grade: 3 + 2 no desktop (6 colunas) e 2 + 2 + 1 no celular (o último ocupa a linha).
+                index === FORMATS.length - 1 ? 'col-span-2 sm:col-span-3' : index >= 3 ? 'sm:col-span-3' : 'sm:col-span-2'
+              } ${selected ? 'border-primary bg-primary/10' : 'border-card-border bg-dark-gray hover:border-primary/60'}`}
             >
               <span className="flex items-center gap-1.5 text-sm font-bold text-white">
                 {selected && <Check className="h-3.5 w-3.5 text-primary" aria-hidden="true" />}
@@ -722,6 +726,59 @@ export function SheetBuilderForm({ draft, analysis, onChange, openLines, onToggl
               <p className="mt-1 text-[10px] leading-relaxed text-muted">O lançamento manual de scores só desempata por tempo; menos tentativas vale pela súmula.</p>
             )}
           </div>
+        </Section>
+        {ruleSection(4)}
+      </div>
+    );
+  }
+
+  if (format === 'distance') {
+    const dd = draft.distance;
+    const durationProblem = analysis.lineProblems[DISTANCE_FIELDS.duration];
+    const noteProblem = analysis.lineProblems[DISTANCE_FIELDS.note];
+    const noteLength = dd.note.trim().length;
+    return (
+      <div className="space-y-4">
+        {formatSection}
+        <Section step={2} title="Duração e resumo" id={id('di-title')}>
+          <div className="max-w-xs">
+            <label htmlFor={id('di-duration')} className={labelClass}>Duração da prova (MM:SS)</label>
+            <input
+              id={id('di-duration')}
+              type="text"
+              inputMode="numeric"
+              autoComplete="off"
+              value={dd.duration}
+              aria-invalid={Boolean(durationProblem)}
+              aria-describedby={id('di-duration-note')}
+              onChange={(event) => onChange({ ...draft, distance: { ...dd, duration: event.target.value } })}
+              className={`${inputClass} font-number ${durationProblem ? errorInputClass : ''}`}
+            />
+            <p id={id('di-duration-note')} className={`mt-1 text-[11px] ${durationProblem ? 'font-semibold text-trading-down' : 'text-muted'}`}>
+              {durationProblem ?? 'De 00:30 a 99:59. A súmula avisa quando a duração termina.'}
+            </p>
+          </div>
+          <div>
+            <label htmlFor={id('di-note')} className={labelClass}>Resumo da prova para o judge (opcional)</label>
+            <textarea
+              id={id('di-note')}
+              rows={3}
+              value={dd.note}
+              placeholder="Ex.: 750 m de corrida e máximo de metros no remo; os parceiros trocam a cada volta."
+              aria-invalid={Boolean(noteProblem)}
+              aria-describedby={id('di-note-count')}
+              onChange={(event) => onChange({ ...draft, distance: { ...dd, note: event.target.value } })}
+              className={`${inputClass} min-h-[4.5rem] resize-y ${noteProblem ? errorInputClass : ''}`}
+            />
+            <p id={id('di-note-count')} className={`mt-1 text-[11px] ${noteProblem ? 'font-semibold text-trading-down' : 'text-muted'}`}>
+              <span className="font-number">{noteLength}</span>/{WORKOUT_STRUCTURE_LIMITS.maxNoteLength} caracteres. Aparece para o judge na súmula.
+            </p>
+          </div>
+        </Section>
+        <Section step={3} title="Pontuação" id={id('di-score-title')}>
+          <p className="text-sm leading-relaxed text-white">
+            Maior distância vence. O judge informa o total em metros. Sem desempate nesta versão: empates dividem a posição.
+          </p>
         </Section>
         {ruleSection(4)}
       </div>

@@ -1000,3 +1000,93 @@ test('intervalado: abrir, gravar (com um registro fora da janela) e enviar publi
     { A: [3, 3], B: [1, 1], C: [1, 1], D: [4, 4] }
   );
 });
+
+// ---------------------------------------------------------------------------
+// Story 1.66: Distância pelo caminho real (caso aprovado do README: A e B 6330, C 5915, D ausente)
+// ---------------------------------------------------------------------------
+
+test('distância: abrir, gravar o total (o último vale) e enviar publica os metros; sem lançamento é recusado; ausente 0 m; posições 1, 1, 3, 4', async (t) => {
+  quiet(t);
+  const DISTANCE = validateWorkoutStructure({
+    version: 4, format: 'distance', totalReps: 0, timeCapSeconds: 1200, incomplete: null, tieBreak: null, generator: null, customized: true,
+    entry: { mode: 'both', marking: 'reps', publish: 'after_review' },
+    segments: [], maxLoad: null, scoreDisplay: null, interval: null,
+    distance: { unit: 'm', note: '750 m corrida; máx. distância no remo.' }
+  }).structure;
+  const athletes = ['A', 'B', 'C', 'D', 'E'];
+  seed();
+  database = createFakeSupabase({
+    users: [MANAGER, JUDGE],
+    events: [{ id: 'ev-dist', name: 'Distância', date: '2026-11-01', location: 'Recife', organizer_id: MANAGER.id, event_type: 'functional_fitness', status: 'upcoming',
+      event_schedule: [{ id: 'h-dist', kind: 'heat', workoutId: 'wod-dist', heatNumber: 1, athleteIds: athletes }] }],
+    event_judges: [{ event_id: 'ev-dist', judge_user_id: JUDGE.id }],
+    divisions: [{ id: 'd-dist', event_id: 'ev-dist', name: 'RX' }],
+    athletes: athletes.map((id) => ({ id, name: `Dupla ${id}`, box: 'Box', division_id: 'd-dist' })),
+    workouts: [{ id: 'wod-dist', event_id: 'ev-dist', name: 'Remo e corrida', code: 'W1', order_index: 1, type: 'distance', time_cap: '20:00', tie_breaker: '', division_id: null, structure: DISTANCE }],
+    scores: [],
+    registrations: []
+  });
+  const open = (athleteId, lane) => post(JUDGE, { action: 'open', eventId: 'ev-dist', workoutId: 'wod-dist', athleteId, heatId: 'h-dist', lane });
+  const send = async (athleteId, lane, events) => {
+    const sheetId = (await open(athleteId, lane)).body.sheet.id;
+    const appended = await post(JUDGE, { action: 'append', sheetId, fromSeq: 0, events });
+    assert.equal(appended.status, 200, appended.body.error);
+    return { sheetId, submitted: await post(JUDGE, { action: 'submit', sheetId, expectedCount: events.length }) };
+  };
+
+  // Dupla A: lança 4.500 aos 10:00 e o total de 6.330 aos 20:00; o último vale.
+  const openedA = await open('A', 1);
+  assert.equal(openedA.status, 200, openedA.body.error);
+  assert.deepEqual(openedA.body.sheet.structure, DISTANCE, 'a súmula guarda a cópia da estrutura v4');
+  const sheetA = openedA.body.sheet.id;
+  const logA = [e({ t: 'dist', v: 4500, at: 600 }), e({ t: 'dist', v: 6330, at: 1200 })];
+  assert.deepEqual((await post(JUDGE, { action: 'append', sheetId: sheetA, fromSeq: 0, events: logA })).body, { count: 2 });
+
+  // O servidor confere cada registro: total fora do teto ou não inteiro, rep, fill, set, adj, time e attempt não valem na distância.
+  const refuse = async (event, message) => {
+    const response = await post(JUDGE, { action: 'append', sheetId: sheetA, fromSeq: 2, events: [e(event)] });
+    assert.equal(response.status, 400, JSON.stringify(event));
+    assert.match(response.body.error, message, JSON.stringify(event));
+  };
+  await refuse({ t: 'dist', v: 100000, at: 1210 }, /o total deve ser um número inteiro de metros entre 0 e 99\.999/);
+  await refuse({ t: 'dist', v: 3.5, at: 1210 }, /o total deve ser um número inteiro de metros/);
+  await refuse({ t: 'rep', seg: 'mx', at: 1210 }, /etapa inexistente na prova/);
+  await refuse({ t: 'time', target: 'final', v: 600, at: 1210 }, /o ajuste do tempo não vale para esta prova/);
+  await refuse({ t: 'attempt', lift: 'l1', load: 100, ok: true, at: 1210 }, /movimento inexistente na prova/);
+  assert.equal(rows('scoresheet_events').filter((row) => row.sheet_id === sheetA).length, 2, 'nada foi gravado nas recusas');
+
+  const submittedA = await post(JUDGE, { action: 'submit', sheetId: sheetA, expectedCount: 2 });
+  assert.equal(submittedA.status, 200, submittedA.body.error);
+  assert.deepEqual([submittedA.body.sheet.officialResult, submittedA.body.sheet.officialTieBreak, submittedA.body.summary], ['6330', null, '6.330 m']);
+  assert.deepEqual(scoreOf('A', 'wod-dist'), { athlete_id: 'A', workout_id: 'wod-dist', result: '6330', value: 6330, splits: {}, scoresheet_id: sheetA, result_status: null, rank: 1, points: 1 });
+
+  const sent = { B: await send('B', 2, [e({ t: 'dist', v: 6330, at: 1205 })]), C: await send('C', 3, [e({ t: 'dist', v: 5915, at: 1198 })]) };
+  for (const [athleteId, expected] of [['B', 6330], ['C', 5915]]) {
+    assert.equal(sent[athleteId].submitted.status, 200, sent[athleteId].submitted.body.error);
+    assert.deepEqual([scoreOf(athleteId, 'wod-dist').result, scoreOf(athleteId, 'wod-dist').value, scoreOf(athleteId, 'wod-dist').result_status], [String(expected), expected, null]);
+  }
+
+  // Enviar sem nenhum lançamento é recusado (e desfazer o único lançamento volta a recusar).
+  const sheetE = (await open('E', 5)).body.sheet.id;
+  const emptySubmit = await post(JUDGE, { action: 'submit', sheetId: sheetE, expectedCount: 0 });
+  assert.equal(emptySubmit.status, 400);
+  assert.equal(emptySubmit.body.error, 'Informe a distância total antes de enviar.');
+  await post(JUDGE, { action: 'append', sheetId: sheetE, fromSeq: 0, events: [e({ t: 'dist', v: 5000, at: 900 }), e({ t: 'undo', of: 0, at: 910 })] });
+  const undone = await post(JUDGE, { action: 'submit', sheetId: sheetE, expectedCount: 2 });
+  assert.equal(undone.status, 400);
+  assert.equal(undone.body.error, 'Informe a distância total antes de enviar.');
+  assert.equal(scoreOf('E', 'wod-dist'), undefined, 'nada foi publicado');
+
+  // Ausente: 0 m, depois de qualquer resultado real.
+  const sheetD = (await open('D', 4)).body.sheet.id;
+  const absent = await post(JUDGE, { action: 'absent', sheetId: sheetD });
+  assert.equal(absent.status, 200, absent.body.error);
+  assert.deepEqual([absent.body.sheet.officialResult, absent.body.sheet.absent], ['0', true]);
+  assert.deepEqual([scoreOf('D', 'wod-dist').result, scoreOf('D', 'wod-dist').value, scoreOf('D', 'wod-dist').result_status, scoreOf('D', 'wod-dist').splits], ['0', 0, 'absent', {}]);
+
+  // Ranking e pontos recalculados pelo caminho existente (tipo legado distance, "maior vence", sem desempate).
+  assert.deepEqual(
+    Object.fromEntries(['A', 'B', 'C', 'D'].map((id) => [id, [scoreOf(id, 'wod-dist').rank, scoreOf(id, 'wod-dist').points]])),
+    { A: [1, 1], B: [1, 1], C: [3, 3], D: [4, 4] }
+  );
+});

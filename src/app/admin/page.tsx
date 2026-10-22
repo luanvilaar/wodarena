@@ -7575,12 +7575,12 @@ export default function AdminPage() {
               />
             </div>
 
-            {workoutStructureSupported && (wodStructure || wodType === 'fortime' || wodType === 'amrap' || wodType === 'maxweight') && (
+            {workoutStructureSupported && (wodStructure || wodType === 'fortime' || wodType === 'amrap' || wodType === 'maxweight' || wodType === 'distance') && (
               <WorkoutStructureEditor
                 key={editingWorkoutId || 'nova-prova'}
                 value={wodStructure}
                 onChange={handleWorkoutStructureChange}
-                defaultFormat={wodType === 'amrap' ? 'amrap' : wodType === 'maxweight' ? 'max_load' : 'for_time'}
+                defaultFormat={wodType === 'amrap' ? 'amrap' : wodType === 'maxweight' ? 'max_load' : wodType === 'distance' ? 'distance' : 'for_time'}
                 workoutName={wodName}
                 timeCapHint={wodTimeCap}
                 lockedSheets={editingWorkoutId ? sheetLocks[editingWorkoutId] ?? 0 : 0}

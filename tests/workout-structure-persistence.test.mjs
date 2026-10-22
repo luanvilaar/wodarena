@@ -702,7 +702,7 @@ test('intervalado: a rota grava e edita a estrutura v3, deriva reps, 18:00 e sem
   assert.deepEqual(created, { status: 200, body: { success: true } });
   const saved = rowOf('wod-int');
   assert.deepEqual(saved.structure, validateWorkoutStructure(intervalStructure()).structure);
-  assert.equal(saved.structure.version, 3);
+  assert.equal(saved.structure.version, 4);
   assert.deepEqual([saved.type, saved.time_cap, saved.tie_breaker], ['reps', '18:00', '']);
   assert.deepEqual(deriveLegacyWorkoutFields(saved.structure), { type: 'reps', timeCap: '18:00', tieBreaker: '' });
 
@@ -736,7 +736,7 @@ test('intervalado: a rota grava e edita a estrutura v3, deriva reps, 18:00 e sem
 
 test('intervalado: o selo da página pública segue vindo do tipo legado (Reps), sem mudança de componente', () => {
   assert.match(read('../src/messages/pt-br.json'), /"typeReps": "Reps"/);
-  assert.match(read('../src/app/[locale]/event/[id]/EventView.tsx'), /wod\.type === 'maxweight' \? 'typeMaxWeight' : 'typeReps'/);
+  assert.match(read('../src/app/[locale]/event/[id]/EventView.tsx'), /wod\.type === 'maxweight' \? 'typeMaxWeight' : wod\.type === 'distance' \? 'typeDistance' : 'typeReps'/);
 });
 
 // Story 1.61 (AC6): o que o construtor monta para o Intervalado passa na rota com os legados derivados
@@ -773,4 +773,66 @@ test('intervalado pelo construtor: criar com os legados derivados, reabrir, edit
   assert.equal(updated.status, 200, updated.body.error);
   assert.deepEqual([rowOf('wod-iv-painel').time_cap, rowOf('wod-iv-painel').structure.timeCapSeconds, rowOf('wod-iv-painel').structure.interval.rounds], ['15:00', 900, 4]);
   assert.equal(editor.summarizeStructure(rowOf('wod-iv-painel').structure), 'Intervalado · 4 rounds · 03:00 ON / 01:00 OFF · 15:00');
+});
+
+// ---------------------------------------------------------------------------
+// Story 1.66: prova de distância (contrato v4), sem migration
+// ---------------------------------------------------------------------------
+
+const distanceStructure = (overrides = {}, distanceOverrides = {}) => ({
+  version: 4, format: 'distance', totalReps: 0, timeCapSeconds: 1200, incomplete: null, tieBreak: null, generator: null, customized: true,
+  entry: { mode: 'both', marking: 'reps', publish: 'after_review' },
+  segments: [], maxLoad: null, scoreDisplay: null, interval: null,
+  distance: { unit: 'm', note: '750 m corrida; máx. distância no remo.', ...distanceOverrides },
+  ...overrides
+});
+
+test('distância: a rota grava e edita a estrutura v4, deriva distance, 20:00 e sem desempate, e recusa divergência dos legados', async (t) => {
+  quietConsole(t);
+  seed();
+  const created = await persist(MANAGER, 'createWorkout', createWorkoutPayload({ id: 'wod-dist', name: 'Remo e corrida', description: 'x', code: 'W4', order_index: 4, structure: distanceStructure() }));
+  assert.deepEqual(created, { status: 200, body: { success: true } });
+  const saved = rowOf('wod-dist');
+  assert.deepEqual(saved.structure, validateWorkoutStructure(distanceStructure()).structure);
+  assert.equal(saved.structure.version, 4);
+  assert.deepEqual([saved.type, saved.time_cap, saved.tie_breaker], ['distance', '20:00', '']);
+  assert.deepEqual(deriveLegacyWorkoutFields(saved.structure), { type: 'distance', timeCap: '20:00', tieBreaker: '' });
+
+  // Legado igual ao derivado passa; divergente é recusado com a mesma mensagem de hoje, com o rótulo da distância.
+  assert.equal((await persist(MANAGER, 'createWorkout', createWorkoutPayload({ id: 'wod-dist-2', name: 'Distância 2', structure: distanceStructure(), type: 'distance', time_cap: '20:00', tie_breaker: '' }))).status, 200);
+  const before = database.snapshot();
+  const cases = [
+    [{ type: 'reps' }, /^O tipo da prova vem da estrutura \(Distância\) e não pode ser alterado separadamente\.$/],
+    [{ type: 'fortime' }, /^O tipo da prova vem da estrutura \(Distância\) e não pode ser alterado separadamente\.$/],
+    [{ time_cap: '15:00' }, /^O time cap da prova vem da estrutura \(20:00\) e não pode ser alterado separadamente\.$/],
+    [{ tie_breaker: 'Tempo' }, /^O desempate da prova vem da estrutura \(sem desempate\) e não pode ser alterado separadamente\.$/]
+  ];
+  for (const [legacy, message] of cases) {
+    const create = await persist(MANAGER, 'createWorkout', createWorkoutPayload({ id: 'wod-dist-3', name: 'Prova', structure: distanceStructure(), ...legacy }));
+    assert.equal(create.status, 400, JSON.stringify(legacy));
+    assert.match(create.body.error, message);
+    const update = await persist(MANAGER, 'updateWorkout', updateWorkoutPayload(legacy, 'wod-dist'));
+    assert.equal(update.status, 400, JSON.stringify(legacy));
+    assert.match(update.body.error, message);
+  }
+  assert.deepEqual(database.snapshot(), before, 'nada gravado nas recusas');
+
+  // Editar: a duração derivada acompanha; estrutura inválida (unidade, segmentos, desempate) é recusada sem eco do JSON.
+  assert.equal((await persist(MANAGER, 'updateWorkout', updateWorkoutPayload({ structure: distanceStructure({ timeCapSeconds: 900 }) }, 'wod-dist'))).status, 200);
+  assert.deepEqual([rowOf('wod-dist').time_cap, rowOf('wod-dist').structure.timeCapSeconds, rowOf('wod-dist').type], ['15:00', 900, 'distance']);
+  const wrongUnit = await persist(MANAGER, 'updateWorkout', updateWorkoutPayload({ structure: distanceStructure({}, { unit: 'cal' }) }, 'wod-dist'));
+  assert.equal(wrongUnit.status, 400);
+  assert.match(wrongUnit.body.error, /^Na distância, a unidade \(unit\) deve ser m \(metros\)\.$/);
+  const withTieBreak = await persist(MANAGER, 'updateWorkout', updateWorkoutPayload({ structure: distanceStructure({ tieBreak: { kind: 'last_round', order: 'asc' } }) }, 'wod-dist'));
+  assert.equal(withTieBreak.status, 400);
+  assert.match(withTieBreak.body.error, /^A distância não tem desempate nesta versão/);
+  assert.doesNotMatch(wrongUnit.body.error + withTieBreak.body.error, /\{|"version"/);
+  assert.equal(rowOf('wod-dist').structure.timeCapSeconds, 900, 'a estrutura gravada não mudou nas recusas');
+});
+
+test('distância: estrutura v4 só entra em evento Functional Fitness, como as outras', async (t) => {
+  quietConsole(t);
+  seed();
+  const refused = await persist(MANAGER, 'createWorkout', createWorkoutPayload({ id: 'wod-dist-race', name: 'Prova', type: 'distance', time_cap: '20:00', structure: distanceStructure() }, EVENT_RACE));
+  assert.equal(refused.status, 400);
 });

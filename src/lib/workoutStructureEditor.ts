@@ -35,9 +35,13 @@ import type {
 // mesmas linhas do AMRAP, um número por movimento) e o movimento máximo, sempre
 // o último e sem meta. A duração é calculada (sem descanso depois do último
 // round) e vira o time cap da estrutura v3.
+//
+// Distância (Story 1.67, decisões em docs/design/distancia/): só a duração
+// digitada e um resumo opcional para o judge; o resultado é o total em metros
+// que o judge lança. A estrutura gerada é a v4 do contrato.
 
 export const DEFAULT_PENALTY_SECONDS_PER_REP = 1;
-export const DEFAULT_TIME_CAP_SECONDS: Record<'for_time' | 'amrap', number> = { for_time: 600, amrap: 720 };
+export const DEFAULT_TIME_CAP_SECONDS: Record<'for_time' | 'amrap' | 'distance', number> = { for_time: 600, amrap: 720, distance: 1200 };
 export const DEFAULT_LOAD_STEP_KG = 2.5;
 /** Valores iniciais do Intervalado: os do treino de referência (5 × 02:00 ON / 02:00 OFF). */
 export const DEFAULT_INTERVAL = { rounds: 5, onSeconds: 120, offSeconds: 120 } as const;
@@ -59,6 +63,11 @@ export const INTERVAL_FIELDS = {
   on: 'interval-on',
   off: 'interval-off',
   duration: 'interval-duration'
+} as const;
+/** Chaves de `lineProblems` dos campos da Distância (duração e resumo da prova). */
+export const DISTANCE_FIELDS = {
+  duration: 'distance-duration',
+  note: 'distance-note'
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -143,12 +152,19 @@ export type IntervalDraft = {
   max: BuilderIntervalMax;
 };
 
+/** Distância: a duração em MM:SS e o resumo opcional para o judge, como digitados. */
+export type DistanceDraft = {
+  duration: string;
+  note: string;
+};
+
 export type SheetDraft = {
   format: WorkoutStructureFormat;
   forTime: ForTimeDraft;
   amrap: AmrapDraft;
   maxLoad: MaxLoadDraft;
   interval: IntervalDraft;
+  distance: DistanceDraft;
   /** Próximo número para a chave de uma linha nova. */
   nextKey: number;
 };
@@ -289,6 +305,10 @@ export const createDraft = (format: WorkoutStructureFormat = 'for_time', options
       lines: [emptyLine('k4')],
       max: { key: 'k5', name: '', load: '', note: '' }
     },
+    distance: {
+      duration: initialCap && format === 'distance' ? initialCap : formatTimeInput(DEFAULT_TIME_CAP_SECONDS.distance),
+      note: ''
+    },
     nextKey: 6
   };
 };
@@ -345,6 +365,15 @@ export const draftFromStructure = (structure: WorkoutStructure): DraftResult => 
       scoring: structure.maxLoad.scoring,
       step: formatKg(structure.maxLoad.loadStepKg),
       tieBreak: tie === 'finish_time' || tie === 'fewest_attempts' ? tie : 'none'
+    };
+    return { ok: true, draft: { ...draft, nextKey: next } };
+  }
+
+  if (structure.format === 'distance') {
+    if (!structure.distance) return { ok: false, error: NOT_IN_LINES };
+    draft.distance = {
+      duration: formatTimeInput(structure.timeCapSeconds ?? DEFAULT_TIME_CAP_SECONDS.distance),
+      note: structure.distance.note
     };
     return { ok: true, draft: { ...draft, nextKey: next } };
   }
@@ -745,7 +774,7 @@ const analyzeForTime = (draft: SheetDraft): DraftAnalysis => {
   const generator = buildGenerator(lists, steps.map((step) => step.unit));
 
   return finish(analysis, {
-    version: 3,
+    version: 4,
     format: 'for_time',
     totalReps: total,
     timeCapSeconds: cap,
@@ -757,7 +786,8 @@ const analyzeForTime = (draft: SheetDraft): DraftAnalysis => {
     segments,
     maxLoad: null,
     scoreDisplay: null,
-    interval: null
+    interval: null,
+    distance: null
   });
 };
 
@@ -820,7 +850,7 @@ const analyzeAmrap = (draft: SheetDraft): DraftAnalysis => {
   const generator = buildGenerator(steps.map((step) => [step.reps]), steps.map((step) => step.unit));
 
   return finish(analysis, {
-    version: 3,
+    version: 4,
     format: 'amrap',
     totalReps: perRound,
     timeCapSeconds: duration,
@@ -832,7 +862,8 @@ const analyzeAmrap = (draft: SheetDraft): DraftAnalysis => {
     segments,
     maxLoad: null,
     scoreDisplay: am.scoreDisplay,
-    interval: null
+    interval: null,
+    distance: null
   });
 };
 
@@ -895,7 +926,7 @@ const analyzeMaxLoad = (draft: SheetDraft): DraftAnalysis => {
   if (!windowOk || Number.isNaN(step)) return finish(analysis, null);
 
   return finish(analysis, {
-    version: 3,
+    version: 4,
     format: 'max_load',
     totalReps: 0,
     timeCapSeconds: window,
@@ -907,7 +938,8 @@ const analyzeMaxLoad = (draft: SheetDraft): DraftAnalysis => {
     segments: [],
     maxLoad: { lifts, order: ml.order, scoring: ml.scoring, loadStepKg: step },
     scoreDisplay: null,
-    interval: null
+    interval: null,
+    distance: null
   });
 };
 
@@ -1036,7 +1068,7 @@ const analyzeInterval = (draft: SheetDraft): DraftAnalysis => {
   });
 
   return finish(analysis, {
-    version: 3,
+    version: 4,
     format: 'interval',
     totalReps: perRound,
     timeCapSeconds: timing.totalSeconds,
@@ -1058,12 +1090,58 @@ const analyzeInterval = (draft: SheetDraft): DraftAnalysis => {
         load: maxLoad.kg === null ? null : { value: maxLoad.kg, unit: 'kg' },
         note: iv.max.note.trim()
       }
-    }
+    },
+    distance: null
+  });
+};
+
+const analyzeDistance = (draft: SheetDraft): DraftAnalysis => {
+  const dd = draft.distance;
+  const items: ChecklistItem[] = [];
+  const lineProblems: Record<string, string> = {};
+
+  const duration = timeCheck(dd.duration, 'Duração', items);
+  if (duration === null) lineProblems[DISTANCE_FIELDS.duration] = items[items.length - 1].text;
+  items.push({ tone: 'ok', text: 'Resultado em metros, maior vence' });
+  items.push({ tone: 'muted', text: 'Sem desempate nesta versão' });
+
+  const note = dd.note.trim();
+  if (note.length > LIMITS.maxNoteLength) {
+    const text = `Resumo da prova: até ${LIMITS.maxNoteLength} caracteres (tem ${note.length}).`;
+    items.push({ tone: 'error', text });
+    lineProblems[DISTANCE_FIELDS.note] = text;
+  } else {
+    items.push(note
+      ? { tone: 'ok', text: 'Resumo para o judge preenchido' }
+      : { tone: 'muted', text: 'Resumo para o judge: opcional, vazio' });
+  }
+
+  const analysis: DraftAnalysis = {
+    format: 'distance', items, problems: [], structure: null, steps: [], rounds: 1, derivedRounds: null, lineProblems
+  };
+  if (duration === null || note.length > LIMITS.maxNoteLength) return finish(analysis, null);
+
+  return finish(analysis, {
+    version: 4,
+    format: 'distance',
+    totalReps: 0,
+    timeCapSeconds: duration,
+    incomplete: null,
+    tieBreak: null,
+    generator: null,
+    customized: true,
+    entry: { ...ENTRY_DEFAULTS },
+    segments: [],
+    maxLoad: null,
+    scoreDisplay: null,
+    interval: null,
+    distance: { unit: 'm', note }
   });
 };
 
 /** Etapas, lista de conferência e a estrutura gerada para o formato escolhido. */
 export const analyzeDraft = (draft: SheetDraft): DraftAnalysis => {
+  if (draft.format === 'distance') return analyzeDistance(draft);
   if (draft.format === 'amrap') return analyzeAmrap(draft);
   if (draft.format === 'max_load') return analyzeMaxLoad(draft);
   if (draft.format === 'interval') return analyzeInterval(draft);
@@ -1122,6 +1200,13 @@ const intervalRule = (structure: WorkoutStructure, interval: WorkoutInterval): R
 /** A regra da prova em uma frase, para o gestor conferir (partes em destaque marcadas). */
 export const describeStructureRule = (structure: WorkoutStructure): RulePart[] => {
   if (structure.format === 'interval' && structure.interval) return intervalRule(structure, structure.interval);
+
+  if (structure.format === 'distance') {
+    return [
+      plain('Vale a '), strong('maior distância total'), plain(' em '), strong(formatTimeInput(structure.timeCapSeconds ?? 0)),
+      plain('. O judge informa o total em metros. Empates dividem a posição, sem desempate.')
+    ];
+  }
 
   if (structure.format === 'max_load' && structure.maxLoad) {
     const ml = structure.maxLoad;
@@ -1190,6 +1275,7 @@ export const describeStructureRule = (structure: WorkoutStructure): RulePart[] =
 
 /** "For Time · 6 etapas · 90 repetições · cap 10:00" (selo da lista e resumo do formulário). */
 export const summarizeStructure = (structure: WorkoutStructure) => {
+  if (structure.format === 'distance') return `Distância · ${formatTimeInput(structure.timeCapSeconds ?? 0)} · maior vence`;
   if (structure.format === 'interval') {
     const interval = structure.interval;
     if (!interval) return 'Intervalado';

@@ -131,10 +131,12 @@ test('súmula na quadra: o intervalado revisa ao parar, mostra "repetições" e 
   assert.ok(finished.indexOf("'interval'") < finished.indexOf('deriveSheetState'), 'o intervalado sai antes do motor de segmentos');
   assert.match(sheet, /const showReview = writable && \(clock\.phase === 'stopped' \|\| finished\);/);
   assert.match(sheet, /structure\.format === 'max_load' \? ' kg' : structure\.format === 'interval' \? \(value === 1 \? ' repetição' : ' repetições'\) : ''/);
-  assert.match(sheet, /\{outcome\.result\.replace\('\.', ','\)\}\{resultUnit\(outcome\.value\)\}/);
+  // Story 1.68: o resultado passa por resultText (a distância em metros; os outros formatos como antes, com resultUnit).
+  assert.match(sheet, /\$\{result\.replace\('\.', ','\)\}\$\{resultUnit\(value\)\}/);
+  assert.match(sheet, /\{resultText\(outcome\.result, outcome\.value\)\}/);
   assert.match(sheet, /\{\(structure\.format === 'for_time' \|\| structure\.format === 'amrap'\) && <OfficialTimeForm /);
   assert.doesNotMatch(sheet, /structure\.format !== 'max_load' && <OfficialTimeForm/);
-  assert.match(sheet, /Enviar \{outcome\.ok \? outcome\.result\.replace\('\.', ','\) : ''\} de \{context\.athleteName\}\? O resultado vai direto para o ranking\./);
+  assert.match(sheet, /Enviar \{outcome\.ok \? resultText\(outcome\.result, outcome\.value\) : ''\} de \{context\.athleteName\}\? O resultado vai direto para o ranking\./);
   assert.match(sheet, /const canMarkAbsent = writable && sync\.confirmedCount === 0 && sync\.pendingCount === 0 && events\.length === 0;/);
 });
 

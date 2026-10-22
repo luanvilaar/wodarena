@@ -21,6 +21,7 @@ import {
   checkOfficialTime,
   deriveMaxLoadState,
   deriveSheetState,
+  formatMeters,
   formatWorkoutTime,
   type SheetEvent,
   type WorkoutStructure
@@ -35,7 +36,9 @@ import { parseTimeInput } from '@/lib/workoutStructureEditor';
 // (Story 1.59) só aparece com a súmula sem nenhum registro e publica o pior
 // resultado da prova, calculado pelo servidor (a requisição não leva resultado).
 // O Intervalado (Story 1.62) não termina antes do relógio parado, mostra o
-// resultado em repetições e não tem ajuste pelo cronômetro oficial.
+// resultado em repetições e não tem ajuste pelo cronômetro oficial. A Distância
+// (Story 1.68) também só revisa com o relógio parado, mostra o resultado em
+// metros ("6.330 m") e não tem ajuste pelo cronômetro oficial.
 
 type SheetPayload = {
   sheet: {
@@ -209,13 +212,19 @@ function SheetSession({ payload }: { payload: SheetPayload }) {
   const resultUnit = (value: number) => (
     structure.format === 'max_load' ? ' kg' : structure.format === 'interval' ? (value === 1 ? ' repetição' : ' repetições') : ''
   );
+  // O resultado como a conferência, a confirmação e o cartão publicado o escrevem: a distância em metros ("6.330 m"), os outros como estão.
+  const resultText = (result: string, value: number) => (
+    structure.format === 'distance' ? `${formatMeters(value)} m` : `${result.replace('.', ',')}${resultUnit(value)}`
+  );
   const showReview = writable && (clock.phase === 'stopped' || finished);
   const syncReady = sync.pendingCount === 0 && sync.status === 'saved';
   // Atleta ausente: só sem nenhum registro, nem no servidor nem na fila do aparelho.
   const canMarkAbsent = writable && sync.confirmedCount === 0 && sync.pendingCount === 0 && events.length === 0;
   // Só informativo (o servidor calcula de novo); com erro, a confirmação omite o resultado.
   const absentOutcome = useMemo(() => computeAbsentOutcome(structure), [structure]);
-  const absentResultText = absentOutcome.ok ? `${absentOutcome.result.replace('.', ',')}${structure.format === 'max_load' ? ' kg' : ''}` : '';
+  const absentResultText = absentOutcome.ok
+    ? (structure.format === 'distance' ? `${formatMeters(absentOutcome.value)} m` : `${absentOutcome.result.replace('.', ',')}${structure.format === 'max_load' ? ' kg' : ''}`)
+    : '';
 
   const submit = async () => {
     setSubmitting(true);
@@ -298,7 +307,9 @@ function SheetSession({ payload }: { payload: SheetPayload }) {
         <div className="space-y-1 rounded-2xl border-2 border-trading-up bg-trading-up/10 p-4">
           <p className="text-[11px] font-bold uppercase tracking-widest text-trading-up">Publicada no ranking</p>
           {published.absent && <p className="text-lg font-extrabold">Atleta ausente</p>}
-          <p className="font-number text-4xl font-extrabold">{published.result}</p>
+          <p className="font-number text-4xl font-extrabold">
+            {structure.format === 'distance' && published.result ? `${formatMeters(Number(published.result))} m` : published.result}
+          </p>
           {published.tieBreak && <p className="text-sm font-semibold">Tie-break {published.tieBreak}</p>}
           {published.corrected && <p className="text-xs font-semibold text-muted">Corrigida pelo gestor.</p>}
         </div>
@@ -363,13 +374,13 @@ function SheetSession({ payload }: { payload: SheetPayload }) {
           <h2 id="review-title" className="text-sm font-extrabold uppercase tracking-wider">Conferir e enviar</h2>
           {outcome.ok ? (
             <div className="space-y-0.5">
-              <p className="font-number text-4xl font-extrabold">{outcome.result.replace('.', ',')}{resultUnit(outcome.value)}</p>
+              <p className="font-number text-4xl font-extrabold">{resultText(outcome.result, outcome.value)}</p>
               <p className="text-sm font-semibold text-muted">{outcome.summary}{outcome.tieBreak ? ` · tie-break ${outcome.tieBreak}` : ''}</p>
             </div>
           ) : (
             <p role="alert" className="text-sm font-bold text-trading-down">{outcome.error}</p>
           )}
-          {/* O cronômetro oficial só vale para For Time e AMRAP (carga máxima e intervalado recusam o `time`). */}
+          {/* O cronômetro oficial só vale para For Time e AMRAP (carga máxima, intervalado e distância recusam o `time`). */}
           {(structure.format === 'for_time' || structure.format === 'amrap') && <OfficialTimeForm structure={structure} events={events} at={at} onRecord={sync.record} />}
 
           {!syncReady && <p className="text-xs font-semibold text-muted">Aguarde os registros chegarem ao servidor para enviar.</p>}
@@ -377,7 +388,7 @@ function SheetSession({ payload }: { payload: SheetPayload }) {
           {confirming ? (
             <div role="group" aria-label="Confirmar envio" className="space-y-2 rounded-xl border border-primary bg-primary/10 p-3">
               <p className="text-sm font-bold">
-                Enviar {outcome.ok ? outcome.result.replace('.', ',') : ''} de {context.athleteName}? O resultado vai direto para o ranking.
+                Enviar {outcome.ok ? resultText(outcome.result, outcome.value) : ''} de {context.athleteName}? O resultado vai direto para o ranking.
               </p>
               <div className="grid grid-cols-2 gap-2">
                 <button type="button" onClick={() => setConfirming(false)} disabled={submitting} className={`${buttonClass} border-card-border bg-dark-gray`}>

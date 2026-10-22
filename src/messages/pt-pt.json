@@ -313,6 +313,7 @@
       "typeAmrap": "AMRAP",
       "typeMaxWeight": "Carga Máxima",
       "typeReps": "Reps",
+      "typeDistance": "Distância",
       "capLabel": "Cap: {cap}"
     },
     "sidebar": {

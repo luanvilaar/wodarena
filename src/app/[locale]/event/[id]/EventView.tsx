@@ -1407,7 +1407,7 @@ export function EventView({ eventId }: { eventId: string }) {
                 ) : (
                   <div className="space-y-4">
                     {event.workouts.map((wod) => {
-                      const typeKey = wod.type === 'fortime' ? 'typeForTime' : wod.type === 'amrap' ? 'typeAmrap' : wod.type === 'maxweight' ? 'typeMaxWeight' : 'typeReps';
+                      const typeKey = wod.type === 'fortime' ? 'typeForTime' : wod.type === 'amrap' ? 'typeAmrap' : wod.type === 'maxweight' ? 'typeMaxWeight' : wod.type === 'distance' ? 'typeDistance' : 'typeReps';
                       return (
                         <div key={wod.id} className="space-y-3 rounded-xl border border-card-border bg-card p-6 transition-colors hover:border-primary/60">
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-card-border/50 pb-2">

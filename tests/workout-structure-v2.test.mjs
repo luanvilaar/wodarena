@@ -157,9 +157,10 @@ test('versão 1 vira 2: segmentos em repetições, sem carga máxima e AMRAP em 
     segments: [{ id: 'a', round: 1, name: 'Thruster', reps: 21, load: null, note: '', required: true, mark: 'reps' }]
   };
   const upgraded = valid(v1ForTime);
-  // Story 1.60: a versão 1 sai normalizada na 3, com interval vazio.
-  assert.equal(upgraded.version, 3);
+  // Story 1.66: a versão 1 sai normalizada na 4, com interval e distance vazios.
+  assert.equal(upgraded.version, 4);
   assert.equal(upgraded.interval, null);
+  assert.equal(upgraded.distance, null);
   assert.equal(upgraded.segments[0].unit, 'reps');
   assert.equal(upgraded.maxLoad, null);
   assert.equal(upgraded.scoreDisplay, null);
@@ -177,10 +178,11 @@ test('versão 1 vira 2: segmentos em repetições, sem carga máxima e AMRAP em 
 test('versão 2: idempotente e com as chaves do contrato na ordem', () => {
   for (const structure of [FRAN, CINDY, TOTAL, valid(unitsInput())]) {
     assert.deepEqual(valid(JSON.parse(JSON.stringify(structure))), structure);
-    // Story 1.60: a versão 2 sai normalizada na 3, com a chave interval (vazia) no fim.
-    assert.deepEqual(Object.keys(structure), ['version', 'format', 'totalReps', 'timeCapSeconds', 'incomplete', 'tieBreak', 'generator', 'customized', 'entry', 'segments', 'maxLoad', 'scoreDisplay', 'interval']);
-    assert.equal(structure.version, 3);
+    // Story 1.66: a versão 2 sai normalizada na 4, com as chaves interval e distance (vazias) no fim.
+    assert.deepEqual(Object.keys(structure), ['version', 'format', 'totalReps', 'timeCapSeconds', 'incomplete', 'tieBreak', 'generator', 'customized', 'entry', 'segments', 'maxLoad', 'scoreDisplay', 'interval', 'distance']);
+    assert.equal(structure.version, 4);
     assert.equal(structure.interval, null);
+    assert.equal(structure.distance, null);
   }
 });
 

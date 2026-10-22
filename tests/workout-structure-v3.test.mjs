@@ -111,10 +111,11 @@ const athleteLog = (perRound, lastRoundF2 = 15) => perRound.flatMap((maxReps, in
 // Contrato v3 (AC1)
 // ---------------------------------------------------------------------------
 
-test('versão 3: o caso aprovado é aceito, normalizado e idempotente, com as chaves do contrato na ordem', () => {
-  assert.equal(WORKOUT_STRUCTURE_VERSION, 3);
+test('versão 3: o caso aprovado é aceito, normalizado (hoje na 4) e idempotente, com as chaves do contrato na ordem', () => {
+  // Story 1.66: a versão do contrato passou a 4; a 3 continua aceita e sai normalizada na 4, com distance vazio.
+  assert.equal(WORKOUT_STRUCTURE_VERSION, 4);
   assert.deepEqual(INTERVAL, {
-    version: 3,
+    version: 4,
     format: 'interval',
     totalReps: 21,
     timeCapSeconds: 1080,
@@ -126,9 +127,10 @@ test('versão 3: o caso aprovado é aceito, normalizado e idempotente, com as ch
     segments: [fixed('f1', 'Ring Muscle Up', 6), fixed('f2', 'Box Jump Over', 15, { note: '24/20 in' })],
     maxLoad: null,
     scoreDisplay: null,
-    interval: { rounds: 5, onSeconds: 120, offSeconds: 120, max: { id: 'mx', name: 'Squat Clean', load: { value: 80, unit: 'kg' }, note: '' } }
+    interval: { rounds: 5, onSeconds: 120, offSeconds: 120, max: { id: 'mx', name: 'Squat Clean', load: { value: 80, unit: 'kg' }, note: '' } },
+    distance: null
   });
-  assert.deepEqual(Object.keys(INTERVAL), ['version', 'format', 'totalReps', 'timeCapSeconds', 'incomplete', 'tieBreak', 'generator', 'customized', 'entry', 'segments', 'maxLoad', 'scoreDisplay', 'interval']);
+  assert.deepEqual(Object.keys(INTERVAL), ['version', 'format', 'totalReps', 'timeCapSeconds', 'incomplete', 'tieBreak', 'generator', 'customized', 'entry', 'segments', 'maxLoad', 'scoreDisplay', 'interval', 'distance']);
   assert.deepEqual(valid(JSON.parse(JSON.stringify(INTERVAL))), INTERVAL, 'validar de novo devolve a mesma estrutura');
 
   // Textos do máximo saem sem espaços nas pontas, e o resultado é um objeto novo.
@@ -239,13 +241,13 @@ test('versão 3: o campo interval é obrigatório no intervalado e vazio nos out
   assert.deepEqual(validateWorkoutStructure(hostile), { ok: false, error: 'A estrutura da prova é inválida.' });
 });
 
-test('versões: a 1 e a 2 entram e saem na 3 com interval vazio; nelas o intervalado é recusado com mensagem própria', () => {
+test('versões: a 1 e a 2 entram e saem na 4 com interval vazio; nelas o intervalado é recusado com mensagem própria', () => {
   const fromV1 = valid(forTimeV1());
   const fromV2 = valid(forTimeV2());
   for (const structure of [fromV1, fromV2]) {
-    assert.equal(structure.version, 3);
+    assert.equal(structure.version, 4);
     assert.equal(structure.interval, null);
-    assert.deepEqual(valid(structure), structure, 'a 3 revalidada é igual');
+    assert.deepEqual(valid(structure), structure, 'a 4 revalidada é igual');
   }
   assert.deepEqual(fromV1, fromV2);
 
@@ -256,7 +258,7 @@ test('versões: a 1 e a 2 entram e saem na 3 com interval vazio; nelas o interva
   rejects({ ...intervalInput(), version: 1 }, ownMessage);
   const v2Format = { ...forTimeV2(), format: 'interval' };
   rejects(v2Format, ownMessage);
-  rejects({ ...forTimeV2(), version: 4 }, /^A versão da estrutura da prova deve ser 1, 2 ou 3\.$/);
+  rejects({ ...forTimeV2(), version: 5 }, /^A versão da estrutura da prova deve ser 1, 2, 3 ou 4\.$/);
 });
 
 test('reconcileWorkoutStructure copia o interval por valor e campos legados do intervalado são reps, a duração e sem desempate', () => {

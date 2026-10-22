@@ -2,11 +2,15 @@ import {
   UNIT_WORDS,
   WORKOUT_STRUCTURE_LIMITS,
   checkIntervalEntry,
+  formatMeters,
   formatWorkoutTime,
   intervalPhaseAt,
+  parseMetersInput,
   workUnitWord
 } from '@/lib/workoutStructure';
 import type {
+  DistanceSheetResult,
+  DistanceSheetState,
   IntervalPhase,
   IntervalSheetResult,
   IntervalSheetState,
@@ -20,14 +24,15 @@ import type {
 } from '@/lib/workoutStructure';
 
 // Modelo de tela da súmula digital do judge (Story 1.44; unidades e novos
-// desempates na 1.48, carga máxima na 1.47, intervalado na 1.62). Puro e sem
+// desempates na 1.48, carga máxima na 1.47, intervalado na 1.62, distância na
+// 1.68). Puro e sem
 // DOM: pega a estrutura da prova, o estado e o resultado que o motor calculou
 // e devolve o que a tela precisa mostrar. Nenhum score é calculado aqui; o texto é português fixo,
 // como no restante da área do judge.
 
 // Eventos que o judge pode desfazer. `undo` nunca é alvo (o motor não tem
 // "refazer": desfazer um desfazer não tem efeito).
-const UNDOABLE_EVENT_TYPES = new Set<string>(['rep', 'fill', 'set', 'adj', 'time', 'attempt']);
+const UNDOABLE_EVENT_TYPES = new Set<string>(['rep', 'fill', 'set', 'adj', 'time', 'attempt', 'dist']);
 
 /**
  * Posição do último evento que ainda pode ser desfeito: um evento de contagem,
@@ -874,4 +879,129 @@ export const buildIntervalResultSummary = (
     warning,
     note: 'O servidor calcula o mesmo resultado a partir dos registros. O número do aparelho não é aceito como está.'
   };
+};
+
+// ---------------------------------------------------------------------------
+// Distância (Story 1.68, Maquete 2 de docs/design/distancia/)
+// ---------------------------------------------------------------------------
+
+/** Quantos lançamentos o histórico da tela mostra (AUTO-DECISION 2 da Story 1.68). */
+export const DISTANCE_HISTORY_LIMIT = 5;
+
+/** Quilômetros com vírgula decimal e até três casas, sem zeros à direita (6330 → "6,33", 6000 → "6", 5915 → "5,915"). */
+export const formatKm = (meters: number) => {
+  const whole = Math.max(0, Math.floor(Number.isFinite(meters) ? meters : 0));
+  const rest = String(whole % 1000).padStart(3, '0').replace(/0+$/, '');
+  const km = Math.floor(whole / 1000);
+  return rest ? `${km},${rest}` : String(km);
+};
+
+export type DistanceHistoryRow = {
+  /** Posição do evento no log (o alvo de um `undo`). */
+  position: number;
+  meters: number;
+  /** "6.330 m". */
+  metersLabel: string;
+  /** Horário do relógio do lançamento ("15:48"). */
+  atLabel: string;
+};
+
+export type DistanceViewModel = {
+  durationSeconds: number;
+  /** "20:00". */
+  durationLabel: string;
+  /** O segundo do relógio que o evento grava ("15:48"). */
+  clockLabel: string;
+  /** Do relógio em relação à duração, de 0 a 100. */
+  clockPercent: number;
+  /** Relógio rodando na duração ou além dela: "Tempo esgotado. Pare o relógio.". */
+  timeUp: boolean;
+  /** Resumo da prova para o judge (pode ser vazio). */
+  note: string;
+  entries: number;
+  /** "6.330 m" do último lançamento que conta; null sem lançamento. */
+  totalLabel: string | null;
+  /** Horário do relógio do último lançamento; null sem lançamento. */
+  lastAtLabel: string | null;
+  /** Até 5 lançamentos que contam, do mais recente ao mais antigo. */
+  history: DistanceHistoryRow[];
+  /** Posição do último `dist` que conta (o que o "Desfazer" anula); null sem lançamento. */
+  undoTarget: number | null;
+};
+
+/**
+ * Modelo de tela da súmula da distância. O estado vem do motor
+ * (deriveDistanceState); aqui só há rótulos e a posição do desfazer.
+ */
+export const buildDistanceViewModel = (
+  structure: WorkoutStructure,
+  state: DistanceSheetState,
+  seconds: number,
+  running: boolean
+): DistanceViewModel => {
+  const durationSeconds = structure.timeCapSeconds ?? 0;
+  const raw = Number.isFinite(seconds) ? seconds : 0;
+  const at = Math.max(0, Math.floor(raw));
+  const last = state.history.length > 0 ? state.history[state.history.length - 1] : null;
+  return {
+    durationSeconds,
+    durationLabel: formatWorkoutTime(durationSeconds),
+    clockLabel: formatWorkoutTime(at),
+    clockPercent: durationSeconds > 0 ? Math.max(0, Math.min(100, Math.round((raw / durationSeconds) * 100))) : 0,
+    timeUp: running && durationSeconds > 0 && raw >= durationSeconds,
+    note: structure.distance?.note ?? '',
+    entries: state.entries,
+    totalLabel: state.meters === null ? null : `${formatMeters(state.meters)} m`,
+    lastAtLabel: last ? formatWorkoutTime(last.at) : null,
+    history: [...state.history].reverse().slice(0, DISTANCE_HISTORY_LIMIT).map((entry) => ({
+      position: entry.position,
+      meters: entry.meters,
+      metersLabel: `${formatMeters(entry.meters)} m`,
+      atLabel: formatWorkoutTime(entry.at)
+    })),
+    undoTarget: last ? last.position : null
+  };
+};
+
+export type DistanceResultSummary = {
+  entered: boolean;
+  /** "6.330 m", ou "Nenhum total lançado". */
+  headline: string;
+  /** "= 6,33 km · 2 lançamentos"; null sem lançamento. */
+  detail: string | null;
+  /** "Informe a distância total antes de enviar."; null com lançamento. */
+  warning: string | null;
+  note: string;
+};
+
+/** Texto do resultado da distância que o motor calculou (nada é recalculado aqui). */
+export const buildDistanceResultSummary = (result: DistanceSheetResult): DistanceResultSummary => ({
+  entered: result.entered,
+  headline: result.entered ? `${formatMeters(result.value)} m` : 'Nenhum total lançado',
+  detail: result.entered ? `= ${formatKm(result.value)} km · ${result.entries} ${plural(result.entries, 'lançamento', 'lançamentos')}` : null,
+  warning: result.entered ? null : 'Informe a distância total antes de enviar.',
+  note: 'O servidor calcula o mesmo resultado a partir dos registros. O número do aparelho não é aceito como está.'
+});
+
+/** Dica sob o campo do total (Maquete 2 da distância). */
+export const DISTANCE_FIELD_HINT = 'Some tudo por fora (voltas e remo) e informe o total em metros.';
+/** Aviso quando o judge registra o mesmo total que já está lançado. */
+export const DISTANCE_SAME_NOTICE = 'Esse total já está lançado.';
+
+/**
+ * O que a tela faz com o texto do campo ao tocar em "Registrar": emite o
+ * evento `dist` só se o parser do motor (a Story 1.66) aceita, recusa com a
+ * mensagem dele, e não repete o total que já está lançado (o histórico guarda
+ * só o que mudou). `at` é o segundo do relógio.
+ */
+export type DistanceEntryDecision =
+  | { kind: 'emit'; event: SheetEvent }
+  | { kind: 'same' }
+  | { kind: 'refused'; error: string };
+
+export const decideDistanceEntry = (text: unknown, current: number | null, at: number): DistanceEntryDecision => {
+  const parsed = parseMetersInput(text);
+  if (!parsed.ok) return { kind: 'refused', error: parsed.error };
+  if (parsed.meters === current) return { kind: 'same' };
+  return { kind: 'emit', event: { t: 'dist', v: parsed.meters, at } };
 };

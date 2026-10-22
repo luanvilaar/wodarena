@@ -14,7 +14,7 @@ import { deriveLegacyWorkoutFields, validateWorkoutStructure, type WorkoutStruct
 // Story 1.61: o treino de referência do Intervalado (docs/design/intervalado/),
 // para conferir a prova gravada reabrindo em "Editar súmula".
 const INTERVAL_EXAMPLE: WorkoutStructure = {
-  version: 3,
+  version: 4,
   format: 'interval',
   totalReps: 21,
   timeCapSeconds: 1080,
@@ -29,7 +29,26 @@ const INTERVAL_EXAMPLE: WorkoutStructure = {
   ],
   maxLoad: null,
   scoreDisplay: null,
-  interval: { rounds: 5, onSeconds: 120, offSeconds: 120, max: { id: 'mx', name: 'Squat Clean', load: { value: 80, unit: 'kg' }, note: '' } }
+  interval: { rounds: 5, onSeconds: 120, offSeconds: 120, max: { id: 'mx', name: 'Squat Clean', load: { value: 80, unit: 'kg' }, note: '' } },
+  distance: null
+};
+
+// Story 1.67: o treino de referência da Distância (docs/design/distancia/).
+const DISTANCE_EXAMPLE: WorkoutStructure = {
+  version: 4,
+  format: 'distance',
+  totalReps: 0,
+  timeCapSeconds: 1200,
+  incomplete: null,
+  tieBreak: null,
+  generator: null,
+  customized: true,
+  entry: { mode: 'both', marking: 'reps', publish: 'after_review' },
+  segments: [],
+  maxLoad: null,
+  scoreDisplay: null,
+  interval: null,
+  distance: { unit: 'm', note: '750 m corrida; máx. distância no remo. Os parceiros trocam a cada volta da corrida.' }
 };
 
 export function EditorPreview() {
@@ -46,6 +65,13 @@ export function EditorPreview() {
         className="min-h-9 rounded-md border border-card-border bg-dark-gray px-3 text-xs font-bold text-white"
       >
         Carregar o exemplo do Intervalado (5 × 02:00 / 02:00)
+      </button>
+      <button
+        type="button"
+        onClick={() => setValue(DISTANCE_EXAMPLE)}
+        className="ml-2 min-h-9 rounded-md border border-card-border bg-dark-gray px-3 text-xs font-bold text-white"
+      >
+        Carregar o exemplo da Distância (20:00)
       </button>
       <WorkoutStructureEditor value={value} onChange={setValue} workoutName="Prova de exemplo" timeCapHint="12:00" idPrefix="preview" />
       <details className="rounded-xl border border-card-border p-3 text-xs text-muted" open>

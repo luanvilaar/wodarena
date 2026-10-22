@@ -19,13 +19,16 @@
 // exibir o score do AMRAP. A 3 (Story 1.60) acrescenta o Intervalado
 // (`interval`): rounds de trabalho (ON) e descanso (OFF), de 0 a 9 movimentos
 // fixos por round em `segments` e um movimento máximo no campo `interval`; o
-// resultado é a soma das repetições do máximo nos rounds que pontuaram.
+// resultado é a soma das repetições do máximo nos rounds que pontuaram. A 4
+// (Story 1.66) acrescenta a Distância (`distance`): a prova tem só a duração, o
+// judge soma por fora e lança um total em metros (evento `dist`, vale o último
+// não desfeito); o resultado é esse total.
 
 // ---------------------------------------------------------------------------
 // Contrato
 // ---------------------------------------------------------------------------
 
-export const WORKOUT_STRUCTURE_VERSION = 3;
+export const WORKOUT_STRUCTURE_VERSION = 4;
 
 export const WORKOUT_STRUCTURE_LIMITS = {
   minSegments: 1,
@@ -64,10 +67,12 @@ export const WORKOUT_STRUCTURE_LIMITS = {
   maxIntervalOffSeconds: 1800,
   maxIntervalFixedSegments: 9,
   /** Teto de segurança das repetições do movimento máximo num round. */
-  maxIntervalMaxRepsPerRound: 999
+  maxIntervalMaxRepsPerRound: 999,
+  /** Distância (Story 1.66): o total lançado pelo judge, em metros inteiros. Fica abaixo do 999999 que a tabela pública usa como "sem resultado". */
+  maxDistanceMeters: 99999
 } as const;
 
-export type WorkoutStructureFormat = 'for_time' | 'amrap' | 'max_load' | 'interval';
+export type WorkoutStructureFormat = 'for_time' | 'amrap' | 'max_load' | 'interval' | 'distance';
 /** Formatos contados por segmentos (toque e segure). */
 export type SegmentWorkoutFormat = 'for_time' | 'amrap';
 export type WorkoutSegmentMark = 'reps' | 'end';
@@ -155,8 +160,14 @@ export type WorkoutInterval = {
   max: WorkoutIntervalMax;
 };
 
+/** Distância (Story 1.66): a única unidade desta versão é o metro; o resumo é um texto livre opcional para o judge. */
+export type WorkoutDistance = {
+  unit: 'm';
+  note: string;
+};
+
 export type WorkoutStructure = {
-  version: 3;
+  version: 4;
   format: WorkoutStructureFormat;
   /** Soma das quantidades dos segmentos (no AMRAP e no intervalado, as de um round; em carga máxima, 0). */
   totalReps: number;
@@ -175,6 +186,8 @@ export type WorkoutStructure = {
   scoreDisplay: AmrapScoreDisplay | null;
   /** Só no intervalado. */
   interval: WorkoutInterval | null;
+  /** Só na distância. */
+  distance: WorkoutDistance | null;
 };
 
 export type WorkoutStructureValidation =
@@ -182,7 +195,7 @@ export type WorkoutStructureValidation =
   | { ok: false; error: string };
 
 /** Campos legados da linha de `workouts` derivados da estrutura (camelCase). */
-export type LegacyWorkoutFields = { type: 'fortime' | 'amrap' | 'maxweight' | 'reps'; timeCap: string; tieBreaker: '' | 'Tempo' };
+export type LegacyWorkoutFields = { type: 'fortime' | 'amrap' | 'maxweight' | 'reps' | 'distance'; timeCap: string; tieBreaker: '' | 'Tempo' };
 
 export type SheetTimeTarget = 'final' | 'tiebreak';
 
@@ -193,7 +206,9 @@ export type SheetTimeTarget = 'final' | 'tiebreak';
  * manual com o cronômetro oficial (REQ-9), sem justificativa; `attempt` é uma
  * tentativa de carga máxima (carga em kg, válida ou não). No intervalado,
  * `set` e `adj` levam `rd`, o round corrigido (a correção é feita com o
- * relógio parado, então o `at` não diz o round). Campos extras são ignorados.
+ * relógio parado, então o `at` não diz o round). Na distância, `dist` é o total
+ * acumulado em metros lançado pelo judge (vale o último não desfeito). Campos
+ * extras são ignorados.
  */
 export type SheetEvent =
   | { t: 'rep'; seg: string; at: number }
@@ -202,7 +217,8 @@ export type SheetEvent =
   | { t: 'adj'; seg: string; d: number; at: number; rd?: number }
   | { t: 'undo'; of: number; at: number }
   | { t: 'time'; target: SheetTimeTarget; v: number; at: number }
-  | { t: 'attempt'; lift: string; load: number; ok: boolean; at: number };
+  | { t: 'attempt'; lift: string; load: number; ok: boolean; at: number }
+  | { t: 'dist'; v: number; at: number };
 
 export type SheetSegmentState = {
   id: string;
@@ -327,6 +343,8 @@ const STRUCTURE_KEYS_V1 = [
 ] as const;
 const STRUCTURE_KEYS_V2 = [...STRUCTURE_KEYS_V1, 'maxLoad', 'scoreDisplay'] as const;
 const STRUCTURE_KEYS_V3 = [...STRUCTURE_KEYS_V2, 'interval'] as const;
+const STRUCTURE_KEYS_V4 = [...STRUCTURE_KEYS_V3, 'distance'] as const;
+const DISTANCE_KEYS = ['unit', 'note'] as const;
 const INTERVAL_KEYS = ['rounds', 'onSeconds', 'offSeconds', 'max'] as const;
 const INTERVAL_MAX_KEYS = ['id', 'name', 'load', 'note'] as const;
 const SEGMENT_KEYS_V1 = ['id', 'round', 'name', 'reps', 'load', 'note', 'required', 'mark'] as const;
@@ -340,7 +358,7 @@ const ENTRY_KEYS = ['mode', 'marking', 'publish'] as const;
 const MAX_LOAD_KEYS = ['lifts', 'order', 'scoring', 'loadStepKg'] as const;
 const LIFT_KEYS = ['id', 'name', 'reps', 'maxAttempts', 'startLoadKg', 'note'] as const;
 
-const FORMATS: readonly string[] = ['for_time', 'amrap', 'max_load', 'interval'];
+const FORMATS: readonly string[] = ['for_time', 'amrap', 'max_load', 'interval', 'distance'];
 const MARKS: readonly string[] = ['reps', 'end'];
 const UNITS: readonly string[] = ['reps', 'cal', 'm'];
 const GENERATOR_KINDS: readonly string[] = ['fixed', 'descending', 'ascending'];
@@ -360,8 +378,8 @@ const L = WORKOUT_STRUCTURE_LIMITS;
 const MESSAGES = {
   notObject: 'A estrutura da prova deve ser um objeto.',
   unknownKey: 'A estrutura da prova tem um campo que não faz parte do contrato.',
-  version: 'A versão da estrutura da prova deve ser 1, 2 ou 3.',
-  format: 'O formato da prova deve ser for_time (For Time), amrap (AMRAP), max_load (Carga máxima) ou interval (Intervalado).',
+  version: 'A versão da estrutura da prova deve ser 1, 2, 3 ou 4.',
+  format: 'O formato da prova deve ser for_time (For Time), amrap (AMRAP), max_load (Carga máxima), interval (Intervalado) ou distance (Distância).',
   formatV1: 'A versão 1 da estrutura só aceita for_time (For Time) ou amrap (AMRAP); carga máxima exige a versão 2.',
   intervalVersion: 'O formato intervalado (interval) e o campo interval exigem a versão 3 da estrutura.',
   intervalShape: 'No intervalado, informe o campo interval com os rounds (rounds), o tempo de trabalho (onSeconds), o tempo de descanso (offSeconds) e o movimento máximo (max).',
@@ -371,6 +389,16 @@ const MESSAGES = {
   intervalOff: `No intervalado, o tempo de descanso (offSeconds) deve ser um número inteiro de segundos entre ${L.minIntervalOffSeconds} e ${L.maxIntervalOffSeconds} (de 00:00 a 30:00).`,
   intervalDuration: `No intervalado, a duração total (rounds × trabalho + descansos entre os rounds) deve ser de até ${L.maxTimeCapSeconds} segundos (99:59).`,
   intervalOnlyThere: 'O campo interval só existe em provas intervaladas: fora delas fica vazio (null).',
+  distanceVersion: 'O formato distância (distance) e o campo distance exigem a versão 4 da estrutura.',
+  distanceShape: 'Na distância, informe o campo distance com a unidade (unit, m de metros) e o resumo da prova (note, pode ficar vazio).',
+  distanceUnknownKey: 'O campo distance tem um campo que não faz parte do contrato.',
+  distanceUnit: 'Na distância, a unidade (unit) deve ser m (metros).',
+  distanceNote: `Na distância, o resumo da prova (note) deve ser um texto de até ${L.maxNoteLength} caracteres (pode ficar vazio).`,
+  distanceOnlyThere: 'O campo distance só existe em provas de distância: fora delas fica vazio (null).',
+  distanceSegments: 'Na distância a prova não tem movimentos: a lista de segmentos fica vazia.',
+  incompleteDistance: 'Na distância, a regra de não conclusão deve ficar vazia (null).',
+  tieBreakDistance: 'A distância não tem desempate nesta versão: o campo fica vazio (null).',
+  generatorDistance: 'Na distância o gerador deve ficar vazio (null).',
   intervalSegments: `No intervalado, a prova tem de 0 a ${L.maxIntervalFixedSegments} movimentos fixos por round.`,
   incompleteInterval: 'No intervalado, a regra de não conclusão deve ficar vazia (null).',
   tieBreakInterval: 'O intervalado não tem desempate nesta versão: o campo fica vazio (null).',
@@ -614,20 +642,33 @@ const validateInterval = (input: unknown): IntervalCheck => {
   return { ok: true, interval: { rounds: input.rounds, onSeconds: input.onSeconds, offSeconds: input.offSeconds, max: max.max } };
 };
 
+type DistanceCheck = { ok: true; distance: WorkoutDistance } | { ok: false; error: string };
+
+const validateDistance = (input: unknown): DistanceCheck => {
+  if (!isPlainObject(input)) return fail(MESSAGES.distanceShape);
+  if (!hasOnlyKeys(input, DISTANCE_KEYS)) return fail(MESSAGES.distanceUnknownKey);
+  if (input.unit !== 'm') return fail(MESSAGES.distanceUnit);
+  if (hasNullCharacter(input.note)) return fail(MESSAGES.nullCharacter);
+  if (typeof input.note !== 'string' || input.note.trim().length > L.maxNoteLength) return fail(MESSAGES.distanceNote);
+  return { ok: true, distance: { unit: 'm', note: input.note.trim() } };
+};
+
 type TieBreakCheck = { ok: true; tieBreak: WorkoutTieBreak | null } | { ok: false; error: string };
 
 const TIE_BREAK_MESSAGES: Record<WorkoutStructureFormat, string> = {
   for_time: MESSAGES.tieBreakForTime,
   amrap: MESSAGES.tieBreakAmrap,
   max_load: MESSAGES.tieBreakMaxLoad,
-  interval: MESSAGES.tieBreakInterval
+  interval: MESSAGES.tieBreakInterval,
+  distance: MESSAGES.tieBreakDistance
 };
-// O intervalado não tem desempate nesta versão (decisão 7 do README): nenhum tipo é aceito.
+// O intervalado e a distância não têm desempate nesta versão (decisão 7 do Intervalado e decisão 5 da Distância): nenhum tipo é aceito.
 const TIE_BREAK_KINDS: Record<WorkoutStructureFormat, readonly string[]> = {
   for_time: ['split_time', 'last_split'],
   amrap: ['split_time', 'last_round'],
   max_load: ['finish_time', 'fewest_attempts'],
-  interval: []
+  interval: [],
+  distance: []
 };
 
 const validateTieBreak = (
@@ -669,12 +710,17 @@ const validateTieBreak = (
 
 const validateStructureObject = (input: unknown): WorkoutStructureValidation => {
   if (!isPlainObject(input)) return fail(MESSAGES.notObject);
-  if (!hasOnlyKeys(input, STRUCTURE_KEYS_V3)) return fail(MESSAGES.unknownKey);
-  if (input.version !== 1 && input.version !== 2 && input.version !== 3) return fail(MESSAGES.version);
-  const legacy = input.version === 1;
+  if (!hasOnlyKeys(input, STRUCTURE_KEYS_V4)) return fail(MESSAGES.unknownKey);
+  if (input.version !== 1 && input.version !== 2 && input.version !== 3 && input.version !== 4) return fail(MESSAGES.version);
+  const version: 1 | 2 | 3 | 4 = input.version;
+  const legacy = version === 1;
   // A versão 1 e a 2 não conhecem o intervalado, nem no formato nem na chave.
-  if (input.version !== 3 && (Object.prototype.hasOwnProperty.call(input, 'interval') || input.format === 'interval')) {
+  if (version < 3 && (Object.prototype.hasOwnProperty.call(input, 'interval') || input.format === 'interval')) {
     return fail(MESSAGES.intervalVersion);
+  }
+  // A versão 1, a 2 e a 3 não conhecem a distância, nem no formato nem na chave.
+  if (version < 4 && (Object.prototype.hasOwnProperty.call(input, 'distance') || input.format === 'distance')) {
+    return fail(MESSAGES.distanceVersion);
   }
   if (legacy && !hasOnlyKeys(input, STRUCTURE_KEYS_V1)) return fail(MESSAGES.unknownKey);
   if (!isOneOf(input.format, FORMATS)) return fail(MESSAGES.format);
@@ -682,14 +728,24 @@ const validateStructureObject = (input: unknown): WorkoutStructureValidation => 
   if (legacy && format === 'max_load') return fail(MESSAGES.formatV1);
   const isMaxLoad = format === 'max_load';
   const isInterval = format === 'interval';
+  const isDistance = format === 'distance';
 
   let interval: WorkoutInterval | null = null;
   if (isInterval) {
     const checked = validateInterval(input.interval);
     if (!checked.ok) return checked;
     interval = checked.interval;
-  } else if (input.version === 3 && input.interval !== null) {
+  } else if (version >= 3 && input.interval !== null) {
     return fail(MESSAGES.intervalOnlyThere);
+  }
+
+  let distance: WorkoutDistance | null = null;
+  if (isDistance) {
+    const checked = validateDistance(input.distance);
+    if (!checked.ok) return checked;
+    distance = checked.distance;
+  } else if (version === 4 && input.distance !== null) {
+    return fail(MESSAGES.distanceOnlyThere);
   }
 
   let timeCapSeconds: number | null = null;
@@ -714,6 +770,8 @@ const validateStructureObject = (input: unknown): WorkoutStructureValidation => 
   const segments: WorkoutSegment[] = [];
   if (isMaxLoad) {
     if (!Array.isArray(rawSegments) || rawSegments.length !== 0) return fail(MESSAGES.maxLoadSegments);
+  } else if (isDistance) {
+    if (!Array.isArray(rawSegments) || rawSegments.length !== 0) return fail(MESSAGES.distanceSegments);
   } else {
     const [minSegments, maxSegments] = isInterval ? [0, L.maxIntervalFixedSegments] : [L.minSegments, L.maxSegments];
     if (!Array.isArray(rawSegments) || rawSegments.length < minSegments || rawSegments.length > maxSegments) {
@@ -755,7 +813,7 @@ const validateStructureObject = (input: unknown): WorkoutStructureValidation => 
     if (!valid) return fail(MESSAGES.incompleteForTime);
     incomplete = { rule: 'penalty_per_rep', secondsPerRep: raw.secondsPerRep as number, base: 'time_cap' };
   } else if (input.incomplete !== null) {
-    return fail(isMaxLoad ? MESSAGES.incompleteMaxLoad : isInterval ? MESSAGES.incompleteInterval : MESSAGES.incompleteAmrap);
+    return fail(isMaxLoad ? MESSAGES.incompleteMaxLoad : isInterval ? MESSAGES.incompleteInterval : isDistance ? MESSAGES.incompleteDistance : MESSAGES.incompleteAmrap);
   }
 
   const tieBreakCheck = validateTieBreak(input.tieBreak, format, segments, legacy);
@@ -765,6 +823,7 @@ const validateStructureObject = (input: unknown): WorkoutStructureValidation => 
   if (input.generator !== null) {
     if (isMaxLoad) return fail(MESSAGES.generatorMaxLoad);
     if (isInterval) return fail(MESSAGES.generatorInterval);
+    if (isDistance) return fail(MESSAGES.generatorDistance);
     const raw = input.generator;
     const valid = isPlainObject(raw)
       && hasOnlyKeys(raw, GENERATOR_KEYS)
@@ -824,17 +883,19 @@ const validateStructureObject = (input: unknown): WorkoutStructureValidation => 
       segments,
       maxLoad,
       scoreDisplay,
-      interval
+      interval,
+      distance
     }
   };
 };
 
 /**
  * Valida a estrutura recebida (do cliente ou do banco) e devolve um objeto
- * novo e normalizado na versão 3 (textos sem espaços nas pontas, só as chaves
+ * novo e normalizado na versão 4 (textos sem espaços nas pontas, só as chaves
  * do contrato), nunca a referência recebida. A versão 1 é aceita e convertida
  * (segmentos em repetições, sem carga máxima, AMRAP em rounds + repetições), e
- * a 2 também; as duas saem com `interval: null`.
+ * a 2 e a 3 também; a 1 e a 2 saem com `interval: null` e as três com
+ * `distance: null`.
  * Nunca lança: a mensagem diz o campo e o limite, sem devolver o JSON enviado.
  * Não reconcilia: total diferente da soma ou desempate num segmento inexistente
  * são recusados.
@@ -885,7 +946,8 @@ export const reconcileWorkoutStructure = (structure: WorkoutStructure): WorkoutS
         ...structure.interval,
         max: { ...structure.interval.max, load: structure.interval.max.load ? { ...structure.interval.max.load } : null }
       }
-      : null
+      : null,
+    distance: structure.distance ? { ...structure.distance } : null
   };
 };
 
@@ -893,7 +955,8 @@ const LEGACY_TYPES: Record<WorkoutStructureFormat, LegacyWorkoutFields['type']> 
   for_time: 'fortime',
   amrap: 'amrap',
   max_load: 'maxweight',
-  interval: 'reps'
+  interval: 'reps',
+  distance: 'distance'
 };
 
 /**
@@ -902,6 +965,8 @@ const LEGACY_TYPES: Record<WorkoutStructureFormat, LegacyWorkoutFields['type']> 
  * máxima sem janela não tem time cap (''). O desempate por menos tentativas
  * não é um tempo, então o legado fica sem desempate (''). O intervalado é
  * `reps` ("maior vence"), com a duração da prova como time cap e sem desempate.
+ * A distância é `distance` ("maior vence"), com a duração como time cap e sem
+ * desempate.
  */
 export const deriveLegacyWorkoutFields = (structure: WorkoutStructure): LegacyWorkoutFields => ({
   type: LEGACY_TYPES[structure.format] ?? 'fortime',
@@ -1195,6 +1260,7 @@ const OFFICIAL_TIME_MESSAGES = {
   integer: 'O tempo oficial deve ser um número inteiro de segundos.',
   maxLoad: 'O ajuste manual do tempo ainda não vale para provas de carga máxima.',
   interval: 'O ajuste manual do tempo não vale para provas intervaladas: o resultado são as repetições e o tempo é o dos rounds.',
+  distance: 'O ajuste manual do tempo não vale para provas de distância: o resultado são os metros lançados pelo judge.',
   finalAmrap: 'O ajuste do tempo final não se aplica a provas AMRAP: o tempo da prova é a duração.',
   finalNotCompleted: 'O tempo final só pode ser ajustado em prova concluída. Sem concluir, o tempo é o time cap.',
   noTieBreak: 'Esta prova não tem desempate por tempo.',
@@ -1220,6 +1286,8 @@ export const checkOfficialTime = (
     if (typeof seconds !== 'number' || !Number.isInteger(seconds)) return fail(OFFICIAL_TIME_MESSAGES.integer);
     // O intervalado tem time cap numérico (a duração), mas não tem tempo a ajustar.
     if (structure.format === 'interval') return fail(OFFICIAL_TIME_MESSAGES.interval);
+    // A distância também tem time cap numérico (a duração), mas não tem tempo a ajustar.
+    if (structure.format === 'distance') return fail(OFFICIAL_TIME_MESSAGES.distance);
     if (structure.format === 'max_load' || typeof structure.timeCapSeconds !== 'number') return fail(OFFICIAL_TIME_MESSAGES.maxLoad);
     const timeCap = structure.timeCapSeconds;
     if (seconds < 1 || seconds > timeCap) {
@@ -1736,4 +1804,123 @@ export const checkIntervalEntry = (structure: WorkoutStructure, at: unknown): In
   } catch {
     return fail(INTERVAL_ENTRY_MESSAGES.invalid);
   }
+};
+
+// ---------------------------------------------------------------------------
+// Motor da súmula da distância (Story 1.66)
+// ---------------------------------------------------------------------------
+
+export type DistanceEntry = {
+  /** Posição do evento no log (o alvo de um `undo`). */
+  position: number;
+  meters: number;
+  at: number;
+};
+
+export type DistanceSheetState = {
+  format: 'distance';
+  /** O último total lançado que conta; null sem lançamento válido. */
+  meters: number | null;
+  /** Lançamentos que contam (não desfeitos), na ordem do log. */
+  entries: number;
+  /** Instante (s) do último lançamento que conta; null sem lançamento. */
+  lastEntryAt: number | null;
+  /** Os lançamentos que contam, na ordem do log. */
+  history: DistanceEntry[];
+};
+
+export type DistanceSheetResult = {
+  format: 'distance';
+  /** O total em metros; o mesmo número que vai para `scores.value`. */
+  value: number;
+  /** Texto aceito por parseScoreForWorkout('distance', …): o número (ex.: "6330"). */
+  display: string;
+  /** Sem desempate nesta versão (decisão 5 do README). */
+  tieBreak: null;
+  /** Houve ao menos um lançamento (sem ele a súmula não pode ser enviada). */
+  entered: boolean;
+  entries: number;
+};
+
+type ParsedDistanceEvent = { kind: 'dist'; meters: number; at: number } | UndoEvent;
+
+// Evento malformado é ignorado por inteiro (null): `v` não inteiro, negativo ou
+// acima do teto, `at` inválido, e `rep`, `fill`, `set`, `adj`, `time`,
+// `attempt` e tipos desconhecidos.
+const parseDistanceEvent = (raw: unknown): ParsedDistanceEvent | null => {
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const event = raw as PlainObject;
+  const at = readAt(event.at);
+  if (at === null) return null;
+  if (event.t === 'undo') return readUndo(event, at);
+  if (event.t !== 'dist' || !isIntegerBetween(event.v, 0, L.maxDistanceMeters)) return null;
+  return { kind: 'dist', meters: event.v as number, at };
+};
+
+/**
+ * Estado da súmula da distância derivado do log. Pura, determinística, sem
+ * lançar e sem mutar as entradas. O estado é o último `dist` não anulado;
+ * `undo` anula o evento apontado (undo de undo não tem efeito), como nos outros
+ * formatos, e nada é apagado. Sem janela de tempo: o judge pode lançar durante
+ * e depois do relógio. Estrutura que não é de distância não tem lançamentos.
+ */
+export const deriveDistanceState = (structure: WorkoutStructure, events: readonly unknown[]): DistanceSheetState => {
+  const parsed = structure?.format === 'distance' && Array.isArray(events) ? events.map(parseDistanceEvent) : [];
+  const voided = collectVoided(parsed);
+  const history: DistanceEntry[] = [];
+  for (const [position, event] of parsed.entries()) {
+    if (!event || event.kind !== 'dist' || voided.has(position)) continue;
+    history.push({ position, meters: event.meters, at: event.at });
+  }
+  const last = history.length > 0 ? history[history.length - 1] : null;
+  return {
+    format: 'distance',
+    meters: last ? last.meters : null,
+    entries: history.length,
+    lastEntryAt: last ? last.at : null,
+    history
+  };
+};
+
+/**
+ * Resultado da distância: o total lançado, como número (`value`) e como texto
+ * (`display`), sem desempate. Sem lançamento, `value` é 0 e `entered` é falso.
+ */
+export const computeDistanceResult = (state: DistanceSheetState): DistanceSheetResult => {
+  const value = state.meters ?? 0;
+  return { format: 'distance', value, display: String(value), tieBreak: null, entered: state.meters !== null, entries: state.entries };
+};
+
+/** Metros com o ponto de milhar (6330 → "6.330"), sem depender de Intl. */
+export const formatMeters = (meters: number) => {
+  const whole = Math.max(0, Math.floor(Number.isFinite(meters) ? meters : 0));
+  return String(whole).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+};
+
+export type MetersInputResult = { ok: true; meters: number } | { ok: false; error: string };
+
+const METERS_INPUT_MESSAGES = {
+  empty: 'Informe o total em metros.',
+  format: 'Use só metros inteiros (ex.: 3250).',
+  max: `O total passa de ${formatMeters(L.maxDistanceMeters)} m. Confira o número.`
+} as const;
+
+/**
+ * O total que o judge digitou, em metros inteiros de 0 a 99.999. Aceita só
+ * dígitos ("3250") e o ponto de milhar ("3.250": um a três dígitos e depois
+ * grupos de exatamente três), ignorando espaços. Recusa vazio, vírgula, ponto
+ * que não é de milhar ("3.25"), sinal, letras e o que passa do teto, com a
+ * mensagem para a tela. Nunca lança, qualquer que seja a entrada.
+ */
+export const parseMetersInput = (text: unknown): MetersInputResult => {
+  if (typeof text !== 'string') return fail(METERS_INPUT_MESSAGES.empty);
+  const typed = text.replace(/\s/g, '');
+  if (!typed) return fail(METERS_INPUT_MESSAGES.empty);
+  let digits: string | null = null;
+  if (/^\d+$/.test(typed)) digits = typed;
+  else if (/^\d{1,3}(\.\d{3})+$/.test(typed)) digits = typed.replace(/\./g, '');
+  if (digits === null) return fail(METERS_INPUT_MESSAGES.format);
+  const meters = Number(digits);
+  if (meters > L.maxDistanceMeters) return fail(METERS_INPUT_MESSAGES.max);
+  return { ok: true, meters };
 };

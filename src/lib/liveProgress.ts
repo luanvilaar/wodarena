@@ -1,4 +1,4 @@
-import { deriveIntervalState, deriveMaxLoadState, deriveSheetState } from '@/lib/workoutStructure';
+import { deriveDistanceState, deriveIntervalState, deriveMaxLoadState, deriveSheetState } from '@/lib/workoutStructure';
 import type { WorkoutStructure } from '@/lib/workoutStructure';
 
 // Progresso ao vivo da súmula para o telão (Story 1.54). Puro e sem DOM: o
@@ -9,7 +9,7 @@ import type { WorkoutStructure } from '@/lib/workoutStructure';
 export type LiveProgress = {
   /** Registros no log quando o resumo foi feito. */
   seq: number;
-  /** Total feito (no AMRAP, rounds completos × round + parcial; no intervalado, a soma do máximo dos rounds que pontuaram). */
+  /** Total feito (no AMRAP, rounds completos × round + parcial; no intervalado, a soma do máximo dos rounds que pontuaram; na distância, o total lançado em metros). */
   repsDone: number;
   /** No intervalado, os rounds que pontuaram. */
   roundsCompleted: number;
@@ -66,6 +66,25 @@ export const summarizeLiveProgress = (
   clockStartAt: string | null
 ): LiveProgress => {
   const timed = events as readonly TimedEvent[];
+  if (structure?.format === 'distance') {
+    // Pelo motor da distância: `repsDone` leva os metros do último lançamento que conta, e a
+    // "chegada" é o instante dele (um `undo` não conta). Sem segmentos, round nem carga.
+    const state = deriveDistanceState(structure, events);
+    return {
+      seq: events.length,
+      lastMarkAt: state.lastEntryAt,
+      clockStartAt,
+      repsDone: state.meters ?? 0,
+      roundsCompleted: 0,
+      segments: [],
+      currentSegmentId: null,
+      round: null,
+      completedAt: null,
+      scoreKg: null,
+      attemptsUsed: null,
+      currentLiftId: null
+    };
+  }
   if (structure?.format === 'interval') {
     // Pelo motor do intervalado: registro fora da janela não conta nem como chegada.
     const state = deriveIntervalState(structure, events);

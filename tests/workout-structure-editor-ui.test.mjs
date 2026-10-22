@@ -164,10 +164,10 @@ test('construtor em portal, com rascunho próprio, Esc, foco preso e confirmaç�
 // Integração no painel
 // ---------------------------------------------------------------------------
 
-test('painel: a súmula só aparece em evento Functional Fitness e para provas de tempo, AMRAP ou carga', () => {
+test('painel: a súmula só aparece em evento Functional Fitness e para provas de tempo, AMRAP, carga ou distância', () => {
   assert.match(admin, /import \{ WorkoutStructureEditor \} from '@\/components\/admin\/WorkoutStructureEditor';/);
   assert.match(admin, /const workoutStructureSupported = !selectedEventToManage\?\.eventType \|\| selectedEventToManage\.eventType === 'functional_fitness';/);
-  assert.match(admin, /\{workoutStructureSupported && \(wodStructure \|\| wodType === 'fortime' \|\| wodType === 'amrap' \|\| wodType === 'maxweight'\) && \(\s*<WorkoutStructureEditor\s+key=\{editingWorkoutId \|\| 'nova-prova'\}\s+value=\{wodStructure\}\s+onChange=\{handleWorkoutStructureChange\}\s+defaultFormat=\{wodType === 'amrap' \? 'amrap' : wodType === 'maxweight' \? 'max_load' : 'for_time'\}\s+workoutName=\{wodName\}\s+timeCapHint=\{wodTimeCap\}\s+lockedSheets=\{editingWorkoutId \? sheetLocks\[editingWorkoutId\] \?\? 0 : 0\}\s+idPrefix="wod-structure"/);
+  assert.match(admin, /\{workoutStructureSupported && \(wodStructure \|\| wodType === 'fortime' \|\| wodType === 'amrap' \|\| wodType === 'maxweight' \|\| wodType === 'distance'\) && \(\s*<WorkoutStructureEditor\s+key=\{editingWorkoutId \|\| 'nova-prova'\}\s+value=\{wodStructure\}\s+onChange=\{handleWorkoutStructureChange\}\s+defaultFormat=\{wodType === 'amrap' \? 'amrap' : wodType === 'maxweight' \? 'max_load' : wodType === 'distance' \? 'distance' : 'for_time'\}\s+workoutName=\{wodName\}\s+timeCapHint=\{wodTimeCap\}\s+lockedSheets=\{editingWorkoutId \? sheetLocks\[editingWorkoutId\] \?\? 0 : 0\}\s+idPrefix="wod-structure"/);
   assert.equal((admin.match(/<WorkoutStructureEditor\b/g) || []).length, 1);
 });
 
@@ -337,20 +337,20 @@ const intervalDraft = () => {
 };
 const sectionOf = (html, title) => html.slice(html.indexOf(`</span>${title}</h3>`), html.indexOf('</section>', html.indexOf(`</span>${title}</h3>`)));
 
-test('Intervalado: quarto cartão depois de Carga máxima, um ponto de Tab e setas circulares entre os quatro formatos', () => {
+test('Intervalado: quarto cartão depois de Carga máxima, um ponto de Tab e setas circulares entre os cinco formatos (o quinto é a Distância, Story 1.67)', () => {
   const html = renderPanel(intervalDraft());
   const cards = [...html.matchAll(/id="b-format-([a-z_]+)"[^>]*role="radio"[^>]*aria-checked="(true|false)"[^>]*tabindex="(-?\d)"/g)].map((match) => match.slice(1));
-  assert.deepEqual(cards, [['for_time', 'false', '-1'], ['amrap', 'false', '-1'], ['max_load', 'false', '-1'], ['interval', 'true', '0']]);
+  assert.deepEqual(cards, [['for_time', 'false', '-1'], ['amrap', 'false', '-1'], ['max_load', 'false', '-1'], ['interval', 'true', '0'], ['distance', 'false', '-1']]);
   assert.match(html, /id="b-format-interval"[^>]*>.*?<svg[^>]*lucide-check[\s\S]*?<\/svg>Intervalado<\/span><span[^>]*>Rounds de trabalho e descanso; soma das repetições<\/span><\/button>/s);
-  assert.equal((html.match(/role="radio"/g) || []).length, 4);
+  assert.equal((html.match(/role="radio"/g) || []).length, 5);
   assert.equal((html.match(/lucide-check/g) || []).length, 1, 'só o cartão escolhido leva o Check');
 
   const formats = block(formSource, /const FORMATS: [\s\S]*?\n\];/);
-  assert.equal((formats.match(/\{ value: '/g) || []).length, 4);
-  assert.match(formats, /\{ value: 'max_load', title: 'Carga máxima', detail: 'Maior carga válida, por tentativas' \},\s*\{ value: 'interval', title: 'Intervalado', detail: 'Rounds de trabalho e descanso; soma das repetições' \}/);
+  assert.equal((formats.match(/\{ value: '/g) || []).length, 5);
+  assert.match(formats, /\{ value: 'max_load', title: 'Carga máxima', detail: 'Maior carga válida, por tentativas' \},\s*\{ value: 'interval', title: 'Intervalado', detail: 'Rounds de trabalho e descanso; soma das repetições' \},\s*\{ value: 'distance', title: 'Distância', detail: 'Maior distância no tempo; o judge informa o total' \}/);
   assert.match(formSource, /const next = FORMATS\[\(index \+ step \+ FORMATS\.length\) % FORMATS\.length\]\.value;/);
-  assert.match(formSource, /role="radiogroup" aria-labelledby=\{id\('format-title'\)\} onKeyDown=\{handleFormatKeys\} className="grid grid-cols-2 gap-2 xl:grid-cols-4"/);
-  assert.doesNotMatch(formSource, /sm:grid-cols-3/, 'a grade dos formatos não fica em três colunas');
+  assert.match(formSource, /role="radiogroup" aria-labelledby=\{id\('format-title'\)\} onKeyDown=\{handleFormatKeys\} className="grid grid-cols-2 gap-2 sm:grid-cols-6"/);
+  assert.doesNotMatch(formSource, /sm:grid-cols-3/, 'a grade dos formatos não fica em três colunas: são seis colunas, com 3 + 2 cartões no desktop');
   assert.match(formSource, /onClick=\{\(\) => onChange\(setDraftFormat\(draft, option\.value\)\)\}/);
 });
 
@@ -470,6 +470,107 @@ test('Intervalado no formulário da prova: resumo, frase da regra e "Editar súm
   assert.match(locked, /<button[^>]*id="t-open"[^>]*disabled=""/);
   assert.match(locked, /Estrutura travada: 1 súmula já foi aberta na arbitragem\./);
   // O painel deriva o tipo legado "reps" ao usar a estrutura; o editor continua aparecendo porque wodStructure existe.
-  assert.match(admin, /\{workoutStructureSupported && \(wodStructure \|\| wodType === 'fortime' \|\| wodType === 'amrap' \|\| wodType === 'maxweight'\) && \(/);
+  assert.match(admin, /\{workoutStructureSupported && \(wodStructure \|\| wodType === 'fortime' \|\| wodType === 'amrap' \|\| wodType === 'maxweight' \|\| wodType === 'distance'\) && \(/);
   assert.match(editorSource, /notice: loaded && !loaded\.ok \? `\$\{loaded\.error\} Monte de novo em linhas; a súmula gravada só muda quando você usar a nova e salvar a prova\.` : null,/);
+});
+
+// ---------------------------------------------------------------------------
+// Story 1.67: Distância (Maquete 1 de docs/design/distancia/)
+// ---------------------------------------------------------------------------
+
+const distanceUiDraft = (patch = {}) => {
+  const draft = setDraftFormat(createDraft('for_time'), 'distance');
+  return { ...draft, distance: { ...draft.distance, ...patch } };
+};
+
+test('Distância: quinto cartão, com o texto da maquete, ocupando a última linha da grade de seis colunas', () => {
+  const html = renderPanel(distanceUiDraft());
+  const cards = [...html.matchAll(/id="b-format-([a-z_]+)"[^>]*role="radio"[^>]*aria-checked="(true|false)"[^>]*tabindex="(-?\d)"/g)].map((match) => match.slice(1));
+  assert.deepEqual(cards, [['for_time', 'false', '-1'], ['amrap', 'false', '-1'], ['max_load', 'false', '-1'], ['interval', 'false', '-1'], ['distance', 'true', '0']]);
+  assert.match(html, /id="b-format-distance"[^>]*>.*?<svg[^>]*lucide-check[\s\S]*?<\/svg>Distância<\/span><span[^>]*>Maior distância no tempo; o judge informa o total<\/span><\/button>/s);
+  assert.equal((html.match(/lucide-check/g) || []).length, 1, 'só o cartão escolhido leva o Check');
+  // Cinco cartões preenchem a grade: 3 + 2 no desktop (spans 2, 2, 2, 3, 3) e 2 + 2 + 1 no celular (o último ocupa a linha).
+  const spans = [...html.matchAll(/id="b-format-[a-z_]+"[^>]*class="[^"]*?((?:col-span-2 )?sm:col-span-\d)[^"]*"/g)].map((match) => match[1]);
+  assert.deepEqual(spans, ['sm:col-span-2', 'sm:col-span-2', 'sm:col-span-2', 'sm:col-span-3', 'col-span-2 sm:col-span-3']);
+  // Trocar de formato continua passando pelo rascunho: o clique chama setDraftFormat.
+  assert.match(formSource, /onClick=\{\(\) => onChange\(setDraftFormat\(draft, option\.value\)\)\}/);
+});
+
+test('Distância: seções 2 a 4, campos, dicas e a frase da regra da maquete', () => {
+  const html = renderPanel(distanceUiDraft({ note: '750 m corrida; máx. distância no remo.' }));
+  const titles = [...html.matchAll(/<h3 id="b-[a-z-]+"[^>]*><span class="font-number text-primary">(\d)<\/span>([^<]+)<\/h3>/g)].map((match) => `${match[1]} ${match[2]}`);
+  assert.deepEqual(titles, ['1 Formato da prova', '2 Duração e resumo', '3 Pontuação', '4 Regra da prova']);
+
+  const time = sectionOf(html, 'Duração e resumo');
+  assert.match(time, /<label for="b-di-duration"[^>]*>Duração da prova \(MM:SS\)<\/label>/);
+  assert.match(time, /<input id="b-di-duration" type="text" inputMode="numeric" autoComplete="off" aria-invalid="false" aria-describedby="b-di-duration-note"[^>]*value="20:00"\/>/);
+  assert.match(time, /De 00:30 a 99:59\. A súmula avisa quando a duração termina\./);
+  assert.match(time, /<label for="b-di-note"[^>]*>Resumo da prova para o judge \(opcional\)<\/label>/);
+  assert.match(time, /<textarea id="b-di-note" rows="3"[^>]*>750 m corrida; máx\. distância no remo\.<\/textarea>/);
+  assert.match(time, /<span class="font-number">38<\/span>\/300 caracteres\. Aparece para o judge na súmula\./);
+
+  // A unidade não é uma escolha (decisão 8) e não há desempate nem campos de movimentos.
+  const score = sectionOf(html, 'Pontuação');
+  assert.match(score, /Maior distância vence\. O judge informa o total em metros\. Sem desempate nesta versão: empates dividem a posição\./);
+  assert.doesNotMatch(score, /<input|<select|<textarea/);
+  assert.doesNotMatch(html, /Time cap \(MM:SS\)|Penalidade por repetição|Movimento máximo|Linhas|Carga \(kg\)/);
+
+  const rule = sectionOf(html, 'Regra da prova');
+  assert.match(rule, /<span>Vale a <\/span><strong[^>]*>maior distância total<\/strong><span> em <\/span><strong[^>]*>20:00<\/strong>/);
+  assert.match(rule, /Duração: 20:00/);
+  assert.match(rule, /Resultado em metros, maior vence/);
+  assert.match(rule, /Sem desempate nesta versão/);
+  assert.match(rule, /Resumo para o judge preenchido/);
+});
+
+test('Distância: erros marcados no campo, sem a súmula e com "Usar esta súmula" desligado', () => {
+  const html = renderPanel(distanceUiDraft({ duration: '00:10', note: 'x'.repeat(301) }));
+  assert.match(html, /<input id="b-di-duration"[^>]*aria-invalid="true"[^>]*class="[^"]*border-trading-down\/70[^"]*"/);
+  assert.match(html, /<p id="b-di-duration-note" class="mt-1 text-\[11px\] font-semibold text-trading-down">Duração: use MM:SS entre 00:30 e 99:59\.<\/p>/);
+  assert.match(html, /<textarea id="b-di-note"[^>]*aria-invalid="true"/);
+  assert.match(html, /<span class="font-number">301<\/span>\/300 caracteres/);
+  assert.match(html, /<button[^>]*id="b-use"[^>]*disabled=""/);
+  assert.match(html, /Corrija os itens marcados com ! para ver a súmula\./);
+  assert.match(html, /2 itens para corrigir na regra da prova\./);
+  assert.doesNotMatch(html, /aria-label="Súmula digital da distância"/);
+});
+
+test('Distância: a prévia mostra a súmula do judge da distância (Story 1.68), com "Usar esta súmula" ligado', () => {
+  const html = renderPanel(distanceUiDraft({ note: 'Corrida e remo' }));
+  assert.match(html, /aria-label="Súmula digital da distância"/);
+  assert.doesNotMatch(html, /aria-label="Súmula digital"/, 'nada da súmula de For Time ao lado');
+  assert.match(html, /Corrida e remo/);
+  assert.match(html, /Súmula pronta\. Ela é gravada quando você salvar a prova\./);
+  assert.doesNotMatch(html, /<button[^>]*id="b-use"[^>]*disabled=""/);
+});
+
+test('Distância no formulário da prova: resumo, frase da regra e "Editar súmula" a partir da estrutura gravada', () => {
+  const structure = analyzeDraft(distanceUiDraft({ duration: '15:00', note: 'Corrida' })).structure;
+  const html = renderEditor({ value: structure });
+  assert.match(html, /Distância · 15:00 · maior vence/);
+  assert.match(html, /Vale a maior distância total em 15:00\. O judge informa o total em metros\. Empates dividem a posição, sem desempate\./);
+  assert.match(html, /id="t-open"[^>]*>.*Editar súmula/s);
+  const locked = renderEditor({ value: structure, lockedSheets: 1 });
+  assert.match(locked, /<button[^>]*id="t-open"[^>]*disabled=""/);
+  assert.match(locked, /Estrutura travada: 1 súmula já foi aberta na arbitragem\./);
+  // Reabrir devolve o rascunho da distância (o painel abre o construtor com o formato certo).
+  const reopened = editorLib.draftFromStructure(structure);
+  assert.deepEqual([reopened.draft.format, reopened.draft.distance], ['distance', { duration: '15:00', note: 'Corrida' }]);
+});
+
+test('Distância no painel: o tipo "Distância" do formulário oferece a súmula e abre o construtor na distância; o selo público diz "Distância"', () => {
+  assert.match(admin, /\|\| wodType === 'distance'\) && \(\s*<WorkoutStructureEditor/);
+  assert.match(admin, /wodType === 'maxweight' \? 'max_load' : wodType === 'distance' \? 'distance' : 'for_time'/);
+  const eventView = read('../src/app/[locale]/event/[id]/EventView.tsx');
+  assert.match(eventView, /wod\.type === 'distance' \? 'typeDistance' : 'typeReps'/);
+  assert.match(read('../src/messages/pt-br.json'), /"typeReps": "Reps",\s*"typeDistance": "Distância",/);
+  assert.match(read('../src/messages/en-gb.json'), /"typeReps": "Reps",\s*"typeDistance": "Distance",/);
+  assert.match(read('../src/messages/pt-pt.json'), /"typeReps": "Reps",\s*"typeDistance": "Distância",/);
+  // Os outros selos não mudam.
+  for (const file of ['pt-br', 'pt-pt', 'en-gb']) {
+    const messages = JSON.parse(read(`../src/messages/${file}.json`));
+    const group = Object.values(messages).flatMap((value) => (value && typeof value === 'object' ? Object.values(value) : [])).find((value) => value && typeof value === 'object' && 'typeDistance' in value);
+    assert.ok(group, `${file}: grupo com typeDistance`);
+    for (const key of ['typeForTime', 'typeAmrap', 'typeMaxWeight', 'typeReps', 'typeDistance']) assert.equal(typeof group[key], 'string', `${file}: ${key}`);
+  }
 });
