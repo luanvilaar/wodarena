@@ -1,0 +1,66 @@
+schema: 1
+story: '1.66'
+story_title: 'Distância na Súmula Digital: Contrato v4 e Motor'
+gate: PASS
+status_reason: 'Os ACs 1 a 10 têm evidência no código e nos testes. O motor, o parser e o caso aprovado (A e B 6330, C 5915, D ausente; posições 1, 1, 3, 4) batem com o README, e nenhum ponto do tipo "carga máxima ou o resto" deixa a distância cair no For Time. Ficam só itens LOW: roll-forward depois do deploy e o comentário do log no banco.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-10-22T18:00:00-03:00'
+expires: '2026-11-05T18:00:00-03:00'
+quality_score: 94
+
+top_issues:
+  - id: REL-001
+    severity: low
+    finding: 'Depois do deploy, toda estrutura gravada pela rota (de qualquer formato) e toda súmula nova passam a guardar version 4 com as chaves interval e distance, porque o validador sempre devolve a v4. Se o código voltar para antes da 1.66, o validador antigo recusa version 4 e a chave distance, e deixam de ser lidas as provas de todos os formatos editadas depois do deploy e as súmulas abertas depois dele, não só as de distância. É o mesmo padrão do REL-001 da 1.60.'
+    refs: ['src/lib/workoutStructure.ts', 'src/lib/serverScoresheets.ts:226', 'src/app/api/admin/persistence/route.ts']
+    suggested_owner: devops
+    suggested_action: 'Registrar na nota de deploy: depois do deploy, só corrigir para frente (roll-forward), sem reverter. Se a reversão for inevitável, antes converter de volta para a v3 as estruturas que não são de distância.'
+  - id: MNT-001
+    severity: low
+    finding: 'O COMMENT da tabela scoresheet_events ainda lista os tipos de registro como "rep, fill, set, adj, undo, time e attempt" e não cita dist. É só documentação: a coluna event é JSONB com a única checagem "é um objeto", então o evento novo grava sem migration.'
+    refs: ['supabase/migrations/20261017120000_scoresheets.sql:98']
+    suggested_owner: data-engineer
+    suggested_action: 'Atualizar o texto do COMMENT na próxima migration que tocar essa tabela. Não editar a migration já aplicada.'
+waiver: { active: false }
+
+evidence:
+  tests_reviewed: 36
+  risks_identified: 2
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    ac_gaps: []
+  gate_commands:
+    npm_test: '1031/1031 (eram 981 antes das três stories), rodado pelo QA depois da correção da 1.68'
+    npm_run_lint: '0 erros, 209 warnings (nenhum novo)'
+    npm_run_typecheck: 'verde, rodado pelo QA'
+    npm_run_build: 'verde, rodado pelo QA'
+    coderabbit: 'review_completed, 0 findings sobre os commits 8fe9018 e 72f771c (base origin/main, feito antes do primeiro push)'
+    migration: 'nenhuma'
+  independent_checks: 'Script à parte (fora do repo, apagado depois) rodou 20 mil estruturas aleatórias (campos trocados por null, texto longo, caractere nulo, tipos errados, versões 1 a 5): validateWorkoutStructure nunca lançou, devolveu 277 aceitas e 19723 recusadas, toda aceita voltou idêntica ao ser validada de novo e toda recusa saiu em texto sem JSON. Uma estrutura com a chave __proto__ dentro de distance foi recusada e nada poluiu Object.prototype. 20 mil logs aleatórios (dist, undo, rep, time, lixo): deriveDistanceState só devolveu total inteiro de 0 a 99999 ou nulo, computeSheetOutcome sempre fechou value igual ao número do texto e validateClientEvent nunca lançou. parseMetersInput(formatMeters(n)) e parseMetersInput(String(n)) devolveram n para todo n de 0 a 99999.'
+  notes: 'Conferido no código: o motor próprio não reaproveita deriveSheetState nem parseEvent (reusa readAt, readUndo e collectVoided). O último dist não anulado vale, sem janela, e o undo de undo não tem efeito (o primeiro desfazer continua valendo). Estrutura que não é de distância não tem lançamentos. A v1, a v2 e a v3 saem v4 com distance nulo, e antes da v4 o formato e a chave têm mensagem própria. O resultado publicado sai só do log gravado (computeSheetOutcome no submit) e nunca do aparelho. O tipo legado distance já existia no CHECK de workouts.type, em WorkoutType e em rankWorkoutScores (maior vence).'
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: 'validateClientEvent confere cada dist (inteiro de 0 a 99.999, evento normalizado só com os campos do contrato) e recusa dist fora da distância e time, rep, fill, set, adj e attempt dentro dela. O validador do contrato recusa chave desconhecida em todos os níveis e U+0000, não ecoa o JSON e não lança. Sem migration e sem mudança de RLS ou de autenticação. Varredura de segredos nas linhas adicionadas: vazia.'
+  performance:
+    status: PASS
+    notes: 'O motor é O(eventos), com no máximo 5000 eventos por súmula. Sem I/O.'
+  reliability:
+    status: PASS
+    notes: 'Motor puro, determinístico, sem mutar a entrada, tolera estrutura malformada e log que não é lista. readLiveProgress lê resumos antigos sem mudança. Fica o item LOW de reversão (REL-001).'
+  maintainability:
+    status: PASS
+    notes: 'Os comentários citam as decisões do README. Os mapas Record<WorkoutStructureFormat> fizeram o typecheck apontar TIE_BREAK, LEGACY_TYPES e LEGACY_TYPE_LABELS.'
+
+regression_review:
+  binaries_checked:
+    - 'validateClientEvent (time recusado, dist só na distância)'
+    - 'checkOfficialTime (ramo próprio antes do teste de timeCapSeconds numérico)'
+    - 'computeSheetOutcome e computeAbsentOutcome (ramo da distância antes do intervalado, da carga máxima e do resto)'
+    - 'summarizeLiveProgress (ramo próprio; lastMarkAt vem do motor, não de MARK_TYPES)'
+    - 'deriveLegacyWorkoutFields / LEGACY_TYPES (distance) e LEGACY_TYPE_LABELS (Distância)'
+    - 'reconcileWorkoutStructure (distance copiado por valor)'
+    - 'TIE_BREAK_MESSAGES / TIE_BREAK_KINDS (distance: [], qualquer desempate recusado)'
+    - 'describeWorkoutForBoard e rankLiveEntries (aceitam o formato sem lançar)'
+  old_tests_changed: 'Só o valor esperado mudou: versão 3 para 4, lista de chaves com distance no fim, mensagem de versão "1, 2, 3 ou 4" e a de formato citando a distância. A recusa de version 4 virou version 5, e a forma da v1 com version 4 ganhou asserção própria. Nenhuma asserção foi afrouxada ou removida.'

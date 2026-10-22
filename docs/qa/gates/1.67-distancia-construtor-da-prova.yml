@@ -1,0 +1,68 @@
+schema: 1
+story: '1.67'
+story_title: 'Distância: Construtor da Prova'
+gate: PASS
+status_reason: 'Os ACs 1 a 9 têm evidência no código, nos testes e no navegador. O quinto cartão, a duração, o resumo, a frase da regra e o reabrir igual funcionam, a prova de distância grava com os legados derivados e o selo público deixou de dizer "Reps". Ficam só itens LOW: textos fora do AC, o selo points e o texto da prévia.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-10-22T18:00:00-03:00'
+expires: '2026-11-05T18:00:00-03:00'
+quality_score: 91
+
+top_issues:
+  - id: REQ-001
+    severity: low
+    finding: 'Duas mudanças ficaram fora do texto dos ACs, ambas registradas nas Completion Notes e coerentes com o desenho: o editor da súmula no painel agora também aparece quando o tipo de score é "Distância" (com o construtor abrindo na distância), e a chave typeDistance entrou também em pt-pt.json (o AC7 citava só pt-br e en-gb, e o teste de paridade de i18n exige os três idiomas).'
+    refs: ['src/app/admin/page.tsx:7578', 'src/messages/pt-pt.json']
+    suggested_owner: po
+    suggested_action: 'Ajustar o texto do AC6 e do AC7 para incluir o tipo "Distância" no painel e os três idiomas, na próxima edição da story.'
+  - id: REQ-002
+    severity: low
+    finding: 'O selo da página pública só trata o tipo distance; os tipos points e qualquer outro desconhecido continuam caindo em "Reps". Já era assim antes e a decisão 6 trata só a distância.'
+    refs: ['src/app/[locale]/event/[id]/EventView.tsx:1410']
+    suggested_owner: dev
+    suggested_action: 'Opcional: tratar points (e um rótulo neutro para tipo desconhecido) numa story de acabamento do selo.'
+  - id: REQ-003
+    severity: low
+    finding: 'O texto da prévia do construtor diz "inicie o relógio, toque e segure" para todos os formatos. Na distância não há toque nem segurar: o judge digita o total.'
+    refs: ['src/components/admin/WorkoutSheetBuilderDialog.tsx:140']
+    suggested_owner: dev
+    suggested_action: 'Opcional: trocar por um texto neutro ("Teste à vontade: inicie o relógio e use a súmula. Nada é gravado.") e ajustar a asserção que cita o texto, se houver.'
+waiver: { active: false }
+
+evidence:
+  tests_reviewed: 16
+  risks_identified: 1
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    ac_gaps: []
+  gate_commands:
+    npm_test: '1031/1031, rodado pelo QA'
+    npm_run_lint: '0 erros, 209 warnings (nenhum novo)'
+    npm_run_typecheck: 'verde, rodado pelo QA'
+    npm_run_build: 'verde, rodado pelo QA'
+    coderabbit: 'review_completed, 0 findings sobre os commits 8fe9018 e 72f771c (feito antes do primeiro push)'
+    migration: 'nenhuma'
+  independent_checks: 'No servidor de desenvolvimento, em /pt-br/sumula-preview/editor com o exemplo da Distância e "Editar súmula": cinco cartões em 3 + 2 (spans 2, 2, 2, 3, 3), seção 2 com duração 20:00 e resumo com contador 83/300, seção 3 com o texto fixo e a súmula do judge ao lado, sem erro no console. A gravação pela rota, com os legados derivados (distance, 20:00, sem desempate), a recusa de divergência e o ciclo criar, reabrir, editar e salvar de novo estão em testes com o banco em memória (um deles acrescentado nesta revisão). A largura de celular do construtor não foi medida no navegador; a grade tem 2 colunas no celular por construção (grid-cols-2, último cartão ocupando a linha).'
+  notes: 'A estrutura gerada passa por validateWorkoutStructure, a mesma da rota, e volta idêntica por draftFromStructure. A trava da estrutura com súmula aberta vale para a distância como para as outras (teste com lockedSheets). O resumo não tem maxLength de propósito: colar mais de 300 caracteres mostra o erro e o contador em vermelho em vez de cortar sem aviso. Os literais version e distance nulo dos outros formatos foram atualizados e os testes antigos só mudaram o valor esperado.'
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: 'O resumo é texto de gestor, guardado com trim, limite de 300 caracteres e sem U+0000, e renderizado como texto pelo React (sem HTML). A rota continua exigindo sessão de gestor ou owner, dono do evento e acesso válido. Sem migration.'
+  performance:
+    status: PASS
+    notes: 'A análise do rascunho da distância é constante.'
+  reliability:
+    status: PASS
+    notes: 'Reabrir uma prova gravada devolve o mesmo rascunho; uma distância sem o campo cai no aviso "não cabe em linhas" em vez de quebrar.'
+  maintainability:
+    status: PASS
+    notes: 'O formato segue o molde do intervalado (rascunho, analyzeX, frase da regra e resumo) e reaproveita timeCheck e finish.'
+
+regression_review:
+  binaries_checked:
+    - 'FORMATS e a grade do grupo de formatos (cinco cartões, setas circulares)'
+    - 'analyzeDraft / draftFromStructure / describeStructureRule / summarizeStructure (ramo da distância antes dos outros)'
+    - 'condição do editor no painel e defaultFormat (distance só com o tipo escolhido ou estrutura criada)'
+    - 'typeKey do selo público e as chaves nos três idiomas'
+  old_tests_changed: 'Só o valor esperado mudou: lista de cinco formatos e cartões, a grade de seis colunas e as condições do editor no painel. O teste do selo "Reps" ganhou o ramo da distância.'
