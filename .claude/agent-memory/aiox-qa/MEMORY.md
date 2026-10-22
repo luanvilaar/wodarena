@@ -6,4 +6,5 @@
 - [Desempate WOD 1 com corte 07/10/2026](project_wod1_tiebreak_cutoff.md) — Story 1.35 PASS; 3 eventos legados protegidos pelo corte; riscos REL-001/TEST-001
 - [Story 1.38 camisa opcional](project_optional_shirt_1_38.md) — gate final CONCERNS (2026-10-14); M-1 e M-2 corrigidos; LOWs abertos e o que conferir no re-gate
 - [Story 1.41 mapa Waze](project_event_map_1_41.md) — gate CONCERNS (2026-10-14); REQ-001 foco invisível no overlay; LOWs e técnicas (Chrome headless, PGlite)
+- [Intervalado 1.60 contrato v3](project_intervalado_1_60.md) — PASS 2026-10-21; só roll-forward pós-deploy (REL-001), publicar com 1.61/1.62; o que conferir nas próximas
 - [Telão ao vivo 1.53–1.58](project_telao_ao_vivo_1_53_1_58.md) — rodada 3 2026-10-21: 1.56 e 1.58 PASS (só LOW: SEC-003, REQ-004, PERF-003); 1.57 CONCERNS

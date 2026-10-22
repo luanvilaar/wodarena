@@ -1,0 +1,100 @@
+schema: 1
+story: '1.60'
+story_title: 'Intervalado na Súmula Digital: Contrato v3 e Motor'
+gate: PASS
+status_reason: 'Os ACs 1 a 9 têm evidência no código e nos testes. O motor bate com o caso aprovado (A 23, B e C 40, D 0; posições 1, 1, 3, 4) e com todos os vetores de round e de fase. Nenhum ponto do tipo "carga máxima ou o resto" deixa o intervalado cair no For Time. Ficam só itens LOW: o plano de reversão, a ordem de publicação com a 1.61/1.62 e uma mensagem.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-10-21T22:30:00-03:00'
+expires: '2026-11-04T22:30:00-03:00'
+quality_score: 94
+
+top_issues:
+  - id: REL-001
+    severity: low
+    finding: 'O risco R3 da story é maior do que está escrito. Depois do deploy, toda estrutura gravada pela rota (de qualquer formato) e toda súmula aberta passam a guardar version 3 com a chave interval, porque o validador sempre devolve a v3. Se o código voltar para antes da 1.60, o validador antigo recusa version 3 e a chave interval. Aí deixam de ser lidas as provas de For Time, AMRAP e Carga máxima editadas depois do deploy e as súmulas abertas depois dele, não só as provas intervaladas.'
+    refs: ['src/lib/workoutStructure.ts:811', 'src/lib/serverScoresheets.ts:226', 'src/app/api/admin/persistence/route.ts:174']
+    suggested_owner: devops
+    suggested_action: 'Registrar na nota de deploy: depois do deploy, só corrigir para frente (roll-forward), sem reverter. Se a reversão for inevitável, antes converter de volta para a v2 as estruturas que não são intervaladas.'
+  - id: REL-002
+    severity: low
+    finding: 'Este é o R2 da story, já aceito. A rota de persistência passa a aceitar uma prova intervalada, mas SheetView, CourtSheet e o editor do painel ainda não conhecem o formato. SheetView monta a súmula de segmentos, CourtSheet mostra o formulário de tempo oficial (o servidor recusa) e o editor cai no rascunho padrão ao carregar. Pela tela não dá para criar uma prova intervalada. Só um payload montado à mão por um gestor, no próprio evento, chega lá.'
+    refs: ['src/components/sheet/SheetView.tsx:428', 'src/components/judge/CourtSheet.tsx:364', 'src/components/admin/WorkoutStructureEditor.tsx:58']
+    suggested_owner: devops
+    suggested_action: 'Publicar a 1.60 junto com a 1.61 e a 1.62, ou a 1.61 com a prévia protegida, como diz o R2. Não publicar a 1.60 sozinha esperando que a tela já trate o formato.'
+  - id: MNT-001
+    severity: low
+    finding: 'Uma estrutura v3 de For Time, AMRAP ou Carga máxima sem a chave interval recebe "O campo interval só existe em provas intervaladas: fora delas fica vazio (null)". A mensagem fala de campo preenchido, mas o problema é campo ausente. Ela continua certa sobre o que fazer (null) e não ecoa o JSON.'
+    refs: ['src/lib/workoutStructure.ts:691', 'src/lib/workoutStructure.ts:373']
+    suggested_owner: dev
+    suggested_action: 'Opcional: separar o caso da chave ausente com uma mensagem própria ("Na versão 3, informe o campo interval: vazio (null) fora do intervalado") e ajustar a asserção de tests/workout-structure-v3.test.mjs:218 e tests/workout-structure.test.mjs junto.'
+  - id: TEST-001
+    severity: low
+    finding: 'Cosmético: o título do teste "versão 1 vira 2" ficou desatualizado. As asserções dele já esperam a versão 3.'
+    refs: ['tests/workout-structure-v2.test.mjs:151']
+    suggested_owner: dev
+    suggested_action: 'Renomear quando mexer no arquivo de novo.'
+waiver: { active: false }
+
+evidence:
+  tests_reviewed: 26
+  risks_identified: 2
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    ac_gaps: []
+  gate_commands:
+    npm_test: '907/907 (eram 881), rodado pelo QA'
+    npm_run_lint: '0 erros, 209 warnings. O único warning em arquivo de teste tocado (FRAN_ABSENT, tests/scoresheets-route.test.mjs:491) vem da 1.59 (875ec2c). Os arquivos de src da 1.60 passam no lint sem warning.'
+    npm_run_typecheck: 'verde, rodado pelo QA'
+    npm_run_build: 'verde, rodado pelo QA'
+    coderabbit: 'review_completed, 0 findings, 15 arquivos (base cf22faf = só o commit 1ca1079)'
+    migration: 'nenhuma'
+  independent_checks: 'Script à parte (fora do repo) conferiu o seguinte. Fase em 0, 119, 120, 250, 1079 e 1080: work R1 120, work R1 1, rest R1 120, work R2 110, work R5 1, ended. Porta em 35, 119, 120, 210, 250 e 1080: R1, R1, descanso, descanso, R2, encerrada. Máximo tocado antes de os fixos completarem conta quando eles completam (estado final). Um adj negativo depois de pontuar tira a pontuação do round e o bruto fica guardado. V2 com a chave interval tem a mensagem própria.'
+  notes: 'Conferido no código: o motor próprio não reaproveita deriveSheetState nem parseEvent. A janela é [início, início + ON) com Math.floor. set e adj valem pelo rd, e o evento é ignorado por inteiro sem rd válido. Clamp do fixo até a meta e do máximo até 999. undo com collectVoided, e o registro fora da janela desfeito sai do ignored. A trava da estrutura (route.ts:255) compara as duas formas normalizadas na v3, então reenviar uma prova v2 sem mudança continua passando. O resultado publicado sai só do log gravado (computeSheetOutcome no submit) e nunca do aparelho.'
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: 'validateClientEvent confere cada registro. Os ids aceitos são os dos fixos e o do máximo. fill no máximo é recusado. rd é exigido e limitado a 1..rounds em set/adj do intervalado e descartado em todo o resto. time e attempt são recusados. O evento normalizado só leva os campos do contrato. O validador do contrato recusa chave desconhecida em todos os níveis e o U+0000, não ecoa o JSON e não lança, nem com getter que lança. Sem migration e sem mudança de RLS.'
+  performance:
+    status: PASS
+    notes: 'O motor é O(eventos + rounds × fixos), com no máximo 5000 eventos por súmula, 20 rounds e 9 fixos. Sem I/O.'
+  reliability:
+    status: PASS
+    notes: 'O motor é puro e determinístico, não muta as entradas e tolera estrutura malformada (nenhum registro conta, fase ended). readLiveProgress lê resumos antigos sem round. Ficam dois itens LOW de publicação e reversão: REL-001 e REL-002.'
+  maintainability:
+    status: PASS
+    notes: 'Os comentários citam as decisões do README. Os tipos novos estão exportados. Os mapas Record<WorkoutStructureFormat> fazem o typecheck pegar formato novo esquecido.'
+
+regression_review:
+  binaries_checked:
+    - 'validateClientEvent (time recusado; segmentIds com o máximo só no intervalado)'
+    - 'checkOfficialTime (ramo próprio antes do teste de timeCapSeconds numérico)'
+    - 'computeSheetOutcome e computeAbsentOutcome (ramo do intervalado antes do max_load/resto)'
+    - 'summarizeLiveProgress (ramo próprio; os outros formatos só ganham round: null)'
+    - 'deriveLegacyWorkoutFields / LEGACY_TYPES (reps) e LEGACY_TYPE_LABELS (Intervalado)'
+    - 'reconcileWorkoutStructure (interval e a carga do máximo copiados por valor)'
+    - 'TIE_BREAK_MESSAGES / TIE_BREAK_KINDS (interval: [], qualquer desempate recusado)'
+    - 'describeWorkoutForBoard e rankLiveEntries (aceitam o formato sem lançar)'
+  outside_scope_ui: 'SheetView.tsx:428, CourtSheet.tsx e BroadcastScreen.tsx ainda tratam o intervalado como o "resto". Isso é escopo das Stories 1.61 a 1.63 (ver REL-002).'
+  old_tests_changed: 'Só o valor esperado mudou (versão 2 → 3, lista de chaves com interval, mensagens "1, 2 ou 3" e o formato com o intervalado). A recusa da version 3 virou version 4, e a forma da v1 com version 3 ganhou uma asserção própria. Nenhuma asserção foi afrouxada ou removida, e as fixtures v2 seguem como entrada de compatibilidade.'
+
+observations_for_next_stories:
+  - story: '1.62'
+    note: 'O motor segue a regra aprovada do estado final: um toque no máximo antes de os fixos completarem conta se eles completarem depois. A ordem "máximo sempre o último" precisa ser imposta pela tela da súmula.'
+  - story: '1.63'
+    note: 'round e segments do resumo ao vivo seguem o último registro que conta na ordem do log, inclusive set/adj com rd. Uma correção do round 1 feita durante o round 3 faz o resumo apontar o round 1 até o próximo toque, conforme o AC7. O round e a fase do telão devem vir do relógio da bateria, como a AUTO-DECISION 6 já prevê.'
+    refs: ['src/lib/workoutStructure.ts:1648']
+
+recommendations:
+  immediate: []
+  future:
+    - action: 'Nota de deploy só com correção para frente (REL-001) e publicação junto com a 1.61/1.62 (REL-002)'
+      refs: ['docs/stories/1.60.story.md']
+    - action: 'Mensagem própria para a chave interval ausente na v3 (MNT-001)'
+      refs: ['src/lib/workoutStructure.ts:691']
+
+history:
+  - date: '2026-10-21'
+    gate: PASS
+    quality_score: 94
+    issues: 'REL-001, REL-002, MNT-001 e TEST-001 (low)'

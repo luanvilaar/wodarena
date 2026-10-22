@@ -1,1 +1,2 @@
 - [Story 1.59 validada](project_story_1_59_validation.md) — GO 9/10 em 2026-10-21, Ready; decisões 12 a 17 confirmadas pelo Luan, sem pendência
+- [Intervalado 1.60–1.63 validadas](project_intervalado_1_60_1_63_validation.md) — GO 9/9/8/9 em 2026-10-21, Ready; recomendação: publicar 1.61 com 1.62
