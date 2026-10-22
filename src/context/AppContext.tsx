@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import { requestLogin, type LoginOptions, type LoginResult } from '@/lib/authClient';
 import { WorkoutType, Event, Athlete, Division, Score, CourseStage, Coupon, Registration, User, Workout, AthleteOverall, EventScheduleItem, Contestation, EventType } from '../types';
@@ -9,7 +9,7 @@ import { buildFitnessRacingCourse, buildFitnessRacingDefaults, normalizeInstagra
 import { mapContestationFromDb } from '@/lib/contestations';
 import { getNextDivisionOrderIndex, sortDivisions } from '@/lib/divisionOrder';
 import { sortWorkouts } from '@/lib/workoutOrder';
-import { computeDivisionStandings } from '@/lib/leaderboardStandings';
+import { computeDivisionStandings, qualifierReviewKey } from '@/lib/leaderboardStandings';
 import { getManagerAccessStatus, normalizeServiceValidUntil } from '@/lib/managerAccess';
 import { rankWorkoutScores } from '@/lib/scoring';
 import { normalizeShirtMode } from '@/lib/shirtPricing';
@@ -19,6 +19,17 @@ import type { QualifierWorkoutDeleteConfirmation, QualifierWorkoutDeleteResult }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type LeaderboardEntry = Record<string, any>;
+
+// Qualifier: atletas com envio em análise (ainda sem revisão do judge) por prova.
+type QualifierPendingReview = { workoutId: string; athleteIds: string[] };
+
+const mapQualifierPendingReviews = (groups: { workout_id?: unknown; athlete_ids?: unknown }[] | undefined): QualifierPendingReview[] => (
+  (groups || []).flatMap((group) => (
+    typeof group.workout_id === 'string' && Array.isArray(group.athlete_ids)
+      ? [{ workoutId: group.workout_id, athleteIds: group.athlete_ids.filter((id): id is string => typeof id === 'string') }]
+      : []
+  ))
+);
 
 const MAX_PUBLIC_EVENT_DATA_ATTEMPTS = 2;
 type LoadPublicEventDataOptions = { force?: boolean };
@@ -183,6 +194,7 @@ type BootstrapPayload = {
   coupons: any[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   leaderboardEntries?: any[];
+  qualifierPendingReviews?: { workout_id: string; athlete_ids: string[] }[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   events: any[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -409,6 +421,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [contestations, setContestations] = useState<Contestation[]>([]);
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [leaderboardEntries, setLeaderboardEntries] = useState<LeaderboardEntry[]>([]);
+  const [qualifierPendingReviews, setQualifierPendingReviews] = useState<QualifierPendingReview[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [currentUser, setCurrentUser, isSessionHydrated] = useLocalStorage<User | null>('woda_current_user', null);
   const currentUserId = currentUser?.id || null;
@@ -430,6 +443,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setContestations([]);
     setCoupons([]);
     setLeaderboardEntries([]);
+    setQualifierPendingReviews([]);
     setEvents([]);
     setPublicEventDataStatus({});
     publicEventRequestsRef.current.clear();
@@ -503,6 +517,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         let mappedAthletes: Athlete[] = [];
         let mappedScores: Score[] = [];
         let mappedLeaderboardEntries: LeaderboardEntry[] = [];
+        let mappedPendingReviews: QualifierPendingReview[] = [];
 
         do {
           attemptCount += 1;
@@ -533,6 +548,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             } as Score;
           });
           mappedLeaderboardEntries = payload.leaderboardEntries || [];
+          mappedPendingReviews = mapQualifierPendingReviews(payload.qualifierPendingReviews);
         } while (mappedAthletes.length === 0 && attemptCount < MAX_PUBLIC_EVENT_DATA_ATTEMPTS);
 
         setAthletes(previous => [
@@ -550,6 +566,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setLeaderboardEntries(previous => [
           ...previous.filter(entry => entry.event_id !== eventId),
           ...mappedLeaderboardEntries
+        ]);
+        // Envios em análise são trocados pelo que está gravado: os que foram revisados
+        // saem e viram score na mesma atualização.
+        mappedPendingReviews.forEach(group => eventWorkoutIds.add(group.workoutId));
+        setQualifierPendingReviews(previous => [
+          ...previous.filter(group => !eventWorkoutIds.has(group.workoutId)),
+          ...mappedPendingReviews
         ]);
 
         // Uma resposta com atletas encerra o carregamento para esta sessão. Uma
@@ -714,6 +737,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         } else {
           setLeaderboardEntries([]);
         }
+        setQualifierPendingReviews(mapQualifierPendingReviews(payload.qualifierPendingReviews));
 
         // 5. Carregar eventos, divisões, workouts e credenciais públicas do Mercado Pago dos gestores
         const dbEvents = payload.events;
@@ -823,6 +847,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           setContestations([]);
           setCoupons([]);
           setLeaderboardEntries([]);
+          setQualifierPendingReviews([]);
           setEvents([]);
         }
       } finally {
@@ -2083,6 +2108,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     submitScoresBulk([newScore]);
   };
 
+  // Chaves atleta/prova dos envios do Qualifier em análise (ver leaderboardStandings.ts).
+  const awaitingReview = useMemo(() => new Set(qualifierPendingReviews.flatMap(group => (
+    group.athleteIds.map(athleteId => qualifierReviewKey(athleteId, group.workoutId))
+  ))), [qualifierPendingReviews]);
+
   // Gerar Leaderboard Consolidado
   const getLeaderboard = (eventId: string, divisionId: string): AthleteOverall[] => {
     const event = events.find(e => e.id === eventId);
@@ -2128,7 +2158,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       divisionAthletes = athletes.filter(a => a.divisionId === divisionId && leaderboardAthleteIds.has(a.id));
     }
 
-    return computeDivisionStandings({ event, divisionId, divisionAthletes, scores });
+    return computeDivisionStandings({ event, divisionId, divisionAthletes, scores, awaitingReview });
   };
 
   // Atualizar configurações de bilheteria e formato do evento

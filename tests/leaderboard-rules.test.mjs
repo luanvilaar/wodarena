@@ -8,8 +8,9 @@ const scoring = readFileSync(new URL('../src/lib/scoring.ts', import.meta.url), 
 const standings = readFileSync(new URL('../src/lib/leaderboardStandings.ts', import.meta.url), 'utf8');
 
 test('AppContext delegates the overall standings to the shared pure function', () => {
-  assert.match(appContext, /import \{ computeDivisionStandings \} from '@\/lib\/leaderboardStandings';/);
-  assert.match(appContext, /return computeDivisionStandings\(\{ event, divisionId, divisionAthletes, scores \}\);/);
+  assert.match(appContext, /import \{ computeDivisionStandings, qualifierReviewKey \} from '@\/lib\/leaderboardStandings';/);
+  // Story 1.64: o Qualifier também recebe os envios em análise (awaitingReview).
+  assert.match(appContext, /return computeDivisionStandings\(\{ event, divisionId, divisionAthletes, scores, awaitingReview \}\);/);
 });
 
 test('implements low-point scoring logic by ranking', () => {
@@ -38,11 +39,13 @@ test('ranks qualifier athletes without a result last while the submission window
   // Prova pendente com janela aberta mostra 0 pontos, mas é o pior resultado possível:
   // a ordenação compara antes a quantidade de provas pendentes e só depois os pontos.
   assert.match(standings, /if \(isQualifier && !closed\) pendingCount \+= 1;/);
-  assert.match(standings, /const pendingDiff = getPendingDiff\(a, b\);\s*if \(pendingDiff !== 0\) return pendingDiff;\s*if \(a\.totalPoints !== b\.totalPoints\)/);
-  assert.match(standings, /let isEqual = getPendingDiff\(item, prevItem\) === 0 && item\.totalPoints === prevItem\.totalPoints;/);
+  // Story 1.64: depois das pendentes, o total provisório (envio em análise vale a pior colocação) e então o total exibido.
+  assert.match(standings, /const pendingDiff = getPendingDiff\(a, b\);\s*if \(pendingDiff !== 0\) return pendingDiff;\s*const provisionalDiff = getProvisionalTotal\(a\) - getProvisionalTotal\(b\);\s*if \(provisionalDiff !== 0\) return provisionalDiff;\s*if \(a\.totalPoints !== b\.totalPoints\)/);
+  assert.match(standings, /let isEqual = getPendingDiff\(item, prevItem\) === 0\s*&& getProvisionalTotal\(item\) === getProvisionalTotal\(prevItem\)\s*&& item\.totalPoints === prevItem\.totalPoints;/);
   // Janela encerrada: ausência recebe a maior pontuação em jogo (última colocação da divisão).
   assert.match(standings, /const qualifierAbsencePoints = divisionAthletes\.length;/);
-  assert.match(standings, /const absencePoints = isQualifier && closed \? qualifierAbsencePoints : 0;/);
+  // Envio em análise (sem score até a revisão) nunca é ausência.
+  assert.match(standings, /const absencePoints = isQualifier && closed && !underReview \? qualifierAbsencePoints : 0;/);
 });
 
 test('keeps qualifier scores restricted to judge review instead of manual bulk launch', () => {

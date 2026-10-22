@@ -128,9 +128,17 @@ const ScorePerWorkoutList = ({ workouts, scores }: { workouts: Workout[]; scores
             <p className="text-[11px] font-bold text-white uppercase tracking-wide truncate" title={workout.name}>
               {workout.name}
             </p>
-            {pending ? (
+            {pending && score?.resultStatus === 'absent' ? (
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <ResultStatusBadge status="absent" />
+                <span className="font-mono text-sm font-black text-primary whitespace-nowrap">
+                  {score.points ?? 0}
+                  <span className="text-[8px] font-bold uppercase tracking-wider text-muted font-sans ml-0.5">{t('ptsSuffix')}</span>
+                </span>
+              </div>
+            ) : pending ? (
               <p className="text-[11px] text-muted-soft mt-2 flex items-center gap-1.5">
-                <Clock className="h-3 w-3" /> {t('pendingScore')}
+                <Clock className="h-3 w-3" /> {score?.awaitingReview ? t('awaitingReviewScore') : t('pendingScore')}
               </p>
             ) : (
               <div className="flex items-center justify-between mt-2 gap-2">
@@ -183,6 +191,28 @@ const ResultStatusBadge = ({ status, penaltyPercent }: { status?: Score['resultS
     );
   }
   return null;
+};
+
+// Célula de prova sem resultado. Qualifier: "Em análise" quando o envio já foi feito e
+// espera o judge; "Ausente" com os pontos da ausência quando a janela fechou sem envio.
+const WorkoutPendingCell = ({ score }: { score?: Score }) => {
+  const t = useTranslations('Leaderboard');
+  if (score?.awaitingReview) {
+    return (
+      <span className="inline-flex shrink-0 rounded border border-dashed border-primary/45 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wide text-primary">
+        {t('awaitingReview')}
+      </span>
+    );
+  }
+  if (score?.resultStatus === 'absent') {
+    return (
+      <span className="inline-flex flex-col items-center gap-1">
+        <span className="text-white">{score.points ?? 0}</span>
+        <ResultStatusBadge status="absent" />
+      </span>
+    );
+  }
+  return <>–</>;
 };
 
 type WorkoutScoreResultProps = {
@@ -547,6 +577,21 @@ export function Leaderboard({ event }: LeaderboardProps) {
     return groups;
   }, [divisionWorkouts, leaderboardData]);
 
+  // Qualifier: resultados enviados que ainda esperam o judge. Enquanto houver, o ranking é parcial.
+  const qualifierReviewSummary = useMemo(() => {
+    if (event.eventType !== 'functional_fitness_qualifier') return null;
+    let waiting = 0;
+    let reviewed = 0;
+    leaderboardData.forEach((row) => {
+      divisionWorkouts.forEach((workout) => {
+        const score = row.scores[workout.id];
+        if (score?.awaitingReview) waiting += 1;
+        else if (score && score.result !== '-' && score.result !== '') reviewed += 1;
+      });
+    });
+    return waiting > 0 ? { waiting, total: waiting + reviewed } : null;
+  }, [event.eventType, leaderboardData, divisionWorkouts]);
+
   // Líder do Fitness Racing para cálculo de diferença
   const leaderTime = useMemo(() => {
     if (event.eventType !== 'fitness_racing') return 0;
@@ -635,6 +680,13 @@ export function Leaderboard({ event }: LeaderboardProps) {
           >
             {t('retry')}
           </button>
+        </div>
+      )}
+
+      {qualifierReviewSummary && (
+        <div className="rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-xs leading-5 text-muted" role="status">
+          <p className="font-black uppercase tracking-wide text-primary">{t('qualifierPartialTitle')}</p>
+          <p className="mt-1">{t('qualifierPartialBody', qualifierReviewSummary)}</p>
         </div>
       )}
 
@@ -766,7 +818,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
                                 />
                               </div>
                             ) : (
-                              <div className="flex min-h-14 items-center justify-center text-xs font-bold text-muted-soft">–</div>
+                              <div className="flex min-h-14 items-center justify-center text-xs font-bold text-muted-soft"><WorkoutPendingCell score={score} /></div>
                             )}
                           </td>
                         </tr>
@@ -908,7 +960,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
                                 />
                               </div>
                             ) : (
-                              <div className="flex min-h-16 items-center justify-center text-sm font-bold text-muted-soft">–</div>
+                              <div className="flex min-h-16 items-center justify-center text-sm font-bold text-muted-soft"><WorkoutPendingCell score={score} /></div>
                             )}
                           </td>
                         );

@@ -9282,6 +9282,11 @@ export default function AdminPage() {
 
     const selectedCat = divisions.find(d => d.id === leaderboardFilterCatId);
 
+    // Qualifier: envios feitos que ainda esperam o judge. Enquanto houver, o ranking é parcial.
+    const qualifierAwaitingReviewCount = selectedEventToManage?.eventType === 'functional_fitness_qualifier'
+      ? rawLeaderboard.reduce((total, item) => total + categoryWods.filter(wod => item.scores[wod.id]?.awaitingReview).length, 0)
+      : 0;
+
     // Filtrar e processar dados locais do Leaderboard
     const leaderboardData = (() => {
       let data = rawLeaderboard;
@@ -9412,6 +9417,16 @@ export default function AdminPage() {
             </div>
           )}
         </div>
+
+        {qualifierAwaitingReviewCount > 0 && (
+          <div role="status" className="rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-xs leading-5 text-muted">
+            <p className="font-black uppercase tracking-wide text-primary">Ranking parcial</p>
+            <p className="mt-1">
+              {qualifierAwaitingReviewCount} {qualifierAwaitingReviewCount === 1 ? 'resultado enviado ainda está' : 'resultados enviados ainda estão'} em análise pelos judges nesta categoria.
+              Até a revisão, a prova em análise não soma pontos, mas é tratada como a pior colocação para ordenar o ranking.
+            </p>
+          </div>
+        )}
 
         {!leaderboardFilterCatId ? (
           <p className="text-xs text-muted text-center py-8">Selecione uma categoria para visualizar o Leaderboard.</p>
@@ -9606,7 +9621,11 @@ export default function AdminPage() {
                             <div className="font-number font-semibold text-white">
                               {score ? score.result : '-'}
                             </div>
-                            {score && score.points && score.points > 0 ? (
+                            {score?.awaitingReview ? (
+                              <div className="text-[9px] font-bold uppercase tracking-wide text-primary">Em análise</div>
+                            ) : score?.resultStatus === 'absent' && score.result === '-' ? (
+                              <div className="text-[9px] text-muted">Ausente · {score.points} pts</div>
+                            ) : score && score.points && score.points > 0 ? (
                               <div className="text-[9px] text-primary">
                                 {score.points} pts ({score.rank}º)
                               </div>

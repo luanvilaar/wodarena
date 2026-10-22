@@ -136,6 +136,8 @@ export interface Score {
   splits?: Record<string, string>;
   resultStatus?: 'validated' | 'penalized' | 'rejected' | 'manual' | 'absent';
   penaltyPercent?: number;
+  /** Qualifier: envio feito e ainda sem revisão do judge (só nos scores sintéticos do ranking). */
+  awaitingReview?: boolean;
 }
 
 export interface AthleteOverall {

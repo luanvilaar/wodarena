@@ -12,6 +12,7 @@ import {
 } from '@/lib/bootstrapPayload';
 import { getManagerAccessStatus, normalizeServiceValidUntil } from '@/lib/managerAccess';
 import { getQualifierEventIdsForActor, JudgeAccessError } from '@/lib/serverJudgeAccess';
+import { QUALIFIER_EVENT_TYPE, readQualifierPendingReviews } from '@/lib/serverQualifierPendingReviews';
 import { attachWorkoutStructures, readWorkoutStructures } from '@/lib/serverWorkoutStructures';
 import { createSupabaseAdmin, requireSession, type SessionUser } from '@/lib/serverSecurity';
 
@@ -86,6 +87,16 @@ export async function GET(request: Request) {
     const [users, events] = await Promise.all([usersPromise, eventsPromise]);
     const eventIds = events.map(event => String(event.id));
     const eventIdFilter = session.role === 'manager' || session.role === 'judge' ? eventIds : [];
+    // Envios do Qualifier em análise, para o ranking não tratá-los como ausência.
+    // O atleta recebe isso pelo bootstrap público do evento, como os demais resultados.
+    const qualifierPendingReviewsPromise = session.role === 'athlete'
+      ? Promise.resolve([])
+      : readQualifierPendingReviews(supabaseAdmin, events
+        .filter(event => event.event_type === QUALIFIER_EVENT_TYPE)
+        .map(event => String(event.id)));
+    // Se a leitura falhar, o erro sobe no await mais abaixo (o bootstrap falha em vez de
+    // punir como ausente quem enviou); aqui só evita rejeição sem tratamento no meio do caminho.
+    qualifierPendingReviewsPromise.catch(() => undefined);
 
     // Provas em ordem determinística (order_index, depois id), como no bootstrap público.
     // Estrutura da prova (Story 1.45): só gestor e dono, em leitura própria e tolerante a coluna ausente.
@@ -204,6 +215,7 @@ export async function GET(request: Request) {
       ]);
     }
 
+    const qualifierPendingReviews = await qualifierPendingReviewsPromise;
     const mappedUsers = users.map(mapUserForClient);
     const mappedCurrentUser = mappedUsers.find(user => user.id === session.id) || session;
     const sanitizedLeaderboardEntries = leaderboardEntries.map(sanitizeLeaderboardEntry);
@@ -221,7 +233,8 @@ export async function GET(request: Request) {
         registrations: registrations.length,
         contestations: contestations.length,
         coupons: coupons.length,
-        leaderboardEntries: sanitizedLeaderboardEntries.length
+        leaderboardEntries: sanitizedLeaderboardEntries.length,
+        qualifierPendingReviewWorkouts: qualifierPendingReviews.length
       }
     }));
 
@@ -238,7 +251,8 @@ export async function GET(request: Request) {
       divisions,
       workouts,
       mercadopagoAccounts,
-      leaderboardEntries: sanitizedLeaderboardEntries
+      leaderboardEntries: sanitizedLeaderboardEntries,
+      qualifierPendingReviews
     });
   } catch (err) {
     if (err instanceof JudgeAccessError) {

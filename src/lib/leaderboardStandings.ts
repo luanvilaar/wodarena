@@ -13,14 +13,22 @@ export type DivisionStandingsInput = {
   divisionAthletes: Athlete[];
   scores: Score[];
   nowMs?: number;
+  /**
+   * Qualifier: pares atleta/prova (ver `qualifierReviewKey`) com envio já feito e ainda
+   * sem revisão do judge. Prova sem score nesse conjunto é "Em análise", não ausência.
+   */
+  awaitingReview?: ReadonlySet<string>;
 };
+
+export const qualifierReviewKey = (athleteId: string, workoutId: string) => `${athleteId}::${workoutId}`;
 
 export const computeDivisionStandings = ({
   event,
   divisionId,
   divisionAthletes,
   scores,
-  nowMs = Date.now()
+  nowMs = Date.now(),
+  awaitingReview
 }: DivisionStandingsInput): AthleteOverall[] => {
   // Se for Fitness Racing, o leaderboard é baseado estritamente no tempo do workout TOTAL (Percurso Completo)
   if (event.eventType === 'fitness_racing') {
@@ -89,6 +97,8 @@ export const computeDivisionStandings = ({
   const qualifierAbsencePoints = divisionAthletes.length;
   // Qualifier: provas sem resultado com a janela ainda aberta, por atleta.
   const qualifierPendingCount = new Map<string, number>();
+  // Qualifier: provas com a janela encerrada e o envio ainda em análise, por atleta.
+  const qualifierUnderReviewCount = new Map<string, number>();
 
   // 3. Compilar scores para cada atleta da divisão somando apenas as provas já lançadas.
   //    Provas ainda sem resultado NÃO geram penalidade automática nem score falso: o evento
@@ -98,6 +108,7 @@ export const computeDivisionStandings = ({
     const athleteScores: Record<string, Score> = {};
     let totalPoints = 0;
     let pendingCount = 0;
+    let underReviewCount = 0;
 
     workoutIds.forEach(wId => {
       const score = scores.find(s => s.athleteId === athlete.id && s.workoutId === wId);
@@ -108,11 +119,17 @@ export const computeDivisionStandings = ({
         const workout = divisionWorkouts.find(item => item.id === wId);
         const closed = Boolean(workout?.submissionClosesAt)
           && new Date(workout?.submissionClosesAt as string).getTime() < nowMs;
-        const absencePoints = isQualifier && closed ? qualifierAbsencePoints : 0;
+        // Envio feito e ainda sem revisão do judge (a linha em scores só nasce na
+        // revisão): não é ausência, em nenhum momento.
+        const underReview = isQualifier && Boolean(awaitingReview?.has(qualifierReviewKey(athlete.id, wId)));
+        const absencePoints = isQualifier && closed && !underReview ? qualifierAbsencePoints : 0;
         // Para qualifier encerrado, ausência recebe a maior pontuação em jogo
         // (última colocação da divisão). Antes do encerramento a prova pendente
         // mostra 0 pontos, mas conta como o pior resultado possível na ordenação.
         if (isQualifier && !closed) pendingCount += 1;
+        // Encerrado e em análise: também mostra 0 pontos e conta como o pior resultado
+        // possível, mas só na ordenação (total provisório), até a revisão.
+        if (underReview && closed) underReviewCount += 1;
         athleteScores[wId] = {
           athleteId: athlete.id,
           workoutId: wId,
@@ -120,13 +137,15 @@ export const computeDivisionStandings = ({
           value: 0,
           rank: 0,
           points: absencePoints,
-          resultStatus: absencePoints ? 'absent' : undefined
+          resultStatus: absencePoints ? 'absent' : undefined,
+          awaitingReview: underReview ? true : undefined
         };
         totalPoints += absencePoints;
       }
     });
 
     qualifierPendingCount.set(athlete.id, pendingCount);
+    qualifierUnderReviewCount.set(athlete.id, underReviewCount);
     return {
       athlete,
       scores: athleteScores,
@@ -165,10 +184,19 @@ export const computeDivisionStandings = ({
   const getPendingDiff = (a: AthleteOverall, b: AthleteOverall) =>
     (qualifierPendingCount.get(a.athlete.id) || 0) - (qualifierPendingCount.get(b.athlete.id) || 0);
 
+  // Qualifier com janela encerrada: prova em análise não soma pontos no total exibido,
+  // mas na ordenação vale a pior colocação até ser revisada. Sem isso, quem aguarda
+  // revisão apareceria à frente de todos com 0 ponto. Fora do Qualifier é o próprio total.
+  const getProvisionalTotal = (item: AthleteOverall) =>
+    item.totalPoints + qualifierAbsencePoints * (qualifierUnderReviewCount.get(item.athlete.id) || 0);
+
   // 4. Ordenar os atletas pelo total de pontos crescente (Low-Point) e aplicar critérios de desempate
   const sortedList = [...list].sort((a, b) => {
     const pendingDiff = getPendingDiff(a, b);
     if (pendingDiff !== 0) return pendingDiff;
+
+    const provisionalDiff = getProvisionalTotal(a) - getProvisionalTotal(b);
+    if (provisionalDiff !== 0) return provisionalDiff;
 
     if (a.totalPoints !== b.totalPoints) {
       return a.totalPoints - b.totalPoints; // Menos pontos é melhor
@@ -195,7 +223,9 @@ export const computeDivisionStandings = ({
   return sortedList.map((item, index) => {
     if (index > 0) {
       const prevItem = sortedList[index - 1];
-      let isEqual = getPendingDiff(item, prevItem) === 0 && item.totalPoints === prevItem.totalPoints;
+      let isEqual = getPendingDiff(item, prevItem) === 0
+        && getProvisionalTotal(item) === getProvisionalTotal(prevItem)
+        && item.totalPoints === prevItem.totalPoints;
 
       if (isEqual) {
         // Confronto direto
