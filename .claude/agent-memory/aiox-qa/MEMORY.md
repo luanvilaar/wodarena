@@ -11,3 +11,4 @@
 - [Intervalado 1.63 telão](project_intervalado_1_63.md) — PASS 2026-10-22 (92); título cortado no cabeçalho; selo Ausente do telão nunca feito (1.59); armadilhas CDP
 - [Intervalado 1.60 contrato v3](project_intervalado_1_60.md) — PASS 2026-10-21; só roll-forward pós-deploy (REL-001), publicar com 1.61/1.62; o que conferir nas próximas
 - [Telão ao vivo 1.53–1.58](project_telao_ao_vivo_1_53_1_58.md) — rodada 3 2026-10-21: 1.56 e 1.58 PASS (só LOW: SEC-003, REQ-004, PERF-003); 1.57 CONCERNS
+- [Cards de evento 1.65](project_event_cards_1_65.md) — PASS 2026-10-22 (90); 4 LOWs (PERF-001 só no next dev, Safari não conferido); medir no build de produção com CPU 4x

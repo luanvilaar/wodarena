@@ -1,0 +1,108 @@
+schema: 1
+story: '1.65'
+story_title: 'Cards de evento da home: movimento de entrada, contagem e botão Garantir Vaga'
+gate: PASS
+status_reason: 'Os ACs 1 a 8 têm evidência no código, nos testes e no navegador (desktop 1440, celular 390 com hover: none, movimento reduzido, inglês e navegação do lado do cliente). A entrada só roda quando o card chega à tela, uma vez por evento; a contagem e o brilho seguem o desenho; o card encerrado entra só com fade; o movimento reduzido não anima nada. No build de produção com CPU 4x mais lenta o custo é igual ao da linha de base sem animação. Os quatro achados são LOW.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-10-22T16:30:00-03:00'
+expires: '2026-11-05T16:30:00-03:00'
+quality_score: 90
+
+top_issues:
+  - id: PERF-001
+    severity: low
+    finding: 'A contagem do preço e das divisões chama setState a cada quadro (useCountUp), e cada quadro re-renderiza o EventCard inteiro (imagens, ícones, mensagens traduzidas, formatMoney duas vezes). No `next dev` com CPU 4x mais lenta isso gera tarefas longas (até 180 ms no celular; no desktop, com 3 cards, de 60 a 112 ms conforme a rodada) e 4 a 13 quadros acima de 50 ms em 2,4 s. No build de produção (`next start`), com a mesma CPU 4x e 3 rodadas por cenário, o celular teve 0 quadros acima de 50 ms e 0 tarefas longas em todas as rodadas, e o desktop teve 1 tarefa de 57 ms em uma das 3 rodadas, igual à linha de base em movimento reduzido. Ou seja: não é problema hoje, mas é o trecho que piora primeiro num aparelho mais lento que 4x.'
+    refs: ['src/hooks/useCountUp.ts:22', 'src/components/EventCard.tsx:63', 'src/components/EventCard.tsx:64']
+    suggested_owner: dev
+    suggested_action: 'Opcional. Tirar a contagem do EventCard: componentes folha só para o preço e para as divisões (re-renderizam só um texto), ou atualização imperativa do textContent por ref. O comportamento visível não muda e os testes de função pura (getCountValue) seguem valendo.'
+  - id: REQ-001
+    severity: low
+    finding: 'O botão Garantir Vaga tem `overflow: hidden` e cantos arredondados, e o brilho é um ::after com `translateX` e `skewX`. Em Safari esse conjunto já vazou do canto arredondado em versões antigas. Não foi conferido: não há Safari nesta máquina de QA, só Chrome.'
+    refs: ['src/app/globals.css:430']
+    suggested_owner: dev
+    suggested_action: 'Conferir em um iPhone real. Se vazar, `isolation: isolate` no .event-cta resolve sem mudar o desenho.'
+  - id: TEST-001
+    severity: low
+    finding: 'A lógica dos hooks (uma vez por evento, movimento reduzido nasce pronto, filtro sem repetir, brilho só com o botão visível) só tem teste estático por regex sobre o código. O repositório não tem harness de DOM, então nada exercita o IntersectionObserver de verdade. O QA conferiu cada comportamento no navegador (veja a evidência de AC1, AC4 e AC6), mas uma regressão futura só seria pega por quem repetir essa conferência.'
+    refs: ['tests/event-card-motion.test.mjs', 'src/hooks/useRevealOnView.ts', 'src/hooks/useShineOnView.ts']
+    suggested_owner: dev
+    suggested_action: 'Quando o projeto ganhar um harness de componentes (jsdom ou navegador), cobrir useRevealOnView com um IntersectionObserver falso.'
+  - id: UX-001
+    severity: low
+    finding: 'Com a margem de -96 px, um card cujo topo está a menos de 96 px da borda de baixo da tela continua escondido (pending), então quem para a rolagem nesse ponto vê uma faixa vazia onde estaria a borda do card, até rolar mais um pouco. É a regra aprovada (96 px), não um defeito; fica registrado porque só aparece em uso real com o dedo parando no meio da rolagem.'
+    refs: ['src/lib/eventCardMotion.ts:8']
+    suggested_owner: ux-design-expert
+    suggested_action: 'Só agir se aparecer reclamação. Ajuste possível: margem menor (por exemplo -48 px), que é uma constante.'
+waiver: { active: false }
+
+evidence:
+  tests_reviewed: 3
+  risks_identified: 4
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8]
+    ac_gaps: []
+    ac_evidence:
+      AC1: 'useRevealOnView observa o card com rootMargin 0px 0px -96px 0px e mantém o conjunto revealedIds. No navegador (1440): 22 cards nascem `pending`; ao rolar até #eventos só a primeira linha vira `run`. Em 390 px o card vira `run` quando o topo passa de 748 px (844 - 96): o de índice 2 virou `run` a 727 px e o de índice 3 seguiu `pending` a 1368 px. Pulo até o fim da página: 13 `run` e 9 `pending`; ao voltar, os de cima animam ao entrar (nenhum fica preso escondido). Filtro "Ao vivo" e volta: os 6 primeiros ficam `done`, sem animação. Navegação pelo "Ver evento" e voltar (mesma página JS, marcador preservado): os 3 cards já vistos voltam `done` com 0 animações e os não vistos seguem `pending`. Movimento reduzido: 22 de 22 `done` na carga.'
+      AC2: 'Linha do tempo amostrada por quadro: clip-path de 81% a 0 em ~520 ms, preço e divisões depois, e 7 a 8 animações ativas que vão a 0 até ~1,1 s. O atraso entre colunas medido em getTiming: 0, 70 e 140 ms nos três primeiros cards a 1440 px. Em 390 px não há atraso entre cards: a regra só vale a partir de 640 px, e cada card anima quando chega (a rolagem em passos de 560 px liberou um card por passo).'
+      AC3: 'Preço de R$ 0,00 a R$ 80,00 (valores inteiros no caminho: 38, 54, 61, 68, 72, 75, 78, 79) e divisões de 0 a 6, terminando no valor exato. Texto "0 divisões disponíveis" durante a contagem (plural do valor final). Em en-gb: "R$0.00 / 0 divisions available" até "R$80.00 / 6 divisions available". Em todos os 22 cards o texto final está num span sr-only e o animado em aria-hidden (conferido por script, 0 faltando). Preço gratuito e card encerrado não contam (teste estático e navegador: R$ 330,00 fixo no card encerrado).'
+      AC4: 'Desktop com hover: o hover cria a animação event-cta-shine em ::after (700 ms) e a seta fica em translateX(3px); o clique segurado dá matrix(0.97) e, ao soltar fora, volta a none. Celular (hover: none, pointer: coarse): com o botão a 926 px (fora da tela de 844) `data-shine` não existe e há 0 animações; depois de rolar 330 px o botão fica visível, `data-shine="on"`, --ec-shine-delay 150 ms, uma animação event-cta-shine em ::after de 750 ms e, depois dela, 0. Botões com 48 px de altura. O anel de foco do teclado (2 px azul) aparece inteiro no Garantir Vaga, sem ser cortado pelo overflow: hidden (captura conferida).'
+      AC5: 'Card encerrado: a única animação é event-card-fade; nenhuma abertura, bloco ou zoom. Sem classe de zoom no hover do banner. Preço estático.'
+      AC6: 'Com prefers-reduced-motion: reduce emulado, 22 cards em `done`, 0 animações, opacidade natural (1 e 0,7 nos encerrados) e preço final desde o primeiro quadro. O estado `pending` só esconde sob no-preference, e a impressão nunca sai em branco (teste estático).'
+      AC7: 'EventCard.tsx continua sem hex, shadow-[, backdrop-blur, font-black, transition-all e absolute inset (home-events-visibility e design-system passam). Layout e tokens iguais: a captura a 1440 e a 390 px mostra o mesmo card de antes. FeaturedEventBanner sem diff. Os dois grids usam event-card-slot (teste ajustado sem afrouxar a invariante).'
+      AC8: 'npm test 981/981 (18 testes novos em tests/event-card-motion.test.mjs), npm run lint 0 erros e 209 warnings (mesmo número da base), npm run typecheck verde, npm run build verde. Console do navegador sem erro nem aviso em todos os cenários (desktop, celular, inglês, navegação).'
+  gate_commands:
+    npm_test: '981/981, rodado pelo QA.'
+    npm_run_lint: '0 erros e 209 warnings, todos antigos. npx eslint nos 6 arquivos .ts/.tsx de src da story: 0 problemas.'
+    npm_run_typecheck: 'verde, rodado pelo QA.'
+    npm_run_build: 'verde (rodado pelo @devops no pre-push, mesma árvore do commit 7aaa5a3). Sem conflito com o npm run dev do usuário: o next dev escreve em .next/dev.'
+    coderabbit: 'review_completed, 0 achados, 7 arquivos (uncommitted) e 13 arquivos (committed contra origin/main, no pre-push).'
+    migration: 'nenhuma'
+  contract_untouched: 'FeaturedEventBanner.tsx, SectionOperations.tsx e as regras home-broadcast-* (exceto a saída de .home-broadcast-event-card) sem mudança. Nenhuma rota, banco, RLS, auth ou infraestrutura.'
+  browser_check: 'Chrome headless pelo DevTools Protocol (CDP) contra o npm run dev do usuário em :3000, que lê o banco só para o bootstrap público, e contra o build de produção em :3100 (subido pelo QA e encerrado depois). Cenários: desktop 1440x900; celular 390x844 com mobile, toque, hover: none e pointer: coarse; prefers-reduced-motion: reduce; /en-gb; filtro; pulo até o fim da página; navegação do lado do cliente para /event/[id] e volta; foco de teclado. Desempenho com CPU 4x (Emulation.setCPUThrottlingRate), 3 rodadas por cenário no build de produção, com linha de base em movimento reduzido. Console limpo em todos.'
+  not_verified: 'Aparelho físico (iOS e Android reais), Safari e Firefox (só Chrome), toque real em :active, leitor de tela real (conferida só a marcação sr-only e aria-hidden), e desempenho abaixo de 4x de CPU. O `next dev` do usuário mostra jank na contagem (PERF-001); só o build de produção foi tomado como referência.'
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: 'Só CSS e estado de apresentação: nenhuma entrada do usuário, rota, dado novo nem dangerouslySetInnerHTML. As variáveis --ec-col-* e --ec-shine-delay recebem só números calculados no código. Nada de segredo no diff (CodeRabbit sem achados).'
+  performance:
+    status: PASS
+    notes: 'Só transform, opacity e clip-path animam. No build de produção com CPU 4x: celular 0 quadros acima de 50 ms e 0 tarefas longas em 3 de 3 rodadas; desktop 1 tarefa de 57 ms em 1 de 3 rodadas, igual à linha de base. Um IntersectionObserver por card até revelar (desconectado depois), sem listener de rolagem. A contagem re-renderiza o card por quadro, que só pesa no next dev (PERF-001).'
+  reliability:
+    status: PASS
+    notes: 'O conteúdo nunca fica escondido: pending só existe sob no-preference e some na impressão; sem IntersectionObserver ou com movimento reduzido o card nasce pronto; card que o visitante pulou anima quando entra. Contagem termina sempre no valor exato (teste com 99,9).'
+  maintainability:
+    status: PASS
+    notes: 'Linha do tempo e funções puras em eventCardMotion.ts, estado em três hooks pequenos, CSS num bloco só com comentário de contexto. Sem dependência nova. O teste estático do CSS cobre fill-mode backwards (nunca both), as mídias e o caminho reduzido.'
+
+regression_review:
+  binaries_checked:
+    - 'EventCard encerrado: continua com opacity-70 e grayscale; a animação termina no valor natural (fill-mode backwards, só `from`), conferido: opacidade 0,7 depois da entrada e em movimento reduzido.'
+    - 'Hover do banner: 1,01 virou 1,03 só nos cards abertos, sempre atrás de hover: hover (Tailwind v4).'
+    - 'Botões: as classes de cor e de hover continuam; a compressão e a seta são adicionadas pelo CSS. O botão desabilitado de vendas encerradas não responde ao toque (teste estático).'
+  old_tests_changed: 'Uma asserção em tests/home-events-visibility.test.mjs trocou o wrapper `home-broadcast-event-card` + `Math.min(index, 5)` por `event-card-slot` + variáveis de coluna, e passou a exigir que o nome antigo não exista mais. A invariante (os cards da home têm wrapper de movimento nos dois grids) foi mantida.'
+
+test_quality:
+  notes: 'Bons testes de função pura (easing, contagem com valor exato e sem recuo, atraso do brilho, troca do número no texto) e de contrato do CSS (fill-mode, mídias, só transform/opacity/clip-path, caminho reduzido, hover: none). Ponto fraco: a lógica dos hooks só tem teste por regex (TEST-001); a conferência real foi feita no navegador pelo QA.'
+
+observations_for_next_stories:
+  - story: 'próximos cards ou listas da home'
+    note: 'O padrão (data-reveal + useRevealOnView + CSS em globals.css, fora do namespace home-broadcast-*) pode ser reaproveitado. Medir sempre no build de produção: o next dev exagera o custo de re-render.'
+  - story: 'release'
+    note: 'Já publicada em origin/main (7aaa5a3). Conferir uma vez o deploy da Vercel e, de preferência, abrir a home em um iPhone e em um Android reais.'
+
+recommendations:
+  immediate: []
+  future:
+    - action: 'Isolar a contagem em componentes folha ou atualização imperativa (PERF-001).'
+      refs: ['src/hooks/useCountUp.ts:22', 'src/components/EventCard.tsx:63']
+    - action: 'Conferir o brilho do Garantir Vaga em Safari/iPhone; se vazar do canto, isolation: isolate (REQ-001).'
+      refs: ['src/app/globals.css:430']
+    - action: 'Teste de DOM para os hooks quando houver harness (TEST-001).'
+      refs: ['tests/event-card-motion.test.mjs']
+
+history:
+  - date: '2026-10-22'
+    gate: PASS
+    quality_score: 90
+    issues: 'PERF-001, REQ-001, TEST-001 e UX-001 (todos low)'
