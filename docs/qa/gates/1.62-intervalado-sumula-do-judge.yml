@@ -1,0 +1,125 @@
+schema: 1
+story: '1.62'
+story_title: 'Intervalado: Súmula do Judge'
+gate: PASS
+status_reason: 'Os ACs 1 a 11 têm evidência no código, nos testes e no navegador, conferidos contra a Maquete 2. No navegador, o caso do atleta A dá 23, com a recusa no descanso, a correção por round com rd e nenhum fill no máximo. O motor da 1.60 não foi tocado. Os seis achados são todos LOW, de acessibilidade e de acabamento.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-10-22T10:00:00-03:00'
+expires: '2026-11-05T10:00:00-03:00'
+quality_score: 92
+
+top_issues:
+  - id: REQ-001
+    severity: low
+    finding: 'O foco do teclado se perde quando o movimento da vez muda. O tile é remontado pela key (fixed-f1-1 → fixed-f2-1 → max → rest), e o foco cai no body. No navegador, Tab até o tile e Enter na janela de trabalho emitem rep. Já às 02:00 o foco tinha sumido, e o Enter seguinte não chegou à porta. Para quem usa leitor de tela ou teclado, o foco some a cada fixo concluído e a cada troca de fase. É o mesmo padrão do For Time (key={current.id}), então não é regressão. No celular, com toque, não afeta.'
+    refs: ['src/components/sheet/IntervalSheetView.tsx:366', 'src/components/sheet/IntervalSheetView.tsx:424', 'src/components/sheet/SheetView.tsx:356']
+    suggested_owner: dev
+    suggested_action: 'Numa story pequena de acessibilidade, para as duas súmulas: manter o mesmo botão sem key (zerando o estado do gesto por efeito) ou devolver o foco ao tile novo quando o anterior tinha foco.'
+  - id: REQ-002
+    severity: low
+    finding: 'Um segurar que começa às 01:59,5 e chega aos 700 ms já às 02:00 não emite nada, o que está certo. Mas também não mostra "Fora da janela de trabalho: o toque não foi aceito." e não soma no contador. A troca de fase remonta o tile, e o desmontar limpa o temporizador do useTapHold. Na maquete, o "Concluir" no descanso mostra a recusa. Conferido no navegador: o log ficou vazio, sem mensagem e sem contador.'
+    refs: ['src/components/sheet/IntervalSheetView.tsx:424', 'src/components/sheet/useTapHold.ts:70']
+    suggested_owner: dev
+    suggested_action: 'Opcional. Dá para avisar quando um gesto em curso é cortado pela troca de fase, ou aceitar como está, porque nada é gravado errado.'
+  - id: REQ-003
+    severity: low
+    finding: 'Com o relógio parado no meio da prova (09:30), o selo continua mostrando "Trabalho" e "Round 3 de 5", e o rótulo acima do relógio diz "Relógio parado". Nas telas paradas da maquete aparece "Relógio parado · 18:00", sem o selo de fase. O texto "Relógio parado" reduz a confusão, mas o selo verde de trabalho com o relógio parado mistura dois estados.'
+    refs: ['src/components/sheet/IntervalSheetView.tsx:399', 'src/components/sheet/IntervalSheetView.tsx:405']
+    suggested_owner: ux-design-expert
+    suggested_action: 'Decidir se o selo some (ou vira "Relógio parado") quando phase === stopped. É uma mudança só de apresentação.'
+  - id: REQ-004
+    severity: low
+    finding: 'Cosmético. O resultado e os cartões de correção usam o nome completo do fixo: "Round 5: 0 (Box Jump Overs (24/20 in) 11/15, o máximo não conta)", com parênteses dentro de parênteses. A maquete mostra "Box Jump Overs 11/15" nas duas telas. O AC8 diz só "{fixo}", então o texto está dentro do AC.'
+    refs: ['src/lib/sheetView.ts:849', 'src/components/sheet/IntervalSheetView.tsx:217']
+    suggested_owner: dev
+    suggested_action: 'Reaproveitar a limpeza dos parênteses do intervalColumnShort (sem sigla) no resumo e nos cartões, ou aceitar o nome completo.'
+  - id: REQ-005
+    severity: low
+    finding: 'Pelo teclado não há como concluir um fixo marcado por bloco (calorias ou metros, mark=end) durante a prova. Não existe o botão "Concluir segmento" (AUTO-DECISION 1, aceita pelo @po), e Enter num tile de bloco só mostra "Segure para concluir". Com o relógio parado, a correção por round cobre isso (set com rd e "Definir"). O @dev registrou a limitação.'
+    refs: ['src/components/sheet/IntervalSheetView.tsx:117']
+    suggested_owner: po
+    suggested_action: 'Aceitar como decisão de desenho já documentada ou, junto com o REQ-001, pensar num atalho de teclado para concluir.'
+  - id: MNT-001
+    severity: low
+    finding: 'A confirmação de atleta ausente no intervalado mostra "O resultado 0 vai direto para o ranking", sem a palavra "repetições", porque o ternário da 1.59 só conhece o " kg". O resumo do motor diz "Atleta ausente · 0 repetições". O AC9 só exige o resultado 0, e esse ponto já estava nas pendências do @dev.'
+    refs: ['src/components/judge/CourtSheet.tsx:218']
+    suggested_owner: dev
+    suggested_action: 'Usar o resultUnit(…) que a story criou também no absentResultText.'
+waiver: { active: false }
+
+evidence:
+  tests_reviewed: 23
+  risks_identified: 6
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+    ac_gaps: []
+    ac_evidence:
+      AC1: 'SheetView.tsx:431 tem o ramo interval antes do ternário max_load/segmentos. Os 4 formatos do tipo (workoutStructure.ts:70) são todos cobertos. O IntervalSheetView usa as mesmas SheetViewProps, não faz fetch nem usa armazenamento (teste estático) e fica somente leitura sem onEvent (teste). O aviso INTERVAL_PREVIEW_NOTICE saiu, e o teste foi trocado por um mais forte, que exige a súmula do intervalado e a ausência do aviso no HTML e no fonte. O SheetPreview ganhou "Intervalado 5 × 02:00 / 02:00". No navegador, /editor mostra a súmula do intervalado sem o aviso.'
+      AC2: 'buildIntervalViewModel usa intervalPhaseAt e Math.floor, e o teste cobre os segundos 0, 119, 119,9, 120, 250, 1079 e 1080. A duração é 18:00. Antes de Iniciar aparece "Inicie o relógio para contar", com o tile disabled. A linha do tempo não tem descanso depois do último round nem com OFF 00:00. O anúncio sr-only "Fase. Round." só muda com a fase, e a contagem regressiva não fica em região viva. Tudo conferido no navegador em 390 e 1280 px.'
+      AC3: 'O tile segue o currentId do round no motor: primeiro fixo abaixo da meta, depois o máximo. Os textos são iguais aos do render() da maquete, incluindo "Máx. Squat Clean · 80 kg", "repetições neste round", "Sem meta · conte até o fim da janela", Descanso e Tempo esgotado. No descanso e no fim o tile tem aria-disabled e o toque ainda chega à porta.'
+      AC4: 'decideIntervalTouch (sheetView.ts:782) passa pela checkIntervalEntry. Fora da janela devolve ok:false, e o componente só chama emit quando ok. Um teste de paridade segundo a segundo, com frações, em 3 estruturas mostra que a tela aceita se, e somente se, o motor conta. No navegador: 01:59 aceito (rep at 119); 02:00 recusado com "Descanso: o toque não foi aceito." e contador "1 toque… foi recusado."; segurar no descanso dá "Fora da janela de trabalho…" e contador no plural; 18:00 dá "Prova encerrada…". O log não mudou em nenhuma recusa, e a mensagem sumiu em cerca de 2,3 s depois de soltar (o temporizador de 2,6 s parte do pressionar mais 0,9 s do segurar).'
+      AC5: 'Colunas RMU, BJO e Squat Clean (nome inteiro), com o nome completo em sr-only e title. O round 5 mostra 6/6 e 11/15, máximo bruto visível, Conta 0 e "Fixo incompleto" em texto. O total 23 é igual ao computeIntervalResult. O round atual só fica destacado com o relógio rodando. A tabela tem overflow-x-auto, e não houve rolagem horizontal da página em 390 px.'
+      AC6: 'Desfazer usa findUndoTarget e fica desabilitado sem alvo. Desfazer emite undo, conferido no navegador e no teste. Iniciar e Parar aparecem como na súmula atual. Com o relógio parado não há tile e a regra if (!counting) return vale. Em 18:00 com o relógio rodando: "Prova encerrada", "Pare o relógio" e "Toque em Parar para revisar".'
+      AC7: 'Os cartões emitem adj e set com rd: card.round e o at do relógio parado (teste e log do navegador: adj mx d:1 rd:3; quatro adj f2 rd:5). Os textos da explicação e do aviso do round ruim são os da maquete. Os botões − e + medem 48 px. O máximo aparece sempre, o fixo incompleto aberto e os completos em "Ajustar fixos" (aria-expanded). Completar o BJO do round 5 deixa os 5 cartões completos, e o + seguinte no Squat Clean do round 5 leva o total a 24.'
+      AC8: 'buildIntervalResultSummary só lê o resultado e o estado do motor, sem recalcular. A manchete é "23 repetições", depois "Round 1: 9 · Round 2: 8 · Round 3: 5 · Round 4: 1" e a linha do round 5. O aviso de registros fora da janela tem singular, plural, até 3 com horário e motivo e "e mais N" (testes). O texto do singular é igual ao da maquete, com role=alert. A nota do servidor é igual à da maquete. O resultado publicado é o do servidor (computeSheetOutcome, sem mudança).'
+      AC9: 'CourtSheet.tsx:199: o intervalado devolve false antes do deriveSheetState. O número usa resultUnit ("23 repetições"). OfficialTimeForm só aparece com for_time ou amrap, o que dá o mesmo resultado de antes para os três formatos antigos. A confirmação, sync.record, canMarkAbsent e o somente leitura não mudaram (teste estático). computeAbsentOutcome devolve 0 no intervalado.'
+      AC10: 'Tile com min-h-36 (9 rem). Todos os botões visíveis da súmula têm 44 px ou mais, e o − e o + têm 48 px (medido em 390 e 1280 px). O foco por teclado no tile mostra outline sólido de 2px #1e5ccb, com contraste 6,09:1 contra o fundo. Contraste no court-light: selo de trabalho 5,16:1, de descanso 14,74:1, de encerrada 6,27:1, e textos muted com cerca de 8,6:1. Com prefers-reduced-motion: reduce, a transição do marcador cai de 0,2 s para 0. Não há som nem chamada de vibração no componente (teste estático). O useTapHold já vibrava antes desta story.'
+      AC11: 'O QA rodou npm test (944/944), lint (0 erros), typecheck (verde) e de novo os 4 arquivos de teste da súmula (79/79). O npm run build não foi rodado pelo QA. Na conferência no navegador, o caso do atleta A dá 23, com recusa no descanso e correção por round (58/58 verificações em 390 e em 1280 px).'
+  gate_commands:
+    npm_test: '944/944, rodado pelo QA. Durante a revisão, a 1.63 apareceu na árvore (broadcast*, live-broadcast.test.mjs) e depois foi commitada (38d36a5). Os arquivos da 1.62 estão idênticos ao 97775b8, e os testes da súmula (sheet-view-interval, sheet-view, court-ui, workout-structure-editor-ui) foram rodados de novo: 79/79.'
+    npm_run_lint: '0 erros e 209 warnings, todos antigos. npx eslint nos 9 arquivos de código e teste da story: 0 problemas.'
+    npm_run_typecheck: 'verde, rodado pelo QA.'
+    npm_run_build: 'Não rodado pelo QA: o npm run dev do usuário estava no ar em :3000. O @dev registrou build verde.'
+    coderabbit: 'Não rodado de novo pelo QA. O @dev registrou review_completed, 0 findings e reviewedFiles com os 10 arquivos (base-commit f7b8a79).'
+    migration: 'nenhuma'
+  contract_untouched: 'git diff 97775b8~1 97775b8 em src/lib/workoutStructure.ts e src/lib/scoresheet.ts: vazio. O motor, a porta, o validateClientEvent e o computeSheetOutcome da 1.60 estão intactos. A tela não calcula score: estado, resultado e fase vêm de deriveIntervalState, computeIntervalResult e intervalPhaseAt.'
+  browser_check: 'Chrome headless pelo DevTools Protocol em /pt-br/sumula-preview, com court-light no main, Date.now deslocado para o relógio simulado e toques e segurares reais no centro do tile. O fluxo foi rodado em 390x844 (mobile) e 1280x900. Conferido: pronta; R1 com toque em RMU, segurar RMU e BJO, segurar no máximo sem evento, 9º Squat Clean às 01:59, 02:00 recusado e segurar no descanso recusado; mensagem e contador; rounds 2 a 4; R5 com BJO 11/15 e o toque que não chega ao máximo; Desfazer; 18:00; Parar; correção e resultado 23/24; tamanhos; "Ajustar fixos". No log: nenhum rep/fill fora da janela, nenhum fill no máximo e nenhum rep no máximo antes dos fixos do round. Também: teclado, contraste, reduced motion, parada às 09:30, segurar cruzando 01:59/02:00 e /editor com a súmula do intervalado. Console sem erros nem avisos. Comparado com o HTML e o JS do simulador da Maquete 2 (textos, estados, cores do selo, tile e quadro).'
+  not_verified: 'A quadra de verdade (/judge/quadra/sumula/…: CourtSheet com gravação, fila, "Conferir e enviar", "23 repetições", confirmação, atleta ausente e somente leitura de outro judge), porque exige sessão e súmula no banco único, que é produção; essa parte ficou só com teste estático e leitura do código. O aviso "N registros fora da janela" no navegador, porque a tela nunca emite esse registro; ele foi conferido na renderização de servidor. Leitor de tela real: as regiões aria-live foram vistas só no DOM. Aparelho físico (toque, wake lock, segundo plano). npm run build. CodeRabbit (não rodado de novo).'
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: 'Mudança só de cliente e módulo puro. Sem rede, armazenamento, migration ou RLS. O servidor continua validando cada evento e calculando o resultado (1.60 intacta). A tela não envia número de resultado.'
+  performance:
+    status: PASS
+    notes: 'deriveIntervalState e o modelo são O(eventos + rounds × fixos) por render, memoizados, com tick de 250 ms na quadra. Com 20 rounds e 9 fixos a tabela tem 200 células e rola na horizontal.'
+  reliability:
+    status: PASS
+    notes: 'A porta e o evento usam o mesmo segundo inteiro (paridade testada). Uma recusa nunca chega ao log nem à fila. Um gesto cortado pela troca de fase não grava nada (REQ-002 é só falta de aviso).'
+  maintainability:
+    status: PASS
+    notes: 'Segue o molde do MaxLoadSheetView e do buildMaxLoadViewModel. A decisão do toque é uma função pura testável. Os comentários citam as decisões e AUTO-DECISIONs. A linha do tempo é uma adaptação do componente do construtor, com justificativa de IDS.'
+
+regression_review:
+  binaries_checked:
+    - 'SheetView: o ramo interval é um if antes do ternário de sempre; For Time, AMRAP e Carga máxima seguem pelo mesmo caminho (teste estático).'
+    - 'CourtSheet finished: o intervalado sai antes do deriveSheetState (teste de ordem). max_load e for_time não mudaram.'
+    - 'CourtSheet número: kg em max_load, "repetições" no intervalado e nada em For Time e AMRAP, como antes.'
+    - 'OfficialTimeForm: for_time || amrap no lugar de !== max_load. Com os 4 formatos do tipo, é o mesmo resultado para os 3 antigos e exclui o intervalado.'
+    - 'WorkoutSheetBuilderDialog: a SheetDemo aparece para todo formato com estrutura válida. Os outros formatos seguem com "Súmula digital" (teste).'
+  old_tests_changed: 'tests/workout-structure-editor-ui.test.mjs: só o teste da 1.61 que exigia o aviso foi reescrito. Ficou mais forte: exige a súmula do intervalado, a ausência do aviso no HTML e no fonte, a ausência da súmula de For Time e o aviso "Corrija os itens" com problemas. tests/court-ui.test.mjs: o IntervalSheetView entrou na lista do teste sem text-white e há um teste novo; nada foi removido. Nenhuma outra asserção foi tocada.'
+
+test_quality:
+  notes: 'Os testes de modelo e porta são fortes: segundos de borda, paridade com o motor segundo a segundo em 3 estruturas, "máximo sempre o último" passo a passo, nenhum fill no máximo, rd nas correções aplicado pelo motor, siglas e singular/plural/limite do aviso. A renderização de servidor cobre pronta, trabalho, descanso, encerrada, parada e somente leitura, e confere que os ids não se repetem. Como o projeto não tem biblioteca de DOM, o contador de recusas, o tempo da mensagem, o gesto e o foco foram conferidos só no navegador (aqui e pelo @dev).'
+
+observations_for_next_stories:
+  - story: '1.63'
+    note: 'A 1.62 fecha o REL-001 da 1.61: 1.60, 1.61 e 1.62 podem ir juntas. A 1.63 (telão) foi commitada durante esta revisão (38d36a5) e ainda não passou pelo gate. Antes dela, o BroadcastScreen rotulava o intervalado como "For Time". Por isso o melhor é publicar 1.60 a 1.63 juntas, depois do gate da 1.63.'
+  - story: 'a11y'
+    note: 'REQ-001 vale para a súmula de For Time também (SheetView.tsx:356). Resolver nas duas de uma vez.'
+
+recommendations:
+  immediate: []
+  future:
+    - action: 'Foco do tile depois da remontagem (REQ-001) e atalho de teclado para concluir um fixo por bloco (REQ-005).'
+      refs: ['src/components/sheet/IntervalSheetView.tsx:424', 'src/components/sheet/SheetView.tsx:356']
+    - action: 'Selo de fase com o relógio parado (REQ-003) e nome do fixo sem parênteses no resumo (REQ-004).'
+      refs: ['src/components/sheet/IntervalSheetView.tsx:399', 'src/lib/sheetView.ts:849']
+    - action: '"repetições" na confirmação de atleta ausente (MNT-001).'
+      refs: ['src/components/judge/CourtSheet.tsx:218']
+
+history:
+  - date: '2026-10-22'
+    gate: PASS
+    quality_score: 92
+    issues: 'REQ-001 a REQ-005 e MNT-001 (todos low)'

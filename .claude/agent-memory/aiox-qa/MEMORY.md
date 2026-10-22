@@ -7,5 +7,6 @@
 - [Story 1.38 camisa opcional](project_optional_shirt_1_38.md) — gate final CONCERNS (2026-10-14); M-1 e M-2 corrigidos; LOWs abertos e o que conferir no re-gate
 - [Story 1.41 mapa Waze](project_event_map_1_41.md) — gate CONCERNS (2026-10-14); REQ-001 foco invisível no overlay; LOWs e técnicas (Chrome headless, PGlite)
 - [Intervalado 1.61 construtor](project_intervalado_1_61.md) — CONCERNS 2026-10-21; publicar só com a 1.62 (REL-001); LOWs e o que conferir na 1.62
+- [Intervalado 1.62 súmula do judge](project_intervalado_1_62.md) — PASS 2026-10-22 (92); 6 LOWs (foco do tile, selo parado); 1.63 sem gate; técnicas CDP
 - [Intervalado 1.60 contrato v3](project_intervalado_1_60.md) — PASS 2026-10-21; só roll-forward pós-deploy (REL-001), publicar com 1.61/1.62; o que conferir nas próximas
 - [Telão ao vivo 1.53–1.58](project_telao_ao_vivo_1_53_1_58.md) — rodada 3 2026-10-21: 1.56 e 1.58 PASS (só LOW: SEC-003, REQ-004, PERF-003); 1.57 CONCERNS
