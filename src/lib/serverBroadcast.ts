@@ -13,14 +13,16 @@ import {
   type ModeHeat,
   type ModeSheet
 } from '@/lib/broadcastMode';
-import type {
-  BroadcastCallLane,
-  BroadcastHeat,
-  BroadcastLiveEntry,
-  BroadcastNext,
-  BroadcastPayload,
-  BroadcastStandingsBoard,
-  BroadcastWorkout
+import {
+  intervalMaxLine,
+  type BroadcastCallLane,
+  type BroadcastHeat,
+  type BroadcastIntervalSpec,
+  type BroadcastLiveEntry,
+  type BroadcastNext,
+  type BroadcastPayload,
+  type BroadcastStandingsBoard,
+  type BroadcastWorkout
 } from '@/lib/broadcastPayload';
 import { sortDivisions } from '@/lib/divisionOrder';
 import { computeDivisionStandings } from '@/lib/leaderboardStandings';
@@ -268,6 +270,27 @@ const readStructure = (raw: unknown): WorkoutStructure | null => {
 
 const unitText = (unit: string) => (unit === 'cal' ? ' cal' : unit === 'm' ? ' m' : '');
 
+const MAX_BOARD_LINES = 8;
+
+/** Corta a lista da chamada em 8 linhas ("+ N etapas"); a linha `last` (o máximo do intervalado) fica sempre por último. */
+const capBoardLines = (lines: string[], last: string | null) => {
+  const room = last === null ? MAX_BOARD_LINES : MAX_BOARD_LINES - 1;
+  const head = lines.length > room ? [...lines.slice(0, room - 1), `+ ${lines.length - (room - 1)} etapas`] : lines;
+  return last === null ? head : [...head, last];
+};
+
+/** Bloco do formato Intervalado (Story 1.63); null nos outros formatos. Só dados da prova, nada de pessoa. */
+const describeIntervalSpec = (structure: WorkoutStructure): BroadcastIntervalSpec | null => {
+  const interval = structure.format === 'interval' ? structure.interval : null;
+  if (!interval) return null;
+  return {
+    rounds: interval.rounds,
+    onSeconds: interval.onSeconds,
+    offSeconds: interval.offSeconds,
+    max: { id: interval.max.id, name: interval.max.name, loadKg: interval.max.load ? interval.max.load.value : null }
+  };
+};
+
 /** A prova como o telão mostra: esquema, linhas da chamada e segmentos da barra de progresso. */
 export const describeWorkoutForBoard = (row: Pick<WorkoutRow, 'name' | 'code'>, structure: WorkoutStructure): BroadcastWorkout => {
   const segments = structure.segments.map((segment) => {
@@ -283,17 +306,20 @@ export const describeWorkoutForBoard = (row: Pick<WorkoutRow, 'name' | 'code'>, 
     : scheme
       ? [...new Set(structure.segments.map((segment) => `${segment.name}${segment.load ? ` ${segment.load.value} kg` : ''}`))]
       : segments.map((segment) => segment.label);
+  // Intervalado: os fixos como nos outros formatos e, por último, a linha do máximo (que não tem meta nem entra na barra).
+  const intervalSpec = describeIntervalSpec(structure);
   return {
     name: row.name,
     code: row.code ?? '',
     format: structure.format,
     timeCapSeconds: structure.timeCapSeconds,
     scheme,
-    lines: lines.length > 8 ? [...lines.slice(0, 7), `+ ${lines.length - 7} etapas`] : lines,
+    lines: capBoardLines(lines, intervalSpec ? intervalMaxLine(intervalSpec.max) : null),
     segments,
     lifts: (structure.maxLoad?.lifts ?? []).map((lift) => ({ id: lift.id, name: lift.name })),
     totalReps: structure.totalReps,
-    scoreDisplay: structure.scoreDisplay
+    scoreDisplay: structure.scoreDisplay,
+    intervalSpec
   };
 };
 
@@ -658,7 +684,8 @@ export const buildBroadcastState = async (
         currentSegmentId: item?.currentSegmentId ?? null,
         completedAt: item?.completedAt ?? null,
         scoreKg: item?.scoreKg ?? null,
-        officialResult: sheet.status === 'submitted' ? sheet.official_result : null
+        officialResult: sheet.status === 'submitted' ? sheet.official_result : null,
+        round: structure?.format === 'interval' ? item?.round ?? null : null
       };
     });
     const group = groups.find((item) => item.key === resolution.groupKey);

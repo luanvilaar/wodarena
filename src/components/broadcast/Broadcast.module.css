@@ -51,6 +51,11 @@
 .clock { display: grid; justify-items: end; min-width: 13cqw; }
 .clock b { font-size: 3.7cqw; font-weight: 500; letter-spacing: -0.02em; line-height: 1; }
 .clock span { font-size: 0.95cqw; color: var(--muted); font-weight: 600; margin-top: 0.3cqw; letter-spacing: 0.06em; text-transform: uppercase; }
+/* Intervalado (Story 1.63): round e fase no subtítulo do relógio e a contagem regressiva ao lado, em tamanho de TV. */
+.clockPhase span { font-size: 1.15cqw; color: var(--foreground); font-weight: 700; letter-spacing: 0; text-transform: none; white-space: nowrap; }
+.countdown { display: grid; justify-items: end; padding-left: 1.6cqw; border-left: 0.08cqw solid var(--card-border); }
+.countdown b { font-size: 3cqw; font-weight: 500; letter-spacing: -0.02em; line-height: 1; color: var(--primary); }
+.countdown span { font-size: 0.95cqw; color: var(--muted); font-weight: 600; margin-top: 0.3cqw; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; }
 
 @keyframes pulse { 50% { opacity: 0.25; } }
 
@@ -82,6 +87,7 @@
 .label { font-size: 1.05cqw; color: var(--muted); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
 .big { font-size: 4.4cqw; font-weight: 500; letter-spacing: -0.02em; line-height: 1; margin: 0.3cqw 0 0.6cqw; overflow: hidden; text-overflow: ellipsis; }
 .bigName { font-size: 3cqw; font-weight: 800; font-family: var(--font-body); }
+.scheme { font-size: 1.7cqw; font-weight: 700; color: var(--primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 0.4cqw; }
 .mv { font-size: 1.7cqw; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cap { font-size: 1.25cqw; color: var(--muted); margin-top: 0.6cqw; }
 .when { border-top: 0.08cqw solid var(--card-border); padding-top: 1.3cqw; display: grid; gap: 0.4cqw; }

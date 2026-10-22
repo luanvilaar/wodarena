@@ -862,3 +862,228 @@ test('telão: describeWorkoutForBoard aceita a prova intervalada sem lançar (os
   const board = describeWorkoutForBoard({ name: 'Intervalado', code: 'W1' }, INTERVAL);
   assert.deepEqual([board.format, board.timeCapSeconds, board.segments.map((item) => item.id)], ['interval', 1080, ['f1', 'f2']]);
 });
+
+// ---------------------------------------------------------------------------
+// Story 1.63: Intervalado no telão (rótulo, linha do máximo, round e fase)
+// ---------------------------------------------------------------------------
+// Atenção aos dois "intervalos": `intervalSpec` é o bloco do FORMATO Intervalado
+// na prova; `body.interval` / screen 'interval' é a TELA de intervalo (o geral).
+
+const { broadcastIntervalPhase, describeIntervalClock, intervalLaneProgress, intervalSchemeText, intervalMaxLine } = await importServerModule('lib/broadcastPayload.ts');
+const { intervalPhaseAt } = await importServerModule('lib/workoutStructure.ts');
+
+const plainSegment = (id, name, reps, load = null) => ({ id, round: 1, name, reps, unit: 'reps', load, note: '', required: true, mark: 'reps' });
+const REFERENCE = validateWorkoutStructure({
+  version: 3, format: 'interval', totalReps: 21, timeCapSeconds: 1080, incomplete: null, tieBreak: null, generator: null, customized: true,
+  entry: { mode: 'both', marking: 'reps', publish: 'after_review' },
+  segments: [plainSegment('f1', 'Ring Muscle Ups', 6), plainSegment('f2', 'Box Jump Overs', 15)],
+  maxLoad: null, scoreDisplay: null,
+  interval: { rounds: 5, onSeconds: 120, offSeconds: 120, max: { id: 'mx', name: 'Squat Clean', load: { value: 80, unit: 'kg' }, note: '' } }
+});
+assert.equal(REFERENCE.ok, true, REFERENCE.error);
+const REF = REFERENCE.structure;
+const REF_SPEC = { rounds: 5, onSeconds: 120, offSeconds: 120, max: { id: 'mx', name: 'Squat Clean', loadKg: 80 } };
+
+test('telão 1.63: payload da prova intervalada com o bloco intervalSpec e a linha do máximo por último, inclusive depois do corte de 8 linhas', () => {
+  const board = describeWorkoutForBoard({ name: 'Intervalado', code: 'W1' }, REF);
+  assert.equal(board.format, 'interval');
+  assert.equal(board.timeCapSeconds, 1080, 'a duração da prova');
+  assert.equal(board.scheme, null, 'o título continua o nome da prova');
+  assert.deepEqual(board.lines, ['6 Ring Muscle Ups', '15 Box Jump Overs', 'Máx. Squat Clean 80 kg']);
+  assert.deepEqual(board.segments.map((item) => item.id), ['f1', 'f2'], 'o máximo não tem meta e não entra na barra');
+  assert.deepEqual(board.intervalSpec, REF_SPEC);
+  assert.equal(intervalSchemeText(board.intervalSpec), '5 rounds · 02:00 ON / 02:00 OFF');
+  assert.doesNotMatch(JSON.stringify(board), /@|note/, 'só dados da prova');
+
+  // Máximo sem carga.
+  const noLoad = validateWorkoutStructure({ ...REF, interval: { ...REF.interval, max: { ...REF.interval.max, load: null } } }).structure;
+  const noLoadBoard = describeWorkoutForBoard({ name: 'Intervalado', code: '' }, noLoad);
+  assert.equal(noLoadBoard.lines.at(-1), 'Máx. Squat Clean');
+  assert.equal(noLoadBoard.intervalSpec.max.loadKg, null);
+  assert.equal(intervalMaxLine({ id: 'x', name: 'Burpee', loadKg: null }), 'Máx. Burpee');
+
+  // 9 fixos + o máximo = 10 linhas: corta em 8 e o máximo continua por último.
+  const nine = Array.from({ length: 9 }, (_, index) => plainSegment(`f${index + 1}`, `Mov ${index + 1}`, 5));
+  const long = validateWorkoutStructure({ ...REF, totalReps: 45, timeCapSeconds: 1080, segments: nine });
+  assert.equal(long.ok, true, long.error);
+  const longBoard = describeWorkoutForBoard({ name: 'Longo', code: '' }, long.structure);
+  assert.equal(longBoard.lines.length, 8);
+  assert.deepEqual(longBoard.lines.slice(5), ['5 Mov 6', '+ 3 etapas', 'Máx. Squat Clean 80 kg']);
+  assert.equal(longBoard.segments.length, 9);
+
+  // Sem fixos: só a linha do máximo.
+  const onlyMax = validateWorkoutStructure({ ...REF, totalReps: 0, segments: [] });
+  assert.equal(onlyMax.ok, true, onlyMax.error);
+  assert.deepEqual(describeWorkoutForBoard({ name: 'Só máximo', code: '' }, onlyMax.structure).lines, ['Máx. Squat Clean 80 kg']);
+});
+
+test('telão 1.63: For Time, AMRAP e Carga máxima saem com o mesmo payload de antes (intervalSpec null)', () => {
+  const v2 = { version: 2, generator: null, customized: true, entry: { mode: 'both', marking: 'reps', publish: 'after_review' }, maxLoad: null, scoreDisplay: null };
+  const cindy = validateWorkoutStructure({
+    ...v2, format: 'amrap', totalReps: 30, timeCapSeconds: 1200, incomplete: null, tieBreak: { kind: 'last_round', order: 'asc' }, scoreDisplay: 'rounds_reps',
+    segments: [plainSegment('c1', 'Pull-up', 5), plainSegment('c2', 'Push-up', 10), plainSegment('c3', 'Air squat', 15)]
+  });
+  const total = validateWorkoutStructure({
+    ...v2, format: 'max_load', totalReps: 0, timeCapSeconds: 1200, incomplete: null, tieBreak: { kind: 'finish_time', order: 'asc' }, segments: [],
+    maxLoad: { lifts: [{ id: 'l1', name: 'Back Squat', reps: 1, maxAttempts: 3, startLoadKg: 100, note: '' }, { id: 'l2', name: 'Deadlift', reps: 3, maxAttempts: 3, startLoadKg: 120, note: '' }], order: 'fixed', scoring: 'sum', loadStepKg: 2.5 }
+  });
+  const ten = validateWorkoutStructure({
+    ...v2, format: 'for_time', totalReps: 100, timeCapSeconds: 900, incomplete: { rule: 'penalty_per_rep', secondsPerRep: 1, base: 'time_cap' }, tieBreak: null,
+    segments: Array.from({ length: 10 }, (_, index) => plainSegment(`t${index + 1}`, `Mov ${index + 1}`, 10))
+  });
+  for (const item of [cindy, total, ten]) assert.equal(item.ok, true, item.error);
+
+  const fran = describeWorkoutForBoard({ name: 'Fran', code: 'W1' }, FRAN);
+  assert.deepEqual(
+    [fran.format, fran.timeCapSeconds, fran.scheme, fran.lines, fran.intervalSpec, fran.totalReps],
+    ['for_time', 600, '21-15-9', ['Thruster 43 kg', 'Pull-up'], null, 90]
+  );
+  const amrap = describeWorkoutForBoard({ name: 'Cindy', code: 'W2' }, cindy.structure);
+  assert.deepEqual(
+    [amrap.format, amrap.scheme, amrap.lines, amrap.intervalSpec, amrap.scoreDisplay],
+    ['amrap', null, ['5 Pull-up', '10 Push-up', '15 Air squat'], null, 'rounds_reps']
+  );
+  const load = describeWorkoutForBoard({ name: 'Total', code: 'W3' }, total.structure);
+  assert.deepEqual([load.format, load.lines, load.lifts, load.intervalSpec], ['max_load', ['Back Squat', 'Deadlift · 3RM'], [{ id: 'l1', name: 'Back Squat' }, { id: 'l2', name: 'Deadlift' }], null]);
+  const longFor = describeWorkoutForBoard({ name: 'Chipper', code: '' }, ten.structure);
+  assert.equal(longFor.lines.length, 8);
+  assert.deepEqual(longFor.lines.slice(6), ['10 Mov 7', '+ 3 etapas'], 'o corte de sempre: 7 linhas e "+ N etapas"');
+});
+
+test('telão 1.63: round e fase pelo relógio da bateria com a função da súmula, nos instantes do caso aprovado', () => {
+  const at = (seconds) => {
+    const phase = broadcastIntervalPhase(REF_SPEC, seconds);
+    assert.deepEqual(phase, intervalPhaseAt(REF, seconds), `mesma fase da súmula do judge em ${seconds} s`);
+    return describeIntervalClock(REF_SPEC, phase);
+  };
+  assert.deepEqual(at(0), { line: 'Round 1 de 5 · Trabalho', countdownCaption: 'Restam no round', countdown: '02:00' });
+  assert.deepEqual(at(119), { line: 'Round 1 de 5 · Trabalho', countdownCaption: 'Restam no round', countdown: '00:01' });
+  assert.deepEqual(at(120), { line: 'Depois do round 1 de 5 · Descanso', countdownCaption: 'Próximo round em', countdown: '02:00' });
+  assert.deepEqual(at(250), { line: 'Round 2 de 5 · Trabalho', countdownCaption: 'Restam no round', countdown: '01:50' });
+  assert.deepEqual(at(1079), { line: 'Round 5 de 5 · Trabalho', countdownCaption: 'Restam no round', countdown: '00:01' });
+  assert.deepEqual(at(1080), { line: 'Prova encerrada', countdownCaption: null, countdown: null });
+  assert.deepEqual(at(5000), { line: 'Prova encerrada', countdownCaption: null, countdown: null });
+  // O relógio do telão anda em frações de segundo (useNow, 250 ms).
+  assert.equal(describeIntervalClock(REF_SPEC, broadcastIntervalPhase(REF_SPEC, 119.75)).countdown, '00:01');
+  assert.equal(broadcastIntervalPhase(REF_SPEC, -3).phase, 'work', 'hora do servidor um pouco atrás da largada: round 1');
+
+  // Sem descanso (OFF = 00:00): nunca "Descanso".
+  const noRest = { ...REF_SPEC, offSeconds: 0 };
+  for (let second = 0; second < 600; second += 1) {
+    const clock = describeIntervalClock(noRest, broadcastIntervalPhase(noRest, second));
+    assert.doesNotMatch(clock.line, /Descanso/, `${second} s`);
+  }
+  assert.equal(describeIntervalClock(noRest, broadcastIntervalPhase(noRest, 120)).line, 'Round 2 de 5 · Trabalho');
+  assert.equal(describeIntervalClock(noRest, broadcastIntervalPhase(noRest, 600)).line, 'Prova encerrada');
+});
+
+test('telão 1.63: barra da raia vazia quando o resumo é de um round anterior ao da fase; descanso e fim mantêm o resumo', () => {
+  const board = describeWorkoutForBoard({ name: 'Intervalado', code: 'W1' }, REF);
+  const entry = { segments: [6, 15], currentSegmentId: 'mx', round: 1 };
+  const phaseAt = (seconds) => broadcastIntervalPhase(REF_SPEC, seconds);
+  assert.deepEqual(intervalLaneProgress(entry, board, phaseAt(100)), { segments: [6, 15], currentSegmentId: 'mx', previousRound: false }, 'round 1 em trabalho');
+  assert.deepEqual(intervalLaneProgress(entry, board, phaseAt(200)), { segments: [6, 15], currentSegmentId: 'mx', previousRound: false }, 'descanso: o round que acabou de fechar');
+  assert.deepEqual(intervalLaneProgress(entry, board, phaseAt(250)), { segments: [0, 0], currentSegmentId: 'f1', previousRound: true }, 'round 2 sem registro: barra vazia');
+  assert.deepEqual(intervalLaneProgress(entry, board, phaseAt(1080)), { segments: [6, 15], currentSegmentId: 'mx', previousRound: false }, 'depois do fim: o valor final');
+  assert.deepEqual(intervalLaneProgress(entry, board, null), { segments: [6, 15], currentSegmentId: 'mx', previousRound: false }, 'sem relógio: como veio');
+  assert.deepEqual(intervalLaneProgress({ ...entry, round: null, segments: [0, 0], currentSegmentId: 'f1' }, board, phaseAt(250)).segments, [0, 0]);
+  const onlyMax = describeWorkoutForBoard({ name: 'Só máximo', code: '' }, validateWorkoutStructure({ ...REF, totalReps: 0, segments: [] }).structure);
+  assert.deepEqual(intervalLaneProgress({ segments: [], currentSegmentId: 'mx', round: 1 }, onlyMax, phaseAt(250)), { segments: [], currentSegmentId: 'mx', previousRound: true }, 'sem fixos não há barra');
+});
+
+test('telão 1.63 pelas rotas: chamada com o bloco do intervalado, bateria ao vivo com o round do resumo e geral com o número inteiro e empate dividindo a posição', async (t) => {
+  quiet(t);
+  seed();
+  const EV = 'ev-intervalado';
+  const people = [['ath-ia', 'Iara Melo'], ['ath-ib', 'Ivo Brito 85911112222'], ['ath-ic', 'Inês Cruz']];
+  database.rows('events').push({ id: EV, name: 'Intervalado Litoral', date: '2026-11-01', organizer_id: MANAGER.id, event_type: 'functional_fitness', status: 'upcoming', logo_url: null,
+    event_schedule: [{ id: 'heat-i1', kind: 'heat', workoutId: 'wod-int', heatNumber: 1, date: '2026-11-01', time: '09:00', title: 'BATERIA 1', athleteIds: people.map(([id]) => id) }] });
+  database.rows('event_judges').push({ event_id: EV, judge_user_id: JUDGE.id });
+  database.rows('divisions').push({ id: 'div-int', event_id: EV, name: 'RX', order_index: 1 });
+  database.rows('athletes').push(...people.map(([id, name]) => ({ id, name, box: 'Box Sul', division_id: 'div-int', is_team: false })));
+  database.rows('leaderboard_entries').push(...people.map(([id]) => ({ id: `le-${id}`, event_id: EV, division_id: 'div-int', athlete_id: id })));
+  database.rows('workouts').push({ id: 'wod-int', event_id: EV, name: 'Intervalado', code: 'W1', order_index: 1, type: 'reps', time_cap: '18:00', tie_breaker: '', division_id: null, structure: REF });
+  const { token } = (await control(MANAGER, { action: 'generate_link', eventId: EV })).body;
+  const openLane = async (athleteId, lane) => {
+    const opened = await sheets({ action: 'open', eventId: EV, workoutId: 'wod-int', athleteId, heatId: 'heat-i1', lane });
+    assert.equal(opened.status, 200, opened.body.error);
+    return opened.body.sheet.id;
+  };
+  const [ia, ib, ic] = [await openLane('ath-ia', 1), await openLane('ath-ib', 2), await openLane('ath-ic', 3)];
+
+  const call = await telao(token);
+  assert.equal(call.body.screen, 'call');
+  const workout = call.body.call.heat.workout;
+  assert.deepEqual([workout.format, workout.timeCapSeconds, workout.lines, workout.intervalSpec], ['interval', 1080, ['6 Ring Muscle Ups', '15 Box Jump Overs', 'Máx. Squat Clean 80 kg'], REF_SPEC]);
+  assert.equal(call.body.interval, null, 'a tela de intervalo não está no ar');
+
+  // Round 1 completo para os três; Ivo já no round 2 (1 Ring Muscle Up aos 250 s).
+  const roundLog = (index, maxReps, f2 = 15) => {
+    const start = index * 240;
+    return [
+      e({ t: 'fill', seg: 'f1', n: 6, at: start + 15 }),
+      e({ t: 'fill', seg: 'f2', n: f2, at: start + 45 }),
+      ...Array.from({ length: maxReps }, (_, k) => e({ t: 'rep', seg: 'mx', at: start + 50 + k * 5 }))
+    ];
+  };
+  await append(ia, roundLog(0, 3));
+  await append(ib, [...roundLog(0, 5), e({ t: 'rep', seg: 'f1', at: 250 })]);
+  await append(ic, roundLog(0, 3).map((item, index, list) => (index === list.length - 1 ? e({ ...item.event, at: 59 }) : item)));
+  const live = await telao(token);
+  assert.equal(live.body.screen, 'live');
+  assert.deepEqual(live.body.live.heat.workout.intervalSpec, REF_SPEC);
+  assert.deepEqual(
+    live.body.live.entries.map((entry) => [entry.name, entry.position, entry.repsDone, entry.round, entry.segments, entry.currentSegmentId]),
+    [
+      ['Ivo Brito', 1, 5, 2, [1, 0], 'f1'],
+      // Iara e Inês com 3: Inês fez o último Squat Clean antes (59 s contra 60 s).
+      ['Inês Cruz', 2, 3, 1, [6, 15], 'mx'],
+      ['Iara Melo', 3, 3, 1, [6, 15], 'mx']
+    ]
+  );
+  const text = JSON.stringify(live.body);
+  assert.doesNotMatch(text, /85911112222|@example\.com|ath-i[abc]|judge-telao/, 'sem dado pessoal novo');
+
+  // Telão sem a coluna absent (migration da 1.59 pendente): segue respondendo igual.
+  database.rows('scoresheets').forEach((row) => { delete row.absent; });
+  const withoutAbsent = await telao(token);
+  assert.equal(withoutAbsent.status, 200);
+  assert.deepEqual(withoutAbsent.body.live.entries.map((entry) => entry.repsDone), [5, 3, 3]);
+
+  // Fim da prova: Ivo 5 + 9 + 8 + 7 + 6 = 35, Inês 3 + 4 × 8 = 35 e Iara 3 + 8 + 5 + 1 = 17 (o round 5 dela não pontua: Box Jump Overs 11/15).
+  const rest = {
+    ia: [...[8, 5, 1].flatMap((max, index) => roundLog(index + 1, max)), ...roundLog(4, 3, 11)],
+    ib: [...roundLog(1, 9).slice(1).filter((item) => item.event.seg !== 'f1'), e({ t: 'fill', seg: 'f1', n: 5, at: 251 }), ...[8, 7, 6].flatMap((max, index) => roundLog(index + 2, max))],
+    ic: [8, 8, 8, 8].flatMap((max, index) => roundLog(index + 1, max))
+  };
+  await append(ia, rest.ia);
+  await append(ib, rest.ib);
+  await append(ic, rest.ic);
+  for (const sheetId of [ia, ib, ic]) await submit(sheetId);
+  const interval = await telao(token);
+  assert.equal(interval.body.screen, 'interval');
+  const [standings] = interval.body.interval.boards;
+  assert.deepEqual(standings.columns, [{ label: 'W1', fresh: true }]);
+  const cellOf = (name) => standings.rows.find((row) => row.name === name).cells[0];
+  assert.deepEqual([cellOf('Ivo Brito'), cellOf('Inês Cruz'), cellOf('Iara Melo')], [{ rank: 1, result: '35' }, { rank: 1, result: '35' }, { rank: 3, result: '17' }], 'empate divide a posição, sem desempate');
+});
+
+test('telão 1.63: a tela mostra "Intervalado", "Duração", o esquema e a fase pela função da súmula, sem rede nova', () => {
+  const screen = read('../src/components/broadcast/BroadcastScreen.tsx');
+  assert.match(screen, /format === 'interval' \? 'Intervalado' : 'For Time'/);
+  assert.match(screen, /format === 'amrap' \|\| format === 'interval' \? 'Duração'/);
+  assert.match(screen, /capWord\(workout\.format\)/);
+  assert.match(screen, /intervalSchemeText\(workout\.intervalSpec\)/);
+  assert.match(screen, /broadcastIntervalPhase\(liveSpec, elapsed\)/, 'fase do relógio da bateria no cabeçalho');
+  assert.match(screen, /broadcastIntervalPhase\(spec, elapsed\)/, 'a mesma fase nas raias');
+  assert.match(screen, /liveSpec && elapsed !== null \?/, 'antes da largada não inventa fase');
+  assert.match(screen, /`Máx\. \$\{interval\.max\.name\}`/);
+  assert.match(screen, /intervalLaneProgress\(entry, workout, phase\)/);
+  assert.doesNotMatch(screen, /onSeconds|offSeconds/, 'nenhuma conta de fase própria do telão');
+  assert.equal(screen.match(/fetch\(/g).length, 1, 'nenhuma requisição nova');
+  assert.match(screen, /useNow\(250, offset\)/);
+  assert.match(screen, /aria-live="off"/);
+  const payload = read('../src/lib/broadcastPayload.ts');
+  assert.match(payload, /return intervalPhaseAt\(structure, Math\.max\(0, elapsed\)\)/);
+  assert.match(payload, /intervalSpec: BroadcastIntervalSpec \| null/);
+});

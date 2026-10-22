@@ -3,11 +3,15 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Check, ChevronDown, ChevronUp, Maximize, Minus, WifiOff } from 'lucide-react';
 
-import type {
-  BroadcastLiveEntry,
-  BroadcastPayload,
-  BroadcastStandingsBoard,
-  BroadcastWorkout
+import {
+  broadcastIntervalPhase,
+  describeIntervalClock,
+  intervalLaneProgress,
+  intervalSchemeText,
+  type BroadcastLiveEntry,
+  type BroadcastPayload,
+  type BroadcastStandingsBoard,
+  type BroadcastWorkout
 } from '@/lib/broadcastPayload';
 import styles from './Broadcast.module.css';
 
@@ -34,7 +38,13 @@ const fmt = (seconds: number) => {
 };
 
 const clockTime = (ms: number) => new Date(ms).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-const formatLabel = (format: BroadcastWorkout['format']) => (format === 'amrap' ? 'AMRAP' : format === 'max_load' ? 'Carga máxima' : 'For Time');
+const formatLabel = (format: BroadcastWorkout['format']) => (
+  format === 'amrap' ? 'AMRAP' : format === 'max_load' ? 'Carga máxima' : format === 'interval' ? 'Intervalado' : 'For Time'
+);
+/** Rótulo do tempo da prova: o intervalado e o AMRAP têm duração, nunca "time cap" (Story 1.63). */
+const capWord = (format: BroadcastWorkout['format']) => (
+  format === 'amrap' || format === 'interval' ? 'Duração' : format === 'max_load' ? 'Janela' : 'Time cap'
+);
 const joinWords = (items: string[]) => (items.length > 1 ? `${items.slice(0, -1).join(', ')} e ${items[items.length - 1]}` : items[0] ?? '');
 const workoutTitle = (workout: BroadcastWorkout | null) => (
   workout ? [workout.code, workout.scheme ? `${workout.scheme} ${joinWords(workout.lines)}` : workout.name].filter(Boolean).join(' · ') : 'Prova'
@@ -171,6 +181,7 @@ const describeEntry = (entry: BroadcastLiveEntry, workout: BroadcastWorkout | nu
   const cap = workout?.timeCapSeconds ?? null;
   const capped = workout?.format === 'for_time' && entry.completedAt === null && cap !== null && elapsed !== null && elapsed >= cap;
   const official = entry.status === 'submitted' && Boolean(entry.officialResult);
+  const interval = workout?.format === 'interval' ? workout.intervalSpec : null;
   const segmentIndex = workout?.segments.findIndex((segment) => segment.id === entry.currentSegmentId) ?? -1;
   const segment = segmentIndex >= 0 ? workout?.segments[segmentIndex] : undefined;
 
@@ -178,6 +189,8 @@ const describeEntry = (entry: BroadcastLiveEntry, workout: BroadcastWorkout | nu
   let unit = '';
   if (official) value = entry.officialResult as string;
   else if (workout?.format === 'max_load') { value = entry.scoreKg ? String(entry.scoreKg) : '–'; unit = 'kg'; }
+  // Intervalado: o resultado parcial (repsDone do resumo ao vivo), em repetições.
+  else if (interval && entry.status !== 'waiting') unit = 'reps';
   else if (workout?.format === 'for_time' && entry.completedAt !== null) value = fmt(entry.completedAt);
   else if (workout?.format === 'amrap' && workout.scoreDisplay === 'rounds_reps' && workout.totalReps > 0) {
     value = `${entry.roundsCompleted}+${entry.repsDone - entry.roundsCompleted * workout.totalReps}`;
@@ -193,6 +206,7 @@ const describeEntry = (entry: BroadcastLiveEntry, workout: BroadcastWorkout | nu
   else if (workout?.format === 'for_time' && entry.completedAt !== null) line = 'Terminou · aguardando a súmula';
   else if (capped) line = `Time cap · ${entry.repsDone} reps · aguardando a súmula`;
   else if (workout?.format === 'max_load') line = entry.scoreKg ? 'Melhor carga válida' : 'Sem tentativa válida ainda';
+  else if (interval && entry.currentSegmentId === interval.max.id) lineStrong = `Máx. ${interval.max.name}`;
   else if (segment) {
     lineStrong = segment.label;
     line = ` · faltam ${Math.max(0, segment.reps - (entry.segments[segmentIndex] ?? 0))}`;
@@ -221,7 +235,15 @@ function ProgressBar({ entry, workout }: { entry: BroadcastLiveEntry; workout: B
 function LiveBoard({ live, now }: { live: NonNullable<BroadcastPayload['live']>; now: number }) {
   const workout = live.heat.workout;
   const elapsed = live.startedAt ? (now - Date.parse(live.startedAt)) / 1000 : null;
-  const entries = live.entries;
+  // Intervalado: a fase vem do relógio da bateria (o mesmo do cabeçalho), pela função da súmula.
+  const spec = workout?.format === 'interval' ? workout.intervalSpec : null;
+  const phase = spec && elapsed !== null ? broadcastIntervalPhase(spec, elapsed) : null;
+  const entries = spec && workout
+    ? live.entries.map((entry) => {
+      const { segments, currentSegmentId } = intervalLaneProgress(entry, workout, phase);
+      return { ...entry, segments, currentSegmentId };
+    })
+    : live.entries;
   const leader = entries[0]?.position ? entries[0] : null;
   const rest = leader ? entries.slice(1) : entries;
   const rowHeight = Math.min(5.5, MAX_LIST_HEIGHT / Math.max(rest.length, 1));
@@ -308,9 +330,8 @@ function CallBoard({ call }: { call: NonNullable<BroadcastPayload['call']> }) {
   const dense = call.lanes.length > 8;
   const columns = dense ? 3 : 2;
   const opened = call.lanes.filter((lane) => lane.sheetOpened).length;
-  const capLabel = workout?.timeCapSeconds
-    ? `${workout.format === 'amrap' ? 'Duração' : workout.format === 'max_load' ? 'Janela' : 'Time cap'} ${fmt(workout.timeCapSeconds)}`
-    : '';
+  const capLabel = workout?.timeCapSeconds ? `${capWord(workout.format)} ${fmt(workout.timeCapSeconds)}` : '';
+  const scheme = workout?.format === 'interval' && workout.intervalSpec ? intervalSchemeText(workout.intervalSpec) : '';
   return (
     <div className={styles.call}>
       <div
@@ -334,6 +355,7 @@ function CallBoard({ call }: { call: NonNullable<BroadcastPayload['call']> }) {
           {workout?.scheme
             ? <div className={`${styles.big} ${styles.num}`}>{workout.scheme}</div>
             : <div className={`${styles.big} ${styles.bigName}`}>{workout?.name ?? 'Prova'}</div>}
+          {scheme && <div className={styles.scheme}>{scheme}</div>}
           {workout?.lines.map((line) => <div key={line} className={styles.mv}>{line}</div>)}
           {capLabel && <div className={styles.cap}>{capLabel}</div>}
         </div>
@@ -486,6 +508,9 @@ export function BroadcastScreen({ token }: { token: string }) {
   const live = payload?.screen === 'live' ? payload.live : null;
   const elapsed = live?.startedAt ? Math.max(0, (now - Date.parse(live.startedAt)) / 1000) : null;
   const cap = live?.heat.workout?.timeCapSeconds ?? null;
+  // Intervalado: round e fase pelo relógio da bateria (recalculados a cada passo do relógio local).
+  const liveSpec = live?.heat.workout?.format === 'interval' ? live.heat.workout.intervalSpec : null;
+  const intervalClock = liveSpec && elapsed !== null ? describeIntervalClock(liveSpec, broadcastIntervalPhase(liveSpec, elapsed)) : null;
 
   let titleText = 'Telão ao vivo';
   let category = '';
@@ -493,6 +518,7 @@ export function BroadcastScreen({ token }: { token: string }) {
   let pill: { text: string; className?: string } = { text: 'TELÃO' };
   let clockMain = clockTime(now);
   let clockSub = 'horário';
+  let countdown: { caption: string; value: string } | null = null;
   let footText = 'Placar ao vivo pelas súmulas digitais';
 
   if (status === 'ok' && payload) {
@@ -503,7 +529,15 @@ export function BroadcastScreen({ token }: { token: string }) {
       subtitle = heat.heatCount ? `${heat.title} de ${heat.heatCount}` : heat.title;
       pill = payload.live.finished ? { text: 'ENCERRADA' } : { text: 'AO VIVO', className: styles.pillLive };
       clockMain = elapsed === null ? '--:--' : fmt(cap ? Math.min(elapsed, cap) : elapsed);
-      clockSub = cap ? (elapsed !== null && elapsed >= cap ? 'time cap' : `de ${fmt(cap)}`) : 'tempo de prova';
+      if (intervalClock) {
+        // Intervalado: round e fase no lugar do subtítulo, com a contagem regressiva ao lado.
+        clockSub = intervalClock.line;
+        countdown = intervalClock.countdownCaption && intervalClock.countdown
+          ? { caption: intervalClock.countdownCaption, value: intervalClock.countdown }
+          : null;
+      } else {
+        clockSub = cap ? (elapsed !== null && elapsed >= cap ? 'time cap' : `de ${fmt(cap)}`) : 'tempo de prova';
+      }
       footText = 'Parcial. O resultado oficial sai quando o judge envia a súmula';
     } else if (payload.screen === 'call' && payload.call) {
       const heat = payload.call.heat;
@@ -548,7 +582,8 @@ export function BroadcastScreen({ token }: { token: string }) {
             </div>
             {(category || subtitle) && <div className={styles.cat}><b>{category}</b><span>{subtitle}</span></div>}
             <div className={`${styles.pill} ${pill.className ?? ''}`}><i />{pill.text}</div>
-            <div className={styles.clock}><b className={styles.num}>{clockMain}</b><span>{clockSub}</span></div>
+            {countdown && <div className={styles.countdown}><b className={styles.num}>{countdown.value}</b><span>{countdown.caption}</span></div>}
+            <div className={`${styles.clock} ${intervalClock ? styles.clockPhase : ''}`}><b className={styles.num}>{clockMain}</b><span>{clockSub}</span></div>
           </header>
           <div key={payload ? `${payload.screen}-${payload.live?.heat.key ?? payload.call?.heat.key ?? ''}` : status} className={styles.body}>{body}</div>
           <footer className={styles.foot}>
