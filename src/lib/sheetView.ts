@@ -1,5 +1,15 @@
-import { UNIT_WORDS, formatWorkoutTime, workUnitWord } from '@/lib/workoutStructure';
+import {
+  UNIT_WORDS,
+  WORKOUT_STRUCTURE_LIMITS,
+  checkIntervalEntry,
+  formatWorkoutTime,
+  intervalPhaseAt,
+  workUnitWord
+} from '@/lib/workoutStructure';
 import type {
+  IntervalPhase,
+  IntervalSheetResult,
+  IntervalSheetState,
   MaxLoadSheetResult,
   MaxLoadSheetState,
   SheetEvent,
@@ -10,9 +20,9 @@ import type {
 } from '@/lib/workoutStructure';
 
 // Modelo de tela da súmula digital do judge (Story 1.44; unidades e novos
-// desempates na 1.48, carga máxima na 1.47). Puro e sem DOM: pega a estrutura
-// da prova, o estado e o resultado que o motor calculou e devolve o que a tela
-// precisa mostrar. Nenhum score é calculado aqui; o texto é português fixo,
+// desempates na 1.48, carga máxima na 1.47, intervalado na 1.62). Puro e sem
+// DOM: pega a estrutura da prova, o estado e o resultado que o motor calculou
+// e devolve o que a tela precisa mostrar. Nenhum score é calculado aqui; o texto é português fixo,
 // como no restante da área do judge.
 
 // Eventos que o judge pode desfazer. `undo` nunca é alvo (o motor não tem
@@ -409,5 +419,459 @@ export const buildMaxLoadResultSummary = (structure: WorkoutStructure, result: M
     warning: ignored > 0
       ? `${ignored} ${plural(ignored, 'tentativa não contou', 'tentativas não contaram')} (depois da janela, acima do limite ou fora da ordem).`
       : null
+  };
+};
+
+// ---------------------------------------------------------------------------
+// Intervalado (Story 1.62, Maquete 2 de docs/design/intervalado/)
+// ---------------------------------------------------------------------------
+
+export type IntervalClockPhase = 'work' | 'rest' | 'ended';
+
+/** O movimento da vez (o alvo grande de toque), ou o estado do tile no descanso e no fim. */
+export type IntervalTile =
+  | {
+    kind: 'fixed';
+    id: string;
+    round: number;
+    /** "Thruster · 43 kg". */
+    label: string;
+    done: number;
+    target: number;
+    remaining: number;
+    /** "de 6 repetições". */
+    targetLabel: string;
+    mark: 'reps' | 'end';
+    /** "Toque +1 · Segure para concluir" ou, marcado por bloco, "Segure para concluir o movimento". */
+    hint: string;
+  }
+  | { kind: 'max'; id: string; round: number; label: string; done: number; targetLabel: string; hint: string }
+  | { kind: 'rest'; round: number; label: string; done: number; targetLabel: string; hint: string }
+  | { kind: 'ended'; label: string; done: number; targetLabel: string; hint: string };
+
+export type IntervalTableColumn = {
+  id: string;
+  kind: 'fixed' | 'max';
+  /** Sigla do fixo ("RMU") ou o nome inteiro do máximo ("Squat Clean"). */
+  short: string;
+  /** Nome completo, para leitores de tela e para o título da coluna. */
+  name: string;
+};
+
+export type IntervalTableRow = {
+  round: number;
+  /** "feito/meta" de cada fixo, na ordem das colunas. */
+  fixed: string[];
+  /** Contagem bruta do máximo. */
+  maxRaw: number;
+  /** O que entra no resultado: o máximo se os fixos estão completos, senão 0. */
+  counted: number;
+  /** Round em andamento (relógio rodando, na janela de trabalho). */
+  current: boolean;
+  /** Fixo incompleto com máximo bruto maior que zero: o máximo não conta. */
+  flagged: boolean;
+};
+
+export type IntervalCorrectionControl = {
+  id: string;
+  kind: 'fixed' | 'max';
+  name: string;
+  value: number;
+  /** Meta do fixo; null no máximo. */
+  target: number | null;
+  /** "11/15" no fixo; "9" no máximo. */
+  valueLabel: string;
+  unit: WorkoutSegmentUnit;
+  unitShort: string;
+  unitWord: string;
+  canDecrease: boolean;
+  canIncrease: boolean;
+};
+
+export type IntervalCorrectionCard = {
+  round: number;
+  scored: boolean;
+  /** "Trabalho fixo completo" ou "Fixo incompleto"; null numa prova sem fixos. */
+  statusLabel: string | null;
+  max: IntervalCorrectionControl;
+  /** Todos os fixos, na ordem da prova. */
+  fixed: IntervalCorrectionControl[];
+  /** Fixos abaixo da meta: abertos, como na maquete. */
+  openFixed: IntervalCorrectionControl[];
+  /** Fixos já na meta: recolhidos em "Ajustar fixos" (AUTO-DECISION 5). */
+  collapsedFixed: IntervalCorrectionControl[];
+  /** "O Squat Clean deste round só conta se os fixos chegarem à meta." no round que não pontua. */
+  warning: string | null;
+};
+
+export type IntervalTimelineBlock = { kind: 'work' | 'rest'; seconds: number };
+
+export type IntervalViewModel = {
+  rounds: number;
+  durationSeconds: number;
+  durationLabel: string;
+  /** O mesmo segundo que o registro grava (Math.floor). */
+  at: number;
+  clockLabel: string;
+  clockPhase: IntervalClockPhase;
+  /** Round da janela (trabalho) ou do round que acabou (descanso); null depois do fim. */
+  phaseRound: number | null;
+  phaseLabel: string;
+  roundLabel: string;
+  countdownCaption: string;
+  countdownLabel: string;
+  /** Fase e round para leitores de tela (muda só quando a fase ou o round mudam). */
+  announcement: string;
+  timeline: {
+    blocks: IntervalTimelineBlock[];
+    ticks: { at: number; label: string }[];
+    markerPercent: number;
+    ariaLabel: string;
+  };
+  maxName: string;
+  tile: IntervalTile;
+  columns: IntervalTableColumn[];
+  rows: IntervalTableRow[];
+  total: number;
+  cards: IntervalCorrectionCard[];
+  undoTarget: number | null;
+  canUndo: boolean;
+};
+
+/**
+ * Sigla de um movimento fixo para o cabeçalho do quadro dos rounds
+ * (AUTO-DECISION 4): sem o trecho entre parênteses e sem as palavras que não
+ * começam por letra ("24/20", "#24/20in"); com mais de uma palavra, as
+ * iniciais (até 4 letras); com uma só, a palavra inteira.
+ */
+export const intervalColumnShort = (name: string) => {
+  const words = name
+    .replace(/\([^)]*\)/g, ' ')
+    .split(/\s+/)
+    .filter((word) => /^\p{L}/u.test(word));
+  if (words.length === 0) return name.trim();
+  if (words.length === 1) return words[0];
+  return words.map((word) => word[0].toUpperCase()).join('').slice(0, 4);
+};
+
+const loadText = (load: { value: number; unit: string } | null | undefined) => (
+  load ? `${formatKg(load.value)} ${load.unit}` : null
+);
+
+const intervalDuration = (rounds: number, on: number, off: number) => rounds * on + Math.max(0, rounds - 1) * off;
+
+/**
+ * Modelo de tela da súmula do intervalado. `seconds` é o relógio da súmula; a
+ * fase e o round vêm de intervalPhaseAt (a função do motor), e o estado e as
+ * contagens vêm do motor (deriveIntervalState). Nada é recalculado aqui além
+ * de rótulos.
+ */
+export const buildIntervalViewModel = (
+  structure: WorkoutStructure,
+  state: IntervalSheetState,
+  events: readonly SheetEvent[],
+  seconds: number,
+  phase: IntervalPhase
+): IntervalViewModel => {
+  const interval = structure.interval;
+  const rounds = interval?.rounds ?? state.rounds.length;
+  const on = interval?.onSeconds ?? 0;
+  const off = interval?.offSeconds ?? 0;
+  const durationSeconds = structure.timeCapSeconds ?? intervalDuration(rounds, on, off);
+  const at = Math.max(0, Math.floor(Number.isFinite(seconds) ? seconds : 0));
+  const fixedDefs = structure.segments;
+  const maxName = interval?.max.name ?? 'Máximo';
+  const maxId = interval?.max.id ?? '';
+  const maxLoad = loadText(interval?.max.load);
+  const roundState = (round: number) => state.rounds[round - 1];
+
+  let phaseLabel: string;
+  let roundLabel: string;
+  let countdownCaption: string;
+  let countdownLabel: string;
+  let phaseRound: number | null = null;
+  if (phase.phase === 'work') {
+    phaseRound = phase.round;
+    phaseLabel = 'Trabalho';
+    roundLabel = `Round ${phase.round} de ${rounds}`;
+    countdownCaption = 'Restam no round';
+    countdownLabel = formatWorkoutTime(phase.secondsLeft);
+  } else if (phase.phase === 'rest') {
+    phaseRound = phase.round;
+    phaseLabel = 'Descanso';
+    roundLabel = `Depois do round ${phase.round} de ${rounds}`;
+    countdownCaption = 'Próximo round em';
+    countdownLabel = formatWorkoutTime(phase.secondsLeft);
+  } else {
+    phaseLabel = 'Prova encerrada';
+    roundLabel = `${rounds} ${plural(rounds, 'round feito', 'rounds feitos')}`;
+    countdownCaption = 'Pare o relógio';
+    countdownLabel = '00:00';
+  }
+
+  const repsWord = (count: number) => plural(count, 'repetição', 'repetições');
+  let tile: IntervalTile;
+  if (phase.phase === 'work') {
+    const current = roundState(phase.round);
+    const fixedIndex = current ? fixedDefs.findIndex((segment) => segment.id === current.currentId) : -1;
+    if (current && fixedIndex >= 0) {
+      const segment = fixedDefs[fixedIndex];
+      const unit = segment.unit ?? 'reps';
+      const done = current.fixed[fixedIndex] ?? 0;
+      const segmentLoad = loadText(segment.load);
+      tile = {
+        kind: 'fixed',
+        id: segment.id,
+        round: phase.round,
+        label: segmentLoad ? `${segment.name} · ${segmentLoad}` : segment.name,
+        done,
+        target: segment.reps,
+        remaining: Math.max(0, segment.reps - done),
+        targetLabel: `de ${segment.reps} ${segment.reps === 1 ? UNIT_WORDS[unit].one : UNIT_WORDS[unit].many}`,
+        mark: segment.mark,
+        hint: segment.mark === 'end' ? 'Segure para concluir o movimento' : 'Toque +1 · Segure para concluir'
+      };
+    } else {
+      const done = current?.maxRaw ?? 0;
+      tile = {
+        kind: 'max',
+        id: maxId,
+        round: phase.round,
+        label: maxLoad ? `Máx. ${maxName} · ${maxLoad}` : `Máx. ${maxName}`,
+        done,
+        targetLabel: `${repsWord(done)} neste round`,
+        hint: 'Sem meta · conte até o fim da janela'
+      };
+    }
+  } else if (phase.phase === 'rest') {
+    const done = roundState(phase.round)?.maxCounted ?? 0;
+    tile = {
+      kind: 'rest',
+      round: phase.round,
+      label: 'Descanso',
+      done,
+      targetLabel: `${repsWord(done)} ${plural(done, 'contada', 'contadas')} no round ${phase.round}`,
+      hint: 'Os registros agora não contam'
+    };
+  } else {
+    tile = {
+      kind: 'ended',
+      label: 'Tempo esgotado',
+      done: state.total,
+      targetLabel: `${repsWord(state.total)} no total`,
+      hint: 'Toque em Parar para revisar'
+    };
+  }
+
+  const columns: IntervalTableColumn[] = [
+    ...fixedDefs.map((segment) => ({ id: segment.id, kind: 'fixed' as const, short: intervalColumnShort(segment.name), name: segment.name })),
+    { id: maxId, kind: 'max', short: maxName, name: maxName }
+  ];
+
+  const rows: IntervalTableRow[] = state.rounds.map((round) => ({
+    round: round.round,
+    fixed: fixedDefs.map((segment, index) => `${round.fixed[index] ?? 0}/${segment.reps}`),
+    maxRaw: round.maxRaw,
+    counted: round.maxCounted,
+    current: phase.phase === 'work' && phase.round === round.round,
+    flagged: !round.scored && round.maxRaw > 0
+  }));
+
+  const control = (
+    id: string,
+    kind: 'fixed' | 'max',
+    name: string,
+    value: number,
+    target: number | null,
+    unit: WorkoutSegmentUnit
+  ): IntervalCorrectionControl => ({
+    id,
+    kind,
+    name,
+    value,
+    target,
+    valueLabel: target === null ? String(value) : `${value}/${target}`,
+    unit,
+    unitShort: UNIT_WORDS[unit].short,
+    unitWord: UNIT_WORDS[unit].many,
+    canDecrease: value > 0,
+    canIncrease: value < (target ?? WORKOUT_STRUCTURE_LIMITS.maxIntervalMaxRepsPerRound)
+  });
+
+  const cards: IntervalCorrectionCard[] = state.rounds.map((round) => {
+    const fixedControls = fixedDefs.map((segment, index) => control(
+      segment.id,
+      'fixed',
+      segment.name,
+      round.fixed[index] ?? 0,
+      segment.reps,
+      segment.unit ?? 'reps'
+    ));
+    return {
+      round: round.round,
+      scored: round.scored,
+      statusLabel: fixedDefs.length === 0 ? null : round.scored ? 'Trabalho fixo completo' : 'Fixo incompleto',
+      max: control(maxId, 'max', maxName, round.maxRaw, null, 'reps'),
+      fixed: fixedControls,
+      openFixed: fixedControls.filter((item) => item.value < (item.target ?? 0)),
+      collapsedFixed: fixedControls.filter((item) => item.value >= (item.target ?? 0)),
+      warning: round.scored ? null : `O ${maxName} deste round só conta se os fixos chegarem à meta.`
+    };
+  });
+
+  const cycle = on + off;
+  const every = Math.max(1, Math.ceil(rounds / 8));
+  const ticks: { at: number; label: string }[] = [];
+  for (let round = 1; round <= rounds; round += every) ticks.push({ at: (round - 1) * cycle, label: formatWorkoutTime((round - 1) * cycle) });
+  const blocks: IntervalTimelineBlock[] = [];
+  for (let round = 1; round <= rounds; round += 1) {
+    blocks.push({ kind: 'work', seconds: on });
+    if (round < rounds && off > 0) blocks.push({ kind: 'rest', seconds: off });
+  }
+  const rest = off > 0 ? `${formatWorkoutTime(off)} de descanso entre eles` : 'sem descanso entre eles';
+  const undoTarget = findUndoTarget(events);
+
+  return {
+    rounds,
+    durationSeconds,
+    durationLabel: formatWorkoutTime(durationSeconds),
+    at,
+    clockLabel: formatWorkoutTime(at),
+    clockPhase: phase.phase,
+    phaseRound,
+    phaseLabel,
+    roundLabel,
+    countdownCaption,
+    countdownLabel,
+    announcement: `${phaseLabel}. ${roundLabel}.`,
+    timeline: {
+      blocks,
+      ticks,
+      markerPercent: durationSeconds > 0 ? Math.max(0, Math.min(100, (Math.min(at, durationSeconds) / durationSeconds) * 100)) : 0,
+      ariaLabel: `${rounds} rounds de ${formatWorkoutTime(on)} de trabalho, ${rest}, ${formatWorkoutTime(durationSeconds)} no total`
+    },
+    maxName,
+    tile,
+    columns,
+    rows,
+    total: state.total,
+    cards,
+    undoTarget,
+    canUndo: undoTarget !== null
+  };
+};
+
+/** Mensagem quando o segurar cai fora da janela (a porta do motor fala do toque). */
+export const INTERVAL_HOLD_REFUSED = 'Fora da janela de trabalho: o toque não foi aceito.';
+
+export type IntervalTouchDecision =
+  | { ok: true; event: SheetEvent }
+  /** `refused`: a mensagem da recusa (fora da janela); null quando não há o que registrar dentro dela. */
+  | { ok: false; refused: string | null };
+
+/**
+ * O que um toque (`tap`) ou um segurar (`hold`) no tile vira, no segundo
+ * `seconds` do relógio. Primeiro a porta da tela (checkIntervalEntry, a mesma
+ * que o teste de paridade compara com o motor); fora da janela, recusa com a
+ * mensagem e nada é emitido. Dentro dela, o movimento da vez do round aceito:
+ * o toque soma 1 (`rep`) no fixo abaixo da meta ou, com os fixos feitos, no
+ * máximo; o segurar conclui o fixo (`fill` com o que falta) e no máximo não faz
+ * nada, porque o máximo não tem meta. Fixo marcado por bloco só conclui pelo
+ * segurar.
+ */
+export const decideIntervalTouch = (
+  structure: WorkoutStructure,
+  state: IntervalSheetState,
+  seconds: number,
+  gesture: 'tap' | 'hold'
+): IntervalTouchDecision => {
+  const at = Math.max(0, Math.floor(Number.isFinite(seconds) ? seconds : 0));
+  const check = checkIntervalEntry(structure, at);
+  if (!check.ok) return { ok: false, refused: gesture === 'hold' ? INTERVAL_HOLD_REFUSED : check.error };
+  const round = state.rounds[check.round - 1];
+  if (!round || !round.currentId) return { ok: false, refused: null };
+  const index = structure.segments.findIndex((segment) => segment.id === round.currentId);
+  const segment = index >= 0 ? structure.segments[index] : null;
+  if (gesture === 'tap') {
+    if (segment?.mark === 'end') return { ok: false, refused: null };
+    return { ok: true, event: { t: 'rep', seg: round.currentId, at } };
+  }
+  if (!segment) return { ok: false, refused: null };
+  const remaining = segment.reps - (round.fixed[index] ?? 0);
+  return remaining > 0 ? { ok: true, event: { t: 'fill', seg: segment.id, n: remaining, at } } : { ok: false, refused: null };
+};
+
+export type IntervalResultSummary = {
+  /** "Soma do Squat Clean nos 5 rounds". */
+  caption: string;
+  /** "23". */
+  value: string;
+  /** "repetições" (ou "repetição"). */
+  unitWord: string;
+  /** "23 repetições". */
+  headline: string;
+  /** "Round 1: 9 · Round 2: 8 · …" e uma linha por round que não contou. */
+  details: string[];
+  /** "1 registro fora da janela não contou (…)."; null sem registro ignorado. */
+  warning: string | null;
+  note: string;
+};
+
+/** Até quantos registros fora da janela o aviso detalha (AUTO-DECISION 6). */
+export const INTERVAL_IGNORED_DETAIL_LIMIT = 3;
+
+/**
+ * Texto do resultado do intervalado que o motor calculou (nada é recalculado
+ * aqui): a soma, o máximo contado de cada round, os rounds que não contaram
+ * com os fixos abaixo da meta e o aviso dos registros fora da janela, com o
+ * horário e o motivo de até 3 deles.
+ */
+export const buildIntervalResultSummary = (
+  structure: WorkoutStructure,
+  result: IntervalSheetResult,
+  state: IntervalSheetState,
+  events: readonly SheetEvent[]
+): IntervalResultSummary => {
+  const maxName = structure.interval?.max.name ?? 'máximo';
+  const rounds = result.rounds.length;
+  const unitWord = plural(result.value, 'repetição', 'repetições');
+  const scoredLine = result.rounds
+    .filter((round) => round.scored)
+    .map((round) => `Round ${round.round}: ${round.maxCounted}`)
+    .join(' · ');
+  const missLines = result.rounds
+    .filter((round) => !round.scored)
+    .map((round) => {
+      const missing = structure.segments
+        .map((segment, index) => ({ segment, done: round.fixed[index] ?? 0 }))
+        .filter((item) => item.done < item.segment.reps)
+        .map((item) => `${item.segment.name} ${item.done}/${item.segment.reps}`);
+      return `Round ${round.round}: 0 (${[...missing, 'o máximo não conta'].join(', ')})`;
+    });
+  const details = [...(scoredLine ? [scoredLine] : []), ...missLines];
+
+  let warning: string | null = null;
+  const ignored = state.ignored;
+  if (ignored.length > 0) {
+    const reasons = ignored.slice(0, INTERVAL_IGNORED_DETAIL_LIMIT).map((position) => {
+      const raw = events[position] as { at?: unknown } | undefined;
+      const at = Math.max(0, Math.floor(typeof raw?.at === 'number' && Number.isFinite(raw.at) ? raw.at : 0));
+      const where = intervalPhaseAt(structure, at);
+      const why = where.phase === 'rest' ? `depois do fim do round ${where.round}` : 'depois do fim da prova';
+      return `às ${formatWorkoutTime(at)}, ${why}`;
+    });
+    const extra = ignored.length - reasons.length;
+    const detail = `${plural(ignored.length, 'chegou', 'chegaram')} do aparelho ${reasons.join('; ')}${extra > 0 ? `; e mais ${extra}` : ''}`;
+    warning = `${ignored.length} ${plural(ignored.length, 'registro fora da janela não contou', 'registros fora da janela não contaram')} (${detail}).`;
+  }
+
+  return {
+    caption: `Soma do ${maxName} nos ${rounds} ${plural(rounds, 'round', 'rounds')}`,
+    value: result.display,
+    unitWord,
+    headline: `${result.display} ${unitWord}`,
+    details,
+    warning,
+    note: 'O servidor calcula o mesmo resultado a partir dos registros. O número do aparelho não é aceito como está.'
   };
 };

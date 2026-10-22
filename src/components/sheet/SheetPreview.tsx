@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { SheetDemo } from '@/components/sheet/SheetDemo';
 import type { WorkoutSegment, WorkoutSegmentUnit, WorkoutStructure } from '@/lib/workoutStructure';
 
-// Pré-visualização da súmula do judge (Stories 1.44, 1.47 e 1.48), SÓ em
+// Pré-visualização da súmula do judge (Stories 1.44, 1.47, 1.48 e 1.62), SÓ em
 // desenvolvimento: provas de exemplo sobre o SheetDemo (relógio e log em
 // memória). Nada é gravado. A página que a usa responde 404 em produção.
 
@@ -118,11 +118,32 @@ const MAX_LOAD: WorkoutStructure = {
   interval: null
 };
 
+// Story 1.62: o treino de referência do Intervalado (docs/design/intervalado/).
+const INTERVAL: WorkoutStructure = {
+  version: 3,
+  format: 'interval',
+  totalReps: 21,
+  timeCapSeconds: 1080,
+  incomplete: null,
+  tieBreak: null,
+  generator: null,
+  customized: true,
+  entry: ENTRY,
+  segments: [
+    segment('f1', 1, 'Ring Muscle Ups', 6, null),
+    segment('f2', 1, 'Box Jump Overs (24/20 in)', 15, null)
+  ],
+  maxLoad: null,
+  scoreDisplay: null,
+  interval: { rounds: 5, onSeconds: 120, offSeconds: 120, max: { id: 'mx', name: 'Squat Clean', load: { value: 80, unit: 'kg' }, note: '' } }
+};
+
 const FIXTURES = {
   fortime: { label: 'For Time 21-15-9', structure: FOR_TIME, workoutName: 'Fran · For Time' },
   units: { label: 'Metros e calorias', structure: UNITS, workoutName: 'Remo, bike e burpee · For Time' },
   amrap: { label: 'AMRAP 12 min', structure: AMRAP, workoutName: 'Cindy 30 · AMRAP' },
-  maxload: { label: 'Carga máxima', structure: MAX_LOAD, workoutName: 'CrossFit Total · Carga máxima' }
+  maxload: { label: 'Carga máxima', structure: MAX_LOAD, workoutName: 'CrossFit Total · Carga máxima' },
+  interval: { label: 'Intervalado 5 × 02:00 / 02:00', structure: INTERVAL, workoutName: 'Intervalado 5 × 2′' }
 } as const;
 
 type FixtureId = keyof typeof FIXTURES;

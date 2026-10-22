@@ -3,6 +3,7 @@
 import { useEffect, useId, useMemo, useState } from 'react';
 import { Check, Clock, Minus, Play, Plus, Square, Undo2 } from 'lucide-react';
 
+import { IntervalSheetView } from '@/components/sheet/IntervalSheetView';
 import { MaxLoadSheetView } from '@/components/sheet/MaxLoadSheetView';
 import { PHASE_LABELS, ProgressBar, actionButtonClass, secondaryButtonClass } from '@/components/sheet/sheetUi';
 import { useTapHold } from '@/components/sheet/useTapHold';
@@ -23,6 +24,8 @@ import {
 // fixo, como no restante da área do judge. Provas de carga máxima (Story 1.47)
 // usam a súmula por tentativas (MaxLoadSheetView); calorias e metros (Story
 // 1.48) aparecem com a unidade e se corrigem informando quanto foi feito.
+// Provas intervaladas (Story 1.62) usam a súmula de rounds com trabalho e
+// descanso (IntervalSheetView).
 
 export type SheetPhase = 'ready' | 'running' | 'stopped';
 
@@ -425,5 +428,6 @@ function SegmentSheetView({
 
 export function SheetView(props: SheetViewProps) {
   // Componentes diferentes por formato: o React monta um ou outro, sem misturar os hooks.
+  if (props.structure.format === 'interval') return <IntervalSheetView {...props} />;
   return props.structure.format === 'max_load' ? <MaxLoadSheetView {...props} /> : <SegmentSheetView {...props} />;
 }

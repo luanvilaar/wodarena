@@ -444,16 +444,17 @@ test('Intervalado: erros marcados no campo, duração "—", sem linha do tempo 
   assert.doesNotMatch(emomHtml, /<button[^>]*id="b-use"[^>]*disabled=""/);
 });
 
-test('Intervalado: a prévia mostra o aviso até a súmula do judge existir (Story 1.62), sem bloquear "Usar esta súmula"', () => {
+test('Intervalado: a prévia mostra a súmula do judge do Intervalado (Story 1.62), sem o aviso da 1.61', () => {
   const html = renderPanel(intervalDraft());
-  assert.match(html, /<p role="status"[^>]*>A prévia da súmula do Intervalado chega com a próxima etapa\.<\/p>/);
-  assert.doesNotMatch(html, /aria-label="Súmula digital/, 'nada da súmula de For Time ao lado');
+  assert.doesNotMatch(html, /A prévia da súmula do Intervalado chega com a próxima etapa\./);
+  assert.doesNotMatch(dialogSource, /INTERVAL_PREVIEW_NOTICE|próxima etapa/);
+  assert.match(html, /aria-label="Súmula digital do intervalado"/);
+  assert.doesNotMatch(html, /aria-label="Súmula digital"/, 'nada da súmula de For Time ao lado');
   assert.match(html, /Súmula pronta\. Ela é gravada quando você salvar a prova\./);
   assert.doesNotMatch(html, /<button[^>]*id="b-use"[^>]*disabled=""/);
-  // Também com problemas: o aviso no lugar de "Corrija os itens".
-  assert.match(renderPanel(createDraft('interval')), /A prévia da súmula do Intervalado chega com a próxima etapa\./);
-  assert.match(dialogSource, /\{analysis\.format === 'interval' \? \(/);
-  // Os outros formatos seguem com a súmula ao lado.
+  // Com problemas, o mesmo aviso dos outros formatos.
+  assert.match(renderPanel(createDraft('interval')), /Corrija os itens marcados com ! para ver a súmula\./);
+  // Os outros formatos seguem com a súmula deles ao lado.
   assert.match(renderPanel(franDraft()), /aria-label="Súmula digital"/);
 });
 

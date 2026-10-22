@@ -34,6 +34,8 @@ import { parseTimeInput } from '@/lib/workoutStructureEditor';
 // (decisão 3 da E3); o servidor calcula o resultado do log. "Atleta ausente"
 // (Story 1.59) só aparece com a súmula sem nenhum registro e publica o pior
 // resultado da prova, calculado pelo servidor (a requisição não leva resultado).
+// O Intervalado (Story 1.62) não termina antes do relógio parado, mostra o
+// resultado em repetições e não tem ajuste pelo cronômetro oficial.
 
 type SheetPayload = {
   sheet: {
@@ -193,6 +195,8 @@ function SheetSession({ payload }: { payload: SheetPayload }) {
   };
 
   const finished = useMemo(() => {
+    // Intervalado: sem "terminou antes do fim"; a revisão abre quando o relógio para.
+    if (structure.format === 'interval') return false;
     if (structure.format === 'max_load') {
       const state = deriveMaxLoadState(structure, events);
       return state.attemptsUsed > 0 && state.currentLiftId === null;
@@ -201,6 +205,10 @@ function SheetSession({ payload }: { payload: SheetPayload }) {
     return structure.format === 'for_time' && state.repsRemaining === 0 && state.completedAt !== null;
   }, [structure, events]);
   const outcome = useMemo(() => computeSheetOutcome(structure, events), [structure, events]);
+  // Palavra do formato junto do número principal: "102,5 kg", "23 repetições"; tempo e AMRAP sem palavra.
+  const resultUnit = (value: number) => (
+    structure.format === 'max_load' ? ' kg' : structure.format === 'interval' ? (value === 1 ? ' repetição' : ' repetições') : ''
+  );
   const showReview = writable && (clock.phase === 'stopped' || finished);
   const syncReady = sync.pendingCount === 0 && sync.status === 'saved';
   // Atleta ausente: só sem nenhum registro, nem no servidor nem na fila do aparelho.
@@ -355,13 +363,14 @@ function SheetSession({ payload }: { payload: SheetPayload }) {
           <h2 id="review-title" className="text-sm font-extrabold uppercase tracking-wider">Conferir e enviar</h2>
           {outcome.ok ? (
             <div className="space-y-0.5">
-              <p className="font-number text-4xl font-extrabold">{outcome.result.replace('.', ',')}{structure.format === 'max_load' ? ' kg' : ''}</p>
+              <p className="font-number text-4xl font-extrabold">{outcome.result.replace('.', ',')}{resultUnit(outcome.value)}</p>
               <p className="text-sm font-semibold text-muted">{outcome.summary}{outcome.tieBreak ? ` · tie-break ${outcome.tieBreak}` : ''}</p>
             </div>
           ) : (
             <p role="alert" className="text-sm font-bold text-trading-down">{outcome.error}</p>
           )}
-          {structure.format !== 'max_load' && <OfficialTimeForm structure={structure} events={events} at={at} onRecord={sync.record} />}
+          {/* O cronômetro oficial só vale para For Time e AMRAP (carga máxima e intervalado recusam o `time`). */}
+          {(structure.format === 'for_time' || structure.format === 'amrap') && <OfficialTimeForm structure={structure} events={events} at={at} onRecord={sync.record} />}
 
           {!syncReady && <p className="text-xs font-semibold text-muted">Aguarde os registros chegarem ao servidor para enviar.</p>}
           {submitError && <p role="alert" className="text-sm font-bold text-trading-down">{submitError}</p>}

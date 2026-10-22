@@ -90,7 +90,7 @@ test('quadra: rotas novas fora do painel do Qualifier, link no painel do judge e
   assert.match(block, /--foreground: #0b0e11;/);
   assert.match(block, /color-scheme: light;/);
   assert.match(css, /\.court-light \.text-primary \{\s*color: #7a5c00;/);
-  for (const path of ['../src/components/sheet/SheetView.tsx', '../src/components/sheet/MaxLoadSheetView.tsx', '../src/components/sheet/sheetUi.tsx']) {
+  for (const path of ['../src/components/sheet/SheetView.tsx', '../src/components/sheet/MaxLoadSheetView.tsx', '../src/components/sheet/IntervalSheetView.tsx', '../src/components/sheet/sheetUi.tsx']) {
     assert.doesNotMatch(read(path), /text-white/, `${path}: a súmula usa a cor de texto do tema`);
   }
 });
@@ -121,6 +121,21 @@ test('súmula na quadra: envia só com tudo salvo, confirma antes, limpa o apare
   for (const path of ['../src/components/judge/CourtSheet.tsx', '../src/components/judge/CourtBoard.tsx', '../src/components/judge/CourtEventsList.tsx']) {
     assert.doesNotMatch(read(path), /supabase|localStorage\.setItem/, path);
   }
+});
+
+// Story 1.62: o Intervalado na quadra, sem cair nos caminhos de For Time e de carga máxima.
+test('súmula na quadra: o intervalado revisa ao parar, mostra "repetições" e não tem cronômetro oficial', () => {
+  const sheet = read('../src/components/judge/CourtSheet.tsx');
+  const finished = sheet.match(/const finished = useMemo\(\(\) => \{[\s\S]*?\}, \[structure, events\]\);/)?.[0] || '';
+  assert.match(finished, /if \(structure\.format === 'interval'\) return false;/);
+  assert.ok(finished.indexOf("'interval'") < finished.indexOf('deriveSheetState'), 'o intervalado sai antes do motor de segmentos');
+  assert.match(sheet, /const showReview = writable && \(clock\.phase === 'stopped' \|\| finished\);/);
+  assert.match(sheet, /structure\.format === 'max_load' \? ' kg' : structure\.format === 'interval' \? \(value === 1 \? ' repetição' : ' repetições'\) : ''/);
+  assert.match(sheet, /\{outcome\.result\.replace\('\.', ','\)\}\{resultUnit\(outcome\.value\)\}/);
+  assert.match(sheet, /\{\(structure\.format === 'for_time' \|\| structure\.format === 'amrap'\) && <OfficialTimeForm /);
+  assert.doesNotMatch(sheet, /structure\.format !== 'max_load' && <OfficialTimeForm/);
+  assert.match(sheet, /Enviar \{outcome\.ok \? outcome\.result\.replace\('\.', ','\) : ''\} de \{context\.athleteName\}\? O resultado vai direto para o ranking\./);
+  assert.match(sheet, /const canMarkAbsent = writable && sync\.confirmedCount === 0 && sync\.pendingCount === 0 && events\.length === 0;/);
 });
 
 // ---------------------------------------------------------------------------

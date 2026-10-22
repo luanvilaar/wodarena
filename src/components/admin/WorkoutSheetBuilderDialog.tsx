@@ -27,9 +27,6 @@ export type SheetBuilderPanelProps = {
   onSave: (structure: WorkoutStructure) => void;
 };
 
-/** Aviso no lugar da prévia do Intervalado (sai com a Story 1.62). */
-export const INTERVAL_PREVIEW_NOTICE = 'A prévia da súmula do Intervalado chega com a próxima etapa.';
-
 const buttonClass = 'flex min-h-11 items-center justify-center gap-2 rounded-md border px-4 text-xs font-bold uppercase tracking-wider transition-colors disabled:cursor-not-allowed disabled:opacity-40';
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -142,13 +139,8 @@ export function SheetBuilderPanel({ initialDraft, notice, workoutName, idPrefix,
               <h3 id={previewTitleId} className="text-xs font-bold uppercase tracking-wider text-white">Como o judge verá</h3>
               <p className="text-[11px] text-muted">Teste à vontade: inicie o relógio, toque e segure. Nada é gravado.</p>
             </div>
-            {/* Story 1.61, AUTO-DECISION 1: até a súmula do Intervalado (Story 1.62) existir, a prévia
-                não mostra a de For Time no lugar dela. O aviso não bloqueia "Usar esta súmula". */}
-            {analysis.format === 'interval' ? (
-              <p role="status" className="rounded-2xl border border-dashed border-card-border px-4 py-8 text-center text-xs text-muted">
-                {INTERVAL_PREVIEW_NOTICE}
-              </p>
-            ) : analysis.structure ? (
+            {/* O SheetView escolhe a súmula pelo formato (a do Intervalado desde a Story 1.62). */}
+            {analysis.structure ? (
               <div className="rounded-2xl border border-card-border bg-background p-3">
                 <SheetDemo
                   key={JSON.stringify(analysis.structure)}
