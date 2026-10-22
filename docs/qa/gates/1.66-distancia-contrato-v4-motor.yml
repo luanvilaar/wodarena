@@ -2,7 +2,7 @@ schema: 1
 story: '1.66'
 story_title: 'Distância na Súmula Digital: Contrato v4 e Motor'
 gate: PASS
-status_reason: 'Os ACs 1 a 10 têm evidência no código e nos testes. O motor, o parser e o caso aprovado (A e B 6330, C 5915, D ausente; posições 1, 1, 3, 4) batem com o README, e nenhum ponto do tipo "carga máxima ou o resto" deixa a distância cair no For Time. Ficam só itens LOW: roll-forward depois do deploy e o comentário do log no banco.'
+status_reason: 'Os ACs 1 a 10 têm evidência no código e nos testes. O motor, o parser e o caso aprovado (A e B 6330, C 5915, D ausente; posições 1, 1, 3, 4) batem com o README, e nenhum ponto do tipo "carga máxima ou o resto" do motor, do servidor e da súmula deixa a distância cair no For Time; o telão ao vivo, fora do escopo desta story, ainda a mostra como For Time até a Story 1.69. Ficam só itens LOW: roll-forward depois do deploy e o comentário do log no banco.'
 reviewer: 'Quinn (Test Architect)'
 updated: '2026-10-22T18:00:00-03:00'
 expires: '2026-11-05T18:00:00-03:00'
@@ -63,4 +63,5 @@ regression_review:
     - 'reconcileWorkoutStructure (distance copiado por valor)'
     - 'TIE_BREAK_MESSAGES / TIE_BREAK_KINDS (distance: [], qualquer desempate recusado)'
     - 'describeWorkoutForBoard e rankLiveEntries (aceitam o formato sem lançar)'
+  outside_scope_ui: 'BroadcastScreen.tsx e serverBroadcast.ts ainda tratam a distância como o "resto" e a rotulam como For Time até a Story 1.69 (ver REL-001 do gate da 1.68).'
   old_tests_changed: 'Só o valor esperado mudou: versão 3 para 4, lista de chaves com distance no fim, mensagem de versão "1, 2, 3 ou 4" e a de formato citando a distância. A recusa de version 4 virou version 5, e a forma da v1 com version 4 ganhou asserção própria. Nenhuma asserção foi afrouxada ou removida.'
