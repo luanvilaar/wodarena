@@ -3,4 +3,5 @@
 - [PGlite Migration Validation](project_pglite-migration-validation.md) — stubs (roles, uuid-ossp, storage schema, users FK) needed to replay all migrations locally
 - [Worktree Setup Gotchas](project_worktree-setup-gotchas.md) — agent worktrees lack node_modules and untracked main-checkout files (fresh migrations); symlink/copy before testing
 - [Test in-memory stores shared](project_test-inmemory-stores-shared.md) — rate limit and telão link cache persist across tests in a file; use MANAGER + fresh IPs
-- [CodeRabbit on own commit](reference_coderabbit-own-commit.md) — use `--base-commit <parent>`; `--base origin/main` sweeps in other unpushed commits
+- [Browser check via CDP](reference_browser-check-cdp.md) — no Playwright; headless Chrome + DevTools Protocol on /pt-br/sumula-preview/*; Date.now offset jumps the sheet clock; never the logged-in panel (prod DB)
+- [CodeRabbit on own commit](reference_coderabbit-own-commit.md) — use `--base-commit <parent>`; `--base origin/main` sweeps in other unpushed commits; free tier rate-limits after 3 reviews

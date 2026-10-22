@@ -1,0 +1,112 @@
+schema: 1
+story: '1.61'
+story_title: 'Intervalado: Construtor da Prova'
+gate: CONCERNS
+status_reason: 'Os ACs 1 a 9 têm evidência no código, nos testes e no navegador, e o construtor só entrega estrutura que passa pelo validador da 1.60, que não foi tocada. O código não tem defeito bloqueante. O CONCERNS é pela ordem de publicação: a 1.61 já oferece o Intervalado na tela, a 1.62 ainda está InProgress e a súmula do judge cai na de segmentos (REL-001).'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-10-21T23:30:00-03:00'
+expires: '2026-11-04T23:30:00-03:00'
+quality_score: 88
+
+top_issues:
+  - id: REL-001
+    severity: medium
+    finding: 'Este é o R1 da story, e a exposição cresceu. Na 1.60 só um payload montado à mão chegava a uma prova intervalada. Com a 1.61, qualquer gestor escolhe "Intervalado" no construtor, salva, e a prova abre na quadra pela SheetView, que termina em max_load ? MaxLoadSheetView : SegmentSheetView. O judge veria uma súmula de For Time errada para o formato. A 1.62 está InProgress, e o main local tem 1.60 e 1.61 à frente de origin/main.'
+    refs: ['src/components/sheet/SheetView.tsx:428', 'src/components/admin/WorkoutSheetBuilderDialog.tsx:147', 'docs/stories/1.62.story.md']
+    suggested_owner: devops
+    suggested_action: 'Não publicar a 1.61 (nem a 1.60) antes do gate da 1.62. Publicar as três no mesmo push, como o @po recomendou. Se for preciso publicar antes, registrar na nota de deploy que nenhum evento pode usar o Intervalado até a 1.62.'
+  - id: REQ-001
+    severity: low
+    finding: 'É efeito da AUTO-DECISION 7, que foi aceita. Depois de "Usar esta súmula" com o Intervalado, o painel troca o tipo da prova para reps. Se o gestor clicar em "Remover súmula" na mesma sessão, ou numa prova intervalada gravada, o wodStructure fica null e o tipo continua reps. Aí o bloco "Súmula digital" inteiro some do formulário, porque a condição só aceita fortime, amrap ou maxweight. Para voltar, o gestor precisa trocar o tipo à mão. Isso só acontece com o Intervalado: a Carga máxima vira maxweight, que está na lista.'
+    refs: ['src/app/admin/page.tsx:7578', 'src/app/admin/page.tsx:2220']
+    suggested_owner: po
+    suggested_action: 'O @po decide se aceita. Se não aceitar, uma story pequena mantém o editor visível depois de "Remover súmula" (por exemplo, guardando o tipo anterior ou incluindo reps quando a prova veio de uma estrutura).'
+  - id: REQ-002
+    severity: low
+    finding: 'Os campos ON e OFF usam inputMode="numeric", igual à maquete e aos outros campos de tempo do construtor. No iPhone esse teclado não tem ":". Minutos sozinhos funcionam ("2" vira 02:00), mas 00:45 ou 01:30 só dão certo editando em volta dos dois-pontos que já estão no campo. No Intervalado, tempos abaixo de um minuto são comuns. Não foi conferido em aparelho real.'
+    refs: ['src/components/admin/SheetBuilderForm.tsx:479']
+    suggested_owner: ux-design-expert
+    suggested_action: 'Conferir num iPhone. Se confirmar, usar inputMode="text" nos campos MM:SS do construtor (ON, OFF e também os tempos de For Time e AMRAP) ou aceitar "45s"/"1,5". É mudança pequena e separada.'
+  - id: MNT-001
+    severity: low
+    finding: 'Cosmético. Acima de uma hora, o construtor, o resumo e a frase mostram a duração em minutos ("78:00", decisão do @dev para seguir a maquete). O campo legado time_cap sai de deriveLegacyWorkoutFields, da 1.60, como "1:18:00", e é o que a página pública e o formulário mostram. É o mesmo valor em dois formatos. A rota aceita e o For Time com cap acima de 60:00 já fazia o mesmo.'
+    refs: ['src/lib/workoutStructureEditor.ts:923', 'src/lib/workoutStructure.ts:908']
+    suggested_owner: dev
+    suggested_action: 'Nenhuma correção nesta story. Na 1.62 e na 1.63, escolher um formato só para as durações acima de 60 minutos.'
+waiver: { active: false }
+
+evidence:
+  tests_reviewed: 18
+  risks_identified: 4
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    ac_gaps: []
+    ac_evidence:
+      AC1: 'FORMATS com 4 entradas e o texto da decisão 1 (SheetBuilderForm.tsx:63-68); handleFormatKeys circular sobre FORMATS.length; grade grid-cols-2 xl:grid-cols-4. No navegador: Intervalado → direita vai para For Time, esquerda duas vezes vai para Carga máxima, um ponto de Tab só, e o rascunho do Intervalado sobrevive à troca.'
+      AC2: 'IntervalDraft, DEFAULT_INTERVAL e createDraft (keys k4/k5, nextKey 6). analyzeInterval (workoutStructureEditor.ts:933) devolve a estrutura via finish → validateWorkoutStructure. draftFromStructure tem ramo próprio (workoutStructureEditor.ts:352), e a ida e volta é idempotente nos testes e em 200 rascunhos aleatórios.'
+      AC3: 'Seções 1 a 5, rótulos, dicas, "Máx." desabilitado, Score e Desempate desabilitados e a linha do tempo com legenda, iguais à Maquete 1 (conferido no HTML da maquete e no navegador).'
+      AC4: 'Os quatro textos de erro são idênticos aos de buildUpdate() da maquete. Itens certos: singular, "Nenhum movimento fixo" e "sem descanso". aria-invalid e aria-describedby funcionam no navegador. "Usar esta súmula" fica desabilitado com erro.'
+      AC5: 'intervalRule (workoutStructureEditor.ts:1098) bate letra a letra com a frase da maquete, inclusive os destaques. Os casos de OFF 00:00 e 0 fixos foram testados. summarizeStructure ganhou o ramo antes do For Time e aparece no selo do painel (admin/page.tsx:7647) e no CourtBoard.'
+      AC6: 'tests/workout-structure-persistence.test.mjs: criar pela rota com os campos legados derivados (reps, 18:00, ""), reabrir, editar (4 × 03:00/01:00 = 15:00) e salvar. Trava com lockedSheets testada na renderização. Painel logado não aberto (banco único = produção).'
+      AC7: 'WorkoutSheetBuilderDialog.tsx:147: o aviso role=status fica no lugar da SheetDemo quando o formato é interval, e "Usar esta súmula" continua habilitado. No navegador não aparece nenhuma súmula de For Time ao lado.'
+      AC8: 'Navegador em 1440 e 470 px, sem rolagem horizontal. Botões de ícone com 40 px de altura. Foco visível por teclado (outline 2px pela regra global, :focus-visible = true). Os ids são únicos (testado). role=img com aria-label nos rounds, trabalho, descanso e total.'
+      AC9: 'npm test 922/922, lint 0 erros e typecheck verde, rodados pelo QA. Build não rodado pelo QA (ver gate_commands). Nenhuma asserção existente foi afrouxada.'
+  gate_commands:
+    npm_test: '922/922, rodado pelo QA na árvore de trabalho e de novo numa cópia limpa do commit f7b8a79 (git archive). Durante a revisão apareceu na árvore trabalho da 1.62 ainda sem commit (sheetView.ts, IntervalSheetView.tsx). A cópia limpa também passou no tsc --noEmit sem erro.'
+    npm_run_lint: '0 erros, 209 warnings, todos antigos. npx eslint nos 7 arquivos de código e teste da story: 0 problemas.'
+    npm_run_typecheck: 'verde, rodado pelo QA'
+    npm_run_build: 'não rodado pelo QA: o npm run dev do usuário estava no ar e o build reescreveria a .next dele. O @dev registrou build verde.'
+    coderabbit: 'Rodado pelo QA com coderabbit review --agent --committed --base-commit bdd4dd1 (CLI 0.7.6): review_completed, 0 findings, reviewedFiles com os 8 arquivos da File List.'
+    migration: 'nenhuma'
+  contract_untouched: 'git diff bdd4dd1 f7b8a79 em src/lib/workoutStructure.ts, src/lib/serverScoresheets.ts e src/app: vazio. O commit toca só os 8 arquivos da File List.'
+  independent_checks: 'Script à parte, fora do repo. Os limites batem com a maquete: 00:30, 00:00, 30:00, "02" rounds, "0:30", "1:00:00" recusado e "02:60" recusado. 20 × 04:59/00:00 = 99:40 é aceito e 20 × 03:00/03:00 é recusado com 117:00. Uma estrutura gravada com round 2 ou interval null não abre no construtor e o validador também recusa. Depois de reabrir e acrescentar uma linha, as chaves não se repetem. Uma prova v2 de For Time reabre e gera a mesma estrutura. A frase com 0 fixos e OFF 00:00 sai como na AUTO-DECISION 3.'
+  browser_check: 'Chrome headless pelo DevTools Protocol em /pt-br/sumula-preview/editor, a 1440 e 470 px, com a Maquete 1 aberta pelo arquivo. Conferido: carregar o exemplo, "Editar súmula" (5, 02:00, 02:00, fixos e máximo 80 kg), setas, erro de rounds 1 e ON 00:10, 20 × 02:00/02:00 = 78:00 (a marca de 72:00 some em 470 px), OFF 00:00 com 0 fixos, limite de 9 fixos com o botão desligado e o fluxo completo (montar, usar, campos legados reps/18:00/"" e reabrir). For Time, AMRAP e Carga máxima seguem com as seções de antes e sem o aviso. Console sem erros nem avisos.'
+  not_verified: 'O painel do gestor logado (criar, salvar, reabrir e travar com evento real), porque o banco único é produção e a missão proíbe. O teclado do iPhone (REQ-002). O npm run build.'
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: 'Mudança só de cliente e módulo puro. A estrutura passa pelo validateWorkoutStructure no construtor e de novo na rota (contrato da 1.60, sem mudança). Sem rede, armazenamento, migration ou mudança de RLS. maxLength nos nomes e na observação do máximo.'
+  performance:
+    status: PASS
+    notes: 'analyzeDraft é O(linhas) com até 9 fixos. A linha do tempo tem no máximo 39 blocos (20 rounds).'
+  reliability:
+    status: CONCERNS
+    notes: 'O código em si é confiável: o módulo é puro, não muta (deepFreeze nos testes) e tolera estrutura que não cabe, com o aviso de hoje. A preocupação é a publicação antes da 1.62 (REL-001).'
+  maintainability:
+    status: PASS
+    notes: 'Segue os padrões do construtor: WorkLine com minCount, Section, Checklist e RuleSentence. As constantes vêm de WORKOUT_STRUCTURE_LIMITS. Os comentários citam as decisões e AUTO-DECISIONs.'
+
+regression_review:
+  binaries_checked:
+    - 'addLine/removeLine: o limite de 10 linhas e o mínimo de 1 continuam para forTime e amrap. O ramo interval vem antes e só ele chega a 0.'
+    - 'setDraftFormat: troca só o format, e os rascunhos dos outros formatos são as mesmas referências (testado).'
+    - 'draftFromStructure: ramos de max_load e segmentos sem mudança, e o ramo interval vem antes do splitRounds.'
+    - 'describeStructureRule e summarizeStructure: o ramo interval vem antes de max_load e For Time.'
+    - 'WorkoutSheetBuilderDialog: a SheetDemo continua para os outros três formatos (testado e conferido no navegador).'
+  old_tests_changed: 'Em tests/workout-structure-editor-ui.test.mjs só mudaram a lista de imports e um comentário. A asserção nova do cartão interval entrou ao lado das antigas. Nos outros dois arquivos só houve acréscimo. Nenhuma asserção foi removida ou afrouxada.'
+
+test_quality:
+  notes: 'Os testes puros são fortes: estrutura exata do exemplo, limites nas bordas (2, 00:30, 30:00, 99:40), todos os textos de erro, 0 a 9 fixos, ida e volta em 3 casos e 200 rascunhos aleatórios contra o validador. Os testes de UI são regressão estática do HTML renderizado no servidor (seções, ids únicos, aria e aviso). O comportamento de teclado é conferido no fonte e no navegador, não em teste.'
+
+observations_for_next_stories:
+  - story: '1.62'
+    note: 'Tirar o aviso de WorkoutSheetBuilderDialog.tsx:147 e o INTERVAL_PREVIEW_NOTICE, e ajustar o teste "a prévia mostra o aviso até a súmula do judge existir". Incluir o exemplo do Intervalado no SheetPreview, que ficou de fora de propósito.'
+  - story: '1.62'
+    note: 'A mensagem de repetições inválidas de uma linha de fixo sugere "21-15-9, 3x10", que o Intervalado recusa. O AMRAP já fazia igual. Vale um texto próprio se mexerem no parseRepsField.'
+
+recommendations:
+  immediate:
+    - action: 'Segurar a publicação da 1.61 até o gate da 1.62 (REL-001).'
+      refs: ['docs/stories/1.62.story.md']
+  future:
+    - action: 'Decidir sobre o editor que some depois de "Remover súmula" (REQ-001).'
+      refs: ['src/app/admin/page.tsx:7578']
+    - action: 'Conferir o teclado do iPhone nos campos MM:SS (REQ-002).'
+      refs: ['src/components/admin/SheetBuilderForm.tsx:479']
+
+history:
+  - date: '2026-10-21'
+    gate: CONCERNS
+    quality_score: 88
+    issues: 'REL-001 (medium), REQ-001, REQ-002 e MNT-001 (low)'
