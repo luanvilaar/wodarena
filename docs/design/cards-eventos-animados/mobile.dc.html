@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Cards de eventos mobile</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Sans:wght@500;600&display=swap" rel="stylesheet">
+<style>
+body { margin: 0; }
+::selection { background: #fcd535; color: #181a20; }
+button:focus-visible, input:focus-visible, .scroller:focus-visible { outline: 2px solid #fcd535; outline-offset: 2px; }
+
+.root { --ease: cubic-bezier(0.16, 1, 0.3, 1); box-sizing: border-box; width: 390px; height: 950px; display: flex; flex-direction: column; background: #0b0e11; color: #eaecef; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; -webkit-font-smoothing: antialiased; }
+
+/* barra de controle da vitrine */
+.bar { box-sizing: border-box; height: 150px; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; padding: 12px 16px; border-bottom: 1px solid #2b3139; background: #181a20; }
+.seg-group { display: flex; gap: 6px; padding: 4px; border: 1px solid #2b3139; border-radius: 10px; background: #1e2329; }
+.seg { flex: 1; min-height: 44px; padding: 8px 16px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: #929aa5; font: 700 12px/16px 'Inter', sans-serif; letter-spacing: 0.05em; text-transform: uppercase; cursor: pointer; transition: background-color 150ms, color 150ms; }
+.seg.on { background: #fcd535; color: #181a20; }
+.bar-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.tool { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 16px; border: 1px solid #2b3139; border-radius: 6px; background: #1e2329; color: #fff; font: 700 12px/16px 'Inter', sans-serif; letter-spacing: 0.05em; text-transform: uppercase; cursor: pointer; }
+.sw { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 2px; border: 0; background: transparent; color: #eaecef; font: 500 13px/18px 'Inter', sans-serif; cursor: pointer; }
+.track { position: relative; width: 40px; height: 22px; flex-shrink: 0; border-radius: 11px; border: 1px solid #2b3139; background: #181a20; transition: background-color 150ms, border-color 150ms; }
+.knob { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #929aa5; transition: transform 150ms, background-color 150ms; }
+.sw[aria-checked="true"] .track { background: rgba(252, 213, 53, 0.18); border-color: #fcd535; }
+.sw[aria-checked="true"] .knob { transform: translateX(18px); background: #fcd535; }
+.hint { margin: 0; font-size: 12px; line-height: 16px; color: #929aa5; }
+
+/* tela de eventos, rolável como na home */
+.scroller { height: 800px; flex-shrink: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #2b3139 transparent; background: #0b0e11; }
+.page { box-sizing: border-box; padding: 32px 16px 48px; display: flex; flex-direction: column; gap: 24px; }
+.h2 { margin: 0; font-size: 24px; line-height: 32px; font-weight: 700; letter-spacing: -0.025em; color: #fff; }
+.sub { margin: 8px 0 0; font-size: 14px; line-height: 24px; color: #929aa5; }
+.filters { display: flex; flex-direction: column; gap: 16px; padding: 16px; border: 1px solid #2b3139; border-radius: 12px; background: #1e2329; }
+.pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.pill { min-height: 40px; padding: 8px 16px; border: 1px solid #2b3139; border-radius: 6px; background: #181a20; color: #929aa5; font: 700 12px/16px 'Inter', sans-serif; letter-spacing: 0.05em; text-transform: uppercase; }
+.pill.on { border-color: #fcd535; background: #fcd535; color: #181a20; }
+.sbox { position: relative; }
+.sbox .ic { position: absolute; top: 12px; left: 14px; width: 16px; height: 16px; color: #929aa5; }
+.search { box-sizing: border-box; width: 100%; height: 40px; padding: 0 16px 0 40px; border: 1px solid #2b3139; border-radius: 8px; background: #181a20; color: #fff; font: 400 14px/20px 'Inter', sans-serif; }
+.search::placeholder { color: #929aa5; }
+.list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; }
+.col0 { --col: 0; }
+.col1 { --col: 1; }
+.col2 { --col: 2; }
+.col3 { --col: 3; }
+
+/* card (valores copiados do EventCard.tsx, em largura de celular: p-4, título xl) */
+.card { --d: 0ms; display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden; border-radius: 8px; border: 1px solid #2b3139; border-top: 2px solid #fcd535; background: #1e2329; }
+.card.is-closed { border-top-color: #2b3139; opacity: 0.7; filter: grayscale(0.3); }
+.card.is-pending { opacity: 0; }
+.status { box-sizing: border-box; min-height: 44px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 8px 16px; border-bottom: 1px solid #2b3139; background: #181a20; }
+.badge { display: inline-flex; box-sizing: border-box; min-height: 36px; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid; border-radius: 2px; font-size: 10px; line-height: 16px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
+.badge-pri { border-color: rgba(252, 213, 53, 0.3); background: rgba(252, 213, 53, 0.1); color: #fcd535; }
+.badge-mut { border-color: #2b3139; background: #1e2329; color: #929aa5; }
+.dot { width: 6px; height: 6px; flex-shrink: 0; border-radius: 50%; background: #fcd535; }
+.dot.pulse { animation: c-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+.banner { position: relative; width: 100%; aspect-ratio: 5 / 2; overflow: hidden; background: #181a20; }
+.banner-img { position: absolute; top: 0; right: 0; bottom: 0; left: 0; opacity: 0.8; background: repeating-linear-gradient(135deg, #262c34 0, #262c34 14px, #1b1f25 14px, #1b1f25 28px); }
+.body { display: flex; flex-grow: 1; flex-direction: column; padding: 16px; }
+.ident { display: flex; min-width: 0; align-items: flex-start; gap: 12px; }
+.logo { display: flex; box-sizing: border-box; width: 56px; height: 56px; flex-shrink: 0; align-items: center; justify-content: center; border: 1px solid #2b3139; border-radius: 6px; background: #181a20; font-size: 14px; font-weight: 700; letter-spacing: -0.025em; color: #fcd535; }
+.idtxt { min-width: 0; }
+.kick { margin: 0; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: #fcd535; }
+.aux { display: flex; align-items: flex-start; gap: 6px; margin: 0; font-size: 12px; line-height: 20px; font-weight: 500; color: #929aa5; }
+.title { margin: 8px 0 0; font-size: 20px; line-height: 1.25; font-weight: 700; letter-spacing: -0.025em; color: #fff; text-wrap: pretty; }
+.det { margin-top: 16px; display: flex; flex-direction: column; gap: 16px; }
+.desc { margin: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 14px; line-height: 24px; color: #929aa5; }
+.dl { display: grid; gap: 12px; padding: 16px 0; border-top: 1px solid #2b3139; border-bottom: 1px solid #2b3139; font-size: 14px; line-height: 20px; }
+.row { display: flex; min-width: 0; align-items: flex-start; gap: 8px; }
+.row .val { min-width: 0; overflow-wrap: anywhere; font-weight: 500; color: #fff; }
+.pre { color: #929aa5; }
+.num { font-family: 'IBM Plex Sans', 'JetBrains Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; color: #fcd535; }
+.divs { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 12px; line-height: 16px; font-weight: 500; font-variant-numeric: tabular-nums; color: #929aa5; }
+.acts { margin-top: 20px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding-top: 16px; border-top: 1px solid #2b3139; }
+
+.ic { flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.i14 { width: 14px; height: 14px; }
+.i16 { width: 16px; height: 16px; }
+.row .ic { margin-top: 2px; color: #fcd535; }
+.divs .ic { color: #fcd535; }
+
+/* botões */
+.cta { position: relative; overflow: hidden; display: flex; box-sizing: border-box; min-height: 48px; align-items: center; justify-content: center; padding: 12px; border: 1px solid transparent; border-radius: 6px; font: 700 12px/16px 'Inter', sans-serif; letter-spacing: 0.05em; text-transform: uppercase; white-space: nowrap; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: background-color 200ms, border-color 200ms; }
+.cta-in { position: relative; z-index: 1; display: inline-flex; align-items: center; gap: 6px; }
+.cta-main { background: #fcd535; color: #181a20; }
+.cta-main:active { background: #f0b90b; }
+.cta-sec { border-color: #2b3139; background: #181a20; color: #fff; }
+.cta-sec:active { border-color: #fcd535; background: #2b3139; }
+.cta-sec .ic { color: #fcd535; }
+.cta-off { border-color: #2b3139; background: #181a20; color: #929aa5; cursor: not-allowed; }
+.cta::after { content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 55%; background: linear-gradient(100deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.55) 50%, rgba(255, 255, 255, 0) 100%); transform: translateX(-140%) skewX(-18deg); pointer-events: none; }
+.cta-sec::after, .cta-off::after { display: none; }
+.cta .arr { transition: transform 220ms var(--ease); }
+
+/* HOJE: todos os cards animam ao carregar a página, vejam ou não */
+.now .card.is-run { animation: c-now 380ms var(--ease) backwards; animation-delay: calc(260ms + var(--col) * 45ms); }
+
+/* PROPOSTA: cada card anima quando chega na tela; sem hover, o toque é o feedback */
+.b0 { --i: 0; }
+.b1 { --i: 1; }
+.b2 { --i: 2; }
+.b3 { --i: 3; }
+.b4 { --i: 4; }
+.new .card.is-run { animation: c-open 520ms var(--ease) backwards; }
+.new .card.is-run .blk { animation: c-rise 440ms var(--ease) backwards; animation-delay: calc(100ms + var(--i) * 90ms); }
+.new .card.is-run .banner-img { animation: c-zoom 900ms var(--ease) backwards; animation-delay: 150ms; }
+.new .card.is-closed.is-run { animation: c-fade 240ms linear backwards; }
+.new .card.is-closed.is-run .blk, .new .card.is-closed.is-run .banner-img { animation: none; }
+.new .cta { transition: transform 120ms var(--ease), background-color 200ms, border-color 200ms; }
+.new .cta:active:not(:disabled) { transform: scale(0.97); transition-duration: 80ms; }
+.new .cta:active:not(:disabled) .arr { transform: translateX(3px); }
+.new .cta-main.shine::after { animation: c-shine 750ms var(--ease) both; }
+
+/* MOVIMENTO REDUZIDO: só um fade; estado e feedback de cor continuam */
+.rm .card.is-run { animation: none !important; }
+.rm .card.is-run .blk, .rm .card.is-run .banner-img { animation: none !important; }
+.rm .dot.pulse { animation: none; }
+.rm .cta:active { transform: none !important; }
+.rm .cta::after { display: none !important; }
+.rm .cta .arr { transform: none !important; }
+
+@keyframes c-open { from { clip-path: inset(0 0 100% 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes c-rise { from { opacity: 0; transform: translate3d(0, 14px, 0); } }
+@keyframes c-zoom { from { transform: scale(1.1); } }
+@keyframes c-now { from { opacity: 0; transform: translate3d(0, 18px, 0); } }
+@keyframes c-fade { from { opacity: 0; } }
+@keyframes c-shine { from { transform: translateX(-140%) skewX(-18deg); } to { transform: translateX(260%) skewX(-18deg); } }
+@keyframes c-pulse { 50% { opacity: 0.5; } }
+</style>
+</helmet>
+<div class="root {{rootCls}}">
+  <div class="bar">
+    <div class="seg-group" role="group" aria-label="Versão do movimento">
+      <button type="button" class="seg {{nowCls}}" aria-pressed="{{nowPressed}}" onClick="{{pickNow}}">Hoje</button>
+      <button type="button" class="seg {{newCls}}" aria-pressed="{{newPressed}}" onClick="{{pickNew}}">Proposta</button>
+    </div>
+    <div class="bar-row">
+      <button type="button" class="tool" onClick="{{replay}}">
+        <svg class="ic i16" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+        Reiniciar
+      </button>
+      <button type="button" class="sw" role="switch" aria-checked="{{reducedStr}}" onClick="{{toggleReduced}}">
+        <span class="track"><span class="knob"></span></span>
+        Movimento reduzido
+      </button>
+    </div>
+    <p class="hint">Role a lista e segure o clique no botão amarelo.</p>
+  </div>
+
+  <div class="scroller" data-scroller tabindex="0" role="region" aria-label="Lista de eventos" onScroll="{{onScroll}}">
+    <div class="page">
+      <div>
+        <h2 class="h2">Eventos em destaque</h2>
+        <p class="sub">Encontre sua próxima competição, acompanhe resultados ou garanta sua inscrição.</p>
+      </div>
+      <div class="filters">
+        <div class="pills">
+          <button type="button" class="pill on">Todos</button>
+          <button type="button" class="pill">Ao vivo</button>
+          <button type="button" class="pill">Em breve</button>
+          <button type="button" class="pill">Finalizados</button>
+        </div>
+        <div class="sbox">
+          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <input class="search" type="text" placeholder="Buscar evento ou local..." aria-label="Buscar evento ou local">
+        </div>
+      </div>
+
+      <div class="list">
+        <sc-for list="{{cards}}" as="c" hint-placeholder-count="4">
+          <article class="card {{c.cls}}" data-card-id="{{c.id}}">
+            <div class="status blk b0">
+              <sc-if value="{{c.isOpen}}" hint-placeholder-val="{{true}}">
+                <span class="badge badge-pri"><span class="dot"></span>Inscrições abertas</span>
+              </sc-if>
+              <sc-if value="{{c.isLive}}" hint-placeholder-val="{{false}}">
+                <span class="badge badge-pri"><span class="dot pulse"></span>Ao vivo</span>
+              </sc-if>
+              <sc-if value="{{c.isClosed}}" hint-placeholder-val="{{false}}">
+                <span class="badge badge-mut"><svg class="ic" style="width:12px;height:12px" viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Vendas encerradas</span>
+              </sc-if>
+            </div>
+
+            <div class="banner blk b1"><div class="banner-img"></div></div>
+
+            <div class="body">
+              <div class="ident blk b2">
+                <div class="logo">{{c.ini}}</div>
+                <div class="idtxt">
+                  <sc-if value="{{c.isClosed}}" hint-placeholder-val="{{false}}">
+                    <p class="aux"><svg class="ic i14" viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Vendas online encerradas pelo organizador.</p>
+                  </sc-if>
+                  <sc-if value="{{c.notClosed}}" hint-placeholder-val="{{true}}">
+                    <p class="kick">Próxima arena disponível</p>
+                  </sc-if>
+                  <h3 class="title">{{c.name}}</h3>
+                </div>
+              </div>
+
+              <div class="det blk b3">
+                <sc-if value="{{c.hasDesc}}" hint-placeholder-val="{{true}}">
+                  <p class="desc">{{c.desc}}</p>
+                </sc-if>
+                <div class="dl">
+                  <div class="row">
+                    <svg class="ic i16" viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>
+                    <div class="val">{{c.date}}</div>
+                  </div>
+                  <div class="row">
+                    <svg class="ic i16" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+                    <div class="val">{{c.place}}</div>
+                  </div>
+                  <div class="row">
+                    <svg class="ic i16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5"/></svg>
+                    <div class="val"><span class="pre">A partir de </span><span class="num">{{c.priceText}}</span></div>
+                  </div>
+                </div>
+                <p class="divs"><svg class="ic i14" viewBox="0 0 24 24" aria-hidden="true"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg><span>{{c.divText}}</span></p>
+              </div>
+
+              <div class="acts blk b4">
+                <button type="button" class="cta cta-sec"><span class="cta-in">Ver evento <svg class="ic i14 arr" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></span></button>
+                <sc-if value="{{c.isOpen}}" hint-placeholder-val="{{true}}">
+                  <button type="button" class="{{c.ctaCls}}"><span class="cta-in">Garantir vaga <svg class="ic i16 arr" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></span></button>
+                </sc-if>
+                <sc-if value="{{c.isLive}}" hint-placeholder-val="{{false}}">
+                  <button type="button" class="cta cta-main"><span class="cta-in"><svg class="ic i16" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>Leaderboard</span></button>
+                </sc-if>
+                <sc-if value="{{c.isClosed}}" hint-placeholder-val="{{false}}">
+                  <button type="button" class="cta cta-off" disabled><span class="cta-in"><svg class="ic i14" viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Vendas encerradas</span></button>
+                </sc-if>
+              </div>
+            </div>
+          </article>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":950}}'>
+const CARDS = [
+  { id: 'athletic', kind: 'open', ini: 'AT', name: 'ATHLETIC GAMES | EDIÇÃO OUTUBRO 2026', desc: 'Um desafio completo para atletas reais! Prepare-se para uma experiência que vai colocar à prova sua força, resistência, condicionamento físico e capacidade de trabalhar em equipe!', date: '24 de outubro de 2026', place: 'Pulse Fit Centro de Treinamento', price: 80, divs: 6 },
+  { id: 'batalha', kind: 'open', ini: 'BA', name: 'Batalha Light Box', desc: '', date: '24/10/2026', place: 'Light Box CrossFit', price: 150, divs: 6 },
+  { id: 'qualifier', kind: 'live', ini: 'QS', name: 'Qualifier SELVA 2027', desc: 'Qualifier Online para o Selva 2027', date: '05 a 20 de Outubro', place: 'GINASIO ACILON GONÇALVES PINTO - AQUIRAZ', price: 85, divs: 2 },
+  { id: 'selva', kind: 'closed', ini: 'SE', name: 'Selva 2027 (Presencial)', desc: 'Sem descrição cadastrada.', date: '16/01/2027', place: 'Av. Eusébio de Queiroz, 1890 - Tamatanduba, Eusébio - CE, 61768-680', price: 599, divs: 22 }
+];
+
+const ease = (p) => (p <= 0 ? 0 : p >= 1 ? 1 : 1 - Math.pow(2, -10 * p));
+
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.frame = this.frame.bind(this);
+  }
+  componentDidMount() {
+    let reduced = false;
+    try { reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
+    this.setState({ reduced: reduced, mode: 'new' });
+    this.play();
+  }
+  componentWillUnmount() {
+    if (this._raf) cancelAnimationFrame(this._raf);
+    clearTimeout(this._timer);
+  }
+  play() {
+    if (this._raf) { cancelAnimationFrame(this._raf); this._raf = 0; }
+    clearTimeout(this._timer);
+    const sc = document.querySelector('[data-scroller]');
+    if (sc) sc.scrollTop = 0;
+    this.setState({ starts: {}, t: performance.now() });
+    this._timer = setTimeout(() => this.reveal(), 80);
+  }
+  // Na proposta cada card só começa quando 20% dele (no máximo 120px) entra na tela.
+  // Em "Hoje" todos começam juntos, como o código faz hoje.
+  reveal() {
+    const sc = document.querySelector('[data-scroller]');
+    if (!sc || !this.state.starts) return;
+    const mode = this.state.mode || 'new';
+    const box = sc.getBoundingClientRect();
+    const now = performance.now();
+    const starts = Object.assign({}, this.state.starts);
+    let changed = false;
+    sc.querySelectorAll('[data-card-id]').forEach((el) => {
+      const id = el.getAttribute('data-card-id');
+      if (starts[id] !== undefined) return;
+      let visible = true;
+      if (mode === 'new') {
+        const r = el.getBoundingClientRect();
+        const need = Math.min(120, r.height * 0.2);
+        visible = r.top < box.bottom - need && r.bottom > box.top + need;
+      }
+      if (visible) { starts[id] = now; changed = true; }
+    });
+    if (changed) {
+      this.setState({ starts: starts, t: now });
+      if (!this._raf) this._raf = requestAnimationFrame(this.frame);
+    }
+  }
+  frame() {
+    this._raf = 0;
+    const now = performance.now();
+    this.setState({ t: now });
+    const starts = this.state.starts || {};
+    let live = false;
+    for (const id in starts) { if (now - starts[id] < 2400) live = true; }
+    if (live) this._raf = requestAnimationFrame(this.frame);
+  }
+  renderVals() {
+    const mode = this.state.mode || 'new';
+    const reduced = !!this.state.reduced;
+    const starts = this.state.starts;
+    const t = this.state.t || 0;
+    const fmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+    const cards = CARDS.map((c, i) => {
+      const st = starts ? starts[c.id] : undefined;
+      const phase = !starts ? 'is-done' : st === undefined ? 'is-pending' : 'is-run';
+      const el = st === undefined ? 0 : t - st;
+      const counting = phase === 'is-run' && mode === 'new' && !reduced && c.kind !== 'closed';
+      const pp = counting ? ease((el - 450) / 700) : 1;
+      const dp = counting ? ease((el - 500) / 500) : 1;
+      const n = Math.round(c.divs * dp);
+      const shine = phase === 'is-run' && mode === 'new' && !reduced && c.kind === 'open' && el > 1250;
+      return {
+        id: c.id,
+        ini: c.ini,
+        name: c.name,
+        desc: c.desc,
+        hasDesc: !!c.desc,
+        date: c.date,
+        place: c.place,
+        isOpen: c.kind === 'open',
+        isLive: c.kind === 'live',
+        isClosed: c.kind === 'closed',
+        notClosed: c.kind !== 'closed',
+        cls: ['col' + i, phase, c.kind === 'closed' ? 'is-closed' : ''].join(' '),
+        ctaCls: shine ? 'cta cta-main shine' : 'cta cta-main',
+        priceText: fmt.format(counting ? Math.round(c.price * pp) : c.price),
+        divText: n + (n === 1 ? ' divisão disponível' : ' divisões disponíveis')
+      };
+    });
+    return {
+      cards: cards,
+      rootCls: [mode, reduced ? 'rm' : ''].join(' '),
+      nowCls: mode === 'now' ? 'on' : '',
+      newCls: mode === 'new' ? 'on' : '',
+      nowPressed: mode === 'now' ? 'true' : 'false',
+      newPressed: mode === 'new' ? 'true' : 'false',
+      reducedStr: reduced ? 'true' : 'false',
+      pickNow: () => { this.setState({ mode: 'now' }); this.play(); },
+      pickNew: () => { this.setState({ mode: 'new' }); this.play(); },
+      replay: () => this.play(),
+      toggleReduced: () => { this.setState({ reduced: !this.state.reduced }); this.play(); },
+      onScroll: () => this.reveal()
+    };
+  }
+}
+</script>
+</body>
+</html>

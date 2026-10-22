@@ -359,6 +359,178 @@ input[type=number] {
   }
 }
 
+/* Cards de evento da home (Story 1.65). Maquete aprovada em
+   docs/design/cards-eventos-animados/. Fora do namespace home-broadcast-*: aquelas
+   regras usam fill-mode "both" e o bloco de movimento reduzido abaixo força
+   opacity: 1 !important em tudo que casa o prefixo. Aqui o fill-mode é sempre
+   "backwards" e os keyframes só declaram o estado inicial, então a animação
+   devolve o controle ao valor natural do card (inclusive o opacity-70 do card
+   encerrado). O estado vem de data-reveal (useRevealOnView). */
+@keyframes event-card-open {
+  from {
+    clip-path: inset(0 0 100% 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes event-card-rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0);
+  }
+}
+
+@keyframes event-card-zoom {
+  from {
+    transform: scale(1.1);
+  }
+}
+
+@keyframes event-card-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes event-cta-shine {
+  from {
+    transform: translateX(-140%) skewX(-18deg);
+  }
+  to {
+    transform: translateX(260%) skewX(-18deg);
+  }
+}
+
+/* Cascata entre colunas da mesma linha: 2 colunas em sm, 3 em lg. Em 1 coluna
+   cada card entra sozinho, quando chega na tela. */
+.event-card {
+  --ec-d: 0ms;
+}
+
+@media (min-width: 640px) {
+  .event-card {
+    --ec-d: calc(var(--ec-col-sm, 0) * 70ms);
+  }
+}
+
+@media (min-width: 1024px) {
+  .event-card {
+    --ec-d: calc(var(--ec-col-lg, 0) * 70ms);
+  }
+}
+
+.ec-i0 { --ec-i: 0; }
+.ec-i1 { --ec-i: 1; }
+.ec-i2 { --ec-i: 2; }
+.ec-i3 { --ec-i: 3; }
+.ec-i4 { --ec-i: 4; }
+
+.event-cta {
+  position: relative;
+  overflow: hidden;
+}
+
+/* Brilho diagonal do Garantir Vaga. Fica em repouso fora do botão. */
+.event-cta-shine::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 55%;
+  background: linear-gradient(
+    100deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.55) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  transform: translateX(-140%) skewX(-18deg);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .event-card[data-reveal="pending"] {
+    opacity: 0;
+  }
+
+  .event-card[data-reveal="run"] {
+    animation: event-card-open 520ms var(--motion-broadcast-ease) backwards;
+    animation-delay: var(--ec-d);
+  }
+
+  .event-card[data-reveal="run"] .ec-block {
+    animation: event-card-rise 440ms var(--motion-broadcast-ease) backwards;
+    animation-delay: calc(var(--ec-d) + 100ms + var(--ec-i, 0) * 90ms);
+  }
+
+  .event-card[data-reveal="run"] .ec-banner-art {
+    animation: event-card-zoom 900ms var(--motion-broadcast-ease) backwards;
+    animation-delay: calc(var(--ec-d) + 150ms);
+  }
+
+  /* Card encerrado: só um fade, sem abertura, cascata nem zoom. */
+  .event-card[data-reveal="run"][data-card-state="closed"] {
+    animation: event-card-fade 240ms linear backwards;
+    animation-delay: var(--ec-d);
+  }
+
+  .event-card[data-reveal="run"][data-card-state="closed"] .ec-block,
+  .event-card[data-reveal="run"][data-card-state="closed"] .ec-banner-art {
+    animation: none;
+  }
+
+  /* Botões do card: compressão ao toque e seta que avança. */
+  .event-cta {
+    transition:
+      background-color 200ms ease,
+      border-color 200ms ease,
+      color 200ms ease,
+      transform 120ms var(--motion-broadcast-ease);
+  }
+
+  .event-cta:active {
+    transform: scale(0.97);
+    transition-duration: 80ms;
+  }
+
+  .event-cta-arrow {
+    transition: transform 220ms var(--motion-broadcast-ease);
+  }
+
+  .event-cta:active .event-cta-arrow {
+    transform: translateX(3px);
+  }
+}
+
+/* Com mouse: brilho e seta no hover. */
+@media (prefers-reduced-motion: no-preference) and (hover: hover) {
+  .event-cta:hover .event-cta-arrow {
+    transform: translateX(3px);
+  }
+
+  .event-cta-shine:hover::after {
+    animation: event-cta-shine 700ms var(--motion-broadcast-ease);
+  }
+}
+
+/* Sem hover (celular): o brilho toca uma vez, quando o botão chega à tela e o
+   card já assentou. data-shine e --ec-shine-delay vêm de useShineOnView. */
+@media (prefers-reduced-motion: no-preference) and (hover: none) {
+  .event-card[data-reveal="run"][data-shine="on"] .event-cta-shine::after {
+    animation: event-cta-shine 750ms var(--motion-broadcast-ease) backwards;
+    animation-delay: var(--ec-shine-delay, 0ms);
+  }
+}
+
+/* Impressão: card fora da tela nunca sai em branco. */
+@media print {
+  .event-card[data-reveal="pending"] {
+    opacity: 1;
+  }
+}
+
 @keyframes home-broadcast-modal-overlay {
   from {
     opacity: 0;
@@ -401,8 +573,7 @@ input[type=number] {
   }
 
   .home-broadcast-chip,
-  .home-broadcast-tile,
-  .home-broadcast-event-card {
+  .home-broadcast-tile {
     animation: home-broadcast-rise 380ms var(--motion-broadcast-ease) both;
     animation-delay: var(--motion-delay, 0ms);
   }

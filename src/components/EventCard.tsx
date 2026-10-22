@@ -18,6 +18,10 @@ import { Link } from '@/i18n/navigation';
 import type { AppLocale, Event, EventCurrency } from '@/types';
 import { RegisterModal } from '@/components/RegisterModal';
 import { formatMoney } from '@/lib/intl/format';
+import { EVENT_CARD_MOTION, swapCountInText } from '@/lib/eventCardMotion';
+import { useCountUp } from '@/hooks/useCountUp';
+import { useRevealOnView } from '@/hooks/useRevealOnView';
+import { useShineOnView } from '@/hooks/useShineOnView';
 import {
   getEventStatus,
   getRegistrationAvailability,
@@ -51,6 +55,16 @@ export function EventCard({ event, priority = false }: EventCardProps) {
 
   // Phase 3: contagem de divisões
   const divisionCount = activeDivisions.length;
+
+  // Story 1.65: o card anima ao entrar na tela e o preço e as divisões contam do
+  // zero. Card encerrado não conta (entra só com fade, via data-card-state).
+  const { ref: cardRef, phase } = useRevealOnView<HTMLElement>(event.id);
+  const countPhase = isFinished ? 'done' : phase;
+  const animatedPrice = useCountUp(minPrice ?? 0, countPhase, EVENT_CARD_MOTION.priceCount);
+  const animatedDivisions = useCountUp(divisionCount, countPhase, EVENT_CARD_MOTION.divisionCount);
+  // Brilho único do Garantir Vaga em tela sem hover (o CSS decide pelo media query).
+  const { ref: guaranteeRef, shineDelayMs } = useShineOnView<HTMLButtonElement>(phase);
+  const divisionsFinalText = t('divisionsAvailable', { count: divisionCount });
 
   // Phase 1: badge de status agora reflete estado de inscrições
   const getStatusBadge = () => {
@@ -149,24 +163,34 @@ export function EventCard({ event, priority = false }: EventCardProps) {
         ? t('free')
         : formatMoney(minPrice, (event.currency ?? 'BRL') as EventCurrency, locale);
   const pricePrefix = minPrice === 0 ? t('registrationPrefix') : t('from');
+  // Texto final para leitor de tela; o visível acompanha a contagem.
+  const priceDisplayLabel =
+    minPrice !== null && minPrice > 0
+      ? formatMoney(animatedPrice, (event.currency ?? 'BRL') as EventCurrency, locale)
+      : priceLabel;
 
   return (
     <>
       <article
+        ref={cardRef}
+        data-reveal={phase}
+        data-card-state={isFinished ? 'closed' : 'open'}
+        data-shine={shineDelayMs === null ? undefined : 'on'}
+        style={shineDelayMs === null ? undefined : ({ '--ec-shine-delay': `${shineDelayMs}ms` } as React.CSSProperties)}
         className={[
-          'group flex h-full flex-col overflow-hidden rounded-lg border border-card-border bg-card transition-colors duration-200 hover:border-primary/60 focus-within:border-primary',
+          'event-card group flex h-full flex-col overflow-hidden rounded-lg border border-card-border bg-card transition-colors duration-200 hover:border-primary/60 focus-within:border-primary',
           topBorderStyle,
           isFinished ? 'opacity-70 grayscale-[30%]' : '',
         ]
           .filter(Boolean)
           .join(' ')}
       >
-        <div className="flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-card-border bg-dark-gray px-4 py-2">
+        <div className="flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-card-border bg-dark-gray px-4 py-2 ec-block ec-i0">
           {getStatusBadge()}
           {lifecycleBadge}
         </div>
 
-        <div className="relative aspect-[5/2] w-full overflow-hidden bg-dark-gray">
+        <div className="relative aspect-[5/2] w-full overflow-hidden bg-dark-gray ec-block ec-i1">
           {event.bannerUrl ? (
             <Image
               src={event.bannerUrl}
@@ -175,10 +199,15 @@ export function EventCard({ event, priority = false }: EventCardProps) {
               unoptimized
               priority={priority}
               sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-              className="object-cover opacity-80 transition-transform duration-200 group-hover:scale-[1.01]"
+              className={[
+                'ec-banner-art object-cover opacity-80 transition-transform duration-500 ease-out',
+                isFinished ? '' : 'group-hover:scale-[1.03]',
+              ]
+                .filter(Boolean)
+                .join(' ')}
             />
           ) : (
-            <div className="flex h-full w-full items-center justify-center bg-dark-gray px-6 text-center">
+            <div className="ec-banner-art flex h-full w-full items-center justify-center bg-dark-gray px-6 text-center">
               <span className="text-3xl font-bold tracking-tight text-primary sm:text-4xl">
                 {event.name.substring(0, 2)}
               </span>
@@ -187,7 +216,7 @@ export function EventCard({ event, priority = false }: EventCardProps) {
         </div>
 
         <div className="flex flex-grow flex-col p-4 sm:p-5">
-          <div className="flex min-w-0 items-start gap-3">
+          <div className="ec-block ec-i2 flex min-w-0 items-start gap-3">
             <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-md border border-card-border bg-dark-gray p-1.5">
               {event.logoUrl ? (
                 <Image
@@ -219,7 +248,7 @@ export function EventCard({ event, priority = false }: EventCardProps) {
             </div>
           </div>
 
-          <div className="mt-4 space-y-4">
+          <div className="ec-block ec-i3 mt-4 space-y-4">
             {event.description?.trim() && (
               <p className="line-clamp-2 text-sm leading-6 text-muted">
                 {event.description}
@@ -249,7 +278,8 @@ export function EventCard({ event, priority = false }: EventCardProps) {
                     <dt className="sr-only">{t('priceLabel')}</dt>
                     <dd className="break-words font-medium text-white">
                       <span className="text-muted">{pricePrefix} </span>
-                      <span className="font-number text-primary">{priceLabel}</span>
+                      <span className="sr-only">{priceLabel}</span>
+                      <span className="font-number text-primary tabular-nums" aria-hidden="true">{priceDisplayLabel}</span>
                     </dd>
                   </div>
                 </div>
@@ -257,20 +287,21 @@ export function EventCard({ event, priority = false }: EventCardProps) {
             </dl>
 
             {divisionCount > 0 && (
-              <p className="flex items-center gap-1.5 text-xs font-medium text-muted">
+              <p className="flex items-center gap-1.5 text-xs font-medium tabular-nums text-muted">
                 <Layers className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
-                {t('divisionsAvailable', { count: divisionCount })}
+                <span className="sr-only">{divisionsFinalText}</span>
+                <span aria-hidden="true">{swapCountInText(divisionsFinalText, divisionCount, animatedDivisions)}</span>
               </p>
             )}
           </div>
 
-          <div className="mt-5 grid grid-cols-2 gap-3 border-t border-card-border pt-4">
+          <div className="ec-block ec-i4 mt-5 grid grid-cols-2 gap-3 border-t border-card-border pt-4">
             <Link
               href={`/event/${event.id}`}
-              className="flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-card-border bg-dark-gray px-3 py-3 text-xs font-bold uppercase tracking-wider text-white transition-colors hover:border-primary hover:bg-elevated"
+              className="event-cta flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-card-border bg-dark-gray px-3 py-3 text-xs font-bold uppercase tracking-wider text-white transition-colors hover:border-primary hover:bg-elevated"
             >
               <span>{t('viewEvent')}</span>
-              <ArrowRight className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+              <ArrowRight className="event-cta-arrow h-3.5 w-3.5 text-primary" aria-hidden="true" />
             </Link>
 
             {!isRegistrationAvailable ? (
@@ -285,17 +316,20 @@ export function EventCard({ event, priority = false }: EventCardProps) {
               </button>
             ) : event.status === 'upcoming' || isClosing ? (
               <button
+                ref={guaranteeRef}
                 type="button"
                 onClick={() => setIsRegisterOpen(true)}
-                className="flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-3 py-3 text-xs font-bold uppercase tracking-wider text-ink transition-colors hover:bg-primary-hover active:bg-primary-hover"
+                className="event-cta event-cta-shine flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-3 py-3 text-xs font-bold uppercase tracking-wider text-ink transition-colors hover:bg-primary-hover active:bg-primary-hover"
               >
-                <span>{t('guaranteeSpot')}</span>
-                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                <span className="relative z-10 inline-flex items-center gap-1.5">
+                  <span>{t('guaranteeSpot')}</span>
+                  <ArrowRight className="event-cta-arrow h-4 w-4" aria-hidden="true" />
+                </span>
               </button>
             ) : event.status === 'live' ? (
               <Link
                 href={`/event/${event.id}/leaderboard`}
-                className="flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-3 py-3 text-xs font-bold uppercase tracking-wider text-ink transition-colors hover:bg-primary-hover active:bg-primary-hover"
+                className="event-cta flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-3 py-3 text-xs font-bold uppercase tracking-wider text-ink transition-colors hover:bg-primary-hover active:bg-primary-hover"
               >
                 <Trophy className="h-4 w-4 text-black" aria-hidden="true" />
                 <span>{t('leaderboard')}</span>
@@ -303,7 +337,7 @@ export function EventCard({ event, priority = false }: EventCardProps) {
             ) : (
               <Link
                 href={`/event/${event.id}/leaderboard`}
-                className="flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-card-border bg-dark-gray px-3 py-3 text-xs font-bold uppercase tracking-wider text-muted transition-colors hover:border-primary hover:text-white"
+                className="event-cta flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-card-border bg-dark-gray px-3 py-3 text-xs font-bold uppercase tracking-wider text-muted transition-colors hover:border-primary hover:text-white"
               >
                 <span>{t('results')}</span>
               </Link>

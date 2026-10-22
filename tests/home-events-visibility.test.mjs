@@ -122,8 +122,12 @@ test('home entrance motion follows the Arena Broadcast package with reduced-moti
   assert.match(globals, /@keyframes wa-hero-copy-in/);
   assert.match(globals, /@media \(prefers-reduced-motion: no-preference\)[\s\S]*\.wa-hero__copy/);
   assert.match(featuredBanner, /className="wa-hero/);
-  assert.match(homePage, /home-broadcast-event-card/);
-  assert.match(homePage, /Math\.min\(index, 5\)/);
+  // Story 1.65: os cards saíram do namespace home-broadcast-* (entrada no
+  // carregamento) e entram quando chegam na tela, via data-reveal no EventCard.
+  // O wrapper só leva a coluna de cada card para a cascata entre colunas.
+  assert.doesNotMatch(homePage, /home-broadcast-event-card/);
+  assert.equal((homePage.match(/className="event-card-slot h-full"/g) ?? []).length, 2);
+  assert.equal((homePage.match(/'--ec-col-sm': index % 2, '--ec-col-lg': index % 3/g) ?? []).length, 2);
 });
 
 test('hero master and optimized derivatives keep the intended codecs and file weights', () => {

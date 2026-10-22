@@ -232,8 +232,8 @@ export function HomeView() {
             {upcomingEvents.map((event, index) => (
               <div
                 key={event.id}
-                className="home-broadcast-event-card h-full"
-                style={{ '--motion-delay': `${260 + Math.min(index, 5) * 45}ms` } as React.CSSProperties}
+                className="event-card-slot h-full"
+                style={{ '--ec-col-sm': index % 2, '--ec-col-lg': index % 3 } as React.CSSProperties}
               >
                 <EventCard event={event} priority={index === 0} />
               </div>
@@ -268,8 +268,8 @@ export function HomeView() {
             {pastEvents.map((event, index) => (
               <div
                 key={event.id}
-                className="home-broadcast-event-card h-full"
-                style={{ '--motion-delay': `${120 + Math.min(index, 5) * 35}ms` } as React.CSSProperties}
+                className="event-card-slot h-full"
+                style={{ '--ec-col-sm': index % 2, '--ec-col-lg': index % 3 } as React.CSSProperties}
               >
                 <EventCard event={event} />
               </div>
