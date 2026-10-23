@@ -230,7 +230,22 @@ export const parseTimeInput = (text: unknown): TimeInputResult => {
   if (short) return { ok: true, seconds: Number(short[1]) * 60 + Number(short[2]) };
   const long = raw.match(/^(\d{1,2}):([0-5]\d):([0-5]\d)$/);
   if (long) return { ok: true, seconds: Number(long[1]) * 3600 + Number(long[2]) * 60 + Number(long[3]) };
+  if (/^\d{1,3}:\d{2}$/.test(raw)) return { ok: false, error: 'Os segundos vão de 00 a 59 (ex.: 10:30).' };
   return { ok: false, error: 'Informe o tempo no formato MM:SS (ex.: 10:00).' };
+};
+
+/**
+ * Máscara do campo de tempo para o teclado numérico do celular, que não tem ":".
+ * Vale só o que é algarismo, e ele entra da direita para a esquerda, como num
+ * cronômetro: 1 → "00:01", 33 → "00:33", 133 → "01:33", 1133 → "11:33". O quinto
+ * algarismo em diante é ignorado (o maior tempo é 99:59); vazio ou só zeros
+ * devolve vazio. O resultado passa em `parseTimeInput` quando os segundos são de 00 a 59.
+ */
+export const maskTimeInput = (text: unknown) => {
+  const digits = (typeof text === 'string' ? text : '').replace(/\D/g, '').replace(/^0+/, '').slice(0, 4);
+  if (!digits) return '';
+  const padded = digits.padStart(4, '0');
+  return `${padded.slice(0, 2)}:${padded.slice(2)}`;
 };
 
 export const formatTimeInput = (seconds: number) => formatWorkoutTime(seconds);

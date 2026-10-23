@@ -14,7 +14,7 @@ const { validateWorkoutStructure, deriveLegacyWorkoutFields } = await importServ
 
 const {
   addLift, addLine, analyzeDraft, createDraft, describeStructureRule, detectGeneratorKind, draftFromStructure,
-  formatKg, formatRepsField, MAX_BUILDER_LINES, moveLine, parseLoadInput, parseRepsField, parseTimeInput, formatTimeInput,
+  formatKg, formatRepsField, MAX_BUILDER_LINES, maskTimeInput, moveLine, parseLoadInput, parseRepsField, parseTimeInput, formatTimeInput,
   removeLift, removeLine, setDraftFormat, setForTimeTieBreak, summarizeStructure, toggleStepMark, updateLift, updateLine,
   DEFAULT_INTERVAL, INTERVAL_FIELDS, INTERVAL_MAX_ID, MAX_INTERVAL_FIXED_LINES, formatMinutes, intervalDurationSeconds,
   updateIntervalMax, updateIntervalTiming
@@ -93,6 +93,39 @@ test('carga, tempo e gerador', () => {
   assert.equal(detectGeneratorKind([10, 10, 10]), 'fixed');
   assert.equal(detectGeneratorKind([10, 15, 20]), 'ascending');
   assert.equal(detectGeneratorKind([10, 20, 10]), null);
+});
+
+// Story 1.70: o teclado numérico do celular não tem ":"; a máscara preenche o
+// MM:SS da direita para a esquerda e o resultado tem que passar no parseTimeInput.
+test('maskTimeInput: algarismos entram da direita para a esquerda e o ":" aparece sozinho', () => {
+  for (const [typed, shown] of [
+    ['', ''], ['0', ''], ['000', ''], ['1', '00:01'], ['33', '00:33'], ['133', '01:33'], ['1133', '11:33'],
+    ['0033', '00:33'], ['00:33', '00:33'], ['9959', '99:59'], ['12345', '12:34'], ['11:335', '11:33']
+  ]) assert.equal(maskTimeInput(typed), shown, JSON.stringify(typed));
+  for (const pasted of ['11:33', '11.33', '11,33', ' 11:33 ', '1133', '11h33']) assert.equal(maskTimeInput(pasted), '11:33', pasted);
+  for (const notText of [undefined, null, 1133, {}]) assert.equal(maskTimeInput(notText), '', String(notText));
+});
+
+test('maskTimeInput: digitando tecla a tecla, com ou sem zeros e com backspace, chega a todo tempo de 00:01 a 99:59', () => {
+  // O input é controlado: o valor novo é o valor mostrado + a tecla (cursor no fim), e volta pela máscara.
+  const press = (shown, key) => maskTimeInput(key === 'backspace' ? shown.slice(0, -1) : shown + key);
+  const type = (keys) => keys.reduce(press, '');
+  for (let seconds = 1; seconds <= 5999; seconds++) {
+    const digits = `${String(Math.floor(seconds / 60)).padStart(2, '0')}${String(seconds % 60).padStart(2, '0')}`;
+    for (const keys of [[...digits], [...digits.replace(/^0+/, '')], ['9', 'backspace', ...digits]]) {
+      assert.deepEqual(parseTimeInput(type(keys)), { ok: true, seconds }, `${seconds}: ${keys.join(' ')}`);
+    }
+  }
+  assert.equal(type([...'1133', 'backspace']), '01:13');
+  assert.equal(type([...'11335']), '11:33');
+});
+
+test('parseTimeInput: segundos de 60 a 99 recebem o aviso dos segundos; o resto mantém o aviso de formato', () => {
+  assert.deepEqual(parseTimeInput(maskTimeInput('1175')), { ok: false, error: 'Os segundos vão de 00 a 59 (ex.: 10:30).' });
+  assert.deepEqual(parseTimeInput('10:60'), { ok: false, error: 'Os segundos vão de 00 a 59 (ex.: 10:30).' });
+  for (const bad of ['', 'dez', '10:0', '1:10:75', '1000']) {
+    assert.deepEqual(parseTimeInput(bad), { ok: false, error: 'Informe o tempo no formato MM:SS (ex.: 10:00).' }, bad);
+  }
 });
 
 // ---------------------------------------------------------------------------

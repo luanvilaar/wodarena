@@ -123,6 +123,23 @@ test('súmula na quadra: envia só com tudo salvo, confirma antes, limpa o apare
   }
 });
 
+// Story 1.70: o teclado numérico do celular não tem ":"; o tempo oficial é digitado só com algarismos, pela máscara.
+test('súmula na quadra: o tempo final e o tie-break oficiais usam teclado numérico com a máscara do MM:SS', () => {
+  const sheet = read('../src/components/judge/CourtSheet.tsx');
+  const input = sheet.match(/<input\s+id=\{`official-\$\{target\}`\}[\s\S]*?\/>/)?.[0] || '';
+  assert.match(sheet, /import \{ maskTimeInput, parseTimeInput \} from '@\/lib\/workoutStructureEditor';/);
+  assert.match(input, /inputMode="numeric"/);
+  assert.match(input, /placeholder="00:00"/);
+  assert.match(input, /onChange=\{\(event\) => setText\(maskTimeInput\(event\.target\.value\)\)\}/);
+  assert.doesNotMatch(input, /onChange=\{\(event\) => setText\(event\.target\.value\)\}/);
+  // Os dois campos saem da mesma linha (`row`), então os dois têm a máscara.
+  assert.match(sheet, /row\('final', 'Tempo final oficial'/);
+  assert.match(sheet, /row\('tiebreak', 'Tie-break oficial'/);
+  // O servidor segue recebendo segundos inteiros: a máscara só muda a digitação.
+  assert.match(sheet, /const parsed = parseTimeInput\(text\);/);
+  assert.match(sheet, /onRecord\(\{ t: 'time', target, v: parsed\.seconds, at \}\);/);
+});
+
 // Story 1.62: o Intervalado na quadra, sem cair nos caminhos de For Time e de carga máxima.
 test('súmula na quadra: o intervalado revisa ao parar, mostra "repetições" e não tem cronômetro oficial', () => {
   const sheet = read('../src/components/judge/CourtSheet.tsx');

@@ -26,7 +26,7 @@ import {
   type SheetEvent,
   type WorkoutStructure
 } from '@/lib/workoutStructure';
-import { parseTimeInput } from '@/lib/workoutStructureEditor';
+import { maskTimeInput, parseTimeInput } from '@/lib/workoutStructureEditor';
 
 // Súmula na quadra (Stories 1.50 e 1.51): a súmula do judge (Story 1.44) com a
 // gravação no servidor, o relógio guardado no aparelho (recarregar a página
@@ -38,7 +38,9 @@ import { parseTimeInput } from '@/lib/workoutStructureEditor';
 // O Intervalado (Story 1.62) não termina antes do relógio parado, mostra o
 // resultado em repetições e não tem ajuste pelo cronômetro oficial. A Distância
 // (Story 1.68) também só revisa com o relógio parado, mostra o resultado em
-// metros ("6.330 m") e não tem ajuste pelo cronômetro oficial.
+// metros ("6.330 m") e não tem ajuste pelo cronômetro oficial. O tempo oficial é
+// digitado só com algarismos (Story 1.70): o teclado numérico do celular não tem
+// ":", então a máscara preenche o MM:SS da direita para a esquerda.
 
 type SheetPayload = {
   sheet: {
@@ -134,9 +136,9 @@ function OfficialTimeForm({ structure, events, at, onRecord }: { structure: Work
           type="text"
           inputMode="numeric"
           autoComplete="off"
-          placeholder="MM:SS"
+          placeholder="00:00"
           value={text}
-          onChange={(event) => setText(event.target.value)}
+          onChange={(event) => setText(maskTimeInput(event.target.value))}
           className="min-h-12 w-full min-w-0 rounded-md border border-card-border bg-dark-gray px-3 font-number text-lg font-bold focus:border-primary focus:outline-none"
         />
         <button type="button" onClick={() => apply(target, text)} disabled={!text.trim()} className={`${buttonClass} border-card-border bg-dark-gray`}>
