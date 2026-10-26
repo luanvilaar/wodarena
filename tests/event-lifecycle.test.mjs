@@ -30,11 +30,14 @@ const eventStatusModule = await import(`data:text/javascript;base64,${Buffer.fro
 const formatDate = (date) => date.toLocaleDateString('pt-BR');
 
 test('event lifecycle derives finished state from manual status, deadline and event date', () => {
-  assert.match(eventStatus, /export function getEventStatus\(event: Pick<Event, 'status' \| 'date' \| 'registrationDeadline'>\)/);
+  assert.match(eventStatus, /export function getEventStatus\(event: EventLifecycleInput\): EventLifecycle/);
   assert.match(eventStatus, /if \(event\.status === 'finished'\) return 'finished';/);
-  assert.match(eventStatus, /if \(hasEventDatePassed\(event\.date\)\) return 'finished';/);
-  assert.match(eventStatus, /if \(!Number\.isNaN\(hoursUntilDeadline\) && hoursUntilDeadline < 0\) return 'finished';/);
-  assert.match(eventStatus, /hoursUntilDeadline <= CLOSING_THRESHOLD_HOURS/);
+  // Story 1.71: "já aconteceu" sai de end_date (fuso do evento), com o texto como reserva.
+  assert.match(eventStatus, /if \(hasEventEnded\(event\)\) return 'finished';/);
+  assert.match(eventStatus, /if \(range\) return getEventToday\(event\.timeZone, now\) > range\.end;\s*return hasEventDatePassed\(event\.date, now\);/);
+  // Prazo de inscrição vencido fecha a inscrição, mas não vira "evento realizado".
+  assert.match(eventStatus, /hoursUntilDeadline >= 0 && hoursUntilDeadline <= CLOSING_THRESHOLD_HOURS/);
+  assert.match(eventStatus, /event\.isTicketingActive === false \|\| hasRegistrationDeadlinePassed\(event\.registrationDeadline\)/);
 });
 
 test('event lifecycle classifies past, future, invalid and current-day dates correctly', () => {
@@ -49,7 +52,7 @@ test('event lifecycle classifies past, future, invalid and current-day dates cor
   assert.equal(eventStatusModule.getEventStatus({ status: 'upcoming', date: formatDate(yesterday) }), 'finished');
   assert.equal(eventStatusModule.getEventStatus({ status: 'upcoming', date: formatDate(today) }), 'active');
   assert.equal(eventStatusModule.getEventStatus({ status: 'upcoming', date: formatDate(tomorrow) }), 'active');
-  assert.equal(eventStatusModule.getEventStatus({ status: 'upcoming', date: formatDate(nextWeek), registrationDeadline: new Date(Date.now() - 1_000).toISOString() }), 'finished');
+  assert.equal(eventStatusModule.getEventStatus({ status: 'upcoming', date: formatDate(nextWeek), registrationDeadline: new Date(Date.now() - 1_000).toISOString() }), 'active');
   assert.equal(eventStatusModule.getEventStatus({ status: 'upcoming', date: 'data indefinida' }), 'active');
   assert.equal(eventStatusModule.getEventStatus({ status: 'finished', date: formatDate(tomorrow) }), 'finished');
 });
@@ -117,11 +120,13 @@ test('home banner fallback follows the chronological order of eligible events', 
 
 test('public surfaces consistently hide registration for derived finished events', () => {
   assert.match(eventCard, /const registrationAvailability = getRegistrationAvailability\(event\)/);
-  assert.match(eventCard, /!registrationAvailability\.isAvailable/);
-  assert.match(eventCard, /t\('eventEndedBadge'\)/);
-  assert.match(eventCard, /t\('finishedAux'\)/);
-  assert.match(ptBrMessages, /"eventEndedBadge": "Evento Encerrado"/);
-  assert.match(ptBrMessages, /"finishedAux": "Este evento não está mais disponível para inscrição\."/);
+  // Story 1.72: realizado e "inscrições encerradas com o evento por acontecer" são estados distintos.
+  assert.match(eventCard, /const isPast = lifecycle === 'finished';/);
+  assert.match(eventCard, /const isClosedUpcoming = !isRegistrationAvailable && !isPast;/);
+  assert.match(eventCard, /t\('realizedBadge'\)/);
+  assert.match(eventCard, /t\('realizedAux', \{ date: pastDateLabel \}\)/);
+  assert.match(ptBrMessages, /"realizedBadge": "Realizado"/);
+  assert.match(ptBrMessages, /"realizedAux": "Aconteceu em \{date\}\."/);
   assert.match(homePage, /statusFilter === 'finished' && lifecycle === 'finished'/);
   assert.match(homePage, /statusFilter === 'upcoming' && event\.status === 'upcoming' && lifecycle !== 'finished'/);
   assert.match(featuredBanner, /getEventStatus\(event\) !== 'finished'/);
@@ -130,7 +135,9 @@ test('public surfaces consistently hide registration for derived finished events
 });
 
 test('server rejects registrations for derived finished events before persistence', () => {
-  assert.match(serverCheckout, /select\('id, name, status, date, registration_deadline, ticket_price, ticket_slots, is_ticketing_active, shirt_mode, shirt_addon_price'\)/);
+  // Story 1.71: os selects do checkout pedem time_zone e passam por selectEventWithDates.
+  assert.match(serverCheckout, /selectEventWithDates<[^>]*>>\(\s*supabaseAdmin,\s*eventId,\s*'id, name, status, date, registration_deadline, ticket_price, ticket_slots, is_ticketing_active, shirt_mode, shirt_addon_price, time_zone'/);
+  assert.match(serverCheckout, /getRegistrationAvailability\(toEventLifecycleInput\(event\)\)/);
   assert.match(serverCheckout, /throw new RegistrationAccessError\('Este evento esta encerrado e nao aceita novas inscricoes\.', 409\)/);
   assert.match(registrationStart, /RegistrationAccessError/);
   assert.match(registrationStart, /status: err\.status/);
@@ -146,8 +153,9 @@ test('manual ticketing closure has one public signal and blocks only new checkou
     { isAvailable: false, lifecycle: 'active', reason: 'sales_closed' },
   );
   assert.match(eventCard, /getRegistrationAvailability\(event\)/);
-  assert.match(eventCard, /t\('salesClosedBadge'\)/);
-  assert.match(ptBrMessages, /"salesClosedBadge": "Vendas Encerradas"/);
+  assert.match(eventCard, /t\('registrationClosedBadge'\)/);
+  assert.match(eventCard, /t\('upcomingClosedAux'\)/);
+  assert.match(ptBrMessages, /"registrationClosedBadge": "Inscrições Encerradas"/);
   assert.match(featuredBanner, /const activeAvailability = activeEvent \? getRegistrationAvailability\(activeEvent\) : null;/);
   assert.match(featuredBanner, /t\('salesClosedBadge'\)/);
   assert.match(ptBrMessages, /"salesClosedBadge": "Vendas encerradas"/);

@@ -142,9 +142,11 @@ test('hover só com hover: hover; o brilho único do celular só em hover: none'
 test('card encerrado entra só com fade: sem abertura, cascata nem zoom', () => {
   assert.match(cardMotionCss, /\[data-reveal="run"\]\[data-card-state="closed"\] \{\s*animation: event-card-fade/);
   assert.match(cardMotionCss, /\[data-card-state="closed"\] \.ec-block,\s*\.event-card\[data-reveal="run"\]\[data-card-state="closed"\] \.ec-banner-art \{\s*animation: none;/);
-  assert.match(eventCard, /data-card-state=\{isFinished \? 'closed' : 'open'\}/);
-  assert.match(eventCard, /isFinished \? '' : 'group-hover:scale-\[1\.03\]'/);
-  assert.match(eventCard, /const countPhase = isFinished \? 'done' : phase;/);
+  // Story 1.72: só o evento realizado entra como "closed"; inscrição encerrada com
+  // o evento por acontecer anima como aberto.
+  assert.match(eventCard, /data-card-state=\{isPast \? 'closed' : 'open'\}/);
+  assert.match(eventCard, /isPast \? 'opacity-60 grayscale' : 'opacity-80 group-hover:scale-\[1\.03\]'/);
+  assert.match(eventCard, /const countPhase = isPast \? 'done' : phase;/);
 });
 
 test('o EventCard marca os cinco blocos da cascata e o brilho só no Garantir Vaga', () => {
@@ -154,9 +156,9 @@ test('o EventCard marca os cinco blocos da cascata e o brilho só no Garantir Va
   assert.match(eventCard, /className="event-cta event-cta-shine flex min-h-12/);
   assert.equal((eventCard.match(/event-cta-shine/g) ?? []).length, 1, 'brilho só no Garantir Vaga');
   assert.equal((eventCard.match(/event-cta /g) ?? []).length + (eventCard.match(/event-cta"/g) ?? []).length, 4);
-  assert.equal((eventCard.match(/<button\s+type="button"\s+disabled/g) ?? []).length, 1);
-  const disabledButton = block(eventCard, 'type="button"\n                disabled', '</button>');
-  assert.doesNotMatch(disabledButton, /event-cta/, 'botão desabilitado não responde ao toque');
+  // Story 1.72: card fechado não tem mais botão desabilitado; tem um só link na largura toda.
+  assert.equal((eventCard.match(/<button\s+type="button"\s+disabled/g) ?? []).length, 0);
+  assert.match(eventCard, /className="event-cta col-span-2 flex min-h-12/);
 });
 
 test('preço e divisões contam só visualmente: leitor de tela lê o texto final', () => {

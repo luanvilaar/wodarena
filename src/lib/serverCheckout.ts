@@ -4,6 +4,7 @@ import { assertManagerSalesAccessForEvent } from '@/lib/serverManagerAccess';
 import { getRequestSession, hashPassword, verifyRegistrationAccessToken } from '@/lib/serverSecurity';
 import { sendRegistrationEmail } from '@/lib/resend';
 import { getRegistrationAvailability } from '@/lib/eventStatus';
+import { selectEventWithDates, toEventLifecycleInput, type EventLifecycleRow } from '@/lib/serverEventLifecycle';
 import { calculateRegistrationAmounts, getDivisionParticipantCount, normalizeShirtMode, resolveParticipantShirts } from '@/lib/shirtPricing';
 import { createAthleteId, createRegistrationId } from '@/lib/registrationIds';
 import { Registration, Athlete, Event, AppLocale } from '@/types';
@@ -98,21 +99,13 @@ const resolveTicketPrice = (divisionPrice: unknown, eventTicketPrice: unknown) =
   return price;
 };
 
-type EventRegistrationAvailabilityRow = {
+type EventRegistrationAvailabilityRow = EventLifecycleRow & {
   id: string;
-  status: Event['status'];
-  date: string;
-  registration_deadline?: string | null;
-  is_ticketing_active?: boolean | null;
 };
 
 const assertRegistrationAvailableForEvent = (event: EventRegistrationAvailabilityRow) => {
-  const availability = getRegistrationAvailability({
-    status: event.status,
-    date: event.date,
-    registrationDeadline: event.registration_deadline || undefined,
-    isTicketingActive: event.is_ticketing_active !== false,
-  });
+  // Story 1.71: o "evento já aconteceu" sai de end_date no fuso do evento.
+  const availability = getRegistrationAvailability(toEventLifecycleInput(event));
 
   if (availability.isAvailable) return;
 
@@ -127,11 +120,11 @@ export const assertEventRegistrationAvailable = async (
   supabaseAdmin: SupabaseClient,
   eventId: string,
 ) => {
-  const { data: event, error } = await supabaseAdmin
-    .from('events')
-    .select('id, status, date, registration_deadline, is_ticketing_active')
-    .eq('id', eventId)
-    .maybeSingle<EventRegistrationAvailabilityRow>();
+  const { data: event, error } = await selectEventWithDates<EventRegistrationAvailabilityRow>(
+    supabaseAdmin,
+    eventId,
+    'id, status, date, registration_deadline, is_ticketing_active, time_zone'
+  );
 
   if (error || !event) {
     throw new RegistrationAccessError('Evento nao encontrado para checkout.', 404);
@@ -212,11 +205,11 @@ export const validateCheckoutCoupon = async (
     throw new Error('Evento, categoria e cupom sao obrigatorios.');
   }
 
-  const { data: event, error: eventError } = await supabaseAdmin
-    .from('events')
-    .select('id, status, date, registration_deadline, ticket_price, is_ticketing_active')
-    .eq('id', eventId)
-    .maybeSingle();
+  const { data: event, error: eventError } = await selectEventWithDates<EventRegistrationAvailabilityRow & { ticket_price?: unknown }>(
+    supabaseAdmin,
+    eventId,
+    'id, status, date, registration_deadline, ticket_price, is_ticketing_active, time_zone'
+  );
 
   if (eventError || !event) {
     throw new Error('Evento nao encontrado para checkout.');
@@ -314,11 +307,11 @@ export const calculateSecureRegistrationSnapshot = async (
     throw new Error('Evento e categoria sao obrigatorios para checkout.');
   }
 
-  const { data: event, error: eventError } = await supabaseAdmin
-    .from('events')
-    .select('id, name, status, date, registration_deadline, ticket_price, ticket_slots, is_ticketing_active, shirt_mode, shirt_addon_price')
-    .eq('id', eventId)
-    .maybeSingle();
+  const { data: event, error: eventError } = await selectEventWithDates<EventRegistrationAvailabilityRow & Record<string, unknown>>(
+    supabaseAdmin,
+    eventId,
+    'id, name, status, date, registration_deadline, ticket_price, ticket_slots, is_ticketing_active, shirt_mode, shirt_addon_price, time_zone'
+  );
 
   if (eventError || !event) {
     throw new Error('Evento nao encontrado para checkout.');

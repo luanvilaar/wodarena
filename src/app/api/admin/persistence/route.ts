@@ -4,6 +4,8 @@ import { applyCouponUsageForApprovedRegistration, createManagerRegistration, Reg
 import { checkRateLimit, createSupabaseAdmin, hashPassword, requireSession, safeErrorMessage, SessionUser } from '@/lib/serverSecurity';
 import { getEventStatus } from '@/lib/eventStatus';
 import { validateEventCoordinates } from '@/lib/eventMap';
+import { resolveEventDatesForWrite } from '@/lib/eventDates';
+import { selectEventWithDates, toEventLifecycleInput, type EventLifecycleRow } from '@/lib/serverEventLifecycle';
 import { sendQualifierWorkoutDeletedEmails } from '@/lib/resend';
 import { checkRegistrationShirtEdit, validateShirtConfig } from '@/lib/shirtPricing';
 import { deriveLegacyWorkoutFields, validateWorkoutStructure, type LegacyWorkoutFields } from '@/lib/workoutStructure';
@@ -66,7 +68,7 @@ const EVENT_UPDATABLE_FIELDS = [
   'name', 'logo_url', 'banner_url', 'status', 'location', 'date', 'description',
   'format', 'ticket_price', 'ticket_slots', 'is_ticketing_active', 'time', 'city',
   'state', 'rules', 'instagram', 'website', 'event_type', 'event_schedule', 'mp_public_key',
-  'shirt_mode', 'shirt_addon_price', 'latitude', 'longitude'
+  'shirt_mode', 'shirt_addon_price', 'latitude', 'longitude', 'start_date', 'end_date'
 ] as const;
 
 const DIVISION_UPDATABLE_FIELDS = [
@@ -702,6 +704,16 @@ export async function POST(request: Request) {
           event.longitude = coordinates.longitude;
         }
 
+        // Datas do evento (Story 1.71): as duas juntas e o fim não antes do início.
+        if ('start_date' in event || 'end_date' in event) {
+          const eventDates = resolveEventDatesForWrite(event);
+          if (!eventDates.ok) {
+            return NextResponse.json({ error: eventDates.error }, { status: 400 });
+          }
+          event.start_date = eventDates.startDate;
+          event.end_date = eventDates.endDate;
+        }
+
         // Estrutura de prova não entra pelo lote de provas do evento; recusa antes de criar o evento.
         const structureRejection = rejectStructureOnRawWorkoutInsert(workouts);
         if (structureRejection) return structureRejection;
@@ -806,6 +818,16 @@ export async function POST(request: Request) {
           allowedData.longitude = coordinates.longitude;
         }
 
+        // Datas do evento: se uma vier, as duas precisam vir (datas válidas, ou null e null).
+        if ('start_date' in allowedData || 'end_date' in allowedData) {
+          const eventDates = resolveEventDatesForWrite(allowedData);
+          if (!eventDates.ok) {
+            return NextResponse.json({ error: eventDates.error }, { status: 400 });
+          }
+          allowedData.start_date = eventDates.startDate;
+          allowedData.end_date = eventDates.endDate;
+        }
+
         const nextEventType = allowedData.event_type || currentEvent.event_type || 'functional_fitness';
         const nextSchedule = allowedData.event_schedule === undefined ? currentEvent.event_schedule : allowedData.event_schedule;
         assertQualifierSchedule(nextEventType, nextSchedule);
@@ -831,14 +853,14 @@ export async function POST(request: Request) {
 
         const eventId = typeof payload.eventId === 'string' && payload.eventId.length > 0 ? payload.eventId : null;
         if (eventId) {
-          const { data: event, error: eventError } = await supabaseAdmin
-            .from('events')
-            .select('id, status, date, registration_deadline')
-            .eq('id', eventId)
-            .maybeSingle();
+          const { data: event, error: eventError } = await selectEventWithDates<EventLifecycleRow>(
+            supabaseAdmin,
+            eventId,
+            'id, status, date, registration_deadline, time_zone'
+          );
 
           if (eventError) throw eventError;
-          if (!event || (event.status !== 'live' && event.status !== 'upcoming') || getEventStatus(event) === 'finished') {
+          if (!event || (event.status !== 'live' && event.status !== 'upcoming') || getEventStatus(toEventLifecycleInput(event)) === 'finished') {
             return NextResponse.json({ error: 'Apenas eventos ativos podem ser destacados na home.' }, { status: 400 });
           }
         }

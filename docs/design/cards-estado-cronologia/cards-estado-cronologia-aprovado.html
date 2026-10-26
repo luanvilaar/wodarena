@@ -1,0 +1,634 @@
+<title>Cards de Evento WODArena</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: relatório em coluna de leitura; maquetes dos cards em grade de 3 estados por opção. Mesmo mundo visual do produto (tema escuro, amarelo WODArena). */
+:root {
+  color-scheme: dark;
+  --bg: #0b0e11;
+  --fg: #eaecef;
+  --card: #1e2329;
+  --line: #2b3139;
+  --deep: #181a20;
+  --muted: #929aa5;
+  --muted-soft: #707a8a;
+  --primary: #fcd535;
+  --primary-hover: #f0b90b;
+  --ink: #181a20;
+  --up: #0ecb81;
+  --down: #f6465d;
+  --info: #7fb2ff;
+  --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-num: "IBM Plex Sans", "Inter", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 40px 80px;
+}
+.wrap { max-width: 1120px; margin: 0 auto; display: grid; gap: 56px; }
+.read { max-width: 70ch; }
+h1, h2, h3 { text-wrap: balance; margin: 0; letter-spacing: -0.02em; line-height: 1.15; }
+h1 { font-size: clamp(30px, 5vw, 46px); font-weight: 800; }
+h2 { font-size: clamp(22px, 3vw, 30px); font-weight: 800; }
+h3 { font-size: 18px; font-weight: 700; }
+p { margin: 0; }
+.kicker { font-size: 12px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--primary); }
+.lede { color: var(--muted); font-size: 17px; margin-top: 14px; }
+.stack { display: grid; gap: 14px; }
+.section { display: grid; gap: 22px; }
+code, .mono { font-family: var(--font-mono); font-size: 0.86em; background: var(--deep); border: 1px solid var(--line); border-radius: 3px; padding: 1px 5px; color: var(--fg); word-break: break-word; }
+a { color: var(--primary); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 0; }
+
+/* Meta */
+.meta { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 20px; font-size: 13px; color: var(--muted); }
+.meta b { color: var(--fg); font-weight: 600; }
+
+/* Achados */
+.findings { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.finding { border: 1px solid var(--line); background: var(--card); border-radius: 6px; padding: 20px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.sev { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; padding: 3px 8px; border-radius: 2px; width: fit-content; }
+.sev.p0 { color: var(--down); background: color-mix(in srgb, var(--down) 12%, transparent); border: 1px solid color-mix(in srgb, var(--down) 40%, transparent); }
+.sev.p1 { color: var(--primary); background: color-mix(in srgb, var(--primary) 10%, transparent); border: 1px solid color-mix(in srgb, var(--primary) 35%, transparent); }
+.finding p { color: var(--muted); font-size: 14px; }
+.finding p strong { color: var(--fg); font-weight: 600; }
+
+/* Tabela de evidência */
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; min-width: 720px; font-size: 13px; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); font-weight: 700; background: var(--deep); }
+tr:last-child td { border-bottom: 0; }
+td.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tag { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 2px; white-space: nowrap; }
+.tag.bad { color: var(--down); background: color-mix(in srgb, var(--down) 12%, transparent); }
+.tag.ok { color: var(--up); background: color-mix(in srgb, var(--up) 12%, transparent); }
+.tag.warn { color: var(--primary); background: color-mix(in srgb, var(--primary) 10%, transparent); }
+.caption { font-size: 12.5px; color: var(--muted-soft); }
+
+/* Causa técnica */
+.cause { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+.cause > div { min-width: 0; border-left: 2px solid var(--line); padding-left: 16px; display: grid; gap: 10px; align-content: start; }
+.cause p, .cause li { color: var(--muted); font-size: 14px; }
+.cause ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+.cause strong { color: var(--fg); font-weight: 600; }
+pre.snip { margin: 0; overflow-x: auto; background: var(--deep); border: 1px solid var(--line); border-radius: 4px; padding: 12px 14px; font-family: var(--font-mono); font-size: 12px; line-height: 1.55; color: #c9cdd3; }
+pre.snip .c { color: var(--muted-soft); }
+pre.snip .h { color: var(--primary); }
+
+/* ====== Maquete do card (fiel ao EventCard atual) ====== */
+.row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.row.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 900px) { .row, .row.two { grid-template-columns: 1fr; max-width: 420px; } }
+.slot { display: grid; gap: 10px; min-width: 0; }
+.slot-label { font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); display: flex; gap: 8px; align-items: center; }
+.slot-label .dotk { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.slot-note { font-size: 12.5px; color: var(--muted-soft); line-height: 1.5; }
+
+.ec { border: 1px solid var(--line); border-top: 2px solid var(--primary); background: var(--card); border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; }
+.ec-top { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; padding: 8px 14px; background: var(--deep); border-bottom: 1px solid var(--line); min-height: 44px; }
+.badge { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 3px 9px; border-radius: 2px; border: 1px solid; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap; }
+.badge .d { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
+.badge .d.hollow { background: transparent; border: 1.5px solid currentColor; }
+.b-open { color: var(--primary); border-color: color-mix(in srgb, var(--primary) 30%, transparent); background: color-mix(in srgb, var(--primary) 10%, transparent); }
+.b-closed { color: var(--muted); border-color: var(--line); background: var(--card); }
+.b-soldout { color: var(--fg); border-color: color-mix(in srgb, var(--fg) 45%, transparent); background: color-mix(in srgb, var(--fg) 6%, transparent); }
+.b-past { color: var(--muted-soft); border-color: var(--line); background: transparent; }
+.b-when { color: var(--fg); border-color: var(--line); background: transparent; font-family: var(--font-num); letter-spacing: 0.04em; }
+.b-when.hot { color: var(--primary); border-color: color-mix(in srgb, var(--primary) 30%, transparent); }
+svg.i { width: 12px; height: 12px; flex: none; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+svg.i.m { width: 15px; height: 15px; }
+
+.banner { position: relative; aspect-ratio: 5 / 2; max-width: 100%; overflow: hidden; display: grid; place-items: center; }
+.banner span { font-weight: 900; font-style: italic; text-transform: uppercase; letter-spacing: -0.03em; line-height: 0.9; text-align: center; font-size: clamp(22px, 2.6vw, 30px); padding: 0 10px; }
+.bn-sim { background: linear-gradient(115deg, #1a1440 0%, #2a2360 45%, #121233 100%); }
+.bn-sim span { color: #c6f432; text-shadow: 3px 3px 0 #0a0a1e; }
+.bn-sim span em { color: #f2f2f2; font-style: italic; display: block; font-size: 0.7em; }
+.bn-hib { background: linear-gradient(110deg, #0d1626 0%, #1b2b3d 55%, #1f3a12 100%); }
+.bn-hib span { color: #f1f1f1; } .bn-hib span em { color: #b5e61d; font-style: italic; display: block; }
+.bn-xg { background: radial-gradient(circle at 75% 50%, #e8b422 0 18%, transparent 19%), linear-gradient(120deg, #b0145f 0%, #d61f7a 60%, #8d0f4b 100%); }
+.bn-xg span { color: #ffe14a; text-shadow: 2px 2px 0 #2a1a6e; }
+.bn-cn { background: radial-gradient(ellipse at 50% 120%, #2c3a2a 0, transparent 60%), linear-gradient(180deg, #1a1d1a 0%, #0e100e 100%); }
+.bn-cn span { color: #3fdc3f; } .bn-cn span em { color: #cfcfcf; font-style: normal; display: block; font-size: 0.7em; }
+.bn-selva { background: linear-gradient(120deg, #1d3c68 0%, #24497c 60%, #173257 100%); }
+.bn-selva span { color: #e8c55a; }
+
+.ec-body { padding: 14px 16px 16px; display: grid; gap: 12px; }
+.ec-head { display: flex; gap: 12px; align-items: flex-start; min-width: 0; }
+.logo { width: 46px; height: 46px; border-radius: 6px; border: 1px solid var(--line); background: var(--deep); flex: none; display: grid; place-items: center; font-weight: 800; font-size: 13px; color: var(--primary); }
+.ec-head > div { min-width: 0; display: grid; gap: 4px; }
+.eyebrow { font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: var(--primary); }
+.aux { font-size: 12px; font-weight: 500; color: var(--muted); display: flex; gap: 6px; align-items: flex-start; line-height: 1.45; }
+.aux.fg { color: var(--fg); }
+.ec-title { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; color: #fff; }
+dl.facts { margin: 0; display: grid; gap: 8px; border-block: 1px solid var(--line); padding-block: 12px; font-size: 13px; }
+dl.facts div { display: flex; gap: 8px; align-items: flex-start; min-width: 0; }
+dl.facts dd { margin: 0; font-weight: 500; color: #fff; min-width: 0; }
+dl.facts svg { color: var(--primary); margin-top: 3px; }
+.price { color: var(--muted); } .price b { color: var(--primary); font-family: var(--font-num); font-weight: 600; }
+.datebig { font-family: var(--font-num); font-weight: 600; }
+.datebig small { color: var(--muted); font-family: var(--font-body); font-weight: 500; font-size: 12px; margin-left: 4px; }
+.ctas { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; border-top: 1px solid var(--line); padding-top: 12px; }
+.cta { min-height: 42px; display: flex; align-items: center; justify-content: center; gap: 6px; border-radius: 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap; padding: 0 8px; border: 1px solid var(--line); background: var(--deep); color: #fff; }
+.cta.primary { background: var(--primary); color: var(--ink); border-color: var(--primary); }
+.cta.off { color: var(--muted); cursor: not-allowed; }
+.cta.outline { border-color: color-mix(in srgb, var(--primary) 55%, transparent); color: var(--primary); }
+.cta.full { grid-column: 1 / -1; }
+
+/* Variantes de estado */
+.ec.dim { opacity: 0.7; filter: grayscale(30%); border-top-color: var(--line); }
+.ec.neutral-top { border-top-color: color-mix(in srgb, var(--fg) 55%, transparent); }
+.ec.past { border-top-color: var(--line); }
+.ec.past .banner { filter: grayscale(100%) brightness(0.6); }
+.ec.past .ec-title { color: #c9ced6; }
+.ec.past dl.facts svg { color: var(--muted-soft); }
+.ec.past .price b { color: var(--muted); }
+.ec.wrong { outline: 2px dashed color-mix(in srgb, var(--down) 70%, transparent); outline-offset: 4px; }
+
+/* Opção C: date tile */
+.tile { position: absolute; left: 10px; bottom: 10px; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 6px 10px 5px; display: grid; justify-items: center; line-height: 1; min-width: 58px; }
+.tile .dd { font-family: var(--font-num); font-weight: 700; font-size: 24px; color: #fff; font-variant-numeric: tabular-nums; }
+.tile .mm { font-size: 10px; font-weight: 700; letter-spacing: 0.14em; color: var(--primary); margin-top: 3px; }
+.ec.past .tile .mm { color: var(--muted); }
+.statusline { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; padding: 10px 12px; border-radius: 4px; background: var(--deep); border: 1px solid var(--line); }
+.statusline.open { color: var(--primary); border-color: color-mix(in srgb, var(--primary) 30%, transparent); }
+.statusline.closed { color: var(--fg); }
+.statusline.past { color: var(--muted); }
+.statusline .grow { flex: 1; min-width: 0; }
+.statusline .r { font-family: var(--font-num); color: var(--muted); font-weight: 500; }
+
+/* Opções */
+.option { border: 1px solid var(--line); border-radius: 10px; background: color-mix(in srgb, var(--card) 45%, var(--bg)); padding: clamp(18px, 3vw, 32px); display: grid; gap: 26px; }
+.option.rec { border-color: color-mix(in srgb, var(--primary) 55%, transparent); }
+.opt-head { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: baseline; justify-content: space-between; }
+.opt-letter { font-family: var(--font-num); font-weight: 700; color: var(--primary); font-size: 14px; letter-spacing: 0.1em; text-transform: uppercase; }
+.rec-pill { font-size: 11px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink); background: var(--primary); padding: 5px 10px; border-radius: 2px; }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px 28px; }
+.cols > div { min-width: 0; display: grid; gap: 8px; align-content: start; }
+.cols h4 { margin: 0; font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.cols ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 14px; color: #cfd3d9; }
+.cols li::marker { color: var(--muted-soft); }
+.pros li::marker { color: var(--up); }
+.cons li::marker { color: var(--down); }
+.facts-strip { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { font-size: 12px; padding: 5px 10px; border-radius: 3px; border: 1px solid var(--line); color: #cfd3d9; background: var(--deep); }
+.chip b { color: var(--fg); font-weight: 600; }
+.chip.db { border-color: color-mix(in srgb, var(--primary) 35%, transparent); }
+
+/* Esquema da home */
+.home-map { display: grid; gap: 8px; font-size: 13px; }
+.hm-sec { display: grid; grid-template-columns: 170px 1fr; gap: 12px; align-items: start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 4px; background: var(--deep); }
+@media (max-width: 560px) { .hm-sec { grid-template-columns: 1fr; } }
+.hm-sec b { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg); }
+.hm-sec span { color: var(--muted); }
+.hm-items { display: flex; flex-wrap: wrap; gap: 6px; }
+.hm-items i { font-style: normal; font-size: 12px; padding: 2px 8px; border-radius: 2px; border: 1px solid var(--line); color: #cfd3d9; white-space: nowrap; }
+.hm-items i.y { border-color: color-mix(in srgb, var(--primary) 40%, transparent); color: var(--primary); }
+.hm-items i.n { border-color: color-mix(in srgb, var(--fg) 40%, transparent); }
+.hm-items i.g { color: var(--muted-soft); }
+
+/* Recomendação */
+.verdict { border-left: 3px solid var(--primary); padding: 6px 0 6px 20px; display: grid; gap: 12px; }
+.verdict p { color: #cfd3d9; }
+ol.steps { margin: 0; padding-left: 22px; display: grid; gap: 10px; color: #cfd3d9; font-size: 14.5px; }
+ol.steps li::marker { font-family: var(--font-num); color: var(--primary); font-weight: 700; }
+.compare { min-width: 640px; }
+.compare td:first-child { color: var(--muted); font-weight: 600; white-space: nowrap; }
+.foot { color: var(--muted-soft); font-size: 12.5px; }
+
+:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+  <symbol id="cal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+  <symbol id="pin" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></symbol>
+  <symbol id="tag" viewBox="0 0 24 24"><path d="M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4l8.7 8.7a2.4 2.4 0 0 0 3.4 0l6.6-6.6a2.4 2.4 0 0 0 0-3.4Z"/><circle cx="7.5" cy="7.5" r="1"/></symbol>
+  <symbol id="arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="trophy" viewBox="0 0 24 24"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18M4 22h16M10 14.7V17c0 .6-.5 1-1 1.2C7.9 18.8 7 20.2 7 22M14 14.7V17c0 .6.5 1 1 1.2 1.2.6 2 2 2 3.8M18 2H6v7a6 6 0 0 0 12 0V2Z"/></symbol>
+  <symbol id="clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+  <symbol id="check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="alert" viewBox="0 0 24 24"><path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z"/><path d="M12 9v4M12 17h.01"/></symbol>
+</svg>
+
+<main class="wrap">
+
+  <header class="read">
+    <p class="kicker">Diagnóstico · Home pública</p>
+    <h1 style="margin-top:10px">Cards de evento: estado de venda e cronologia</h1>
+    <p class="lede">O público confunde "vendas encerradas" com "evento que já passou", e eventos que já aconteceram continuam na lista de abertos. Abaixo, o que está errado, por que acontece e três caminhos para corrigir. Nada foi alterado no código, no banco ou na infraestrutura.</p>
+    <div class="meta">
+      <span>Levantado em <b>26/10/2026</b></span>
+      <span>Fonte: <b>/api/app/bootstrap/public</b> (leitura) + código em <b>main</b> (a1ee677)</span>
+      <span>Eventos públicos lidos: <b>22</b></span>
+    </div>
+  </header>
+
+  <!-- ===================== 1. ERROS ===================== -->
+  <section class="section">
+    <div class="read stack">
+      <p class="kicker">1 · O que está errado</p>
+      <h2>Dois problemas, um deles também no checkout</h2>
+    </div>
+
+    <div class="findings">
+      <article class="finding">
+        <span class="sev p1">P1 · Visual</span>
+        <h3>"Vendas encerradas" tem a mesma cara de "evento encerrado"</h3>
+        <p>Um evento futuro com vendas online fechadas pelo organizador recebe <strong>exatamente o mesmo tratamento</strong> de um evento que já aconteceu: card com 70% de opacidade e 30% de cinza, borda superior apagada, cadeado no selo, no texto auxiliar e no botão, e a contagem animada desligada. Hoje há três eventos nessa situação: Hibrido Games (14/11), Híbirdo Race (14/11) e Selva 2027 Presencial (16/01/2027).</p>
+        <p>O texto "Vendas online encerradas pelo organizador" também substitui o rótulo "Próxima arena disponível", então o card perde a única pista de que o evento ainda vai acontecer. A data continua lá, mas no mesmo peso das outras linhas.</p>
+      </article>
+      <article class="finding">
+        <span class="sev p0">P0 · Cronologia + checkout</span>
+        <h3>Evento que já aconteceu continua "Inscrições abertas"</h3>
+        <p>Três eventos que já passaram seguem na seção de abertos, com selo amarelo e botão <strong>Garantir vaga</strong> ativo: <strong>X-Games 2.0</strong> e <strong>CN GAMES 26</strong> (17 e 18 de outubro) e <strong>Qualifier SELVA 2027</strong> ("05 a 20 de Outubro").</p>
+        <p>O servidor usa a mesma regra de data para aceitar inscrição, então <strong>o checkout desses três eventos ainda aceita inscrição paga</strong>. Por isso o P0: não é só aparência.</p>
+        <p>Os mesmos eventos podem aparecer no banner de destaque da home, que usa o mesmo filtro.</p>
+      </article>
+    </div>
+
+    <div class="stack">
+      <h3>Hoje: dois eventos em situações opostas, mesmo card</h3>
+      <div class="row">
+        <div class="slot">
+          <p class="slot-label" style="color:var(--fg)"><span class="dotk"></span>Futuro · vendas fechadas</p>
+          <article class="ec dim">
+            <div class="ec-top"><span class="badge b-closed"><svg class="i"><use href="#lock"/></svg>Vendas encerradas</span></div>
+            <div class="banner bn-hib"><span>Híbrido<em>Race</em></span></div>
+            <div class="ec-body">
+              <div class="ec-head"><div class="logo">HR</div><div><p class="aux"><svg class="i"><use href="#lock"/></svg>Vendas online encerradas pelo organizador.</p><p class="ec-title">Híbirdo Race</p></div></div>
+              <dl class="facts"><div><svg class="i m"><use href="#cal"/></svg><dd>14/11/2026</dd></div><div><svg class="i m"><use href="#tag"/></svg><dd class="price">A partir de <b>R$ 330,00</b></dd></div></dl>
+              <div class="ctas"><span class="cta">Ver evento <svg class="i"><use href="#arrow"/></svg></span><span class="cta off"><svg class="i"><use href="#lock"/></svg>Vendas encerradas</span></div>
+            </div>
+          </article>
+          <p class="slot-note">Acontece daqui a 19 dias.</p>
+        </div>
+        <div class="slot">
+          <p class="slot-label" style="color:var(--muted)"><span class="dotk"></span>Passado · já aconteceu</p>
+          <article class="ec dim">
+            <div class="ec-top"><span class="badge b-closed"><svg class="i"><use href="#lock"/></svg>Evento encerrado</span></div>
+            <div class="banner bn-cn" style="background:linear-gradient(120deg,#3a2a12,#5a3b12 60%,#2a1d0c)"><span style="color:#f6c453">Sertão<em style="color:#eee">Hybrid Run</em></span></div>
+            <div class="ec-body">
+              <div class="ec-head"><div class="logo">SH</div><div><p class="aux"><svg class="i"><use href="#lock"/></svg>Este evento não está mais disponível para inscrição.</p><p class="ec-title">Sertão Hybrid Run</p></div></div>
+              <dl class="facts"><div><svg class="i m"><use href="#cal"/></svg><dd>29/08/2026</dd></div><div><svg class="i m"><use href="#tag"/></svg><dd class="price">A partir de <b>R$ 120,00</b></dd></div></dl>
+              <div class="ctas"><span class="cta">Ver evento <svg class="i"><use href="#arrow"/></svg></span><span class="cta off"><svg class="i"><use href="#lock"/></svg>Encerrado</span></div>
+            </div>
+          </article>
+          <p class="slot-note">Aconteceu há 58 dias. Visualmente indistinguível do card ao lado.</p>
+        </div>
+        <div class="slot">
+          <p class="slot-label" style="color:var(--down)"><span class="dotk"></span>Passado, mas exibido como aberto</p>
+          <article class="ec wrong">
+            <div class="ec-top"><span class="badge b-open"><span class="d"></span>Inscrições abertas</span></div>
+            <div class="banner bn-xg"><span>X-Games<br>2.0</span></div>
+            <div class="ec-body">
+              <div class="ec-head"><div class="logo">XG</div><div><p class="eyebrow">Próxima arena disponível</p><p class="ec-title">X-Games 2.0</p></div></div>
+              <dl class="facts"><div><svg class="i m"><use href="#cal"/></svg><dd>17 e 18 de outubro</dd></div><div><svg class="i m"><use href="#tag"/></svg><dd class="price">A partir de <b>R$ 145,00</b></dd></div></dl>
+              <div class="ctas"><span class="cta">Ver evento <svg class="i"><use href="#arrow"/></svg></span><span class="cta primary">Garantir vaga <svg class="i"><use href="#arrow"/></svg></span></div>
+            </div>
+          </article>
+          <p class="slot-note">Aconteceu há 8 dias. A data foi digitada sem o ano.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="stack">
+      <h3>Evidência: todos os eventos com data sem ano</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Evento</th><th>Data digitada</th><th>Data lida pelo sistema</th><th>Última data no cronograma</th><th>Onde aparece hoje</th><th>Situação real</th></tr></thead>
+          <tbody>
+            <tr><td>X-Games 2.0</td><td class="num">17 e 18 de outubro</td><td class="num">nenhuma</td><td class="num">18/10/2026</td><td><span class="tag warn">Abertos · Garantir vaga</span></td><td><span class="tag bad">Aconteceu há 8 dias</span></td></tr>
+            <tr><td>CN GAMES 26 - PROVINS GROUND</td><td class="num">17 E 18 DE OUTUBRO</td><td class="num">nenhuma</td><td class="num">18/10/2026</td><td><span class="tag warn">Abertos · Garantir vaga</span></td><td><span class="tag bad">Aconteceu há 8 dias</span></td></tr>
+            <tr><td>Qualifier SELVA 2027</td><td class="num">05 a 20 de Outubro</td><td class="num">nenhuma</td><td class="num">05/10/2026</td><td><span class="tag warn">Abertos · Ao vivo</span></td><td><span class="tag bad">Período terminou em 20/10</span></td></tr>
+            <tr><td>WOD BASE GAMES 2026</td><td class="num">20 e 21 de Novembro</td><td class="num">nenhuma</td><td class="num">21/11/2026</td><td><span class="tag warn">Abertos (fim da fila)</span></td><td><span class="tag ok">Futuro, certo por acaso</span></td></tr>
+            <tr><td>Hero Games 2026</td><td class="num">07 e 08 de Novembro</td><td class="num">nenhuma</td><td class="num">07/11/2026</td><td><span class="tag warn">Abertos (fim da fila)</span></td><td><span class="tag ok">Futuro, certo por acaso</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="caption">Os outros 17 eventos têm o ano na data e foram classificados corretamente. Nenhum evento tem prazo de inscrição (<code>registration_deadline</code>) preenchido, então a data do evento é o único critério em uso. Eventos com data ilegível também vão para o fim da lista de abertos, fora da ordem cronológica.</p>
+    </div>
+  </section>
+
+  <hr>
+
+  <!-- ===================== 2. CAUSA ===================== -->
+  <section class="section">
+    <div class="read stack">
+      <p class="kicker">2 · Por que acontece</p>
+      <h2>Causa técnica</h2>
+    </div>
+    <div class="cause">
+      <div>
+        <h3>Cronologia: a data do evento é texto livre</h3>
+        <ul>
+          <li>No painel, o campo de data é um <code>type="text"</code> com o exemplo "Ex: 10 e 11 de Outubro, 2026". O ano não é obrigatório e o banco guarda só o texto (<code>events.date</code>).</li>
+          <li><code>parseEventDate</code> em <code>src/lib/eventStatus.ts</code> só entende nome de mês quando acha um ano de 4 dígitos. Sem ano, tenta <code>new Date("17 e 18 de outubro")</code>, que é inválido, e devolve <code>null</code>.</li>
+          <li>Com <code>null</code>, <code>hasEventDatePassed</code> responde <strong>false</strong> ("não passou"). O erro cai do lado errado: data desconhecida vira "evento aberto".</li>
+          <li>A mesma função decide a seção da home (<code>HomeView.tsx</code>), o banner de destaque, a página do evento e a trava de inscrição no servidor (<code>assertRegistrationAvailableForEvent</code> em <code>serverCheckout.ts</code>).</li>
+          <li>Detalhe menor: o fim do dia é calculado no fuso de quem roda o código (UTC na Vercel), não no fuso do evento (<code>time_zone</code>).</li>
+        </ul>
+<pre class="snip"><span class="c">// src/lib/eventStatus.ts</span>
+if (monthEntry <span class="h">&amp;&amp; yearMatch</span>) { … }   <span class="c">// sem ano, pula</span>
+const parsed = new Date(dateText);       <span class="c">// "17 e 18 de outubro" → Invalid</span>
+return … ? <span class="h">null</span> : …
+
+export function hasEventDatePassed(dateText) {
+  const eventDate = parseEventDate(dateText);
+  if (!eventDate) return <span class="h">false</span>;           <span class="c">// desconhecido = "não passou"</span></pre>
+      </div>
+      <div>
+        <h3>Visual: dois motivos diferentes, uma só variável</h3>
+        <ul>
+          <li>Em <code>EventCard.tsx</code>, <code>isFinished = !registrationAvailability.isAvailable || lifecycle === 'finished'</code>. "Vendas fechadas" (<code>reason: 'sales_closed'</code>) e "evento passou" (<code>'event_finished'</code>) caem no mesmo <code>true</code>.</li>
+          <li>Esse booleano liga <code>opacity-70 grayscale-[30%]</code>, desliga a animação, apaga a borda superior e marca <code>data-card-state="closed"</code>.</li>
+          <li>Selo, texto auxiliar e botão usam o mesmo cadeado e o mesmo cinza nos dois casos; só a palavra muda ("Vendas encerradas" × "Evento encerrado").</li>
+          <li>O sistema não sabe se a venda fechou por lotação ou por decisão do organizador: <code>is_ticketing_active</code> é um interruptor manual e não existe contagem pública de vagas por divisão. Logo, o card não pode afirmar "Esgotado" hoje sem dado novo.</li>
+        </ul>
+<pre class="snip"><span class="c">// src/components/EventCard.tsx</span>
+const isFinished = <span class="h">!registrationAvailability.isAvailable</span>
+  || lifecycle === 'finished';
+…
+isFinished ? '<span class="h">opacity-70 grayscale-[30%]</span>' : ''</pre>
+      </div>
+    </div>
+  </section>
+
+  <hr>
+
+  <!-- ===================== 3. OPÇÕES ===================== -->
+  <section class="section">
+    <div class="read stack">
+      <p class="kicker">3 · Como corrigir</p>
+      <h2>Três opções</h2>
+      <p style="color:var(--muted)">Todas separam três estados que hoje se misturam: <strong style="color:var(--fg)">inscrições abertas</strong>, <strong style="color:var(--fg)">evento futuro com inscrições fechadas</strong> e <strong style="color:var(--fg)">evento realizado</strong>. Elas diferem em quanto mexem nos dados e na home.</p>
+    </div>
+
+    <!-- ===== Opção A ===== -->
+    <article class="option">
+      <div class="opt-head">
+        <div class="stack" style="gap:6px"><p class="opt-letter">Opção A</p><h2>Correção pontual, sem mudar o banco</h2></div>
+      </div>
+      <p class="read" style="color:#cfd3d9">O leitor de data passa a entender datas sem ano, e o painel passa a exigir o ano daqui para frente. No card, só o evento realizado fica apagado; o evento futuro com vendas fechadas mantém cores e ganha um selo neutro claro, com a data em destaque.</p>
+      <div class="row">
+        <div class="slot">
+          <p class="slot-label" style="color:var(--primary)"><span class="dotk"></span>Aberto</p>
+          <article class="ec">
+            <div class="ec-top"><span class="badge b-open"><span class="d"></span>Inscrições abertas</span></div>
+            <div class="banner bn-sim"><span>31<em>de outubro</em></span></div>
+            <div class="ec-body">
+              <div class="ec-head"><div class="logo">31</div><div><p class="eyebrow">Próxima arena disponível</p><p class="ec-title">Simulado Hibrido Race</p></div></div>
+              <dl class="facts"><div><svg class="i m"><use href="#cal"/></svg><dd>31/10/2026</dd></div><div><svg class="i m"><use href="#tag"/></svg><dd class="price">A partir de <b>R$ 300,00</b></dd></div></dl>
+              <div class="ctas"><span class="cta">Ver evento <svg class="i"><use href="#arrow"/></svg></span><span class="cta primary">Garantir vaga <svg class="i"><use href="#arrow"/></svg></span></div>
+            </div>
+          </article>
+          <p class="slot-note">Sem mudança.</p>
+        </div>
+        <div class="slot">
+          <p class="slot-label" style="color:var(--fg)"><span class="dotk"></span>Futuro · inscrições fechadas</p>
+          <article class="ec neutral-top">
+            <div class="ec-top"><span class="badge b-soldout"><span class="d hollow"></span>Inscrições encerradas</span></div>
+            <div class="banner bn-hib"><span>Híbrido<em>Race</em></span></div>
+            <div class="ec-body">
+              <div class="ec-head"><div class="logo">HR</div><div><p class="eyebrow" style="color:var(--fg)">Evento confirmado</p><p class="ec-title">Híbirdo Race</p></div></div>
+              <dl class="facts"><div><svg class="i m"><use href="#cal"/></svg><dd>14/11/2026</dd></div><div><svg class="i m"><use href="#tag"/></svg><dd class="price">A partir de <b>R$ 330,00</b></dd></div></dl>
+              <div class="ctas"><span class="cta outline full">Ver evento <svg class="i"><use href="#arrow"/></svg></span></div>
+            </div>
+          </article>
+          <p class="slot-note">Cores normais. Some o botão desabilitado; "Ver evento" ocupa a largura toda.</p>
+        </div>
+        <div class="slot">
+          <p class="slot-label" style="color:var(--muted)"><span class="dotk"></span>Realizado · seção "Eventos passados"</p>
+          <article class="ec dim">
+            <div class="ec-top"><span class="badge b-closed"><svg class="i"><use href="#check"/></svg>Realizado</span></div>
+            <div class="banner bn-xg"><span>X-Games<br>2.0</span></div>
+            <div class="ec-body">
+              <div class="ec-head"><div class="logo">XG</div><div><p class="aux">Aconteceu em 17 e 18 de outubro.</p><p class="ec-title">X-Games 2.0</p></div></div>
+              <dl class="facts"><div><svg class="i m"><use href="#cal"/></svg><dd>17 e 18 de outubro</dd></div><div><svg class="i m"><use href="#tag"/></svg><dd class="price">A partir de <b>R$ 145,00</b></dd></div></dl>
+              <div class="ctas"><span class="cta">Ver evento <svg class="i"><use href="#arrow"/></svg></span><span class="cta">Resultados</span></div>
+            </div>
+          </article>
+          <p class="slot-note">Mantém o cinza atual; agora só para quem já aconteceu.</p>
+        </div>
+      </div>
+      <div class="cols">
+        <div><h4>O que muda</h4><ul>
+          <li><code>parseEventDate</code>: data sem ano usa o ano do cronograma do evento; sem cronograma, a ocorrência mais próxima de hoje (18/out → 2026, não 2027).</li>
+          <li>Campo de data do painel recusa texto sem ano.</li>
+          <li><code>EventCard</code>: separa "vendas fechadas" de "realizado" e troca selo, rótulo e botão.</li>
+        </ul></div>
+        <div class="pros"><h4>A favor</h4><ul>
+          <li>Tira hoje os 3 eventos passados da lista de abertos e fecha o checkout deles.</li>
+          <li>Sem migration, sem tela nova.</li>
+          <li>Menor custo das três.</li>
+        </ul></div>
+        <div class="cons"><h4>Contra</h4><ul>
+          <li>A data continua sendo texto: "Outubro/2026", "17-18/10" e erros de digitação seguem possíveis.</li>
+          <li>A regra de "ocorrência mais próxima" é um palpite; um evento digitado com 7 meses de antecedência e sem ano pode cair no ano errado.</li>
+          <li>Não resolve o fuso horário.</li>
+        </ul></div>
+      </div>
+      <div class="facts-strip">
+        <span class="chip">Banco: <b>sem mudança</b></span>
+        <span class="chip">Arquivos: <b>eventStatus.ts, EventCard.tsx, admin/page.tsx, pt-br/pt-pt/en-gb</b></span>
+        <span class="chip">Testes: <b>event-lifecycle, event-card-motion</b></span>
+        <span class="chip">Esforço: <b>1 story pequena</b></span>
+      </div>
+    </article>
+
+    <!-- ===== Opção B ===== -->
+    <article class="option rec">
+      <div class="opt-head">
+        <div class="stack" style="gap:6px"><p class="opt-letter">Opção B</p><h2>Data de verdade no banco e três estados com tempo</h2></div>
+        <span class="rec-pill">Recomendada</span>
+      </div>
+      <p class="read" style="color:#cfd3d9">O evento passa a ter <strong>data de início e de fim</strong> como datas reais (seletor de calendário no painel). O texto livre continua existindo só como rótulo de exibição ("17 e 18 de outubro"). Toda decisão de "passou ou não", na tela e no checkout, sai da data de fim, no fuso do evento. No card, cada estado ganha um marcador de tempo no topo: quanto falta ou há quanto aconteceu.</p>
+      <div class="row">
+        <div class="slot">
+          <p class="slot-label" style="color:var(--primary)"><span class="dotk"></span>Aberto</p>
+          <article class="ec">
+            <div class="ec-top"><span class="badge b-open"><span class="d"></span>Inscrições abertas</span><span class="badge b-when hot"><svg class="i"><use href="#clock"/></svg>Em 5 dias</span></div>
+            <div class="banner bn-sim"><span>31<em>de outubro</em></span></div>
+            <div class="ec-body">
+              <div class="ec-head"><div class="logo">31</div><div><p class="eyebrow">Próxima arena disponível</p><p class="ec-title">Simulado Hibrido Race</p></div></div>
+              <dl class="facts"><div><svg class="i m"><use href="#cal"/></svg><dd class="datebig">sáb, 31 out 2026</dd></div><div><svg class="i m"><use href="#tag"/></svg><dd class="price">A partir de <b>R$ 300,00</b></dd></div></dl>
+              <div class="ctas"><span class="cta">Ver evento <svg class="i"><use href="#arrow"/></svg></span><span class="cta primary">Garantir vaga <svg class="i"><use href="#arrow"/></svg></span></div>
+            </div>
+          </article>
+          <p class="slot-note">Data escrita sempre no mesmo formato, gerada da data real.</p>
+        </div>
+        <div class="slot">
+          <p class="slot-label" style="color:var(--fg)"><span class="dotk"></span>Futuro · inscrições fechadas</p>
+          <article class="ec neutral-top">
+            <div class="ec-top"><span class="badge b-soldout"><span class="d hollow"></span>Inscrições encerradas</span><span class="badge b-when"><svg class="i"><use href="#clock"/></svg>Em 19 dias</span></div>
+            <div class="banner bn-hib"><span>Híbrido<em>Race</em></span></div>
+            <div class="ec-body">
+              <div class="ec-head"><div class="logo">HR</div><div><p class="aux fg">Evento confirmado. Inscrições online encerradas pelo organizador.</p><p class="ec-title">Híbirdo Race</p></div></div>
+              <dl class="facts"><div><svg class="i m"><use href="#cal"/></svg><dd class="datebig">sáb, 14 nov 2026</dd></div><div><svg class="i m"><use href="#tag"/></svg><dd class="price">A partir de <b>R$ 330,00</b></dd></div></dl>
+              <div class="ctas"><span class="cta outline full">Ver programação <svg class="i"><use href="#arrow"/></svg></span></div>
+            </div>
+          </article>
+          <p class="slot-note">"Em 19 dias" deixa claro que o evento ainda vai acontecer. Fica na seção de próximos, na ordem da data.</p>
+        </div>
+        <div class="slot">
+          <p class="slot-label" style="color:var(--muted)"><span class="dotk"></span>Realizado · seção "Eventos passados"</p>
+          <article class="ec past">
+            <div class="ec-top"><span class="badge b-past"><svg class="i"><use href="#check"/></svg>Realizado</span><span class="badge b-when" style="color:var(--muted)">Há 8 dias</span></div>
+            <div class="banner bn-xg"><span>X-Games<br>2.0</span></div>
+            <div class="ec-body">
+              <div class="ec-head"><div class="logo">XG</div><div><p class="aux">Aconteceu em 17 e 18 de outubro de 2026.</p><p class="ec-title">X-Games 2.0</p></div></div>
+              <dl class="facts"><div><svg class="i m"><use href="#cal"/></svg><dd class="datebig">17–18 out 2026</dd></div><div><svg class="i m"><use href="#pin"/></svg><dd>Mossoró, RN</dd></div></dl>
+              <div class="ctas"><span class="cta outline full"><svg class="i"><use href="#trophy"/></svg>Ver resultados</span></div>
+            </div>
+          </article>
+          <p class="slot-note">Banner em preto e branco; o resto do card fica legível. Preço sai (não se compra mais); a ação vira o resultado.</p>
+        </div>
+      </div>
+      <div class="home-map">
+        <div class="hm-sec"><b>Próximos eventos</b><div class="hm-items"><i class="y">Simulado Hibrido Race · 31/10</i><i class="y">Chua Experience Cup · 07/11</i><i class="y">Hero Games · 07/11</i><i class="n">Hibrido Games · 14/11</i><i class="n">Híbirdo Race · 14/11</i><i class="y">WOD BASE · 20/11</i><i>…</i><i class="n">Selva Presencial · 16/01</i></div></div>
+        <div class="hm-sec"><b>Eventos passados</b><div class="hm-items"><i class="g">X-Games 2.0 · 18/10</i><i class="g">CN GAMES 26 · 18/10</i><i class="g">Qualifier SELVA · 20/10</i><i class="g">Batalha Light Box · 24/10</i><i>…</i></div></div>
+      </div>
+      <p class="caption">Amarelo = inscrições abertas. Branco = futuro com inscrições encerradas. Cinza = realizado. Ordem real dos eventos lidos hoje, depois da correção.</p>
+      <div class="cols">
+        <div><h4>O que muda</h4><ul>
+          <li>Migration nova: <code>events.start_date</code> e <code>events.end_date</code> (tipo <code>date</code>).</li>
+          <li>Preenchimento dos 22 eventos a partir do texto e do cronograma, conferido um a um antes de gravar; os 5 sem ano entram numa lista para confirmação sua.</li>
+          <li>Painel: seletor de data de início e fim; o texto livre vira "rótulo opcional".</li>
+          <li><code>getEventStatus</code> lê <code>end_date</code> no fuso do evento; a trava do checkout passa a usar a mesma data.</li>
+          <li><code>EventCard</code> com os três estados acima; bootstrap público passa a enviar as datas.</li>
+        </ul></div>
+        <div class="pros"><h4>A favor</h4><ul>
+          <li>Ataca a causa: o sistema deixa de adivinhar a data.</li>
+          <li>Uma só fonte de verdade para home, destaque, página do evento, checkout e desempate do ranking (princípio 2 do produto).</li>
+          <li>Ordem cronológica sempre correta; nada vai para o fim da fila por data ilegível.</li>
+          <li>Prepara o terreno para "Esgotado" no futuro, quando houver contagem de vagas.</li>
+        </ul></div>
+        <div class="cons"><h4>Contra</h4><ul>
+          <li>Mexe no banco de produção (migration + preenchimento): precisa de autorização e da rotina de aplicação.</li>
+          <li>Mais arquivos tocados, incluindo o formulário grande do painel.</li>
+          <li><code>leaderboardStandings.ts</code> usa a data para o desempate antigo da 1ª prova; precisa de teste para não mudar resultado já publicado.</li>
+        </ul></div>
+      </div>
+      <div class="facts-strip">
+        <span class="chip db">Banco: <b>2 colunas novas + preenchimento</b></span>
+        <span class="chip">Arquivos: <b>migration, eventStatus.ts, serverCheckout.ts, bootstrapPayload, AppContext, EventCard, HomeView, admin/page.tsx, i18n</b></span>
+        <span class="chip">Esforço: <b>2 stories (dados + card)</b></span>
+      </div>
+    </article>
+
+    <!-- ===== Opção C ===== -->
+    <article class="option">
+      <div class="opt-head">
+        <div class="stack" style="gap:6px"><p class="opt-letter">Opção C</p><h2>Home em linha do tempo, com a data como protagonista</h2></div>
+      </div>
+      <p class="read" style="color:#cfd3d9">A home deixa de separar por "abertos × passados" e passa a separar por tempo: <strong>Esta semana</strong>, <strong>Próximos</strong> e <strong>Realizados</strong>. Cada card ganha um bloco de data grande sobre o banner, que é a primeira coisa lida. O estado da inscrição desce para uma linha de status logo acima dos botões. Depende da data estruturada da opção B (ou, no mínimo, da correção da A).</p>
+      <div class="row">
+        <div class="slot">
+          <p class="slot-label" style="color:var(--primary)"><span class="dotk"></span>Esta semana · aberto</p>
+          <article class="ec">
+            <div class="banner bn-sim"><span>31<em>de outubro</em></span><div class="tile"><span class="dd">31</span><span class="mm">OUT</span></div></div>
+            <div class="ec-body">
+              <div class="ec-head"><div class="logo">31</div><div><p class="eyebrow">João Pessoa, PB</p><p class="ec-title">Simulado Hibrido Race</p></div></div>
+              <div class="statusline open"><span class="badge b-open" style="min-height:0;border:0;padding:0;background:none"><span class="d"></span></span><span class="grow">Inscrições abertas</span><span class="r">a partir de R$ 300</span></div>
+              <div class="ctas"><span class="cta">Ver evento <svg class="i"><use href="#arrow"/></svg></span><span class="cta primary">Garantir vaga <svg class="i"><use href="#arrow"/></svg></span></div>
+            </div>
+          </article>
+        </div>
+        <div class="slot">
+          <p class="slot-label" style="color:var(--fg)"><span class="dotk"></span>Próximos · inscrições fechadas</p>
+          <article class="ec neutral-top">
+            <div class="banner bn-hib"><span>Híbrido<em>Race</em></span><div class="tile"><span class="dd">14</span><span class="mm">NOV</span></div></div>
+            <div class="ec-body">
+              <div class="ec-head"><div class="logo">HR</div><div><p class="eyebrow" style="color:var(--muted)">João Pessoa, PB</p><p class="ec-title">Híbirdo Race</p></div></div>
+              <div class="statusline closed"><svg class="i m"><use href="#lock"/></svg><span class="grow">Inscrições encerradas</span><span class="r">em 19 dias</span></div>
+              <div class="ctas"><span class="cta outline full">Ver programação <svg class="i"><use href="#arrow"/></svg></span></div>
+            </div>
+          </article>
+        </div>
+        <div class="slot">
+          <p class="slot-label" style="color:var(--muted)"><span class="dotk"></span>Realizados</p>
+          <article class="ec past">
+            <div class="banner bn-xg"><span>X-Games<br>2.0</span><div class="tile"><span class="dd">18</span><span class="mm">OUT</span></div></div>
+            <div class="ec-body">
+              <div class="ec-head"><div class="logo">XG</div><div><p class="eyebrow" style="color:var(--muted)">Mossoró, RN</p><p class="ec-title">X-Games 2.0</p></div></div>
+              <div class="statusline past"><svg class="i m"><use href="#check"/></svg><span class="grow">Realizado</span><span class="r">há 8 dias</span></div>
+              <div class="ctas"><span class="cta outline full"><svg class="i"><use href="#trophy"/></svg>Ver resultados</span></div>
+            </div>
+          </article>
+        </div>
+      </div>
+      <div class="home-map">
+        <div class="hm-sec"><b>Esta semana</b><div class="hm-items"><i class="y">Simulado Hibrido Race · 31/10</i></div></div>
+        <div class="hm-sec"><b>Próximos</b><div class="hm-items"><i class="y">Chua · 07/11</i><i class="y">Hero Games · 07/11</i><i class="n">Hibrido Games · 14/11</i><i class="n">Híbirdo Race · 14/11</i><i>…</i></div></div>
+        <div class="hm-sec"><b>Realizados</b><span>Recolhido por padrão, abre em lista compacta do mais recente para o mais antigo.</span></div>
+      </div>
+      <div class="cols">
+        <div><h4>O que muda</h4><ul>
+          <li>Tudo da opção B (ou da A, com as limitações dela).</li>
+          <li>Card novo: bloco de data no banner, cidade no lugar do rótulo, linha de status.</li>
+          <li><code>HomeView</code>: três seções por tempo; filtros "Ao vivo / Em breve / Finalizados" revistos.</li>
+          <li>Animação de entrada da Story 1.65 refeita para o novo card.</li>
+        </ul></div>
+        <div class="pros"><h4>A favor</h4><ul>
+          <li>Responde primeiro à pergunta que o atleta faz: "quando é?".</li>
+          <li>Cards mais curtos (endereço completo e contagem de divisões vão para a página do evento): cabem mais eventos na tela do celular.</li>
+        </ul></div>
+        <div class="cons"><h4>Contra</h4><ul>
+          <li>Maior custo: redesenho do card e da home logo depois da Story 1.65.</li>
+          <li>Esconde informação que o card mostra hoje (endereço, divisões); precisa de validação com organizadores.</li>
+          <li>Risco de regressão visual em todos os eventos ao mesmo tempo.</li>
+        </ul></div>
+      </div>
+      <div class="facts-strip">
+        <span class="chip db">Banco: <b>o mesmo da opção B</b></span>
+        <span class="chip">Arquivos: <b>B + HomeView, globals.css (motion), testes de motion</b></span>
+        <span class="chip">Esforço: <b>3 stories</b></span>
+      </div>
+    </article>
+  </section>
+
+  <hr>
+
+  <!-- ===================== 4. RECOMENDAÇÃO ===================== -->
+  <section class="section">
+    <div class="read stack">
+      <p class="kicker">4 · Recomendação</p>
+      <h2>Opção B, com uma contenção antes</h2>
+    </div>
+    <div class="verdict read">
+      <p>A causa dos dois problemas é a mesma: o sistema adivinha a data do evento a partir de um texto e, quando não consegue, assume que o evento está aberto. A opção A melhora o palpite; a B elimina o palpite. Como a mesma regra também libera o checkout, a correção precisa ser na origem, e a B é a que deixa home, destaque, página do evento, checkout e ranking lendo a mesma data. A C é um bom passo seguinte, mas redesenha a home logo depois da 1.65 e não resolve nada que a B não resolva.</p>
+    </div>
+    <ol class="steps read">
+      <li><strong>Contenção imediata (com sua autorização):</strong> fechar a venda de X-Games 2.0 e CN GAMES 26 pelo painel (desligar a venda ou marcar como finalizado). O Qualifier SELVA 2027 precisa de cuidado: ele tem fluxo próprio de envios e contestação, então convém confirmar antes se marcar como finalizado afeta essas telas.</li>
+      <li><strong>Story 1 · Dados:</strong> migration com <code>start_date</code>/<code>end_date</code>, preenchimento conferido (você valida os 5 sem ano), regra única no fuso do evento, checkout e ranking apontando para ela, seletor de data no painel.</li>
+      <li><strong>Story 2 · Card:</strong> três estados visuais da opção B, "Ver resultados" nos realizados, textos nas três línguas, testes de regressão atualizados.</li>
+      <li><strong>Depois, se fizer sentido:</strong> "Esgotado" como quarto estado, quando houver contagem pública de vagas por divisão; e a linha do tempo da opção C.</li>
+    </ol>
+
+    <div class="table-wrap">
+      <table class="compare">
+        <thead><tr><th></th><th>A · Pontual</th><th>B · Data real</th><th>C · Linha do tempo</th></tr></thead>
+        <tbody>
+          <tr><td>Tira os 3 eventos passados dos abertos</td><td>Sim</td><td>Sim</td><td>Sim</td></tr>
+          <tr><td>Fecha o checkout deles</td><td>Sim</td><td>Sim</td><td>Sim</td></tr>
+          <tr><td>Impede que volte a acontecer</td><td>Em parte (exige ano)</td><td>Sim</td><td>Sim</td></tr>
+          <tr><td>Vendas fechadas ≠ realizado</td><td>Sim</td><td>Sim, com "faltam X dias"</td><td>Sim, data em destaque</td></tr>
+          <tr><td>Fuso do evento</td><td>Não</td><td>Sim</td><td>Sim</td></tr>
+          <tr><td>Mexe no banco</td><td>Não</td><td>Sim</td><td>Sim</td></tr>
+          <tr><td>Esforço</td><td>1 story</td><td>2 stories</td><td>3 stories</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="foot">Nenhum código, dado, autenticação ou infraestrutura foi alterado. Os dados acima vêm da leitura do endpoint público no servidor local e da leitura do código em main. As maquetes usam fundos desenhados no lugar dos banners reais, que não carregam aqui.</p>
+  </section>
+</main>

@@ -229,7 +229,8 @@ test('createEvent e updateEvent validam o ponto com validateEventCoordinates dep
 });
 
 test('bootstrap: PUBLIC_EVENT_SELECT termina com latitude, longitude e o legado não as pede', () => {
-  assert.match(PUBLIC_EVENT_SELECT, /, shirt_mode, shirt_addon_price, latitude, longitude$/);
+  // Story 1.71: as datas do evento vêm logo depois do ponto do mapa.
+  assert.match(PUBLIC_EVENT_SELECT, /, shirt_mode, shirt_addon_price, latitude, longitude, start_date, end_date$/);
   assert.doesNotMatch(PUBLIC_EVENT_SELECT_LEGACY, /latitude|longitude/);
   assert.match(PUBLIC_EVENT_SELECT_LEGACY, /, shirt_mode, shirt_addon_price$/);
   // Os dois bootstraps (público e autenticado) usam o fallback.

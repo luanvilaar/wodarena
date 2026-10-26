@@ -70,7 +70,7 @@ export async function GET(request: Request) {
     const eventsPromise = session.role === 'manager'
       ? readEventsWithFeaturedFallback(
         'eventos do gestor',
-        () => supabaseAdmin.from('events').select(PUBLIC_EVENT_SELECT).eq('organizer_id', session.id),
+        (select) => supabaseAdmin.from('events').select(select).eq('organizer_id', session.id),
         () => supabaseAdmin.from('events').select(PUBLIC_EVENT_SELECT_LEGACY).eq('organizer_id', session.id)
       )
       : session.role === 'judge'
@@ -80,7 +80,7 @@ export async function GET(request: Request) {
           .in('id', judgeEventIds), 'eventos atribuídos ao judge')
       : readEventsWithFeaturedFallback(
         'eventos autenticados',
-        () => supabaseAdmin.from('events').select(PUBLIC_EVENT_SELECT),
+        (select) => supabaseAdmin.from('events').select(select),
         () => supabaseAdmin.from('events').select(PUBLIC_EVENT_SELECT_LEGACY)
       );
 

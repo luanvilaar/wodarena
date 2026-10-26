@@ -79,13 +79,105 @@ export function hasEventDatePassed(dateText?: string, now = new Date()): boolean
   return now >= endOfEventDay;
 }
 
-type EventOrderInput = Pick<Event, 'name' | 'date'>;
+// Datas estruturadas do evento (Story 1.71). Sem elas, as regras abaixo caem
+// na leitura do texto livre de `date`, como antes da migration.
+type EventDatesInput = Pick<Event, 'date'> & Partial<Pick<Event, 'startDate' | 'endDate' | 'timeZone'>>;
+
+const DEFAULT_EVENT_TIME_ZONE = 'America/Fortaleza';
+const ISO_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Devolve a data YYYY-MM-DD quando é um dia de calendário válido; senão null. */
+export function readIsoDate(value?: string | null): string | null {
+  if (typeof value !== 'string') return null;
+  const text = value.trim().slice(0, 10);
+  const match = text.match(ISO_DATE_PATTERN);
+  if (!match) return null;
+  return createLocalDate(Number(match[1]), Number(match[2]) - 1, Number(match[3])) ? text : null;
+}
+
+const isoToUtcDay = (isoDate: string) => {
+  const [year, month, day] = isoDate.split('-').map(Number);
+  return Date.UTC(year, month - 1, day);
+};
+
+const daysBetween = (fromIso: string, toIso: string) =>
+  Math.round((isoToUtcDay(toIso) - isoToUtcDay(fromIso)) / DAY_MS);
+
+/** Dia de hoje (YYYY-MM-DD) no fuso do evento; fuso inválido cai no padrão da plataforma. */
+export function getEventToday(timeZone?: string, now = new Date()): string {
+  const format = (zone: string) => {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: zone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(now);
+    const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? '';
+    return `${part('year')}-${part('month')}-${part('day')}`;
+  };
+
+  try {
+    return format(timeZone || DEFAULT_EVENT_TIME_ZONE);
+  } catch {
+    return format(DEFAULT_EVENT_TIME_ZONE);
+  }
+}
+
+/** Primeiro e último dia estruturados; um só preenchido vale para os dois. */
+export function getEventDateRange(event: Partial<Pick<Event, 'startDate' | 'endDate'>>): { start: string; end: string } | null {
+  const start = readIsoDate(event.startDate);
+  const end = readIsoDate(event.endDate);
+  if (!start && !end) return null;
+  return { start: start ?? end!, end: end ?? start! };
+}
+
+/**
+ * O evento já aconteceu quando, no fuso dele, o dia de hoje passou do último
+ * dia. Sem datas estruturadas, vale a leitura do texto (hasEventDatePassed).
+ */
+export function hasEventEnded(event: EventDatesInput, now = new Date()): boolean {
+  const range = getEventDateRange(event);
+  if (range) return getEventToday(event.timeZone, now) > range.end;
+  return hasEventDatePassed(event.date, now);
+}
+
+export type EventTiming =
+  | { kind: 'upcoming'; days: number }
+  | { kind: 'today' }
+  | { kind: 'ongoing' }
+  | { kind: 'ended'; days: number };
+
+/**
+ * Distância em dias de calendário entre hoje (no fuso do evento) e o evento,
+ * para o marcador do card ("Em 5 dias", "Há 8 dias"). Só com datas estruturadas.
+ */
+export function getEventTiming(event: Partial<Pick<Event, 'startDate' | 'endDate' | 'timeZone'>>, now = new Date()): EventTiming | null {
+  const range = getEventDateRange(event);
+  if (!range) return null;
+
+  const today = getEventToday(event.timeZone, now);
+  if (today < range.start) return { kind: 'upcoming', days: daysBetween(today, range.start) };
+  if (today > range.end) return { kind: 'ended', days: daysBetween(range.end, today) };
+  return today === range.start ? { kind: 'today' } : { kind: 'ongoing' };
+}
+
+type EventOrderInput = Pick<Event, 'name' | 'date'> & Partial<Pick<Event, 'startDate' | 'endDate'>>;
 
 const EVENT_NAME_COLLATOR = new Intl.Collator('pt-BR', { sensitivity: 'base' });
 
+// Próximos em ordem de início; passados pelo último dia (quem terminou por
+// último vem primeiro, mesmo que tenha começado antes).
+const getEventOrderDate = (event: EventOrderInput, direction: 1 | -1): Date | null => {
+  const range = getEventDateRange(event);
+  if (!range) return parseEventDate(event.date);
+  const [year, month, day] = (direction === 1 ? range.start : range.end).split('-').map(Number);
+  return createLocalDate(year, month - 1, day);
+};
+
 const compareEventsByDate = (a: EventOrderInput, b: EventOrderInput, direction: 1 | -1): number => {
-  const dateA = parseEventDate(a.date);
-  const dateB = parseEventDate(b.date);
+  const dateA = getEventOrderDate(a, direction);
+  const dateB = getEventOrderDate(b, direction);
 
   // Eventos sem data legível ficam sempre no fim, independente da direção.
   if (!dateA && !dateB) return EVENT_NAME_COLLATOR.compare(a.name ?? '', b.name ?? '');
@@ -108,25 +200,35 @@ export function compareEventsByDateDesc(a: EventOrderInput, b: EventOrderInput):
   return compareEventsByDate(a, b, -1);
 }
 
-export function getEventStatus(event: Pick<Event, 'status' | 'date' | 'registrationDeadline'>): EventLifecycle {
+const getHoursUntilDeadline = (registrationDeadline?: string): number | null => {
+  if (!registrationDeadline) return null;
+  const hours = (new Date(registrationDeadline).getTime() - Date.now()) / (1000 * 60 * 60);
+  return Number.isNaN(hours) ? null : hours;
+};
+
+/** Prazo de inscrição vencido: fecha a inscrição, mas o evento continua por acontecer. */
+export function hasRegistrationDeadlinePassed(registrationDeadline?: string): boolean {
+  const hoursUntilDeadline = getHoursUntilDeadline(registrationDeadline);
+  return hoursUntilDeadline !== null && hoursUntilDeadline < 0;
+}
+
+type EventLifecycleInput = Pick<Event, 'status' | 'date' | 'registrationDeadline'> & Partial<Pick<Event, 'startDate' | 'endDate' | 'timeZone'>>;
+
+export function getEventStatus(event: EventLifecycleInput): EventLifecycle {
   if (event.status === 'finished') return 'finished';
 
-  if (hasEventDatePassed(event.date)) return 'finished';
+  if (hasEventEnded(event)) return 'finished';
 
-  if (event.registrationDeadline) {
-    const deadline = new Date(event.registrationDeadline);
-    const now = new Date();
-    const hoursUntilDeadline = (deadline.getTime() - now.getTime()) / (1000 * 60 * 60);
-
-    if (!Number.isNaN(hoursUntilDeadline) && hoursUntilDeadline < 0) return 'finished';
-    if (hoursUntilDeadline <= CLOSING_THRESHOLD_HOURS) return 'closing';
+  const hoursUntilDeadline = getHoursUntilDeadline(event.registrationDeadline);
+  if (hoursUntilDeadline !== null && hoursUntilDeadline >= 0 && hoursUntilDeadline <= CLOSING_THRESHOLD_HOURS) {
+    return 'closing';
   }
 
   return 'active';
 }
 
 export function getRegistrationAvailability(
-  event: Pick<Event, 'status' | 'date' | 'registrationDeadline' | 'isTicketingActive'>,
+  event: EventLifecycleInput & Pick<Event, 'isTicketingActive'>,
 ): RegistrationAvailability {
   const lifecycle = getEventStatus(event);
 
@@ -134,7 +236,7 @@ export function getRegistrationAvailability(
     return { isAvailable: false, lifecycle, reason: 'event_finished' };
   }
 
-  if (event.isTicketingActive === false) {
+  if (event.isTicketingActive === false || hasRegistrationDeadlinePassed(event.registrationDeadline)) {
     return { isAvailable: false, lifecycle, reason: 'sales_closed' };
   }
 

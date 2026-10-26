@@ -4,7 +4,9 @@ import { SupabaseClient } from '@supabase/supabase-js';
 type AthleteRow = Record<string, any>;
 
 export const PUBLIC_EVENT_SELECT_LEGACY = 'id, name, logo_url, banner_url, status, location, date, description, organizer_id, sponsors, format, ticket_price, ticket_slots, is_ticketing_active, time, city, state, rules, instagram, website, event_type, event_schedule, mp_public_key, marketplace_fee, registration_deadline, country_code, currency, time_zone, payment_gateway, default_locale, shirt_mode, shirt_addon_price';
-export const PUBLIC_EVENT_SELECT = 'id, name, logo_url, banner_url, status, location, date, description, organizer_id, sponsors, format, ticket_price, ticket_slots, is_ticketing_active, is_featured, time, city, state, rules, instagram, website, event_type, event_schedule, mp_public_key, marketplace_fee, registration_deadline, country_code, currency, time_zone, payment_gateway, default_locale, shirt_mode, shirt_addon_price, latitude, longitude';
+// Sem as datas estruturadas (Story 1.71): usado quando o banco ainda não tem a migration.
+export const PUBLIC_EVENT_SELECT_WITHOUT_DATES = 'id, name, logo_url, banner_url, status, location, date, description, organizer_id, sponsors, format, ticket_price, ticket_slots, is_ticketing_active, is_featured, time, city, state, rules, instagram, website, event_type, event_schedule, mp_public_key, marketplace_fee, registration_deadline, country_code, currency, time_zone, payment_gateway, default_locale, shirt_mode, shirt_addon_price, latitude, longitude';
+export const PUBLIC_EVENT_SELECT = `${PUBLIC_EVENT_SELECT_WITHOUT_DATES}, start_date, end_date`;
 export const PUBLIC_ATHLETE_SELECT = 'id, name, box, country, division_id, gender, is_team, city, state, instagram, team_members';
 export const PUBLIC_SCORE_SELECT = 'athlete_id, workout_id, result, value, rank, points, splits, result_status';
 export const PUBLIC_DIVISION_SELECT = 'id, event_id, name, category, type, slots_limit, price, is_active, order_index, use_age_groups, age_groups, course_layout, is_course_published';
@@ -21,11 +23,17 @@ type BootstrapQueryResult<T> = {
 // no select legado em vez de falhar: is_featured (destaque da home) e
 // latitude/longitude (ponto do mapa, Story 1.41).
 const LEGACY_FALLBACK_COLUMNS = ['is_featured', 'latitude', 'longitude'] as const;
+// Datas do evento (Story 1.71): se faltarem, refaz o select completo sem elas,
+// sem perder destaque e ponto do mapa; o app volta a ler o texto de `date`.
+const EVENT_DATE_COLUMNS = ['start_date', 'end_date'] as const;
 
-const findMissingEventColumn = (error: BootstrapQueryResult<unknown>['error']) => {
+const findMissingEventColumn = (
+  error: BootstrapQueryResult<unknown>['error'],
+  columns: readonly string[] = LEGACY_FALLBACK_COLUMNS
+) => {
   if (!error || (error.code !== '42703' && error.code !== 'PGRST204')) return null;
   const message = String(error.message || '');
-  return LEGACY_FALLBACK_COLUMNS.find((column) => message.includes(column)) || null;
+  return columns.find((column) => message.includes(column)) || null;
 };
 
 const withDefaultFeaturedFlag = <T>(rows: T): T => {
@@ -63,10 +71,18 @@ export const readBootstrapQuery = async <T>(
 
 export const readEventsWithFeaturedFallback = async <T>(
   label: string,
-  primaryQuery: () => PromiseLike<BootstrapQueryResult<T>>,
+  // O select chega como string montada, que o tipo do Supabase não consegue ler:
+  // as linhas seguem o formato do select legado (T), mais as colunas novas.
+  primaryQuery: (select: string) => PromiseLike<BootstrapQueryResult<unknown>>,
   legacyQuery: () => PromiseLike<BootstrapQueryResult<T>>
 ): Promise<T> => {
-  const result = await primaryQuery();
+  let result = await primaryQuery(PUBLIC_EVENT_SELECT) as BootstrapQueryResult<T>;
+
+  const missingDateColumn = findMissingEventColumn(result.error, EVENT_DATE_COLUMNS);
+  if (missingDateColumn) {
+    console.warn('[Bootstrap Query] Datas do evento ausentes, lendo sem elas:', JSON.stringify({ label, column: missingDateColumn }));
+    result = await primaryQuery(PUBLIC_EVENT_SELECT_WITHOUT_DATES) as BootstrapQueryResult<T>;
+  }
 
   const missingColumn = findMissingEventColumn(result.error);
   if (missingColumn) {
@@ -156,7 +172,7 @@ export const buildPublicBootstrapPayload = async (supabaseAdmin: SupabaseClient)
   ] = await Promise.all([
     readEventsWithFeaturedFallback(
       'eventos públicos',
-      () => supabaseAdmin.from('events').select(PUBLIC_EVENT_SELECT),
+      (select) => supabaseAdmin.from('events').select(select),
       () => supabaseAdmin.from('events').select(PUBLIC_EVENT_SELECT_LEGACY)
     ),
     readBootstrapQuery('divisões públicas', supabaseAdmin
@@ -199,7 +215,7 @@ export const buildPublicEventBootstrapPayload = async (
   const [event, divisions, workouts] = await Promise.all([
     readEventsWithFeaturedFallback(
       'evento público',
-      () => supabaseAdmin.from('events').select(PUBLIC_EVENT_SELECT).eq('id', eventId).maybeSingle(),
+      (select) => supabaseAdmin.from('events').select(select).eq('id', eventId).maybeSingle(),
       () => supabaseAdmin.from('events').select(PUBLIC_EVENT_SELECT_LEGACY).eq('id', eventId).maybeSingle()
     ),
     readBootstrapQuery('divisões do evento', supabaseAdmin

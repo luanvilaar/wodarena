@@ -64,7 +64,8 @@ test('featured home event persistence is owner-only and bypasses generic event u
   assert.match(adminPersistence, /delete event\.is_featured/);
   assert.match(adminPersistence, /'is_featured' in payload\.data/);
   assert.match(adminPersistence, /Use a acao setFeaturedHomeEvent/);
-  assert.match(adminPersistence, /getEventStatus\(event\) === 'finished'/);
+  // Story 1.71: o evento é lido com as datas e convertido antes da regra.
+  assert.match(adminPersistence, /getEventStatus\(toEventLifecycleInput\(event\)\) === 'finished'/);
   assert.match(adminPersistence, /Apenas eventos ativos podem ser destacados na home/);
 });
 

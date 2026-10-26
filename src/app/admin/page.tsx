@@ -91,6 +91,7 @@ import { buildDivisionOrderMap, getDivisionOrderPosition, moveDivisionId, shiftD
 import { sortWorkouts } from '@/lib/workoutOrder';
 import { buildManagerFinanceSummary } from '@/lib/managerFinance';
 import { getTeamDisplayName } from '@/lib/teamDisplay';
+import { buildEventDateLabel, resolveEventDateForm } from '@/lib/eventDates';
 import { fortalezaDateTimeLocalToUtc, normalizeQualifierSubmissionWindow, utcToFortalezaDateTimeLocal } from '@/lib/submissionWindow';
 import {
   canChangeQualifierWorkoutType,
@@ -734,7 +735,10 @@ export default function AdminPage() {
   // 3. Estados dos Formulários
   // Cadastro de Evento (Novo Evento)
   const [eventName, setEventName] = useState('');
+  // eventDate é o texto exibido (opcional); início e término decidem o ciclo do evento (Story 1.71).
   const [eventDate, setEventDate] = useState('');
+  const [eventStartDate, setEventStartDate] = useState('');
+  const [eventEndDate, setEventEndDate] = useState('');
   const [eventLocation, setEventLocation] = useState('');
   const [eventDescription, setEventDescription] = useState('');
   const [eventStatus, setEventStatus] = useState<EventStatus>('upcoming');
@@ -761,6 +765,8 @@ export default function AdminPage() {
   // Edição do Evento Selecionado (Aba: Informações Gerais)
   const [editEventName, setEditEventName] = useState('');
   const [editEventDate, setEditEventDate] = useState('');
+  const [editEventStartDate, setEditEventStartDate] = useState('');
+  const [editEventEndDate, setEditEventEndDate] = useState('');
   const [editEventLocation, setEditEventLocation] = useState('');
   const [editEventDescription, setEditEventDescription] = useState('');
   const [editEventStatus, setEditEventStatus] = useState<EventStatus>('upcoming');
@@ -1726,8 +1732,14 @@ export default function AdminPage() {
   // Enviar formulário de Evento
   const handleCreateEvent = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!eventName || !eventDate || !eventLocation) {
+    if (!eventName || !eventLocation) {
       setAdminNotice({ text: 'Preencha os campos obrigatórios antes de salvar o evento.', tone: 'error' });
+      return;
+    }
+
+    const eventDates = resolveEventDateForm({ startDate: eventStartDate, endDate: eventEndDate, label: eventDate });
+    if (!eventDates.ok) {
+      setAdminNotice({ text: `Revise as datas do evento: ${eventDates.error}`, tone: 'error' });
       return;
     }
 
@@ -1748,7 +1760,9 @@ export default function AdminPage() {
     try {
       await addEvent({
         name: eventName,
-        date: eventDate,
+        date: eventDates.label,
+        startDate: eventDates.startDate,
+        endDate: eventDates.endDate,
         location: eventLocation,
         description: eventDescription || 'Sem descrição cadastrada.',
         status: eventStatus,
@@ -1779,6 +1793,8 @@ export default function AdminPage() {
       // Reset
       setEventName('');
       setEventDate('');
+      setEventStartDate('');
+      setEventEndDate('');
       setEventLocation('');
       setEventDescription('');
       setEventLogo('');
@@ -1810,9 +1826,19 @@ export default function AdminPage() {
   };
 
   // Inicializar formulário de edição de evento
+  // Texto da data gerado das datas antigas fica velho quando elas mudam: limpa
+  // para ser gerado de novo ao salvar. Texto digitado pelo gestor fica.
+  const clearGeneratedEditEventDateLabel = () => {
+    if (!editEventStartDate) return;
+    const generated = buildEventDateLabel(editEventStartDate, editEventEndDate || editEventStartDate);
+    if (editEventDate.trim() === generated) setEditEventDate('');
+  };
+
   const initEventEditForm = (evt: Event) => {
     setEditEventName(evt.name);
     setEditEventDate(evt.date);
+    setEditEventStartDate(evt.startDate || '');
+    setEditEventEndDate(evt.endDate || '');
     setEditEventLocation(evt.location);
     setEditEventDescription(evt.description);
     setEditEventStatus(evt.status);
@@ -1903,6 +1929,12 @@ export default function AdminPage() {
     e.preventDefault();
     if (!selectedEventToManage) return;
 
+    const eventDates = resolveEventDateForm({ startDate: editEventStartDate, endDate: editEventEndDate, label: editEventDate });
+    if (!eventDates.ok) {
+      setAdminNotice({ text: `Revise as datas do evento: ${eventDates.error}`, tone: 'error' });
+      return;
+    }
+
     const shirtSettings = resolveShirtSettingsForSave(
       editEventShirtMode,
       editEventShirtAddonPrice,
@@ -1931,7 +1963,9 @@ export default function AdminPage() {
     try {
       await updateEvent(selectedEventToManage.id, {
         name: editEventName,
-        date: editEventDate,
+        date: eventDates.label,
+        startDate: eventDates.startDate,
+        endDate: eventDates.endDate,
         location: editEventLocation,
         description: editEventDescription,
         status: editEventStatus,
@@ -1959,7 +1993,9 @@ export default function AdminPage() {
         return {
           ...prev,
           name: editEventName,
-          date: editEventDate,
+          date: eventDates.label,
+          startDate: eventDates.startDate,
+          endDate: eventDates.endDate,
           location: editEventLocation,
           description: editEventDescription,
           status: editEventStatus,
@@ -1981,7 +2017,9 @@ export default function AdminPage() {
           ...mapPointUpdate
         };
       });
-      // O campo passa a mostrar o valor salvo (arredondado em centavos).
+      // Os campos passam a mostrar o valor salvo (texto gerado, término = início, centavos).
+      setEditEventDate(eventDates.label);
+      setEditEventEndDate(eventDates.endDate);
       setEditEventShirtAddonPrice(toShirtPriceInput(shirtSettings.price));
       if (editEventCoordinatesChanged) {
         setEditEventCoordinates(toCoordinatesInput(mapPointUpdate.latitude, mapPointUpdate.longitude));
@@ -4301,16 +4339,52 @@ export default function AdminPage() {
               />
             </div>
             <div>
-              <label htmlFor="edit-event-date" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Data *</label>
+              <label htmlFor="edit-event-date" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Texto da data</label>
               <input
                 id="edit-event-date"
                 type="text"
-                required
-                placeholder="Ex: 10 e 11 de Outubro, 2026"
+                aria-describedby="edit-event-date-hint"
+                placeholder={editEventStartDate ? buildEventDateLabel(editEventStartDate, editEventEndDate || editEventStartDate) : 'Ex: 17 e 18 de outubro'}
                 value={editEventDate}
                 onChange={(e) => setEditEventDate(e.target.value)}
                 className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white placeholder:text-muted focus:border-primary/50 focus:outline-none"
               />
+              <p id="edit-event-date-hint" className="mt-1 text-[11px] text-muted">Opcional. Em branco, usamos as datas de início e término.</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="edit-event-start-date" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Início *</label>
+              <input
+                id="edit-event-start-date"
+                type="date"
+                required
+                value={editEventStartDate}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  clearGeneratedEditEventDateLabel();
+                  setEditEventStartDate(value);
+                  if (!editEventEndDate || editEventEndDate < value) setEditEventEndDate(value);
+                }}
+                className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white [color-scheme:dark] focus:border-primary/50 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label htmlFor="edit-event-end-date" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Término *</label>
+              <input
+                id="edit-event-end-date"
+                type="date"
+                required
+                min={editEventStartDate || undefined}
+                value={editEventEndDate}
+                onChange={(e) => {
+                  clearGeneratedEditEventDateLabel();
+                  setEditEventEndDate(e.target.value);
+                }}
+                className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white [color-scheme:dark] focus:border-primary/50 focus:outline-none"
+              />
+              <p className="mt-1 text-[11px] text-muted">O evento passa para &quot;Eventos passados&quot; no dia seguinte ao término.</p>
             </div>
           </div>
 
@@ -10040,17 +10114,51 @@ export default function AdminPage() {
                       />
                     </div>
                     <div>
-                      <label htmlFor="event-date" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans">Data *</label>
+                      <label htmlFor="event-date" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans">Texto da data</label>
                       <input
                         id="event-date"
                         name="event-date"
                         type="text"
-                        required
-                        placeholder="Ex: 10 e 11 de Outubro, 2026"
+                        aria-describedby="event-date-hint"
+                        placeholder={eventStartDate ? buildEventDateLabel(eventStartDate, eventEndDate || eventStartDate) : 'Ex: 17 e 18 de outubro'}
                         value={eventDate}
                         onChange={(e) => setEventDate(e.target.value)}
                         className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2.5 text-sm text-white placeholder:text-muted focus:border-primary/50 focus:outline-none"
                       />
+                      <p id="event-date-hint" className="mt-1 text-[11px] text-muted">Opcional. Em branco, usamos as datas de início e término.</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="event-start-date" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans">Início *</label>
+                      <input
+                        id="event-start-date"
+                        name="event-start-date"
+                        type="date"
+                        required
+                        value={eventStartDate}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setEventStartDate(value);
+                          if (!eventEndDate || eventEndDate < value) setEventEndDate(value);
+                        }}
+                        className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2.5 text-sm text-white [color-scheme:dark] focus:border-primary/50 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="event-end-date" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans">Término *</label>
+                      <input
+                        id="event-end-date"
+                        name="event-end-date"
+                        type="date"
+                        required
+                        min={eventStartDate || undefined}
+                        value={eventEndDate}
+                        onChange={(e) => setEventEndDate(e.target.value)}
+                        className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2.5 text-sm text-white [color-scheme:dark] focus:border-primary/50 focus:outline-none"
+                      />
+                      <p className="mt-1 text-[11px] text-muted">O evento passa para &quot;Eventos passados&quot; no dia seguinte ao término.</p>
                     </div>
                   </div>
 

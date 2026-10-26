@@ -793,6 +793,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               status: evt.status,
               location: evt.location,
               date: evt.date,
+              // Datas estruturadas (Story 1.71); ausentes em banco sem a migration.
+              startDate: evt.start_date || undefined,
+              endDate: evt.end_date || undefined,
               description: evt.description,
               organizerId: evt.organizer_id,
               sponsors: evt.sponsors || [],
@@ -1199,6 +1202,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // ponto segue funcionando em banco ainda sem a migration (Story 1.41).
       ...(mapPoint.latitude != null && mapPoint.longitude != null
         ? { latitude: mapPoint.latitude, longitude: mapPoint.longitude }
+        : {}),
+      // Datas estruturadas (Story 1.71): o servidor exige as duas juntas.
+      ...(newEvent.startDate && newEvent.endDate
+        ? { start_date: newEvent.startDate, end_date: newEvent.endDate }
         : {})
     };
 
@@ -2212,6 +2219,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (updatedData.status !== undefined) dbPayload.status = updatedData.status;
     if (updatedData.location !== undefined) dbPayload.location = updatedData.location;
     if (updatedData.date !== undefined) dbPayload.date = updatedData.date;
+    // Datas estruturadas (Story 1.71): sempre as duas juntas.
+    if (updatedData.startDate !== undefined || updatedData.endDate !== undefined) {
+      dbPayload.start_date = updatedData.startDate || null;
+      dbPayload.end_date = updatedData.endDate || null;
+    }
     if (updatedData.description !== undefined) dbPayload.description = updatedData.description;
     if (updatedData.format !== undefined) dbPayload.format = updatedData.format;
     if (updatedData.ticketPrice !== undefined) dbPayload.ticket_price = updatedData.ticketPrice;

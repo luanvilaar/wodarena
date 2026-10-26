@@ -154,7 +154,13 @@ export interface Event {
   bannerUrl: string;
   status: EventStatus;
   location: string;
+  // Rótulo da data como o gestor quer exibir ("17 e 18 de outubro"). Quem
+  // decide se o evento já aconteceu são startDate/endDate (Story 1.71).
   date: string;
+  // Primeiro e último dia do evento (YYYY-MM-DD). Ausentes em evento antigo
+  // ou em banco sem a migration: aí vale a leitura do texto de `date`.
+  startDate?: string;
+  endDate?: string;
   description: string;
   organizerId: string;
   sponsors: string[];

@@ -47,7 +47,8 @@ test('shirtPricing é um módulo puro: sem imports, sem enum e sem alias', () =>
 test('o snapshot do checkout valida a camisa e calcula o total no servidor', () => {
   assert.match(serverCheckout, /import \{ calculateRegistrationAmounts, getDivisionParticipantCount, normalizeShirtMode, resolveParticipantShirts \} from '@\/lib\/shirtPricing'/);
   assert.ok(snapshotBlock, 'calculateSecureRegistrationSnapshot deve existir');
-  assert.match(snapshotBlock, /is_ticketing_active, shirt_mode, shirt_addon_price'\)/);
+  // Story 1.71: o select ganhou time_zone e passa por selectEventWithDates (datas do evento).
+  assert.match(snapshotBlock, /is_ticketing_active, shirt_mode, shirt_addon_price, time_zone'\s*\)/);
   assert.match(snapshotBlock, /resolveParticipantShirts\(\{ mode: shirtMode, divisionType: division\.type, athleteProfile \}\)/);
   assert.match(snapshotBlock, /throw new RegistrationAccessError\(shirts\.error, 400\)/);
   assert.match(snapshotBlock, /calculateRegistrationAmounts\(\{[\s\S]*discount,[\s\S]*shirtAddonPrice: asNumber\(event\.shirt_addon_price, 0\),[\s\S]*shirtAddonCount: shirts\.addonCount[\s\S]*\}\)/);
@@ -180,7 +181,9 @@ test('respostas de inscrição do painel trazem o adicional da camisa', () => {
 
 test('bootstrap entrega modo e adicional do evento e o adicional da inscrição só no privado', () => {
   // Story 1.41: o select principal ganhou o ponto do mapa depois da camisa; o legado segue igual.
-  assert.match(selectList(bootstrapPayload, 'PUBLIC_EVENT_SELECT'), /, shirt_mode, shirt_addon_price, latitude, longitude$/, 'PUBLIC_EVENT_SELECT');
+  // Story 1.71: as datas do evento vêm depois, no PUBLIC_EVENT_SELECT montado sobre este.
+  assert.match(selectList(bootstrapPayload, 'PUBLIC_EVENT_SELECT_WITHOUT_DATES'), /, shirt_mode, shirt_addon_price, latitude, longitude$/, 'PUBLIC_EVENT_SELECT_WITHOUT_DATES');
+  assert.match(bootstrapPayload, /export const PUBLIC_EVENT_SELECT = `\$\{PUBLIC_EVENT_SELECT_WITHOUT_DATES\}, start_date, end_date`;/);
   assert.match(selectList(bootstrapPayload, 'PUBLIC_EVENT_SELECT_LEGACY'), /, shirt_mode, shirt_addon_price$/, 'PUBLIC_EVENT_SELECT_LEGACY');
   assert.match(selectList(bootstrapRoute, 'PRIVATE_REGISTRATION_SELECT'), /shirt_addon_count, shirt_addon_amount/);
   // AC14: o bootstrap público não ganha dado novo de atleta nem de inscrição.
