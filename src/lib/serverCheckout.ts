@@ -3,11 +3,12 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { assertManagerSalesAccessForEvent } from '@/lib/serverManagerAccess';
 import { getRequestSession, hashPassword, verifyRegistrationAccessToken } from '@/lib/serverSecurity';
 import { sendRegistrationEmail } from '@/lib/resend';
+import { loadRegistrationConfirmation } from '@/lib/serverRegistrationConfirmation';
 import { getRegistrationAvailability } from '@/lib/eventStatus';
 import { selectEventWithDates, toEventLifecycleInput, type EventLifecycleRow } from '@/lib/serverEventLifecycle';
 import { calculateRegistrationAmounts, getDivisionParticipantCount, normalizeShirtMode, resolveParticipantShirts } from '@/lib/shirtPricing';
 import { createAthleteId, createRegistrationId } from '@/lib/registrationIds';
-import { Registration, Athlete, Event, AppLocale } from '@/types';
+import { Registration } from '@/types';
 
 type RegistrationInput = Record<string, unknown>;
 type AthleteInput = Record<string, unknown>;
@@ -510,106 +511,17 @@ export const triggerRegistrationApprovedEmail = async (
   registrationId: string
 ) => {
   try {
-    const snapshot = await loadRegistrationCheckoutSnapshot(supabaseAdmin, registrationId);
-    
-    const { data: dbEvent, error: eventError } = await supabaseAdmin
-      .from('events')
-      .select('*')
-      .eq('id', snapshot.eventId)
-      .maybeSingle();
-
-    if (eventError || !dbEvent) {
-      console.error(`[Email Trigger] Evento ${snapshot.eventId} não encontrado para envio de e-mail.`);
-      return { success: false, error: 'Evento não encontrado.' };
+    // Mesma inscrição, evento (com datas estruturadas) e atleta do comprovante no app
+    // e da segunda via: o e-mail do servidor não monta os dados por conta própria.
+    const loaded = await loadRegistrationConfirmation(supabaseAdmin, registrationId);
+    if (!loaded.ok) {
+      console.error(`[Email Trigger] Inscrição ${registrationId} não carregada para o e-mail: ${loaded.error}`);
+      return { success: false, error: loaded.error };
     }
 
-    const event: Event = {
-      id: dbEvent.id,
-      name: dbEvent.name,
-      logoUrl: dbEvent.logo_url,
-      bannerUrl: dbEvent.banner_url,
-      status: dbEvent.status,
-      location: dbEvent.location,
-      date: dbEvent.date,
-      description: dbEvent.description,
-      organizerId: dbEvent.organizer_id,
-      sponsors: dbEvent.sponsors || [],
-      divisions: [],
-      workouts: [],
-      format: dbEvent.format || 'individual',
-      ticketPrice: dbEvent.ticket_price,
-      ticketSlots: dbEvent.ticket_slots,
-      isTicketingActive: dbEvent.is_ticketing_active,
-      time: dbEvent.time || '',
-      city: dbEvent.city || '',
-      state: dbEvent.state || '',
-      rules: dbEvent.rules || '',
-      instagram: dbEvent.instagram || '',
-      website: dbEvent.website || '',
-      eventType: dbEvent.event_type || 'functional_fitness',
-      currency: dbEvent.currency || 'BRL',
-      defaultLocale: (dbEvent.default_locale as AppLocale) || 'pt-br',
-      shirtMode: normalizeShirtMode(dbEvent.shirt_mode),
-      shirtAddonPrice: Number(dbEvent.shirt_addon_price) || 0
-    };
-
-    const registration: Registration = {
-      id: snapshot.registrationId,
-      eventId: snapshot.eventId,
-      divisionId: String(snapshot.registrationData.divisionId),
-      userId: snapshot.registrationData.userId ? String(snapshot.registrationData.userId) : undefined,
-      athleteId: snapshot.registrationData.athleteId ? String(snapshot.registrationData.athleteId) : undefined,
-      athleteName: String(snapshot.registrationData.athleteName),
-      athleteEmail: String(snapshot.registrationData.athleteEmail),
-      athletePhone: String(snapshot.registrationData.athletePhone),
-      box: snapshot.registrationData.box ? String(snapshot.registrationData.box) : '',
-      gender: snapshot.registrationData.gender as 'male' | 'female',
-      ticketType: String(snapshot.registrationData.ticketType),
-      ticketPrice: Number(snapshot.registrationData.ticketPrice),
-      quantity: Number(snapshot.registrationData.quantity),
-      totalPaid: Number(snapshot.registrationData.totalPaid),
-      shirtAddonCount: Number(snapshot.registrationData.shirtAddonCount) || 0,
-      shirtAddonAmount: Number(snapshot.registrationData.shirtAddonAmount) || 0,
-      createdAt: String(snapshot.registrationData.createdAt),
-      couponCode: snapshot.registrationData.couponCode ? String(snapshot.registrationData.couponCode) : undefined,
-      paymentStatus: 'payment_approved',
-      updatedAt: new Date().toISOString(),
-      locale: (snapshot.registrationData.locale as AppLocale) || undefined,
-      currency: snapshot.registrationData.currency ? String(snapshot.registrationData.currency) as Registration['currency'] : undefined
-    };
-
-    const normalizeTeamMembers = (value: unknown) => {
-      if (!value) return [];
-      if (Array.isArray(value)) return value;
-      if (typeof value === 'string') {
-        try {
-          const parsed = JSON.parse(value);
-          return Array.isArray(parsed) ? parsed : [];
-        } catch {
-          return [];
-        }
-      }
-      return [];
-    };
-
-    const athlete: Athlete = {
-      id: snapshot.athleteProfile.id ? String(snapshot.athleteProfile.id) : `ath-${Date.now()}`,
-      name: String(snapshot.athleteProfile.name),
-      box: snapshot.athleteProfile.box ? String(snapshot.athleteProfile.box) : 'Independente',
-      country: String(snapshot.athleteProfile.country || 'BR'),
-      divisionId: String(snapshot.athleteProfile.divisionId),
-      birthDate: snapshot.athleteProfile.birthDate ? String(snapshot.athleteProfile.birthDate) : '',
-      gender: snapshot.athleteProfile.gender as 'male' | 'female',
-      city: snapshot.athleteProfile.city ? String(snapshot.athleteProfile.city) : '',
-      state: snapshot.athleteProfile.state ? String(snapshot.athleteProfile.state) : '',
-      instagram: snapshot.athleteProfile.instagram ? String(snapshot.athleteProfile.instagram) : '',
-      photoUrl: snapshot.athleteProfile.photoUrl ? String(snapshot.athleteProfile.photoUrl) : '',
-      shirtSize: snapshot.athleteProfile.shirtSize ? String(snapshot.athleteProfile.shirtSize) : '',
-      email: String(snapshot.athleteProfile.email),
-      phone: String(snapshot.athleteProfile.phone),
-      isTeam: Boolean(snapshot.athleteProfile.isTeam),
-      teamMembers: normalizeTeamMembers(snapshot.athleteProfile.teamMembers)
-    };
+    // Quem chama já gravou a aprovação; o e-mail só sai para inscrição aprovada.
+    const registration: Registration = { ...loaded.registration, paymentStatus: 'payment_approved' };
+    const { athlete, event } = loaded;
 
     console.log(`[Email Trigger] Disparando e-mail de confirmação para a inscrição ${registrationId}...`);
     // Uma chave por inscrição: aprovação reportada por mais de um caminho (consulta de
@@ -621,7 +533,7 @@ export const triggerRegistrationApprovedEmail = async (
       registration.locale || event.defaultLocale,
       { idempotencyKey: `registration-confirmed/${registrationId}` }
     );
-    
+
     if (!emailResult.success) {
       console.error(`[Email Trigger] Falha ao enviar e-mail via Resend:`, emailResult.error);
     } else {

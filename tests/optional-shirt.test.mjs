@@ -10,6 +10,7 @@ const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
 const shirtPricing = read('../src/lib/shirtPricing.ts');
 const serverCheckout = read('../src/lib/serverCheckout.ts');
+const registrationConfirmation = read('../src/lib/serverRegistrationConfirmation.ts');
 const startRoute = read('../src/app/api/registrations/start/route.ts');
 const persistenceRoute = read('../src/app/api/admin/persistence/route.ts');
 const bootstrapPayload = read('../src/lib/bootstrapPayload.ts');
@@ -118,10 +119,12 @@ test('is_team sai da categoria no servidor, não do navegador (L-5)', () => {
 test('pagamento, conciliação e e-mail leem o adicional já gravado', () => {
   assert.match(loadSnapshotBlock, /shirtAddonCount: Number\(registration\.shirt_addon_count\) \|\| 0/);
   assert.match(loadSnapshotBlock, /shirtAddonAmount: Number\(registration\.shirt_addon_amount\) \|\| 0/);
-  assert.match(emailTriggerBlock, /shirtMode: normalizeShirtMode\(dbEvent\.shirt_mode\)/);
-  assert.match(emailTriggerBlock, /shirtAddonPrice: Number\(dbEvent\.shirt_addon_price\) \|\| 0/);
-  assert.match(emailTriggerBlock, /shirtAddonCount: Number\(snapshot\.registrationData\.shirtAddonCount\) \|\| 0/);
-  assert.match(emailTriggerBlock, /shirtAddonAmount: Number\(snapshot\.registrationData\.shirtAddonAmount\) \|\| 0/);
+  // O e-mail do servidor usa o mesmo carregador do comprovante (Story 1.76), que lê o adicional gravado.
+  assert.match(emailTriggerBlock, /await loadRegistrationConfirmation\(supabaseAdmin, registrationId\)/);
+  assert.match(registrationConfirmation, /shirtMode: normalizeShirtMode\(dbEvent\.shirt_mode\)/);
+  assert.match(registrationConfirmation, /shirtAddonPrice: Number\(dbEvent\.shirt_addon_price\) \|\| 0/);
+  assert.match(registrationConfirmation, /shirtAddonCount: Number\(dbReg\.shirt_addon_count\) \|\| 0/);
+  assert.match(registrationConfirmation, /shirtAddonAmount: Number\(dbReg\.shirt_addon_amount\) \|\| 0/);
 });
 
 test('nenhuma rota de pagamento conhece a camisa: cobram o total_paid gravado (AC7)', () => {

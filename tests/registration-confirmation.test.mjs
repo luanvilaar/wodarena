@@ -27,6 +27,7 @@ const { renderRegistrationPoster } = await importServerModule('lib/registrationP
 const { sendRegistrationEmail } = await importServerModule('lib/resend.ts');
 const { GET: getPoster } = await importServerModule('app/api/registrations/[id]/poster/route.ts');
 const { createRegistrationAccessToken } = await importServerModule('lib/serverSecurity.ts');
+const { triggerRegistrationApprovedEmail } = await importServerModule('lib/serverCheckout.ts');
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
 const registerModal = read('../src/components/RegisterModal.tsx');
@@ -397,6 +398,24 @@ test('rota da imagem: a inscrição aprovada de outro atleta não aparece com a 
   assert.match(posterRoute, /isPosterEligible\(loaded\.registration\)/);
   assert.match(posterRoute, /checkRateLimit\(/);
   assert.match(posterRoute, /export const runtime = 'nodejs'/);
+});
+
+test('e-mail disparado pelo servidor traz a forma de pagamento, as datas do evento e a chave de idempotência', async (t) => {
+  const sent = captureEmails(t);
+  database = seedPosterDatabase();
+  const result = await triggerRegistrationApprovedEmail(database.client, REG_ID);
+  assert.equal(result.success, true);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].headers['Idempotency-Key'], `registration-confirmed/${REG_ID}`);
+  assert.equal(sent[0].body.to, 'marina@example.com');
+  assert.match(sent[0].body.html, />Forma de Pagamento<[\s\S]*?Pix/);
+  assert.match(sent[0].body.html, /15 nov 2026/, 'datas estruturadas do evento, como no comprovante do app');
+  assert.equal(sent[0].body.attachments.length, 1);
+
+  database = seedPosterDatabase();
+  const missing = await triggerRegistrationApprovedEmail(database.client, 'reg-inexistente');
+  assert.equal(missing.success, false);
+  assert.equal(sent.length, 1, 'inscrição inexistente não envia nada');
 });
 
 // ---------------------------------------------------------------------------
