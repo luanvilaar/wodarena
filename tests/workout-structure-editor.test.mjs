@@ -569,7 +569,7 @@ test('Intervalado: o treino de referência gera a estrutura v3 válida (18:00, 2
   ]);
   const structure = analysis.structure;
   assert.deepEqual(structure, {
-    version: 4,
+    version: 5,
     format: 'interval',
     totalReps: 21,
     timeCapSeconds: 1080,
@@ -585,7 +585,8 @@ test('Intervalado: o treino de referência gera a estrutura v3 válida (18:00, 2
     maxLoad: null,
     scoreDisplay: null,
     interval: { rounds: 5, onSeconds: 120, offSeconds: 120, max: { id: INTERVAL_MAX_ID, name: 'Squat Clean', load: { value: 80, unit: 'kg' }, note: '' } },
-    distance: null
+    distance: null,
+    tonnage: null
   });
   const checked = validateWorkoutStructure(structure);
   assert.equal(checked.ok, true, checked.error);
@@ -881,7 +882,7 @@ test('Distância: a estrutura gerada é a v4 válida, sem segmentos e sem desemp
   assert.deepEqual(analysis.steps, []);
   const { structure } = analysis;
   assert.deepEqual(structure, {
-    version: 4,
+    version: 5,
     format: 'distance',
     totalReps: 0,
     timeCapSeconds: 1200,
@@ -894,7 +895,8 @@ test('Distância: a estrutura gerada é a v4 válida, sem segmentos e sem desemp
     maxLoad: null,
     scoreDisplay: null,
     interval: null,
-    distance: { unit: 'm', note: '750 m corrida; máx. distância no remo.' }
+    distance: { unit: 'm', note: '750 m corrida; máx. distância no remo.' },
+    tonnage: null
   });
   const checked = validateWorkoutStructure(structure);
   assert.equal(checked.ok, true, checked.error);

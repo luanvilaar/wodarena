@@ -6,8 +6,10 @@ import { Check, ChevronDown, ChevronUp, Maximize, Minus, WifiOff } from 'lucide-
 import {
   broadcastIntervalPhase,
   describeDistanceEntry,
+  describeTonnageEntry,
   describeIntervalClock,
   distanceGapText,
+  tonnageGapText,
   intervalLaneProgress,
   intervalSchemeText,
   type BroadcastLiveEntry,
@@ -41,7 +43,7 @@ const fmt = (seconds: number) => {
 
 const clockTime = (ms: number) => new Date(ms).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 const formatLabel = (format: BroadcastWorkout['format']) => (
-  format === 'amrap' ? 'AMRAP' : format === 'max_load' ? 'Carga máxima' : format === 'interval' ? 'Intervalado' : format === 'distance' ? 'Distância' : 'For Time'
+  format === 'amrap' ? 'AMRAP' : format === 'max_load' ? 'Carga máxima' : format === 'interval' ? 'Intervalado' : format === 'distance' ? 'Distância' : format === 'tonnage' ? 'Tonelagem' : 'For Time'
 );
 /** Rótulo do tempo da prova: o intervalado, o AMRAP e a distância têm duração, nunca "time cap" (Stories 1.63 e 1.69). */
 const capWord = (format: BroadcastWorkout['format']) => (
@@ -182,6 +184,8 @@ type EntryView = { value: string; unit: string; line: string; lineStrong: string
 const describeEntry = (entry: BroadcastLiveEntry, workout: BroadcastWorkout | null, elapsed: number | null): EntryView => {
   // Distância (Story 1.69): o total de metros que o judge lançou, com a unidade; "–" enquanto não houver lançamento.
   if (workout?.format === 'distance') return { ...describeDistanceEntry(entry), capped: false };
+  // Tonelagem (Story 1.81): a tonelagem em kg que o judge registrou, com a liberação da vez antes do levantamento; "–" enquanto não houver repetição.
+  if (workout?.format === 'tonnage') return { ...describeTonnageEntry(entry, workout), capped: false };
   const cap = workout?.timeCapSeconds ?? null;
   const capped = workout?.format === 'for_time' && entry.completedAt === null && cap !== null && elapsed !== null && elapsed >= cap;
   const official = entry.status === 'submitted' && Boolean(entry.officialResult);
@@ -264,6 +268,7 @@ function LiveBoard({ live, now }: { live: NonNullable<BroadcastPayload['live']>;
   if (leader && second) {
     if (workout?.format === 'max_load') { gapLabel = 'Vantagem sobre o 2º'; gapValue = `+${Math.max(0, (leader.scoreKg ?? 0) - (second.scoreKg ?? 0))} kg`; }
     else if (workout?.format === 'distance') { gapLabel = 'Vantagem sobre o 2º'; gapValue = distanceGapText(leader.repsDone, second.repsDone); }
+    else if (workout?.format === 'tonnage') { gapLabel = 'Vantagem sobre o 2º'; gapValue = tonnageGapText(leader.scoreKg ?? 0, second.scoreKg ?? 0); }
     else if (leader.completedAt !== null && second.completedAt !== null) { gapLabel = 'Vantagem sobre o 2º'; gapValue = fmt(second.completedAt - leader.completedAt); }
     else if (leader.completedAt !== null) { gapLabel = '2º lugar'; gapValue = `${second.repsDone} reps`; }
     else { gapLabel = 'Vantagem sobre o 2º'; gapValue = `+${leader.repsDone - second.repsDone} reps`; }

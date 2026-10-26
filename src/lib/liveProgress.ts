@@ -1,4 +1,4 @@
-import { deriveDistanceState, deriveIntervalState, deriveMaxLoadState, deriveSheetState } from '@/lib/workoutStructure';
+import { deriveDistanceState, deriveIntervalState, deriveMaxLoadState, deriveSheetState, deriveTonnageState } from '@/lib/workoutStructure';
 import type { WorkoutStructure } from '@/lib/workoutStructure';
 
 // Progresso ao vivo da súmula para o telão (Story 1.54). Puro e sem DOM: o
@@ -9,7 +9,7 @@ import type { WorkoutStructure } from '@/lib/workoutStructure';
 export type LiveProgress = {
   /** Registros no log quando o resumo foi feito. */
   seq: number;
-  /** Total feito (no AMRAP, rounds completos × round + parcial; no intervalado, a soma do máximo dos rounds que pontuaram; na distância, o total lançado em metros). */
+  /** Total feito (no AMRAP, rounds completos × round + parcial; no intervalado, a soma do máximo dos rounds que pontuaram; na distância, o total lançado em metros; na tonelagem, as repetições válidas do exercício que conta). */
   repsDone: number;
   /** No intervalado, os rounds que pontuaram. */
   roundsCompleted: number;
@@ -22,7 +22,7 @@ export type LiveProgress = {
   completedAt: number | null;
   /** Instante (s) do último registro que conta: a "chegada" para desempatar o parcial. */
   lastMarkAt: number | null;
-  /** Carga máxima: score em kg e tentativas usadas. */
+  /** Carga máxima e tonelagem: score em kg (na tonelagem, a tonelagem corrente) e, na carga máxima, tentativas usadas. */
   scoreKg: number | null;
   attemptsUsed: number | null;
   currentLiftId: string | null;
@@ -81,6 +81,26 @@ export const summarizeLiveProgress = (
       round: null,
       completedAt: null,
       scoreKg: null,
+      attemptsUsed: null,
+      currentLiftId: null
+    };
+  }
+  if (structure?.format === 'tonnage') {
+    // Pelo motor da tonelagem (Story 1.77): `scoreKg` leva a tonelagem corrente, `repsDone` as repetições
+    // válidas e `segments` o feito em cada exercício de liberação. A "chegada" é a da última repetição
+    // que conta (ou o fim da liberação, enquanto não houver repetição); um `undo` não conta.
+    const state = deriveTonnageState(structure, events);
+    return {
+      seq: events.length,
+      lastMarkAt: state.lastRepAt ?? state.releasedAt,
+      clockStartAt,
+      repsDone: state.reps,
+      roundsCompleted: 0,
+      segments: state.segments.slice(0, state.position).map((segment) => segment.done),
+      currentSegmentId: state.currentSegmentId,
+      round: null,
+      completedAt: null,
+      scoreKg: state.tonnageKg,
       attemptsUsed: null,
       currentLiftId: null
     };

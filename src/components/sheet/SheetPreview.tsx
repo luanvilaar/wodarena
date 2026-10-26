@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { SheetDemo } from '@/components/sheet/SheetDemo';
 import type { WorkoutSegment, WorkoutSegmentUnit, WorkoutStructure } from '@/lib/workoutStructure';
 
-// Pré-visualização da súmula do judge (Stories 1.44, 1.47, 1.48 e 1.62), SÓ em
+// Pré-visualização da súmula do judge (Stories 1.44, 1.47, 1.48, 1.62 e 1.80), SÓ em
 // desenvolvimento: provas de exemplo sobre o SheetDemo (relógio e log em
 // memória). Nada é gravado. A página que a usa responde 404 em produção.
 
@@ -31,7 +31,7 @@ const segment = (
 const ENTRY = { mode: 'both', marking: 'reps', publish: 'after_review' } as const;
 
 const FOR_TIME: WorkoutStructure = {
-  version: 4,
+  version: 5,
   format: 'for_time',
   totalReps: 90,
   timeCapSeconds: 600,
@@ -51,11 +51,12 @@ const FOR_TIME: WorkoutStructure = {
   maxLoad: null,
   scoreDisplay: null,
   interval: null,
-  distance: null
+  distance: null,
+  tonnage: null
 };
 
 const UNITS: WorkoutStructure = {
-  version: 4,
+  version: 5,
   format: 'for_time',
   totalReps: 550,
   timeCapSeconds: 900,
@@ -72,11 +73,12 @@ const UNITS: WorkoutStructure = {
   maxLoad: null,
   scoreDisplay: null,
   interval: null,
-  distance: null
+  distance: null,
+  tonnage: null
 };
 
 const AMRAP: WorkoutStructure = {
-  version: 4,
+  version: 5,
   format: 'amrap',
   totalReps: 30,
   timeCapSeconds: 720,
@@ -93,11 +95,12 @@ const AMRAP: WorkoutStructure = {
   maxLoad: null,
   scoreDisplay: 'rounds_reps',
   interval: null,
-  distance: null
+  distance: null,
+  tonnage: null
 };
 
 const MAX_LOAD: WorkoutStructure = {
-  version: 4,
+  version: 5,
   format: 'max_load',
   totalReps: 0,
   timeCapSeconds: 1200,
@@ -119,12 +122,13 @@ const MAX_LOAD: WorkoutStructure = {
   },
   scoreDisplay: null,
   interval: null,
-  distance: null
+  distance: null,
+  tonnage: null
 };
 
 // Story 1.62: o treino de referência do Intervalado (docs/design/intervalado/).
 const INTERVAL: WorkoutStructure = {
-  version: 4,
+  version: 5,
   format: 'interval',
   totalReps: 21,
   timeCapSeconds: 1080,
@@ -140,12 +144,13 @@ const INTERVAL: WorkoutStructure = {
   maxLoad: null,
   scoreDisplay: null,
   interval: { rounds: 5, onSeconds: 120, offSeconds: 120, max: { id: 'mx', name: 'Squat Clean', load: { value: 80, unit: 'kg' }, note: '' } },
-  distance: null
+  distance: null,
+  tonnage: null
 };
 
 // Story 1.68: o treino de referência da Distância (docs/design/distancia/).
 const DISTANCE: WorkoutStructure = {
-  version: 4,
+  version: 5,
   format: 'distance',
   totalReps: 0,
   timeCapSeconds: 1200,
@@ -158,7 +163,53 @@ const DISTANCE: WorkoutStructure = {
   maxLoad: null,
   scoreDisplay: null,
   interval: null,
-  distance: { unit: 'm', note: '750 m corrida; máx. distância no remo. Os parceiros trocam a cada volta da corrida.' }
+  distance: { unit: 'm', note: '750 m corrida; máx. distância no remo. Os parceiros trocam a cada volta da corrida.' },
+  tonnage: null
+};
+
+// Story 1.80: os dois treinos de referência da Tonelagem (docs/design/tonelagem/).
+const TONNAGE_BASE = {
+  version: 5,
+  format: 'tonnage',
+  incomplete: null,
+  tieBreak: null,
+  generator: null,
+  customized: true,
+  entry: ENTRY,
+  maxLoad: null,
+  scoreDisplay: null,
+  interval: null,
+  distance: null
+} as const;
+
+// Treino 1: 10 Pull Ups e 10 Burpees liberam, Squat Clean conta (carga livre, time cap de 10:00).
+const TONNAGE_LIBERATION: WorkoutStructure = {
+  ...TONNAGE_BASE,
+  totalReps: 20,
+  timeCapSeconds: 600,
+  segments: [segment('s1', 1, 'Pull Ups', 10, null), segment('s2', 1, 'Burpees', 10, null)],
+  tonnage: {
+    position: 2,
+    lift: { id: 'tn', name: 'Squat Clean', loadKg: null, note: '' },
+    loadMode: 'athlete',
+    increment: { allowed: false, stepKg: 2.5 },
+    note: ''
+  }
+};
+
+// Treino 2: um exercício só, carga livre que pode subir de 10 em 10 kg, time cap de 03:00.
+const TONNAGE_SINGLE: WorkoutStructure = {
+  ...TONNAGE_BASE,
+  totalReps: 0,
+  timeCapSeconds: 180,
+  segments: [],
+  tonnage: {
+    position: 0,
+    lift: { id: 'tn', name: 'Squat Snatch', loadKg: null, note: '' },
+    loadMode: 'athlete',
+    increment: { allowed: true, stepKg: 10 },
+    note: ''
+  }
 };
 
 const FIXTURES = {
@@ -167,7 +218,9 @@ const FIXTURES = {
   amrap: { label: 'AMRAP 12 min', structure: AMRAP, workoutName: 'Cindy 30 · AMRAP' },
   maxload: { label: 'Carga máxima', structure: MAX_LOAD, workoutName: 'CrossFit Total · Carga máxima' },
   interval: { label: 'Intervalado 5 × 02:00 / 02:00', structure: INTERVAL, workoutName: 'Intervalado 5 × 2′' },
-  distance: { label: 'Distância 20:00', structure: DISTANCE, workoutName: 'Remo e corrida · Distância' }
+  distance: { label: 'Distância 20:00', structure: DISTANCE, workoutName: 'Remo e corrida · Distância' },
+  tonnage1: { label: 'Tonelagem com liberação', structure: TONNAGE_LIBERATION, workoutName: 'Squat Clean · Tonelagem' },
+  tonnage2: { label: 'Tonelagem 03:00', structure: TONNAGE_SINGLE, workoutName: 'Squat Snatch · Tonelagem' }
 } as const;
 
 type FixtureId = keyof typeof FIXTURES;

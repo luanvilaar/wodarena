@@ -702,7 +702,7 @@ test('intervalado: a rota grava e edita a estrutura v3, deriva reps, 18:00 e sem
   assert.deepEqual(created, { status: 200, body: { success: true } });
   const saved = rowOf('wod-int');
   assert.deepEqual(saved.structure, validateWorkoutStructure(intervalStructure()).structure);
-  assert.equal(saved.structure.version, 4);
+  assert.equal(saved.structure.version, 5);
   assert.deepEqual([saved.type, saved.time_cap, saved.tie_breaker], ['reps', '18:00', '']);
   assert.deepEqual(deriveLegacyWorkoutFields(saved.structure), { type: 'reps', timeCap: '18:00', tieBreaker: '' });
 
@@ -736,7 +736,7 @@ test('intervalado: a rota grava e edita a estrutura v3, deriva reps, 18:00 e sem
 
 test('intervalado: o selo da página pública segue vindo do tipo legado (Reps), sem mudança de componente', () => {
   assert.match(read('../src/messages/pt-br.json'), /"typeReps": "Reps"/);
-  assert.match(read('../src/app/[locale]/event/[id]/EventView.tsx'), /wod\.type === 'maxweight' \? 'typeMaxWeight' : wod\.type === 'distance' \? 'typeDistance' : 'typeReps'/);
+  assert.match(read('../src/app/[locale]/event/[id]/EventView.tsx'), /wod\.type === 'maxweight' \? 'typeMaxWeight' : wod\.type === 'distance' \? 'typeDistance' : wod\.type === 'tonnage' \? 'typeTonnage' : 'typeReps'/);
 });
 
 // Story 1.61 (AC6): o que o construtor monta para o Intervalado passa na rota com os legados derivados
@@ -794,7 +794,7 @@ test('distância: a rota grava e edita a estrutura v4, deriva distance, 20:00 e 
   assert.deepEqual(created, { status: 200, body: { success: true } });
   const saved = rowOf('wod-dist');
   assert.deepEqual(saved.structure, validateWorkoutStructure(distanceStructure()).structure);
-  assert.equal(saved.structure.version, 4);
+  assert.equal(saved.structure.version, 5);
   assert.deepEqual([saved.type, saved.time_cap, saved.tie_breaker], ['distance', '20:00', '']);
   assert.deepEqual(deriveLegacyWorkoutFields(saved.structure), { type: 'distance', timeCap: '20:00', tieBreaker: '' });
 
@@ -867,4 +867,68 @@ test('distância pelo construtor: criar com os legados derivados, reabrir, edita
   assert.equal(updated.status, 200, updated.body.error);
   assert.deepEqual([rowOf('wod-di-painel').time_cap, rowOf('wod-di-painel').structure.timeCapSeconds, rowOf('wod-di-painel').structure.distance.note], ['15:00', 900, 'Corrida']);
   assert.equal(editor.summarizeStructure(rowOf('wod-di-painel').structure), 'Distância · 15:00 · maior vence');
+});
+
+// ---------------------------------------------------------------------------
+// Story 1.77: prova de tonelagem (contrato v5). O tipo legado `tonnage` exige a migration da Story 1.78.
+// ---------------------------------------------------------------------------
+
+const tonnageStructure = (overrides = {}, blockOverrides = {}) => ({
+  version: 5, format: 'tonnage', totalReps: 20, timeCapSeconds: 600, incomplete: null, tieBreak: null, generator: null, customized: true,
+  entry: { mode: 'both', marking: 'reps', publish: 'after_review' },
+  segments: [
+    { id: 'pu', round: 1, name: 'Pull Ups', reps: 10, unit: 'reps', load: null, note: '', required: true, mark: 'reps' },
+    { id: 'bp', round: 1, name: 'Burpees', reps: 10, unit: 'reps', load: null, note: '', required: true, mark: 'reps' }
+  ],
+  maxLoad: null, scoreDisplay: null, interval: null, distance: null,
+  tonnage: {
+    position: 2, lift: { id: 'sc', name: 'Squat Clean', loadKg: null, note: '' }, loadMode: 'athlete',
+    increment: { allowed: false, stepKg: 2.5 }, note: '', ...blockOverrides
+  },
+  ...overrides
+});
+
+test('tonelagem: a rota grava e edita a estrutura v5, deriva tonnage, 10:00 e sem desempate, e recusa divergência dos legados e time cap vazio', async (t) => {
+  quietConsole(t);
+  seed();
+  const created = await persist(MANAGER, 'createWorkout', createWorkoutPayload({ id: 'wod-ton', name: 'Squat Clean', description: 'x', code: 'W5', order_index: 5, structure: tonnageStructure() }));
+  assert.deepEqual(created, { status: 200, body: { success: true } });
+  const saved = rowOf('wod-ton');
+  assert.deepEqual(saved.structure, validateWorkoutStructure(tonnageStructure()).structure);
+  assert.equal(saved.structure.version, 5);
+  assert.deepEqual([saved.type, saved.time_cap, saved.tie_breaker], ['tonnage', '10:00', '']);
+  assert.deepEqual(deriveLegacyWorkoutFields(saved.structure), { type: 'tonnage', timeCap: '10:00', tieBreaker: '' });
+
+  assert.equal((await persist(MANAGER, 'createWorkout', createWorkoutPayload({ id: 'wod-ton-2', name: 'Tonelagem 2', structure: tonnageStructure(), type: 'tonnage', time_cap: '10:00', tie_breaker: '' }))).status, 200);
+  const before = database.snapshot();
+  const cases = [
+    [{ type: 'maxweight' }, /^O tipo da prova vem da estrutura \(Tonelagem\) e não pode ser alterado separadamente\.$/],
+    [{ type: 'fortime' }, /^O tipo da prova vem da estrutura \(Tonelagem\) e não pode ser alterado separadamente\.$/],
+    [{ time_cap: '15:00' }, /^O time cap da prova vem da estrutura \(10:00\) e não pode ser alterado separadamente\.$/],
+    [{ tie_breaker: 'Tempo' }, /^O desempate da prova vem da estrutura \(sem desempate\) e não pode ser alterado separadamente\.$/]
+  ];
+  for (const [legacy, message] of cases) {
+    const create = await persist(MANAGER, 'createWorkout', createWorkoutPayload({ id: 'wod-ton-3', name: 'Prova', structure: tonnageStructure(), ...legacy }));
+    assert.equal(create.status, 400, JSON.stringify(legacy));
+    assert.match(create.body.error, message);
+    const update = await persist(MANAGER, 'updateWorkout', updateWorkoutPayload(legacy, 'wod-ton'));
+    assert.equal(update.status, 400, JSON.stringify(legacy));
+    assert.match(update.body.error, message);
+  }
+  assert.deepEqual(database.snapshot(), before, 'nada gravado nas recusas');
+
+  // Editar: o time cap derivado acompanha; time cap vazio, desempate e carga prescrita sem kg são recusados sem eco do JSON.
+  assert.equal((await persist(MANAGER, 'updateWorkout', updateWorkoutPayload({ structure: tonnageStructure({ timeCapSeconds: 900 }) }, 'wod-ton'))).status, 200);
+  assert.deepEqual([rowOf('wod-ton').time_cap, rowOf('wod-ton').structure.timeCapSeconds, rowOf('wod-ton').type], ['15:00', 900, 'tonnage']);
+  const noCap = await persist(MANAGER, 'updateWorkout', updateWorkoutPayload({ structure: tonnageStructure({ timeCapSeconds: null }) }, 'wod-ton'));
+  assert.equal(noCap.status, 400);
+  assert.match(noCap.body.error, /^Na tonelagem o time cap é obrigatório/);
+  const withTieBreak = await persist(MANAGER, 'updateWorkout', updateWorkoutPayload({ structure: tonnageStructure({ tieBreak: { kind: 'last_round', order: 'asc' } }) }, 'wod-ton'));
+  assert.equal(withTieBreak.status, 400);
+  assert.match(withTieBreak.body.error, /^A tonelagem não tem desempate nesta versão/);
+  const prescribedWithoutKg = await persist(MANAGER, 'updateWorkout', updateWorkoutPayload({ structure: tonnageStructure({}, { loadMode: 'prescribed' }) }, 'wod-ton'));
+  assert.equal(prescribedWithoutKg.status, 400);
+  assert.match(prescribedWithoutKg.body.error, /^Na tonelagem com carga prescrita, informe a carga do exercício/);
+  assert.doesNotMatch(noCap.body.error + withTieBreak.body.error + prescribedWithoutKg.body.error, /\{|"version"/);
+  assert.equal(rowOf('wod-ton').structure.timeCapSeconds, 900, 'a estrutura gravada não mudou nas recusas');
 });

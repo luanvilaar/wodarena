@@ -28,7 +28,7 @@ import { ShirtSummaryCard } from '@/components/admin/ShirtSummaryCard';
 import { EventLocationPicker, toCoordinatesInput } from '@/components/admin/EventLocationPicker';
 import { parseCoordinatesInput } from '@/lib/eventMap';
 import { WorkoutStructureEditor } from '@/components/admin/WorkoutStructureEditor';
-import { deriveLegacyWorkoutFields, validateWorkoutStructure, type WorkoutStructure } from '@/lib/workoutStructure';
+import { deriveLegacyWorkoutFields, parseTonnageKgInput, validateWorkoutStructure, type WorkoutStructure } from '@/lib/workoutStructure';
 import { summarizeStructure } from '@/lib/workoutStructureEditor';
 import {
   LayoutDashboard, Calendar, Trophy,
@@ -133,6 +133,7 @@ const WORKOUT_SCORE_TYPE_OPTIONS: { value: WorkoutType; label: string; detail: s
   { value: 'reps', label: 'Repetições', detail: 'Maior número vence' },
   { value: 'maxweight', label: 'Peso', detail: 'Maior carga vence' },
   { value: 'distance', label: 'Distância', detail: 'Maior distância vence' },
+  { value: 'tonnage', label: 'Tonelagem', detail: 'Maior tonelagem vence (só pelo construtor)' },
   { value: 'points', label: 'Pontos', detail: 'Maior pontuação vence' }
 ];
 const WORKOUT_TIE_BREAKER_OPTIONS = [
@@ -2257,7 +2258,11 @@ export default function AdminPage() {
   // divergência): o painel os espelha nos campos, que ficam somente leitura.
   const handleWorkoutStructureChange = (next: WorkoutStructure | null) => {
     setWodStructure(next);
-    if (!next) return;
+    if (!next) {
+      // Tonelagem só existe com estrutura (o construtor a monta): sem ela, o tipo volta a ser um tipo de score comum (kg).
+      if (wodType === 'tonnage') setWodType('maxweight');
+      return;
+    }
     const checked = validateWorkoutStructure(next);
     if (!checked.ok) return;
     const derived = deriveLegacyWorkoutFields(checked.structure);
@@ -2574,6 +2579,11 @@ export default function AdminPage() {
       const val = parseInt(clean, 10);
       return !isNaN(val) ? val : 999999; // Fallback alto para fortime lento
     }
+    // Tonelagem (Story 1.78): kg com vírgula decimal e ponto de milhar ("1.652,5" é 1652,5, nunca 1,652).
+    if (type === 'tonnage') {
+      const kg = parseTonnageKgInput(clean);
+      return kg.ok ? kg.kg : 0;
+    }
     const val = parseFloat(clean);
     return !isNaN(val) ? val : 0;
   };
@@ -2592,6 +2602,19 @@ export default function AdminPage() {
     const mergedTieBreakerInputs = { ...derivedScoreTieBreakerInputs, ...scoreTieBreakerInputs };
     const usesTimeTieBreaker = shouldUseTimeTieBreaker(currentWod.tieBreaker);
     const scoresToSubmit: Score[] = [];
+
+    // Tonelagem (Story 1.78): valida todas as entradas antes de montar o lote; uma inválida cancela o salvamento inteiro, sem aviso de sucesso.
+    if (currentWod.type === 'tonnage') {
+      for (const resultStr of Object.values(mergedInputs)) {
+        const typed = typeof resultStr === 'string' ? resultStr.trim() : '';
+        if (!typed) continue;
+        const kg = parseTonnageKgInput(typed);
+        if (!kg.ok) {
+          setAdminNotice({ text: kg.error, tone: 'error' });
+          return;
+        }
+      }
+    }
 
     Object.entries(mergedInputs).forEach(([athleteId, resultStr]) => {
       if (resultStr === undefined || resultStr === null) return;
@@ -2616,7 +2639,7 @@ export default function AdminPage() {
       scoresToSubmit.push({
         athleteId,
         workoutId: scoreFilterWodId,
-        result: trimmed || '-', // Grava "-" se o usuário apagou a pontuação para limpá-la
+        result: trimmed && currentWod.type === 'tonnage' ? String(val) : trimmed || '-', // Grava "-" se o usuário apagou a pontuação para limpá-la; na tonelagem grava os kg normalizados
         value: val,
         splits
       });
@@ -7542,7 +7565,7 @@ export default function AdminPage() {
                   className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white focus:border-primary/50 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {WORKOUT_SCORE_TYPE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value} disabled={isScoreTypeOptionLocked(option.value)}>{option.label} - {option.detail}</option>
+                    <option key={option.value} value={option.value} disabled={isScoreTypeOptionLocked(option.value) || (option.value === 'tonnage' && !wodStructure)}>{option.label} - {option.detail}</option>
                   ))}
                 </select>
               </div>
@@ -9063,6 +9086,7 @@ export default function AdminPage() {
                   : activeWod.type === 'amrap' ? 'Repetições (ex: 187)'
                   : activeWod.type === 'maxweight' ? 'Peso (ex: 125)'
                   : activeWod.type === 'distance' ? 'Distância (ex: 1500)'
+                  : activeWod.type === 'tonnage' ? 'Tonelagem em kg (ex: 830)'
                   : 'Pontos (ex: 100)'
                 }
               </p>
@@ -9093,6 +9117,7 @@ export default function AdminPage() {
                             : activeWod.type === 'amrap' ? '187'
                             : activeWod.type === 'maxweight' ? '125'
                             : activeWod.type === 'distance' ? '1500'
+                            : activeWod.type === 'tonnage' ? '830'
                             : '100'
                           }
                           value={(scoreInputs[ath.id] !== undefined ? scoreInputs[ath.id] : derivedScoreInputs[ath.id]) || ''}
@@ -9110,6 +9135,7 @@ export default function AdminPage() {
                             : activeWod.type === 'amrap' ? 'Reps'
                             : activeWod.type === 'maxweight' ? 'Kg'
                             : activeWod.type === 'distance' ? 'Mts'
+                            : activeWod.type === 'tonnage' ? 'Kg'
                             : 'Pts'}
                         </span>
                       </div>

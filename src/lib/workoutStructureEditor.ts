@@ -2,12 +2,14 @@ import {
   UNIT_WORDS,
   WORKOUT_STRUCTURE_LIMITS,
   formatWorkoutTime,
+  isTonnageLoad,
   maxSegmentAmount,
   validateWorkoutStructure,
   workUnitWord
 } from '@/lib/workoutStructure';
 import type {
   AmrapScoreDisplay,
+  TonnageLoadMode,
   WorkoutGenerator,
   WorkoutGeneratorKind,
   WorkoutInterval,
@@ -39,6 +41,12 @@ import type {
 // Distância (Story 1.67, decisões em docs/design/distancia/): só a duração
 // digitada e um resumo opcional para o judge; o resultado é o total em metros
 // que o judge lança. A estrutura gerada é a v4 do contrato.
+//
+// Tonelagem (Story 1.79, decisões em docs/design/tonelagem/): a lista de
+// exercícios na ordem da prova, com um deles marcado como o que conta (os de
+// antes liberam o atleta e os de depois só aparecem na súmula), a origem da
+// carga (livre ou prescrita), o incremento permitido ou não e o time cap
+// obrigatório. A estrutura gerada é a v5 do contrato.
 
 export const DEFAULT_PENALTY_SECONDS_PER_REP = 1;
 export const DEFAULT_TIME_CAP_SECONDS: Record<'for_time' | 'amrap' | 'distance', number> = { for_time: 600, amrap: 720, distance: 1200 };
@@ -63,6 +71,17 @@ export const INTERVAL_FIELDS = {
   on: 'interval-on',
   off: 'interval-off',
   duration: 'interval-duration'
+} as const;
+/** Linhas da Tonelagem: os exercícios de fora da conta (até 9) mais o que conta. */
+export const MAX_TONNAGE_LINES = WORKOUT_STRUCTURE_LIMITS.maxTonnageSegments + 1;
+/** Id do exercício que conta na estrutura gerada (os outros são s1, s2...). */
+export const TONNAGE_LIFT_ID = 'tn';
+/** Chaves de `lineProblems` dos campos da Tonelagem (as linhas usam a própria chave). */
+export const TONNAGE_FIELDS = {
+  duration: 'tonnage-duration',
+  prescribed: 'tonnage-prescribed',
+  step: 'tonnage-step',
+  note: 'tonnage-note'
 } as const;
 /** Chaves de `lineProblems` dos campos da Distância (duração e resumo da prova). */
 export const DISTANCE_FIELDS = {
@@ -158,6 +177,24 @@ export type DistanceDraft = {
   note: string;
 };
 
+/**
+ * Tonelagem: os exercícios na ordem da prova (as linhas do For Time: reps,
+ * movimento e carga) com o que conta marcado em `liftKey`; nesse a quantidade
+ * é livre e a carga vem da origem escolhida. `duration` é o time cap da prova
+ * (obrigatório) e `step` o passo do incremento, como digitados.
+ */
+export type TonnageDraft = {
+  lines: BuilderLine[];
+  liftKey: string;
+  loadMode: TonnageLoadMode;
+  /** Carga prescrita em kg como digitada; só vale na origem `prescribed`. */
+  prescribed: string;
+  incrementAllowed: boolean;
+  step: string;
+  duration: string;
+  note: string;
+};
+
 export type SheetDraft = {
   format: WorkoutStructureFormat;
   forTime: ForTimeDraft;
@@ -165,6 +202,7 @@ export type SheetDraft = {
   maxLoad: MaxLoadDraft;
   interval: IntervalDraft;
   distance: DistanceDraft;
+  tonnage: TonnageDraft;
   /** Próximo número para a chave de uma linha nova. */
   nextKey: number;
 };
@@ -324,7 +362,18 @@ export const createDraft = (format: WorkoutStructureFormat = 'for_time', options
       duration: initialCap && format === 'distance' ? initialCap : formatTimeInput(DEFAULT_TIME_CAP_SECONDS.distance),
       note: ''
     },
-    nextKey: 6
+    // O time cap da Tonelagem é obrigatório e não tem valor padrão: o gestor informa o da prova.
+    tonnage: {
+      lines: [emptyLine('k6')],
+      liftKey: 'k6',
+      loadMode: 'athlete',
+      prescribed: '',
+      incrementAllowed: false,
+      step: formatKg(DEFAULT_LOAD_STEP_KG),
+      duration: initialCap && format === 'tonnage' ? initialCap : '',
+      note: ''
+    },
+    nextKey: 7
   };
 };
 
@@ -380,6 +429,37 @@ export const draftFromStructure = (structure: WorkoutStructure): DraftResult => 
       scoring: structure.maxLoad.scoring,
       step: formatKg(structure.maxLoad.loadStepKg),
       tieBreak: tie === 'finish_time' || tie === 'fewest_attempts' ? tie : 'none'
+    };
+    return { ok: true, draft: { ...draft, nextKey: next } };
+  }
+
+  if (structure.format === 'tonnage') {
+    const tonnage = structure.tonnage;
+    // O construtor só gera exercícios de uma rodada e obrigatórios (o contrato aceita `required: false`).
+    const fits = tonnage
+      && structure.segments.length <= LIMITS.maxTonnageSegments
+      && structure.segments.every((segment) => segment.round === 1 && segment.required);
+    if (!tonnage || !fits) return { ok: false, error: NOT_IN_LINES };
+    const toLine = (segment: WorkoutSegment): BuilderLine => ({
+      key: key(),
+      reps: formatRepsField([segment.reps], segment.unit),
+      name: segment.name,
+      load: segment.load ? formatKg(segment.load.value) : '',
+      mark: segment.mark,
+      note: segment.note
+    });
+    const liftLine: BuilderLine = { key: key(), reps: '', name: tonnage.lift.name, load: '', mark: 'reps', note: tonnage.lift.note };
+    const before = structure.segments.slice(0, tonnage.position).map(toLine);
+    const after = structure.segments.slice(tonnage.position).map(toLine);
+    draft.tonnage = {
+      lines: [...before, liftLine, ...after],
+      liftKey: liftLine.key,
+      loadMode: tonnage.loadMode,
+      prescribed: tonnage.lift.loadKg === null ? '' : formatKg(tonnage.lift.loadKg),
+      incrementAllowed: tonnage.increment.allowed,
+      step: formatKg(tonnage.increment.stepKg),
+      duration: formatTimeInput(structure.timeCapSeconds ?? 0),
+      note: tonnage.note
     };
     return { ok: true, draft: { ...draft, nextKey: next } };
   }
@@ -472,11 +552,11 @@ export const draftFromStructure = (structure: WorkoutStructure): DraftResult => 
 
 export const setDraftFormat = (draft: SheetDraft, format: WorkoutStructureFormat): SheetDraft => ({ ...draft, format });
 
-type LineList = 'forTime' | 'amrap' | 'interval';
+type LineList = 'forTime' | 'amrap' | 'interval' | 'tonnage';
 
 export const addLine = (draft: SheetDraft, list: LineList): SheetDraft => {
   const lines = draft[list].lines;
-  if (lines.length >= (list === 'interval' ? MAX_INTERVAL_FIXED_LINES : MAX_BUILDER_LINES)) return draft;
+  if (lines.length >= (list === 'interval' ? MAX_INTERVAL_FIXED_LINES : list === 'tonnage' ? MAX_TONNAGE_LINES : MAX_BUILDER_LINES)) return draft;
   // Em For Time a linha nova copia as repetições da anterior (21-15-9 costuma valer para todas).
   const reps = list === 'forTime' && lines.length > 0 ? lines[lines.length - 1].reps : '';
   return {
@@ -499,6 +579,8 @@ export const removeLine = (draft: SheetDraft, list: LineList, key: string): Shee
   const remaining = lines.filter((line) => line.key !== key);
   // No Intervalado os fixos podem chegar a zero (o máximo é uma linha à parte).
   if (list === 'interval') return { ...draft, interval: { ...draft.interval, lines: remaining } };
+  // Tonelagem: o exercício que conta não se remove (marque outro antes); os demais saem à vontade.
+  if (list === 'tonnage') return key === draft.tonnage.liftKey ? draft : { ...draft, tonnage: { ...draft.tonnage, lines: remaining } };
   if (lines.length <= 1) return draft;
   if (list === 'forTime') {
     return { ...draft, forTime: { ...draft.forTime, lines: remaining, marks: draft.forTime.marks.filter((mark) => mark.line !== key) } };
@@ -514,6 +596,19 @@ export const moveLine = (draft: SheetDraft, list: LineList, key: string, directi
   [lines[index], lines[target]] = [lines[target], lines[index]];
   return { ...draft, [list]: { ...draft[list], lines } };
 };
+
+export type TonnagePatch = Partial<Pick<TonnageDraft, 'loadMode' | 'prescribed' | 'incrementAllowed' | 'step' | 'duration' | 'note'>>;
+
+/** Campos da Tonelagem fora da lista de exercícios. */
+export const updateTonnage = (draft: SheetDraft, patch: TonnagePatch): SheetDraft => ({
+  ...draft,
+  tonnage: { ...draft.tonnage, ...patch }
+});
+
+/** Marca qual exercício conta para a tonelagem (qualquer linha da lista). */
+export const setTonnageLift = (draft: SheetDraft, key: string): SheetDraft => (
+  draft.tonnage.lines.some((line) => line.key === key) ? { ...draft, tonnage: { ...draft.tonnage, liftKey: key } } : draft
+);
 
 export type IntervalMaxPatch = Partial<Pick<BuilderIntervalMax, 'name' | 'load' | 'note'>>;
 
@@ -789,7 +884,7 @@ const analyzeForTime = (draft: SheetDraft): DraftAnalysis => {
   const generator = buildGenerator(lists, steps.map((step) => step.unit));
 
   return finish(analysis, {
-    version: 4,
+    version: 5,
     format: 'for_time',
     totalReps: total,
     timeCapSeconds: cap,
@@ -802,7 +897,8 @@ const analyzeForTime = (draft: SheetDraft): DraftAnalysis => {
     maxLoad: null,
     scoreDisplay: null,
     interval: null,
-    distance: null
+    distance: null,
+    tonnage: null
   });
 };
 
@@ -865,7 +961,7 @@ const analyzeAmrap = (draft: SheetDraft): DraftAnalysis => {
   const generator = buildGenerator(steps.map((step) => [step.reps]), steps.map((step) => step.unit));
 
   return finish(analysis, {
-    version: 4,
+    version: 5,
     format: 'amrap',
     totalReps: perRound,
     timeCapSeconds: duration,
@@ -878,7 +974,8 @@ const analyzeAmrap = (draft: SheetDraft): DraftAnalysis => {
     maxLoad: null,
     scoreDisplay: am.scoreDisplay,
     interval: null,
-    distance: null
+    distance: null,
+    tonnage: null
   });
 };
 
@@ -941,7 +1038,7 @@ const analyzeMaxLoad = (draft: SheetDraft): DraftAnalysis => {
   if (!windowOk || Number.isNaN(step)) return finish(analysis, null);
 
   return finish(analysis, {
-    version: 4,
+    version: 5,
     format: 'max_load',
     totalReps: 0,
     timeCapSeconds: window,
@@ -954,7 +1051,8 @@ const analyzeMaxLoad = (draft: SheetDraft): DraftAnalysis => {
     maxLoad: { lifts, order: ml.order, scoring: ml.scoring, loadStepKg: step },
     scoreDisplay: null,
     interval: null,
-    distance: null
+    distance: null,
+    tonnage: null
   });
 };
 
@@ -1083,7 +1181,7 @@ const analyzeInterval = (draft: SheetDraft): DraftAnalysis => {
   });
 
   return finish(analysis, {
-    version: 4,
+    version: 5,
     format: 'interval',
     totalReps: perRound,
     timeCapSeconds: timing.totalSeconds,
@@ -1106,7 +1204,8 @@ const analyzeInterval = (draft: SheetDraft): DraftAnalysis => {
         note: iv.max.note.trim()
       }
     },
-    distance: null
+    distance: null,
+    tonnage: null
   });
 };
 
@@ -1137,7 +1236,7 @@ const analyzeDistance = (draft: SheetDraft): DraftAnalysis => {
   if (duration === null || note.length > LIMITS.maxNoteLength) return finish(analysis, null);
 
   return finish(analysis, {
-    version: 4,
+    version: 5,
     format: 'distance',
     totalReps: 0,
     timeCapSeconds: duration,
@@ -1150,12 +1249,172 @@ const analyzeDistance = (draft: SheetDraft): DraftAnalysis => {
     maxLoad: null,
     scoreDisplay: null,
     interval: null,
-    distance: { unit: 'm', note }
+    distance: { unit: 'm', note },
+    tonnage: null
+  });
+};
+
+/** Carga prescrita da Tonelagem: de 0,25 a 500 kg em múltiplos de 0,25 (o contrato recusa o resto). */
+const readPrescribed = (text: string): number | null => {
+  const parsed = parseLoadInput(text);
+  return parsed.ok && parsed.kg !== null && isTonnageLoad(parsed.kg) ? parsed.kg : null;
+};
+
+/** Passo do incremento da Tonelagem: de 0,25 a 25 kg em múltiplos de 0,25. */
+const readTonnageStep = (text: string): number | null => {
+  const stepText = text.trim().replace(',', '.');
+  const step = /^\d{1,2}(\.\d{1,2})?$/.test(stepText) ? Number(stepText) : Number.NaN;
+  if (!(step >= LIMITS.minLoadStepKg && step <= LIMITS.maxLoadStepKg)) return null;
+  return Math.abs(step / LIMITS.tonnageLoadGranularityKg - Math.round(step / LIMITS.tonnageLoadGranularityKg)) < 1e-9 ? step : null;
+};
+
+const analyzeTonnage = (draft: SheetDraft): DraftAnalysis => {
+  const tn = draft.tonnage;
+  const items: ChecklistItem[] = [];
+  const lineProblems: Record<string, string> = {};
+
+  const liftIndex = tn.lines.findIndex((line) => line.key === tn.liftKey);
+  if (liftIndex < 0) items.push({ tone: 'error', text: 'Marque o exercício que conta para a tonelagem.' });
+  const lift = liftIndex >= 0 ? tn.lines[liftIndex] : null;
+
+  // O exercício que conta: só o nome (a quantidade é livre e a carga vem da origem escolhida).
+  const liftName = lift ? lift.name.trim() : '';
+  if (lift) {
+    const problem = !liftName ? 'informe o movimento' : liftName.length > LIMITS.maxNameLength ? `o movimento tem até ${LIMITS.maxNameLength} caracteres` : '';
+    if (problem) {
+      const text = `Linha ${liftIndex + 1}: ${problem}.`;
+      items.push({ tone: 'error', text });
+      lineProblems[lift.key] = text;
+    } else {
+      items.push({ tone: 'ok', text: `Exercício que conta: ${liftName}` });
+    }
+  }
+
+  // Os demais: as linhas do AMRAP (um número por exercício).
+  const readings = readLines(tn.lines).filter((reading) => reading.line.key !== tn.liftKey);
+  lineChecks(readings, items, lineProblems);
+  for (const reading of readings) {
+    if (reading.reps.ok && reading.reps.list.length > 1 && !lineProblems[reading.line.key]) {
+      const text = `Linha ${reading.index + 1}: na Tonelagem use uma quantidade por exercício.`;
+      items.push({ tone: 'error', text });
+      lineProblems[reading.line.key] = text;
+    }
+  }
+  if (tn.lines.length > MAX_TONNAGE_LINES) {
+    items.push({ tone: 'error', text: `Exercícios: de 1 a ${MAX_TONNAGE_LINES}.` });
+  }
+  const before = liftIndex >= 0 ? liftIndex : 0;
+  const after = liftIndex >= 0 ? tn.lines.length - liftIndex - 1 : 0;
+  if (lift) {
+    items.push(before > 0
+      ? { tone: 'ok', text: `${before} ${before === 1 ? 'exercício libera' : 'exercícios liberam'} o atleta (não contam ponto)` }
+      : { tone: 'muted', text: 'Sem exercícios de liberação' });
+    if (after > 0) items.push({ tone: 'muted', text: `${after} ${after === 1 ? 'exercício depois' : 'exercícios depois'} da tonelagem: não conta nem trava` });
+  }
+
+  // Carga: livre (o judge informa antes de iniciar) ou prescrita pelo gestor.
+  let prescribed: number | null = null;
+  if (tn.loadMode === 'prescribed') {
+    prescribed = readPrescribed(tn.prescribed);
+    if (prescribed === null) {
+      const text = `Carga prescrita: de ${formatKg(LIMITS.minTonnageLoadKg)} a ${LIMITS.maxLoadKg} kg, em múltiplos de ${formatKg(LIMITS.tonnageLoadGranularityKg)} (ex.: 60 ou 42,5).`;
+      items.push({ tone: 'error', text });
+      lineProblems[TONNAGE_FIELDS.prescribed] = text;
+    } else {
+      items.push({ tone: 'ok', text: `Carga prescrita: ${formatKg(prescribed)} kg` });
+    }
+  } else {
+    items.push({ tone: 'ok', text: 'Carga livre: o judge informa antes de iniciar' });
+  }
+
+  // Incremento: permitido (só sobe, no passo) ou carga travada.
+  const step = readTonnageStep(tn.step);
+  if (tn.incrementAllowed) {
+    if (step === null) {
+      const text = `Incremento: de ${formatKg(LIMITS.minLoadStepKg)} a ${LIMITS.maxLoadStepKg} kg, em múltiplos de ${formatKg(LIMITS.tonnageLoadGranularityKg)}.`;
+      items.push({ tone: 'error', text });
+      lineProblems[TONNAGE_FIELDS.step] = text;
+    } else {
+      items.push({ tone: 'ok', text: `Incremento permitido, de ${formatKg(step)} em ${formatKg(step)} kg` });
+    }
+  } else {
+    items.push({ tone: 'ok', text: 'Carga travada durante o treino' });
+  }
+
+  // Time cap: obrigatório.
+  let duration: number | null = null;
+  if (!tn.duration.trim()) {
+    const text = `Time cap: informe o tempo da prova, de ${formatTimeInput(LIMITS.minTimeCapSeconds)} a 99:59 (obrigatório).`;
+    items.push({ tone: 'error', text });
+    lineProblems[TONNAGE_FIELDS.duration] = text;
+  } else {
+    duration = timeCheck(tn.duration, 'Time cap', items);
+    if (duration === null) lineProblems[TONNAGE_FIELDS.duration] = items[items.length - 1].text;
+  }
+
+  // O resumo da prova (opcional) não tem campo na tela desta versão (maquete aprovada); o contrato o guarda e a validação o limita.
+  const note = tn.note.trim();
+  if (note.length > LIMITS.maxNoteLength) {
+    const text = `Resumo da prova: até ${LIMITS.maxNoteLength} caracteres (tem ${note.length}).`;
+    items.push({ tone: 'error', text });
+    lineProblems[TONNAGE_FIELDS.note] = text;
+  }
+
+  const analysis: DraftAnalysis = {
+    format: 'tonnage', items, problems: [], structure: null, steps: [], rounds: 1, derivedRounds: null, lineProblems
+  };
+  const linesOk = readings.every((reading) => !lineProblems[reading.line.key]);
+  if (!lift || !liftName || liftName.length > LIMITS.maxNameLength || !linesOk
+    || tn.lines.length > MAX_TONNAGE_LINES || (tn.loadMode === 'prescribed' && prescribed === null)
+    || (tn.incrementAllowed && step === null) || duration === null || note.length > LIMITS.maxNoteLength) {
+    return finish(analysis, null);
+  }
+
+  const segments: WorkoutSegment[] = readings.map((reading, index) => {
+    const parsed = reading.reps as Extract<RepsFieldResult, { ok: true }>;
+    const unit = parsed.unit;
+    return {
+      id: `s${index + 1}`,
+      round: 1,
+      name: reading.name,
+      reps: parsed.list[0],
+      unit,
+      load: reading.load.ok && reading.load.kg !== null ? { value: reading.load.kg, unit: 'kg' } : null,
+      note: reading.line.note.trim(),
+      required: true,
+      // Metros: o judge só conclui o bloco.
+      mark: unit === 'm' ? 'end' : reading.line.mark
+    };
+  });
+
+  return finish(analysis, {
+    version: 5,
+    format: 'tonnage',
+    totalReps: segments.reduce((sum, segment) => sum + segment.reps, 0),
+    timeCapSeconds: duration,
+    incomplete: null,
+    tieBreak: null,
+    generator: null,
+    customized: true,
+    entry: { ...ENTRY_DEFAULTS },
+    segments,
+    maxLoad: null,
+    scoreDisplay: null,
+    interval: null,
+    distance: null,
+    tonnage: {
+      position: before,
+      lift: { id: TONNAGE_LIFT_ID, name: liftName, loadKg: tn.loadMode === 'prescribed' ? prescribed : null, note: lift.note.trim() },
+      loadMode: tn.loadMode,
+      increment: { allowed: tn.incrementAllowed, stepKg: step ?? DEFAULT_LOAD_STEP_KG },
+      note
+    }
   });
 };
 
 /** Etapas, lista de conferência e a estrutura gerada para o formato escolhido. */
 export const analyzeDraft = (draft: SheetDraft): DraftAnalysis => {
+  if (draft.format === 'tonnage') return analyzeTonnage(draft);
   if (draft.format === 'distance') return analyzeDistance(draft);
   if (draft.format === 'amrap') return analyzeAmrap(draft);
   if (draft.format === 'max_load') return analyzeMaxLoad(draft);
@@ -1212,9 +1471,34 @@ const intervalRule = (structure: WorkoutStructure, interval: WorkoutInterval): R
   return parts;
 };
 
+const tonnageRule = (structure: WorkoutStructure, tonnage: NonNullable<WorkoutStructure['tonnage']>): RulePart[] => {
+  const before = structure.segments.slice(0, tonnage.position);
+  const after = structure.segments.slice(tonnage.position);
+  const parts: RulePart[] = [];
+  if (before.length > 0) {
+    const labels = before.map((segment) => `${segmentLabel(segment, false)}${kgLabel(segment.load ? segment.load.value : null)}`);
+    parts.push(plain('Para liberar o atleta: '), ...joinParts(labels), plain(' (não contam ponto). '));
+  }
+  parts.push(plain('A tonelagem é a '), strong('soma de carga × repetições válidas'), plain(' de '), strong(tonnage.lift.name), plain('. '));
+  parts.push(tonnage.loadMode === 'prescribed'
+    ? plain(`Carga prescrita: ${formatKg(tonnage.lift.loadKg ?? 0)} kg. `)
+    : plain('Carga livre, informada pelo judge antes de iniciar. '));
+  parts.push(tonnage.increment.allowed
+    ? plain(`A carga pode subir de ${formatKg(tonnage.increment.stepKg)} em ${formatKg(tonnage.increment.stepKg)} kg. `)
+    : plain('A carga fica travada. '));
+  parts.push(plain('Time cap da prova: '), strong(formatTimeInput(structure.timeCapSeconds ?? 0)), plain('.'));
+  if (after.length > 0) {
+    parts.push(plain(` Depois da tonelagem (não conta, não trava): ${after.map((segment) => segmentLabel(segment, false)).join(', ')}.`));
+  }
+  parts.push(plain(' Mesma tonelagem divide a posição.'));
+  return parts;
+};
+
 /** A regra da prova em uma frase, para o gestor conferir (partes em destaque marcadas). */
 export const describeStructureRule = (structure: WorkoutStructure): RulePart[] => {
   if (structure.format === 'interval' && structure.interval) return intervalRule(structure, structure.interval);
+
+  if (structure.format === 'tonnage' && structure.tonnage) return tonnageRule(structure, structure.tonnage);
 
   if (structure.format === 'distance') {
     return [
@@ -1290,6 +1574,10 @@ export const describeStructureRule = (structure: WorkoutStructure): RulePart[] =
 
 /** "For Time · 6 etapas · 90 repetições · cap 10:00" (selo da lista e resumo do formulário). */
 export const summarizeStructure = (structure: WorkoutStructure) => {
+  if (structure.format === 'tonnage') {
+    const count = structure.segments.length + 1;
+    return `Tonelagem · ${structure.tonnage?.lift.name ?? 'exercício'} · ${count} ${count === 1 ? 'exercício' : 'exercícios'} · cap ${formatTimeInput(structure.timeCapSeconds ?? 0)}`;
+  }
   if (structure.format === 'distance') return `Distância · ${formatTimeInput(structure.timeCapSeconds ?? 0)} · maior vence`;
   if (structure.format === 'interval') {
     const interval = structure.interval;

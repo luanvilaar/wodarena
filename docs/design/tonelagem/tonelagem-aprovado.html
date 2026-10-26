@@ -1,0 +1,810 @@
+<title>Tonelagem na Súmula</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@500;600;700&family=Inter:wght@400;500;600;700;800&display=swap">
+<style>
+/* Layout: leitura em uma coluna, com o mesmo visual do app WODArena (tokens de src/app/globals.css).
+   Duas maquetes interativas: o construtor no painel escuro e a súmula do judge na quadra clara (.court-light). */
+:root{
+  --font-body:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --font-num:"IBM Plex Sans",ui-monospace,Menlo,monospace;
+  /* página: escura primeiro, como o painel do WODArena */
+  --bg:#0b0e11; --surface:#14181d; --surface-2:#1e2329; --line:#2b3139;
+  --fg:#eaecef; --muted:#929aa5; --accent:#fcd535; --accent-text:#fcd535; --ink:#181a20;
+  --up:#0ecb81; --down:#f6465d; --info:#7db4ff;
+  /* maquete do construtor: sempre o tema escuro do painel */
+  --a-bg:#0b0e11; --a-card:#1e2329; --a-line:#2b3139; --a-gray:#181a20; --a-fg:#eaecef; --a-muted:#929aa5;
+  --a-primary:#fcd535; --a-hover:#f0b90b; --a-ink:#181a20; --a-up:#0ecb81; --a-down:#f6465d; --a-info:#3b82f6;
+  /* maquete da súmula: sempre a quadra clara de alto contraste (.court-light do app) */
+  --c-bg:#ffffff; --c-fg:#0b0e11; --c-card:#f3f4f6; --c-line:#b9c0cb; --c-elev:#dde1e7; --c-muted:#3f4652;
+  --c-primary:#f5c518; --c-primary-text:#7a5c00; --c-up:#0a7d52; --c-down:#b8243a; --c-info:#1f5fd1;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --bg:#f4f5f7; --surface:#ffffff; --surface-2:#eceef2; --line:#d6dae1;
+    --fg:#181a20; --muted:#566070; --accent-text:#7a5c00; --up:#07694a; --down:#b8243a; --info:#1f5fd1;
+    color-scheme:light;
+  }
+}
+:root[data-theme="light"]{
+  --bg:#f4f5f7; --surface:#ffffff; --surface-2:#eceef2; --line:#d6dae1;
+  --fg:#181a20; --muted:#566070; --accent-text:#7a5c00; --up:#07694a; --down:#b8243a; --info:#1f5fd1;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:15px;line-height:1.55;-webkit-text-size-adjust:100%;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:32px 72px}
+h1,h2,h3,h4{text-wrap:balance;line-height:1.2;margin:0}
+p{margin:0}
+a{color:var(--accent-text)}
+code{font-family:var(--font-num);font-size:.92em;background:var(--surface-2);border:1px solid var(--line);border-radius:4px;padding:0 5px;overflow-wrap:anywhere}
+.wrap{max-width:1040px;margin:0 auto;display:grid;gap:52px}
+.num{font-family:var(--font-num);font-variant-numeric:tabular-nums}
+.eyebrow{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--accent-text)}
+h1{font-size:clamp(28px,5vw,40px);font-weight:800;letter-spacing:-.02em}
+h2{font-size:22px;font-weight:800;letter-spacing:-.01em}
+h3{font-size:15px;font-weight:700}
+.lead{max-width:68ch;color:var(--muted);font-size:16px}
+.head{display:grid;gap:14px}
+.pills{display:flex;flex-wrap:wrap;gap:8px}
+.pill{display:inline-block;font-size:12px;font-weight:600;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:999px;padding:4px 12px;text-decoration:none}
+a.pill:hover,a.pill:focus-visible{border-color:var(--accent-text)}
+.notice{border:1px solid var(--accent-text);background:var(--surface);border-radius:8px;padding:12px 16px;max-width:78ch}
+.notice b{color:var(--accent-text)}
+.notice.ok{border-color:var(--up)} .notice.ok b{color:var(--up)}
+section{display:grid;gap:16px;min-width:0;scroll-margin-top:16px}
+.sec-lead{max-width:72ch;color:var(--muted)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;min-width:0}
+.card h3{margin-bottom:10px}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:16px}
+.cols>*{min-width:0}
+.card ul{margin:0;padding-left:18px;display:grid;gap:4px}
+.small{font-size:13px;color:var(--muted)}
+.scroll{overflow-x:auto;max-width:100%}
+table.t{border-collapse:collapse;width:100%;min-width:600px;font-size:13.5px}
+table.t th,table.t td{text-align:left;vertical-align:top;padding:9px 12px;border-bottom:1px solid var(--line)}
+table.t th{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--surface-2)}
+table.t td:first-child{font-weight:600}
+table.t td.n,table.t th.n{text-align:right;font-family:var(--font-num);font-variant-numeric:tabular-nums}
+table.t tr:last-child td{border-bottom:0}
+.tag{display:inline-block;font-size:11px;font-weight:700;padding:1px 8px;border-radius:4px;background:var(--surface-2);border:1px solid var(--line);white-space:nowrap}
+.tag.ok{color:var(--up);border-color:var(--up)}
+.tag.warn{color:var(--accent-text);border-color:var(--accent-text)}
+.tag.bad{color:var(--down);border-color:var(--down)}
+.wod{font-family:var(--font-num);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px 16px;line-height:1.7;font-size:14px}
+.wod b{color:var(--accent-text)}
+.wod small{display:block;margin-top:8px;font-family:var(--font-body);color:var(--muted);font-size:12.5px;line-height:1.5}
+pre{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px;overflow-x:auto;font-family:var(--font-num);font-size:12.5px;line-height:1.55;margin:0}
+.dcode{font-family:var(--font-num);font-weight:700;color:var(--accent-text);white-space:nowrap}
+.dec{display:grid;grid-template-columns:48px 1fr;gap:4px 14px;padding:14px 0;border-bottom:1px solid var(--line)}
+.dec:last-child{border-bottom:0}
+.dec>div{min-width:0}
+.dec h4{font-size:14.5px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:4px}
+.dec p+p{margin-top:6px}
+.steps{counter-reset:s;list-style:none;padding:0;margin:0;display:grid;gap:8px}
+.steps li{counter-increment:s;display:grid;grid-template-columns:30px 1fr;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px}
+.steps li::before{content:counter(s);font-family:var(--font-num);font-weight:700;font-size:1.3rem;color:var(--accent-text);line-height:1}
+.steps li>div{min-width:0}
+
+/* ---------- maquete 1: construtor (painel escuro) ---------- */
+.stage{border:1px solid var(--line);border-radius:12px;padding:16px;background:var(--surface-2);min-width:0}
+.stage-cap{font-size:12px;color:var(--muted);margin-bottom:12px}
+.panel{background:var(--a-bg);color:var(--a-fg);border:1px solid var(--a-line);border-radius:10px;padding:14px;display:grid;gap:14px;font-size:14px}
+.psec{background:var(--a-card);border:1px solid var(--a-line);border-radius:8px;padding:14px;display:grid;gap:12px;min-width:0}
+.psec>h4{display:flex;align-items:baseline;gap:8px;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#fff}
+.psec>h4 span{font-family:var(--font-num);color:var(--a-primary)}
+.lbl{display:block;margin-bottom:4px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--a-muted)}
+.fmt{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.fmt div{background:var(--a-gray);border:1px solid var(--a-line);border-radius:8px;padding:10px 12px;display:grid;gap:3px;align-content:start;position:relative}
+.fmt b{font-size:13.5px}
+.fmt span{font-size:11.5px;color:var(--a-muted);line-height:1.4}
+.fmt .on{border-color:var(--a-primary);box-shadow:inset 0 0 0 1px var(--a-primary)}
+.fmt .on b{color:var(--a-primary)}
+.fmt .new em{position:absolute;top:8px;right:8px;font-style:normal;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;background:var(--a-primary);color:var(--a-ink);border-radius:3px;padding:1px 5px}
+.in{width:100%;min-width:0;background:var(--a-gray);color:#fff;border:1px solid var(--a-line);border-radius:6px;padding:8px 12px;font:inherit;font-size:14px}
+.in::placeholder{color:var(--a-muted)}
+.in:focus-visible{outline:none;border-color:rgba(252,213,53,.5)}
+.in:disabled{opacity:.5;cursor:not-allowed}
+.in.c{text-align:center;font-family:var(--font-num)}
+.in.err{border-color:rgba(246,70,93,.7)}
+.lines{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.lh,.line{display:grid;grid-template-columns:5.2rem minmax(0,1fr) 5.2rem 5.6rem 2.5rem;gap:8px;align-items:center}
+.lh{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--a-muted);margin-bottom:6px}
+.line .role{grid-column:1 / -1;font-size:11.5px;color:var(--a-muted);margin-top:-2px}
+.line.ton .role{color:var(--a-primary);font-weight:600}
+.mark{display:flex;align-items:center;gap:6px;min-height:40px;font-size:12px;font-weight:700;color:var(--a-muted);cursor:pointer;white-space:nowrap}
+.mark input{width:16px;height:16px;accent-color:#fcd535}
+.line.ton .mark{color:var(--a-primary)}
+.ibtn{display:flex;align-items:center;justify-content:center;min-height:40px;min-width:40px;border-radius:6px;border:1px solid var(--a-line);background:var(--a-gray);color:#fff;font:inherit;font-size:18px;line-height:1;cursor:pointer}
+.ibtn:hover:not(:disabled){border-color:var(--a-primary)}
+.ibtn:disabled{opacity:.4;cursor:not-allowed}
+.tbtn{display:inline-flex;align-items:center;justify-content:center;min-height:40px;border-radius:6px;border:1px solid var(--a-line);background:var(--a-gray);color:#fff;font:inherit;font-size:12px;font-weight:700;padding:0 12px;cursor:pointer}
+.tbtn:hover:not(:disabled){border-color:var(--a-primary)}
+.tbtn:disabled{opacity:.4;cursor:not-allowed}
+.tbtn:focus-visible,.ibtn:focus-visible{outline:2px solid var(--a-info);outline-offset:3px}
+.opts{display:flex;flex-wrap:wrap;gap:8px}
+.opt{position:relative}
+.opt input{position:absolute;opacity:0;inset:0;cursor:pointer}
+.opt span{display:block;min-height:40px;padding:9px 14px;border-radius:6px;border:1px solid var(--a-line);background:var(--a-gray);font-size:13px;font-weight:700}
+.opt input:checked+span{border-color:var(--a-primary);color:var(--a-primary);box-shadow:inset 0 0 0 1px var(--a-primary)}
+.opt input:focus-visible+span{outline:2px solid var(--a-info);outline-offset:3px}
+.sub{display:grid;gap:4px;max-width:200px}
+.hint{font-size:12px;color:var(--a-muted)}
+.chk{list-style:none;margin:0;padding:0;display:grid;gap:4px;font-size:12px}
+.chk li{display:flex;gap:8px;align-items:baseline}
+.chk b{width:12px;flex:none;font-weight:700}
+.chk .ok b{color:var(--a-up)} .chk .er b{color:var(--a-down)} .chk .mu b{color:var(--a-muted)} .chk .mu span{color:var(--a-muted)}
+.rulebox{background:var(--a-gray);border:1px solid var(--a-line);border-radius:6px;padding:10px 12px;font-size:13px;line-height:1.6;color:#fff}
+.rulebox strong{color:var(--a-primary);font-weight:600}
+.presets{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+.pbtn2{border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:999px;padding:6px 14px;font:inherit;font-size:12px;font-weight:700;cursor:pointer;min-height:36px}
+.pbtn2:hover{border-color:var(--accent-text)}
+@media (max-width:640px){
+  .lh{display:none}
+  .line{grid-template-columns:5rem 1fr 5rem}
+  .line .in.nm{order:-1;grid-column:1 / -1}
+  .line .mark{grid-column:1 / 3}
+  .line .ibtn{justify-self:end}
+}
+
+/* ---------- maquete 2: súmula do judge (quadra clara) ---------- */
+.phone{width:100%;max-width:360px;margin:0 auto;background:var(--c-bg);color:var(--c-fg);border:3px solid #3a414b;border-radius:26px;padding:14px 14px 0;display:grid;gap:12px;align-content:start;font-size:14px;min-width:0}
+.phone .wk{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--c-primary-text)}
+.phone .who{font-size:18px;font-weight:800;line-height:1.2}
+.phone .who small{font-size:13px;font-weight:600;color:var(--c-muted);margin-left:6px}
+.pc{background:var(--c-card);border:1px solid var(--c-line);border-radius:16px;padding:14px;display:grid;gap:10px;min-width:0}
+.pc.lock{opacity:.55}
+.pc .k{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--c-muted);display:flex;justify-content:space-between;gap:8px}
+.clk{display:flex;justify-content:space-between;align-items:flex-end;gap:10px}
+.clk .t{font-family:var(--font-num);font-size:38px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
+.clk .d{text-align:right;font-size:12px;font-weight:600;color:var(--c-muted)}
+.clk .d b{display:block;font-family:var(--font-num);font-size:16px;color:var(--c-fg)}
+.pbar{height:6px;border-radius:99px;background:var(--c-elev);overflow:hidden}
+.pbar i{display:block;height:100%;background:var(--c-primary);width:0}
+.alert{border:1px solid rgba(184,36,58,.5);background:rgba(184,36,58,.1);border-radius:6px;padding:8px 12px;font-size:12px;font-weight:700}
+.pc .lab,.lab2{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--c-muted)}
+.pin{width:100%;min-height:56px;border:2px solid var(--c-line);border-radius:6px;background:#fff;color:var(--c-fg);font-family:var(--font-num);font-size:30px;font-weight:800;padding:0 12px;font-variant-numeric:tabular-nums}
+.pin:focus-visible{outline:none;border-color:var(--c-primary)}
+.pin[readonly]{background:var(--c-elev)}
+.phelp{font-size:12px;font-weight:600;color:var(--c-muted)}
+.pbad{font-size:13px;font-weight:700;color:var(--c-down)}
+.lib{list-style:none;margin:0;padding:0}
+.lib li{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid var(--c-line);font-size:15px;font-weight:600;font-variant-numeric:tabular-nums}
+.lib li:last-child{border-bottom:0}
+.lib .done{color:var(--c-up);font-weight:800}
+.big{font-family:var(--font-num);font-size:40px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
+.big small{font-size:15px;font-weight:600;color:var(--c-muted);margin-left:6px}
+.ab{display:flex;min-height:44px;align-items:center;justify-content:center;gap:8px;border-radius:6px;border:1px solid var(--c-line);background:var(--c-bg);color:var(--c-fg);font:inherit;font-size:14px;font-weight:700;padding:8px 14px;cursor:pointer;width:100%}
+.ab:hover:not(:disabled){border-color:var(--c-fg)}
+.ab:disabled{opacity:.4;cursor:not-allowed}
+.ab.main{border-color:var(--c-primary);background:var(--c-primary);color:#0b0e11}
+.ab.main:hover:not(:disabled){background:#e0b100}
+.ab.stop{border-color:var(--c-down);background:rgba(184,36,58,.12)}
+.ab.huge{min-height:76px;font-size:22px;font-weight:800;border-radius:12px}
+.ab:focus-visible{outline:3px solid var(--c-info);outline-offset:2px}
+.hist{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+.hist li{min-height:34px;display:flex;align-items:center;gap:6px;border:1px solid var(--c-line);background:var(--c-bg);border-radius:6px;padding:0 8px;font-family:var(--font-num);font-size:12px;font-weight:700}
+.res{border:2px solid var(--c-up);border-radius:16px;background:var(--c-card);padding:14px;display:grid;gap:6px}
+.res .k{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--c-up)}
+.res .det{font-size:13px;font-weight:600;color:var(--c-muted)}
+.res .nt{font-size:11px;color:var(--c-muted);line-height:1.5}
+.bar{position:sticky;bottom:0;margin:0 -4px;padding:10px 4px 14px;background:rgba(255,255,255,.96);display:grid;grid-template-columns:1fr 2fr;gap:8px}
+.demo{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;margin-top:12px}
+.cap{font-size:12.5px;color:var(--muted);text-align:center;margin-top:8px;max-width:360px;margin-inline:auto}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+</style>
+
+<div class="wrap">
+
+<header class="head">
+  <p class="eyebrow">WODArena · Súmula digital · Análise e proposta · versão 4</p>
+  <h1>Formato Tonelagem</h1>
+  <p class="lead">O resultado é a soma de carga × repetições de um exercício marcado pelo gestor. Os exercícios que vêm antes não contam ponto, mas precisam ser feitos para liberar o atleta até ele. Mesma tonelagem divide a posição.</p>
+  <div class="notice"><b>Nada foi alterado.</b> Esta página é só análise e desenho, feita com leitura do código. Nenhuma linha de código, banco, autenticação ou infraestrutura foi tocada. A implementação só começa depois da sua aprovação desta versão.</div>
+  <nav class="pills" aria-label="Seções">
+    <a class="pill" href="#design">Sobre o design</a>
+    <a class="pill" href="#mudou">O que mudou</a>
+    <a class="pill" href="#exemplos">Seus treinos</a>
+    <a class="pill" href="#construtor">Construtor</a>
+    <a class="pill" href="#judge">Súmula do judge</a>
+    <a class="pill" href="#motor">Regras do motor</a>
+    <a class="pill" href="#impacto">O que muda</a>
+    <a class="pill" href="#banco">Banco e infra</a>
+    <a class="pill" href="#riscos">Riscos</a>
+    <a class="pill" href="#entrega">Entrega</a>
+    <a class="pill" href="#decisoes">Decisões</a>
+  </nav>
+</header>
+
+<section id="design" aria-labelledby="t-design">
+  <h2 id="t-design">Sobre o design: o que você vê aqui é o que será implementado</h2>
+  <div class="notice ok"><b>Você tem razão em estranhar.</b> A versão anterior desta página usava um visual próprio, com tipografia condensada, laranja e fundo cinza, e as maquetes não eram o desenho do app. Isso não mudava o que seria implementado, mas também não deixava você conferir o que ia ver. Refiz a página e as duas maquetes com o visual real do WODArena.</div>
+  <div class="card">
+    <h3>De onde vem cada coisa nas maquetes</h3>
+    <div class="scroll"><table class="t">
+      <thead><tr><th>Maquete</th><th>Visual</th><th>Estrutura copiada do app</th></tr></thead>
+      <tbody>
+        <tr><td>Construtor da prova</td><td>Tema escuro do painel, com os tokens de <code>src/app/globals.css</code>: fundo <span class="num">#0b0e11</span>, cartão <span class="num">#1e2329</span>, borda <span class="num">#2b3139</span>, primário <span class="num">#fcd535</span></td><td><code>SheetBuilderForm.tsx</code>: seções numeradas, cartões de formato, linhas "reps · movimento · carga", checklist com ✓ e !, frase da regra</td></tr>
+        <tr><td>Súmula do judge</td><td>Quadra clara de alto contraste (<code>.court-light</code>): fundo branco, primário <span class="num">#f5c518</span>. Fontes Inter e IBM Plex Sans, as do app</td><td><code>DistanceSheetView.tsx</code> e <code>sheetUi.tsx</code>: cartão do relógio com fase, duração e barra; cartões de entrada; cartão de resultado a publicar; barra inferior com Desfazer e Iniciar ou Parar</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+  <div class="cols">
+    <div class="card">
+      <h3>O que eu garanto na implementação</h3>
+      <ul>
+        <li><b>Nenhum estilo novo.</b> Só as classes e os componentes que já existem. Se alguma peça não existir, ela aparece na maquete e na story antes de ser feita.</li>
+        <li><b>Esta maquete vira o contrato visual.</b> Depois da aprovação, ela é copiada para <code>docs/design/tonelagem/</code> e citada nos critérios de aceite de cada story, como foi feito com a Distância.</li>
+        <li><b>Nada fora da maquete.</b> Tela, botão ou campo que não estiver aqui não entra (a regra "sem invenção" da constituição do projeto).</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Como você confere antes de publicar</h3>
+      <ul>
+        <li>Terminada cada tela, eu abro o app no navegador, comparo com a maquete e mostro os prints a você.</li>
+        <li>Nenhum commit nem push sem você pedir. O push continua exclusivo do @devops.</li>
+        <li><b>O que a maquete não prova:</b> ela é HTML aproximado, então ícones, o "toque e segure" da contagem e espaçamentos finos podem sair um pouco diferentes. Isso aparece na conferência dos prints, e você aprova antes de publicar.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="mudou" aria-labelledby="t-mudou">
+  <h2 id="t-mudou">O que mudou depois das suas respostas</h2>
+  <div class="card"><div class="scroll"><table class="t">
+    <thead><tr><th>Decisão</th><th>Sua resposta</th><th>Efeito no desenho</th></tr></thead>
+    <tbody>
+      <tr><td>D1 · Nome</td><td>Tonelagem</td><td>Cartão "Tonelagem" em "Formato da prova".</td></tr>
+      <tr><td>D2 · Exercícios</td><td>O gestor adiciona os exercícios e marca qual vale para a tonelagem (normalmente o último)</td><td>Só um exercício conta, o marcado. O construtor tem a lista de exercícios com o marcador.</td></tr>
+      <tr><td>D3 · Carga</td><td>Aprovado</td><td>Livre (o judge digita antes de iniciar) ou prescrita.</td></tr>
+      <tr><td>D4 · Incremento</td><td>Aprovado, definido pelo gestor na pré-configuração</td><td>Permitido ou não, e o passo. Só sobe.</td></tr>
+      <tr><td>D5 · Contagem</td><td>Aprovado</td><td>Um toque por repetição válida, com a carga vigente gravada. Sem carga mínima.</td></tr>
+      <tr><td>D6 · Janela</td><td>O gestor preenche o time cap da prova, e agora <b>é obrigatório</b></td><td><span class="tag warn">ajustado</span> O relógio é um só: a liberação gasta o time cap. Prova de Tonelagem sem time cap válido não pode ser salva, e a súmula não abre sem ele.</td></tr>
+      <tr><td>D7 · Exercícios antes</td><td>Não contam, mas precisam ser feitos para liberar o atleta</td><td>Exercícios com meta, contados pelo judge. O levantamento fica travado até todos terminarem.</td></tr>
+      <tr><td>D8 · Desempate</td><td><b>Deixar para depois</b>: mesma tonelagem divide a pontuação</td><td><span class="tag ok">simplificou</span> Sem desempate, como a Distância e o Intervalado. O ranking não muda e a Story do ranking some.</td></tr>
+      <tr><td>D9 · Banco</td><td>T2, com uma migration nova</td><td>Tipo novo <code>tonnage</code>.</td></tr>
+      <tr><td>D10 · Telão</td><td>Aprovado</td><td>Onda separada, no fim.</td></tr>
+    </tbody>
+  </table></div></div>
+  <div class="notice"><b>Uma descoberta que muda a numeração.</b> As Stories 1.73 a 1.76 já existem (Comprovante único, em InReview). A Tonelagem passa a ser <b>1.77 a 1.81</b>. A árvore de trabalho tem mudanças não commitadas dessa outra entrega, então os commits da Tonelagem vão separar só os arquivos dela.</div>
+</section>
+
+<section id="exemplos" aria-labelledby="t-exemplos">
+  <h2 id="t-exemplos">Seus dois treinos, na prática</h2>
+  <div class="cols">
+    <div>
+      <div class="wod"><b>Treino 1</b><br>10 Pull Ups<br>10 Burpees<br>Max. Squat Clean
+        <small><b>Configuração:</b> 3 exercícios. Pull Ups (10) e Burpees (10) liberam; Squat Clean está marcado para a tonelagem. Carga livre. O enunciado não traz o tempo, então o gestor preenche o time cap (obrigatório); a maquete usa 10:00 só como exemplo. <b>No judge:</b> conta 10 + 10, o levantamento destrava, e cada repetição de Squat Clean soma a carga vigente.</small></div>
+    </div>
+    <div>
+      <div class="wod"><b>Treino 2</b><br>AMRAP 3 min<br>Max. Squat Snatch
+        <small><b>Configuração:</b> 1 exercício, marcado, sem liberação. Carga livre, time cap <span class="num">03:00</span>. <b>Conta:</b> 60 kg × 8 = 480 kg, depois 70 kg × 5 = 350 kg. Tonelagem <span class="num">830 kg</span>.</small></div>
+    </div>
+  </div>
+  <div class="card">
+    <h3>Caso de teste que a story vai travar</h3>
+    <p class="small" style="margin-bottom:10px">Treino 2, cinco atletas da mesma categoria. Mesma tonelagem divide a posição, qualquer que seja o número de repetições.</p>
+    <div class="scroll"><table class="t">
+      <thead><tr><th>Raia</th><th>Registro do judge</th><th class="n">Tonelagem</th><th class="n">Posição</th><th class="n">Pontos</th><th>Observação</th></tr></thead>
+      <tbody>
+        <tr><td>A</td><td>60 kg × 8, depois 70 kg × 5</td><td class="n">830</td><td class="n">1</td><td class="n">1</td><td>13 repetições</td></tr>
+        <tr><td>B</td><td>83 kg × 10</td><td class="n">830</td><td class="n">1</td><td class="n">1</td><td>10 repetições; divide a posição com A</td></tr>
+        <tr><td>C</td><td>55 kg × 12</td><td class="n">660</td><td class="n">3</td><td class="n">3</td><td>Dois atletas acima</td></tr>
+        <tr><td>D</td><td>40 kg × 10</td><td class="n">400</td><td class="n">4</td><td class="n">4</td><td></td></tr>
+        <tr><td>E</td><td>não compareceu</td><td class="n">0</td><td class="n">5</td><td class="n">5</td><td>Ausente, depois de qualquer resultado real</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</section>
+
+<section id="construtor" aria-labelledby="t-construtor">
+  <h2 id="t-construtor">Como fica o construtor da prova</h2>
+  <p class="sec-lead">Sexto cartão em "Formato da prova". A lista de exercícios reaproveita as linhas do For Time (reps, movimento, carga). Mexa nos controles: a checklist, a frase da regra e a súmula do judge (próxima seção) mudam junto.</p>
+  <div class="stage">
+    <p class="stage-cap">Maquete 1 · painel do gestor, tema escuro</p>
+    <div class="presets">
+      <span class="small">Carregar exemplo:</span>
+      <button type="button" class="pbtn2" data-preset="t1">Treino 1</button>
+      <button type="button" class="pbtn2" data-preset="t2">Treino 2</button>
+    </div>
+    <div class="panel" id="mockBuilder">
+      <div class="psec">
+        <h4><span>1</span>Formato da prova</h4>
+        <div class="fmt">
+          <div><b>For Time</b><span>Menor tempo para um trabalho definido</span></div>
+          <div><b>AMRAP</b><span>Mais repetições dentro do tempo</span></div>
+          <div><b>Carga máxima</b><span>Maior carga válida, por tentativas</span></div>
+          <div><b>Intervalado</b><span>Rounds de trabalho e descanso; soma das repetições</span></div>
+          <div><b>Distância</b><span>Maior distância no tempo; o judge informa o total</span></div>
+          <div class="on new"><em>novo</em><b>Tonelagem</b><span>Soma de carga × repetições do exercício marcado</span></div>
+        </div>
+      </div>
+      <div class="psec">
+        <h4><span>2</span>Exercícios, na ordem</h4>
+        <div>
+          <div class="lh"><span>Reps</span><span>Movimento</span><span>Carga (kg)</span><span></span><span></span></div>
+          <ul class="lines" id="exList"></ul>
+        </div>
+        <div><button type="button" class="tbtn" id="addEx">+ Adicionar exercício</button></div>
+        <p class="hint">Marque "Conta" em um deles. Os de antes liberam o atleta e não contam ponto.</p>
+      </div>
+      <div class="psec">
+        <h4><span>3</span>Carga e incremento do exercício que conta</h4>
+        <div>
+          <span class="lbl">De onde vem a carga</span>
+          <div class="opts" role="radiogroup" aria-label="Origem da carga">
+            <label class="opt"><input type="radio" name="mode" value="athlete" checked><span>Livre (o atleta escolhe)</span></label>
+            <label class="opt"><input type="radio" name="mode" value="prescribed"><span>Prescrita pelo gestor</span></label>
+          </div>
+        </div>
+        <div class="sub" id="proscWrap" hidden><label class="lbl" for="presc">Carga prescrita (kg)</label><input class="in c" type="text" id="presc" value="60" inputmode="decimal" autocomplete="off"></div>
+        <div>
+          <span class="lbl">Incrementar a carga durante o treino</span>
+          <div class="opts" role="radiogroup" aria-label="Incremento">
+            <label class="opt"><input type="radio" name="inc" value="no" checked><span>Não permitir</span></label>
+            <label class="opt"><input type="radio" name="inc" value="yes"><span>Permitir subir</span></label>
+          </div>
+        </div>
+        <div class="sub" id="stepwrap" hidden><label class="lbl" for="step">Passo de cada incremento</label>
+          <select class="in" id="step"><option value="1">1 kg</option><option value="2.5" selected>2,5 kg</option><option value="5">5 kg</option><option value="10">10 kg</option></select></div>
+      </div>
+      <div class="psec">
+        <h4><span>4</span>Time cap da prova</h4>
+        <div class="sub"><label class="lbl" for="win">Duração (MM:SS)</label><input class="in c" type="text" id="win" value="10:00" placeholder="ex.: 03:00" inputmode="numeric" autocomplete="off" aria-describedby="winHint"></div>
+        <p class="hint" id="winHint">Obrigatório, de 00:30 a 99:59. Em branco, a prova não pode ser salva.</p>
+      </div>
+      <div class="psec">
+        <h4><span>5</span>Conferência</h4>
+        <ul class="chk" id="chk" aria-live="polite"></ul>
+        <p class="rulebox" id="ruleText" aria-live="polite"></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Como cada campo vira contrato</h3>
+    <div class="scroll"><table class="t">
+      <thead><tr><th>Campo do gestor</th><th>No contrato v5</th><th>Limites</th></tr></thead>
+      <tbody>
+        <tr><td>Exercícios de liberação</td><td><code>segments[]</code>, o mesmo formato do For Time (<code>name</code>, <code>reps</code>, <code>unit</code>, <code>load</code>)</td><td>0 a 9 exercícios, repetições de 1 a 99</td></tr>
+        <tr><td>Exercício que conta</td><td><code>tonnage.lift</code>: <code>id</code>, <code>name</code>, <code>loadKg</code>, <code>note</code></td><td>Exatamente 1, nome até 60 caracteres</td></tr>
+        <tr><td>Posição dele na lista</td><td><code>tonnage.position</code>: quantos exercícios vêm antes</td><td>0 a 9</td></tr>
+        <tr><td>Origem da carga</td><td><code>tonnage.loadMode</code>: <code>athlete</code> ou <code>prescribed</code></td><td>Prescrita exige <code>loadKg</code>; livre deixa <code>null</code></td></tr>
+        <tr><td>Incremento</td><td><code>tonnage.increment</code>: <code>{ allowed, stepKg }</code></td><td>Passo de 0,25 a 25 kg, só quando permitido</td></tr>
+        <tr><td>Time cap</td><td><code>timeCapSeconds</code> (já existe)</td><td>Obrigatório: 00:30 a 99:59 (30 a 5999 s). Nunca <code>null</code></td></tr>
+        <tr><td>Desempate</td><td><code>tieBreak: null</code></td><td>Sem desempate nesta versão</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</section>
+
+<section id="judge" aria-labelledby="t-judge">
+  <h2 id="t-judge">Como fica a súmula do judge</h2>
+  <ol class="steps">
+    <li><div><b>Antes de iniciar: a carga.</b><br><span class="small">Carga livre: o judge digita a carga do atleta e o botão Iniciar só libera depois. Carga prescrita: a carga aparece pronta, para conferir.</span></div></li>
+    <li><div><b>Liberação.</b><br><span class="small">Com exercícios antes do marcado, o judge conta as repetições de cada um, na ordem. Não somam ponto. O levantamento fica travado até todos chegarem à meta.</span></div></li>
+    <li><div><b>Levantamento: um toque por repetição válida.</b><br><span class="small">Cada toque grava a carga vigente. No-rep o judge não toca. Com incremento permitido, um botão sobe a carga no passo do gestor; as repetições seguintes valem a carga nova.</span></div></li>
+    <li><div><b>Time cap.</b><br><span class="small">Aparece "Tempo esgotado. Pare o relógio." Registro depois do time cap fica no log e não entra no cálculo.</span></div></li>
+    <li><div><b>Resultado a publicar.</b><br><span class="small">Ao parar, o cartão de resultado mostra a tonelagem e as repetições. Desfazer volta o último registro. Ausente publica 0 kg, depois de qualquer resultado real.</span></div></li>
+  </ol>
+  <div class="stage">
+    <p class="stage-cap">Maquete 2 · celular do judge, quadra clara. Ligada ao construtor: mude a prova lá e a súmula reinicia. No Treino 1, o levantamento só destrava depois dos 10 Pull Ups e dos 10 Burpees.</p>
+    <div class="phone" id="phone" aria-live="polite"></div>
+    <div class="demo">
+      <button type="button" class="pbtn2" id="skip">Avançar 30 s no relógio (demonstração)</button>
+    </div>
+    <p class="cap">Maquete: nada é gravado nem enviado. Na súmula real, a contagem da liberação usa o mesmo componente de segmentos do For Time (toque e segure); aqui é um botão +1 só para simular.</p>
+  </div>
+</section>
+
+<section id="motor" aria-labelledby="t-motor">
+  <h2 id="t-motor">Regras do motor (contrato v5)</h2>
+  <p class="sec-lead">A v5 é a v4 mais o bloco <code>tonnage</code>. As versões 1 a 4 continuam aceitas e são normalizadas para a 5 com <code>tonnage: null</code>, como a v4 fez com a v3.</p>
+  <pre>format: 'tonnage'
+segments: [ ...exercícios de liberação ]       // 0 a 9, formato do For Time
+tonnage: {
+  position: number,                             // quantos exercícios vêm antes do marcado
+  lift: { id, name, loadKg /* null se livre */, note },
+  loadMode: 'athlete' | 'prescribed',
+  increment: { allowed: boolean, stepKg: number },
+  note: string                                  // resumo, até 300
+}
+tieBreak: null
+timeCapSeconds: number                          // time cap da prova, obrigatório (30 a 5999 s)
+
+// eventos novos no log, só do exercício que conta
+{ t: 'load', v, at }      // carga declarada (antes de iniciar) ou nova carga (incremento)
+{ t: 'lrep', load, at }   // uma repetição válida, com a carga que valia naquele toque
+// da liberação valem os eventos que já existem: rep, fill, set, adj</pre>
+  <div class="notice"><b>Por que a repetição leva a própria carga.</b> Se o motor deduzisse a carga pela ordem do log, desfazer um incremento mudaria, de trás para frente, a carga das repetições já feitas, e a tonelagem mudaria sozinha. Com a carga gravada em cada <code>lrep</code>, desfazer só remove aquele registro.</div>
+  <div class="card">
+    <h3>Regras</h3>
+    <ul>
+      <li><b>Trava da liberação:</b> o motor reproduz o log na ordem e só conta uma <code>lrep</code> se, naquele ponto, todos os exercícios antes do marcado estavam na meta. Se o judge desfaz uma repetição da liberação, o levantamento volta a travar. O servidor também recusa <code>lrep</code> enquanto a liberação não terminou.</li>
+      <li><b>Carga válida:</b> de 0,25 a 500 kg, em múltiplos de 0,25. Nunca 0. Antes da primeira <code>lrep</code> tem que existir um <code>load</code>.</li>
+      <li><b>Incremento não permitido:</b> só um <code>load</code>, e toda <code>lrep</code> usa essa carga. <b>Permitido:</b> cada novo <code>load</code> tem que ser maior que o vigente e no passo da prova.</li>
+      <li><b>Carga prescrita:</b> o <code>load</code> tem que ser igual ao <code>loadKg</code> do exercício.</li>
+      <li><b>Time cap obrigatório:</b> a validação da estrutura recusa Tonelagem sem <code>timeCapSeconds</code> (de 30 a 5999 s), com mensagem em português, no construtor e no servidor. Sem isso a súmula não teria como saber quando o relógio acaba. Qualquer registro com <code>at</code> depois dele fica no log e não entra no cálculo.</li>
+      <li><b>Resultado:</b> Σ <code>load</code> de cada <code>lrep</code> válida e não desfeita, em kg, com até 2 casas. <code>value</code> é o número e <code>display</code> o texto (<code>'830'</code>, <code>'1652.5'</code>), no formato que <code>parseScoreForWorkout</code> já aceita. O total de repetições aparece na súmula, só como informação.</li>
+      <li><b>Teto:</b> 99.999 kg por súmula; o registro que passaria disso é recusado com mensagem.</li>
+      <li><b>Envio:</b> exige a carga declarada. Zero repetições válidas publica 0 kg.</li>
+      <li><b>Não valem neste formato:</b> o ajuste de tempo oficial (<code>time</code>), <code>attempt</code> e <code>dist</code>. A estrutura trava na primeira súmula aberta, como hoje.</li>
+      <li><b>Ranking:</b> maior tonelagem vence; mesma tonelagem divide a posição. Nenhuma mudança em <code>scoring.ts</code>.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="impacto" aria-labelledby="t-impacto">
+  <h2 id="t-impacto">O que muda no sistema</h2>
+  <p class="sec-lead">Mapeado por leitura. Os números de linha são os do código de hoje.</p>
+  <div class="card"><div class="scroll"><table class="t">
+    <thead><tr><th>Camada</th><th>Arquivo</th><th>Mudança</th></tr></thead>
+    <tbody>
+      <tr><td>Motor</td><td><code>src/lib/workoutStructure.ts</code></td><td>Versão 5, validação do bloco <code>tonnage</code>, estado com a trava da liberação (reaproveita a contagem de segmentos de <code>deriveSheetState</code>), resultado, parser da carga, legado derivado (<code>LEGACY_TYPES</code>, linha 954)</td></tr>
+      <tr><td>Eventos e resultado</td><td><code>src/lib/scoresheet.ts</code></td><td><code>validateClientEvent</code> (82), <code>computeSheetOutcome</code> (171) e <code>computeAbsentOutcome</code> (241)</td></tr>
+      <tr><td>Correção do gestor</td><td><code>src/lib/serverScoresheets.ts</code></td><td>Parser de kg com decimais e milhar no ramo da correção (1006), com a lição da Distância</td></tr>
+      <tr><td>Ao vivo</td><td><code>src/lib/liveProgress.ts</code></td><td>Ramo <code>tonnage</code> em <code>summarizeLiveProgress</code> (64), reaproveitando <code>scoreKg</code></td></tr>
+      <tr><td>Construtor</td><td><code>workoutStructureEditor.ts</code>, <code>SheetBuilderForm.tsx</code></td><td>Rascunho e análise da Tonelagem, sexto cartão (linha 68), lista de exercícios com o marcador</td></tr>
+      <tr><td>Súmula</td><td><code>sheetView.ts</code>, novo <code>TonnageSheetView.tsx</code>, <code>SheetView.tsx</code>, <code>CourtSheet.tsx</code></td><td>View-model e tela nova; ramo novo no despachante por formato e nas prévias</td></tr>
+      <tr><td>Telão</td><td><code>serverBroadcast.ts</code>, <code>broadcastPayload.ts</code>, <code>BroadcastScreen.tsx</code></td><td>Rótulo, chamada (linha 325), tonelagem ao vivo e ordem por kg. Onda separada</td></tr>
+      <tr><td>Tipos e textos</td><td><code>types/index.ts</code>, <code>EventView.tsx</code>, <code>admin/page.tsx</code>, <code>ScoresheetsPanel.tsx</code>, <code>persistence/route.ts</code>, <code>messages/*.json</code></td><td><code>WorkoutType</code> ganha <code>tonnage</code>; rótulos, lançamento manual em kg e selo público em pt-br, pt-pt e en-gb</td></tr>
+      <tr><td>Testes</td><td><code>tests/*.test.mjs</code></td><td>Testes novos de cada camada. Vários testes existentes travam <code>VERSION === 4</code> (ex.: <code>workout-structure.test.mjs:145</code>, <code>workout-structure-v3.test.mjs:116</code>) e sobem para 5</td></tr>
+    </tbody>
+  </table></div></div>
+  <p class="small">Não muda: <code>scoring.ts</code> e o ranking (a Tonelagem é "maior vence" e já cai no ramo certo), o placar público, a autenticação, a sessão, o checkout e os cinco formatos atuais. Como na Distância, o placar público mostra o resultado como número puro ("830"), sem "kg".</p>
+</section>
+
+<section id="banco" aria-labelledby="t-banco">
+  <h2 id="t-banco">Banco de dados, autenticação e infraestrutura</h2>
+  <div class="cols">
+    <div class="card">
+      <h3>Migration nova (D9, T2)</h3>
+      <p><span class="tag bad">1 migration</span></p>
+      <p style="margin-top:8px">Nome sugerido: <code>20261027120000_workout_type_tonnage.sql</code>, a próxima depois de <code>20261026120000_event_dates.sql</code>. Um <code>ALTER</code> idempotente que acrescenta <code>'tonnage'</code> ao <code>workouts_type_check</code> (hoje com seis tipos). É aditiva: nenhuma linha existente muda.</p>
+      <p class="small" style="margin-top:8px">O banco é único e é produção. Você aplica depois de revisar, e conferimos a aplicação antes de a Tonelagem ir ao ar.</p>
+    </div>
+    <div class="card">
+      <h3>Sem mudança</h3>
+      <p><b>Contrato e súmulas:</b> a coluna <code>structure</code> só exige "objeto JSON", então a v5 não precisa de migration.</p>
+      <p style="margin-top:8px"><b>Autenticação e infra:</b> mesmas rotas, mesma sessão, mesmo dispatcher <code>POST /api/admin/persistence</code>, sem variável de ambiente nova e sem mudança de CSP.</p>
+    </div>
+  </div>
+  <p class="small">As funções SQL de correção de qualifier têm uma lista própria de tipos reclassificáveis (<code>amrap, reps, maxweight, distance, points</code>). A Tonelagem não entra nela agora; mexer nelas exigiria reescrever funções já aplicadas, e fica fora desta proposta.</p>
+</section>
+
+<section id="riscos" aria-labelledby="t-riscos">
+  <h2 id="t-riscos">Riscos e como cada um é tratado</h2>
+  <div class="card"><div class="scroll"><table class="t">
+    <thead><tr><th>Risco</th><th>Tratamento</th></tr></thead>
+    <tbody>
+      <tr><td>A tela real sair diferente da maquete</td><td>Maquete com os tokens e a estrutura reais, copiada para <code>docs/design/tonelagem/</code>; conferência no navegador com prints para você antes de qualquer commit.</td></tr>
+      <tr><td>Desfazer um incremento reescreve a tonelagem de trás para frente</td><td>Cada <code>lrep</code> leva a própria carga. Teste dedicado.</td></tr>
+      <tr><td>Desfazer na liberação trava ou destrava o levantamento de forma incoerente</td><td>O motor reproduz o log inteiro e reavalia a trava a cada <code>lrep</code>. Teste dedicado: liberar, levantar, desfazer uma repetição da liberação.</td></tr>
+      <tr><td>Telão mostra a prova como "For Time" até a onda do telão</td><td>Mesmo acordo da Distância: não usar telão em evento com Tonelagem até a Story 1.81.</td></tr>
+      <tr><td>Súmula antiga abre uma estrutura v5</td><td>Publicar construtor e súmula juntos (1.79 e 1.80), como na Distância.</td></tr>
+      <tr><td>Correção do gestor lê "1.652,5" errado</td><td>Parser próprio no ramo da correção, com teste de milhar e vírgula decimal.</td></tr>
+      <tr><td>Árvore com mudanças do Comprovante único não commitadas</td><td>Cada commit da Tonelagem adiciona só os arquivos dela, por caminho. O push continua exclusivo do @devops.</td></tr>
+      <tr><td>Prova de Tonelagem sem time cap quebrar a súmula</td><td>Time cap obrigatório na validação do contrato, no construtor e no servidor. A estrutura sem ele nunca é salva, então nenhuma súmula é aberta sem relógio.</td></tr>
+      <tr><td>Migration em produção</td><td>Idempotente e aditiva; aplicada por você antes da Story 1.79 ir ao ar.</td></tr>
+    </tbody>
+  </table></div></div>
+</section>
+
+<section id="entrega" aria-labelledby="t-entrega">
+  <h2 id="t-entrega">Plano de entrega</h2>
+  <p class="sec-lead">Mesmo molde da Distância. Sem desempate, a story do ranking deixa de existir e sobra uma story pequena do banco.</p>
+  <div class="card"><div class="scroll"><table class="t">
+    <thead><tr><th>Story</th><th>Etapa</th><th>Escopo</th><th>Tam.</th></tr></thead>
+    <tbody>
+      <tr><td>1.77</td><td>A</td><td>Contrato v5 e motor: validação, liberação com trava, <code>load</code> e <code>lrep</code>, resultado, <code>validateClientEvent</code>, ausente, progresso ao vivo, ajuste dos testes de versão</td><td>G</td></tr>
+      <tr><td>1.78</td><td>B</td><td>Banco e rótulos: migration do tipo <code>tonnage</code>, tipo e rótulos do app, lançamento manual e correção do gestor em kg</td><td>P</td></tr>
+      <tr><td>1.79</td><td>C</td><td>Construtor: cartão, lista de exercícios com marcador, carga, incremento, time cap obrigatório, checklist, frase da regra, editar prova gravada, selo público</td><td>M</td></tr>
+      <tr><td>1.80</td><td>D</td><td>Súmula do judge: carga antes de iniciar, liberação, levantamento, incremento, resultado a publicar, ausente</td><td>G</td></tr>
+      <tr><td>1.81</td><td>E</td><td>Telão: rótulo, chamada, tonelagem ao vivo, ordem por kg</td><td>P</td></tr>
+    </tbody>
+  </table></div></div>
+  <p class="small">Ordem: 1.77, depois 1.78 (com a migration aplicada), 1.79 e 1.80 publicadas juntas, e 1.81 por último. Nenhum commit nem push antes de você pedir.</p>
+</section>
+
+<section id="decisoes" aria-labelledby="t-decisoes">
+  <h2 id="t-decisoes">Decisões</h2>
+  <div class="card">
+    <div class="dec"><div class="dcode">D1</div><div><h4>Nome <span class="tag ok">aprovado</span></h4><p>Cartão <b>Tonelagem</b> em "Formato da prova".</p></div></div>
+    <div class="dec"><div class="dcode">D2</div><div><h4>Exercícios <span class="tag ok">aprovado</span></h4><p>O gestor adiciona os exercícios e marca qual vale para a tonelagem. Só o marcado soma.</p></div></div>
+    <div class="dec"><div class="dcode">D3</div><div><h4>Origem da carga <span class="tag ok">aprovado</span></h4><p>Livre ou prescrita.</p></div></div>
+    <div class="dec"><div class="dcode">D4</div><div><h4>Incremento <span class="tag ok">aprovado</span></h4><p>Definido pelo gestor na pré-configuração da prova: permitido ou não, e o passo. Só sobe.</p></div></div>
+    <div class="dec"><div class="dcode">D5</div><div><h4>Contagem <span class="tag ok">aprovado</span></h4><p>Um toque por repetição válida. Sem carga mínima.</p></div></div>
+    <div class="dec"><div class="dcode">D6</div><div><h4>Janela <span class="tag ok">aprovado</span></h4><p>É o time cap da prova, preenchido pelo gestor. <b>Obrigatório</b>.</p></div></div>
+    <div class="dec"><div class="dcode">D7</div><div><h4>Exercícios antes do marcado <span class="tag ok">aprovado</span></h4><p>Não contam ponto; precisam ser feitos para liberar o atleta.</p></div></div>
+    <div class="dec"><div class="dcode">D8</div><div><h4>Desempate <span class="tag ok">adiado</span></h4><p>Fica para depois. Mesma tonelagem divide a pontuação. Ausente publica 0 kg, depois de qualquer resultado real. Teto de 99.999 kg.</p></div></div>
+    <div class="dec"><div class="dcode">D9</div><div><h4>Banco <span class="tag ok">aprovado</span></h4><p>Tipo novo <code>tonnage</code>, com uma migration nova e própria.</p></div></div>
+    <div class="dec"><div class="dcode">D10</div><div><h4>Telão <span class="tag ok">aprovado</span></h4><p>Onda separada, no fim (Story 1.81).</p></div></div>
+  </div>
+
+  <h3>Confirmações respondidas</h3>
+  <p class="small">Você respondeu as duas, e o desenho acima já reflete cada uma.</p>
+  <div class="card">
+    <div class="dec"><div class="dcode">C1</div><div><h4>Exercício marcado em qualquer posição <span class="tag ok">aprovado</span></h4><p>O gestor pode marcar qualquer exercício como o da tonelagem. Os de antes liberam o atleta. Os de depois aparecem na súmula como "depois da tonelagem", não contam e não travam nada.</p></div></div>
+    <div class="dec"><div class="dcode">C2</div><div><h4>Time cap <span class="tag ok">obrigatório</span></h4><p>O campo não pode ficar em branco. Sem time cap a prova não é salva, o que evita uma súmula sem relógio de fim.</p></div></div>
+  </div>
+
+  <h3>Fora do escopo</h3>
+  <p class="small">Desempate de qualquer tipo; carga mínima ou máxima por categoria; carga prescrita diferente por sexo ou divisão; mais de um exercício somando tonelagem; reduzir a carga durante o treino; reclassificar uma prova de qualifier para Tonelagem pelas funções SQL; unidade em libras; "kg" na tabela pública de resultados; qualquer mudança nos cinco formatos atuais, no ranking, na autenticação ou na infraestrutura.</p>
+</section>
+
+</div>
+
+<script>
+(function () {
+  var $ = function (s) { return document.querySelector(s); };
+  var fmt = function (n) { return (Math.round(n * 100) / 100).toLocaleString('pt-BR', { maximumFractionDigits: 2 }); };
+  var esc = function (s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+  var parseKg = function (t) {
+    var s = String(t).trim().replace(',', '.');
+    if (!/^\d{1,3}(\.\d{1,2})?$/.test(s)) return null;
+    var v = Number(s);
+    return v > 0 && v <= 500 && Math.abs(v * 4 - Math.round(v * 4)) < 1e-9 ? v : null;
+  };
+  var parseReps = function (t) { var n = parseInt(String(t).trim(), 10); return n >= 1 && n <= 99 ? n : null; };
+  var radio = function (name) { var el = document.querySelector('input[name="' + name + '"]:checked'); return el ? el.value : ''; };
+  var clock = function (s) { var m = Math.floor(s / 60), r = s % 60; return (m < 10 ? '0' : '') + m + ':' + (r < 10 ? '0' : '') + r; };
+
+  // ---- construtor ----
+  var B = { ex: [{ n: 'Pull Ups', r: '10', l: '' }, { n: 'Burpees', r: '10', l: '' }, { n: 'Squat Clean', r: '', l: '' }], ton: 2 };
+  var cfg = {};
+  var sh = { phase: 'ready', log: [], elapsed: 0, timer: null, msg: '' };
+
+  function renderList() {
+    var h = '';
+    B.ex.forEach(function (x, i) {
+      var isTon = i === B.ton;
+      var role = i < B.ton ? 'Libera o atleta · não conta ponto' : (isTon ? 'Conta para a tonelagem · repetições livres, carga definida no passo 3' : 'Depois da tonelagem · não conta nem trava');
+      var badR = !isTon && parseReps(x.r) === null;
+      h += '<li><div class="line' + (isTon ? ' ton' : '') + '">';
+      h += '<input class="in c' + (badR ? ' err' : '') + '" type="text" data-i="' + i + '" data-f="r" value="' + (isTon ? '' : esc(x.r)) + '" placeholder="' + (isTon ? 'livre' : '') + '"' + (isTon ? ' disabled' : '') + ' inputmode="numeric" aria-label="Repetições do exercício ' + (i + 1) + '" autocomplete="off">';
+      h += '<input class="in nm" type="text" data-i="' + i + '" data-f="n" value="' + esc(x.n) + '" maxlength="60" aria-label="Movimento do exercício ' + (i + 1) + '" autocomplete="off">';
+      h += '<input class="in c" type="text" data-i="' + i + '" data-f="l" value="' + (isTon ? '' : esc(x.l)) + '" placeholder="' + (isTon ? 'passo 3' : '') + '"' + (isTon ? ' disabled' : '') + ' inputmode="decimal" aria-label="Carga do exercício ' + (i + 1) + '" autocomplete="off">';
+      h += '<label class="mark"><input type="radio" name="tonIdx" value="' + i + '"' + (isTon ? ' checked' : '') + '>Conta</label>';
+      h += '<button type="button" class="ibtn" data-rm="' + i + '" aria-label="Remover exercício ' + (i + 1) + '"' + (B.ex.length <= 1 ? ' disabled' : '') + '>×</button>';
+      h += '<p class="role">' + role + '</p></div></li>';
+    });
+    $('#exList').innerHTML = h;
+    $('#addEx').disabled = B.ex.length >= 10;
+  }
+
+  function readCfg() {
+    cfg = {
+      ex: B.ex.map(function (x) { return { n: x.n.trim() || 'Exercício', r: parseReps(x.r) || 10, rOk: parseReps(x.r) !== null, l: parseKg(x.l) }; }),
+      ton: B.ton,
+      mode: radio('mode'),
+      presc: $('#presc').value,
+      inc: radio('inc') === 'yes',
+      step: Number($('#step').value),
+      win: $('#win').value.trim()
+    };
+  }
+  function winSeconds() {
+    var m = /^(\d{1,2}):([0-5]\d)$/.exec(cfg.win);
+    if (!m) return null;
+    var s = Number(m[1]) * 60 + Number(m[2]);
+    return s >= 30 && s <= 5999 ? s : null;
+  }
+  function renderChecklist() {
+    var items = [], lift = cfg.ex[cfg.ton];
+    var nb = cfg.ton, na = cfg.ex.length - cfg.ton - 1;
+    items.push(['ok', 'Exercício que conta: ' + esc(lift.n)]);
+    items.push(nb > 0 ? ['ok', nb + (nb === 1 ? ' exercício libera' : ' exercícios liberam') + ' o atleta'] : ['mu', 'Sem exercícios de liberação']);
+    if (na > 0) items.push(['mu', na + (na === 1 ? ' exercício depois' : ' exercícios depois') + ' da tonelagem: não conta nem trava']);
+    cfg.ex.forEach(function (x, i) { if (i !== cfg.ton && !x.rOk) items.push(['er', 'Repetições de ' + esc(x.n) + ': informe de 1 a 99']); });
+    if (cfg.mode === 'prescribed') items.push(parseKg(cfg.presc) === null ? ['er', 'Carga prescrita: use de 0,25 a 500 kg, em múltiplos de 0,25'] : ['ok', 'Carga prescrita: ' + fmt(parseKg(cfg.presc)) + ' kg']);
+    else items.push(['ok', 'Carga livre: o judge informa antes de iniciar']);
+    items.push(['ok', cfg.inc ? 'Incremento permitido, de ' + fmt(cfg.step) + ' em ' + fmt(cfg.step) + ' kg' : 'Carga travada durante o treino']);
+    if (winSeconds() === null) items.push(['er', cfg.win ? 'Time cap: use MM:SS entre 00:30 e 99:59' : 'Informe o time cap da prova (MM:SS)']);
+    else items.push(['ok', 'Time cap de ' + cfg.win]);
+    $('#chk').innerHTML = items.map(function (it) {
+      return '<li class="' + it[0] + '"><b aria-hidden="true">' + (it[0] === 'ok' ? '✓' : it[0] === 'er' ? '!' : '·') + '</b><span>' + it[1] + '</span></li>';
+    }).join('');
+  }
+  function renderRule() {
+    var lift = cfg.ex[cfg.ton];
+    var p = [];
+    if (cfg.ton > 0) p.push('Para liberar o atleta: ' + cfg.ex.slice(0, cfg.ton).map(function (x) { return esc(x.n) + ' × ' + x.r; }).join(', ') + ' (não contam ponto).');
+    p.push('A tonelagem é a soma de carga × repetições válidas de <strong>' + esc(lift.n) + '</strong>.');
+    if (cfg.mode === 'athlete') p.push('Carga livre, informada pelo judge antes de iniciar.');
+    else { var v = parseKg(cfg.presc); p.push('Carga prescrita: ' + (v === null ? '(informe os kg)' : fmt(v) + ' kg') + '.'); }
+    p.push(cfg.inc ? 'A carga pode subir de ' + fmt(cfg.step) + ' em ' + fmt(cfg.step) + ' kg.' : 'A carga fica travada.');
+    p.push(winSeconds() === null ? 'Time cap da prova: (informe o tempo).' : 'Time cap da prova: ' + cfg.win + '.');
+    p.push('Mesma tonelagem divide a posição.');
+    $('#ruleText').innerHTML = p.join(' ');
+  }
+  function syncVisibility() {
+    $('#proscWrap').hidden = radio('mode') !== 'prescribed';
+    $('#stepwrap').hidden = radio('inc') !== 'yes';
+  }
+
+  // ---- súmula (maquete) ----
+  function stopTimer() { if (sh.timer) { clearInterval(sh.timer); sh.timer = null; } }
+  function resetSheet() { stopTimer(); sh = { phase: 'ready', log: [], elapsed: 0, timer: null, msg: '' }; renderSheet(); }
+  var cap = function () { return winSeconds(); };
+  var inCap = function (at) { return cap() === null || at <= cap(); };
+  function liftLoad() {
+    for (var k = sh.log.length - 1; k >= 0; k--) if (sh.log[k].t === 'load') return sh.log[k].v;
+    return null;
+  }
+  function doneOf(i) { return sh.log.filter(function (e) { return e.t === 'rep' && e.seg === i && inCap(e.at); }).length; }
+  function curBefore() { for (var i = 0; i < cfg.ton; i++) if (doneOf(i) < cfg.ex[i].r) return i; return -1; }
+  function released() { return curBefore() === -1; }
+  // Reproduz o log na ordem, como o motor: só conta se a liberação estava completa e dentro do time cap.
+  function replay() {
+    var done = cfg.ex.map(function () { return 0; });
+    var ok = [], ignored = 0;
+    sh.log.forEach(function (e) {
+      if (e.t === 'rep') { if (inCap(e.at)) done[e.seg] += 1; }
+      else if (e.t === 'lrep') {
+        var ready = true;
+        for (var i = 0; i < cfg.ton; i++) if (done[i] < cfg.ex[i].r) ready = false;
+        if (ready && inCap(e.at)) ok.push(e); else ignored += 1;
+      }
+    });
+    return { ok: ok, ignored: ignored };
+  }
+  function total() { return replay().ok.reduce(function (a, e) { return a + e.load; }, 0); }
+  function groups() {
+    var out = [];
+    replay().ok.forEach(function (e) {
+      var g = out.filter(function (x) { return x.load === e.load; })[0];
+      if (!g) { g = { load: e.load, n: 0 }; out.push(g); }
+      g.n += 1;
+    });
+    return out;
+  }
+  function histHtml() {
+    var g = groups();
+    if (!g.length) return '';
+    return '<ol class="hist" aria-label="Cargas e repetições">' + g.map(function (x) {
+      return '<li>' + fmt(x.load) + ' kg × ' + x.n + '</li>';
+    }).join('') + '</ol>';
+  }
+  function timeUp() { return cap() !== null && sh.elapsed > cap(); }
+
+  function clockCard() {
+    var c = cap();
+    var pct = c ? Math.max(0, Math.min(100, Math.round(sh.elapsed / c * 100))) : 0;
+    var label = sh.phase === 'ready' ? 'Não iniciada' : (sh.phase === 'running' ? 'Em andamento' : 'Relógio parado');
+    var h = '<div class="pc"><div class="clk"><div><div class="k">' + label + '</div><div class="t" id="clk" aria-label="Relógio ' + clock(sh.elapsed) + '">' + clock(sh.elapsed) + '</div></div>';
+    h += '<div class="d">Time cap<b>' + (c ? cfg.win : '—') + '</b></div></div>';
+    h += '<div class="pbar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pct + '" aria-label="Relógio em relação ao time cap"><i id="bar" style="width:' + pct + '%"></i></div>';
+    if (timeUp() && sh.phase === 'running') h += '<p class="alert" role="status">Tempo esgotado. Pare o relógio.</p>';
+    h += '</div>';
+    return h;
+  }
+
+  function renderSheet() {
+    var lift = cfg.ex[cfg.ton];
+    var h = '<header><p class="wk">Treino da maquete</p><p class="who">Atleta de exemplo<small>Raia 3</small></p></header>';
+    h += clockCard();
+
+    if (sh.phase === 'ready') {
+      var pre = cfg.mode === 'prescribed' ? cfg.presc : '';
+      h += '<div class="pc"><label class="lab2" for="decl">Carga do atleta · ' + esc(lift.n) + ' (kg)</label>';
+      h += '<input class="pin" id="decl" type="text" inputmode="decimal" autocomplete="off" placeholder="ex.: 60" value="' + esc(pre) + '"' + (cfg.mode === 'prescribed' ? ' readonly' : '') + ' aria-describedby="declHelp">';
+      h += '<p class="phelp" id="declHelp">' + (cfg.mode === 'prescribed' ? 'Carga prescrita pelo gestor. Confira com o atleta.' : 'Informe a carga que o atleta vai usar. Ela vale para as repetições até a próxima subida.') + '</p>';
+      if (cap() === null) h += '<p class="alert" role="status">Prova sem time cap válido: a súmula não abre. Corrija no construtor.</p>';
+      h += '<p class="pbad" id="declErr" role="alert"></p></div>';
+      if (cfg.ton > 0) h += '<div class="pc lock"><div class="k"><span>Liberação</span><span>aguardando</span></div><ul class="lib">' + cfg.ex.slice(0, cfg.ton).map(function (x) { return '<li><span>' + esc(x.n) + '</span><span>0/' + x.r + '</span></li>'; }).join('') + '</ul></div>';
+    } else if (sh.phase === 'running') {
+      var L = liftLoad(), ok = released();
+      if (cfg.ton > 0) {
+        h += '<div class="pc"><div class="k"><span>Liberação</span><span>' + (ok ? 'concluída' : 'em andamento') + '</span></div><ul class="lib">';
+        for (var i = 0; i < cfg.ton; i++) {
+          var d = doneOf(i), t = cfg.ex[i].r;
+          h += '<li><span>' + esc(cfg.ex[i].n) + '</span><span class="' + (d >= t ? 'done' : '') + '">' + (d >= t ? '✓ ' : '') + d + '/' + t + '</span></li>';
+        }
+        h += '</ul>';
+        var c = curBefore();
+        h += '<button type="button" class="ab' + (ok ? '' : ' main') + '" data-act="lib"' + (ok ? ' disabled' : '') + '>' + (ok ? 'Atleta liberado' : '+1 ' + esc(cfg.ex[c].n)) + '</button></div>';
+      }
+      h += '<div class="pc' + (ok ? '' : ' lock') + '"><div class="k"><span>' + esc(lift.n) + ' · conta a tonelagem</span><span>' + (ok ? 'liberado' : 'travado') + '</span></div>';
+      h += '<div class="big">' + fmt(L) + '<small>kg vigente</small></div>';
+      h += '<button type="button" class="ab main huge" data-act="rep"' + (ok ? '' : ' disabled') + '>' + (ok ? '+1 repetição' : 'Conclua a liberação') + '</button>';
+      if (cfg.inc) h += '<button type="button" class="ab" data-act="up"' + (ok && L + cfg.step <= 500 ? '' : ' disabled') + '>Subir carga +' + fmt(cfg.step) + ' kg</button>';
+      h += '<div><div class="lab2">Tonelagem até agora</div><div class="big">' + fmt(total()) + '<small>kg · ' + replay().ok.length + ' reps</small></div></div>';
+      h += histHtml() + '</div>';
+      if (cfg.ex.length - 1 > cfg.ton) h += '<p class="phelp">Depois da tonelagem (não conta, não trava): ' + cfg.ex.slice(cfg.ton + 1).map(function (x) { return esc(x.n); }).join(', ') + '.</p>';
+    } else {
+      var r = replay();
+      h += '<div class="res" aria-label="Resultado a publicar"><p class="k">Resultado a publicar</p><p class="big">' + fmt(total()) + ' kg</p>';
+      h += '<p class="det">' + r.ok.length + (r.ok.length === 1 ? ' repetição válida' : ' repetições válidas') + (r.ignored ? ' · ' + r.ignored + ' fora do time cap ou da liberação, ignorada(s)' : '') + '</p>';
+      h += histHtml();
+      h += '<p class="nt">' + (sh.msg || 'Mesma tonelagem divide a posição no ranking. As repetições aparecem só como informação.') + '</p></div>';
+    }
+
+    var hasUndo = sh.log.length > 1;
+    h += '<div class="bar">';
+    h += '<button type="button" class="ab" data-act="undo"' + (hasUndo ? '' : ' disabled') + '>Desfazer</button>';
+    if (sh.phase === 'ready') h += '<button type="button" class="ab main" data-act="start" id="startBtn" disabled>Iniciar</button>';
+    else if (sh.phase === 'running') h += '<button type="button" class="ab stop" data-act="stop">Parar</button>';
+    else h += '<button type="button" class="ab main" data-act="send"' + (sh.msg ? ' disabled' : '') + '>Enviar súmula</button>';
+    h += '</div>';
+    $('#phone').innerHTML = h;
+    if (sh.phase === 'ready') checkDecl();
+  }
+  function checkDecl() {
+    var inp = $('#decl'); if (!inp) return;
+    var ok = parseKg(inp.value) !== null && cap() !== null;
+    $('#startBtn').disabled = !ok;
+    $('#declErr').textContent = !ok && inp.value.trim() ? 'Use de 0,25 a 500 kg, em múltiplos de 0,25.' : '';
+  }
+  function tick() {
+    sh.elapsed += 1;
+    var c = $('#clk'); if (c) { c.textContent = clock(sh.elapsed); c.setAttribute('aria-label', 'Relógio ' + clock(sh.elapsed)); }
+    var cp = cap(), b = $('#bar');
+    if (cp && b) b.style.width = Math.min(100, Math.round(sh.elapsed / cp * 100)) + '%';
+    if (cp && sh.elapsed === cp + 1) renderSheet();
+  }
+
+  $('#phone').addEventListener('input', function (e) { if (e.target && e.target.id === 'decl') checkDecl(); });
+  $('#phone').addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('[data-act]') : null;
+    if (!b || b.disabled) return;
+    var a = b.getAttribute('data-act');
+    if (a === 'start') { sh.log.push({ t: 'load', v: parseKg($('#decl').value), at: 0 }); sh.phase = 'running'; sh.timer = setInterval(tick, 1000); }
+    else if (a === 'stop') { stopTimer(); sh.phase = 'stopped'; }
+    else if (a === 'lib') { var c = curBefore(); if (c >= 0) sh.log.push({ t: 'rep', seg: c, at: sh.elapsed }); }
+    else if (a === 'rep') { if (released()) sh.log.push({ t: 'lrep', load: liftLoad(), at: sh.elapsed }); }
+    else if (a === 'up') sh.log.push({ t: 'load', v: liftLoad() + cfg.step, at: sh.elapsed });
+    else if (a === 'undo') { if (sh.log.length > 1) sh.log.pop(); }
+    else if (a === 'send') sh.msg = 'Simulação concluída: ' + fmt(total()) + ' kg publicados. Nada foi enviado de verdade.';
+    renderSheet();
+  });
+  $('#skip').addEventListener('click', function () {
+    if (sh.phase !== 'running') return;
+    sh.elapsed += 30; renderSheet();
+  });
+
+  function refresh() { syncVisibility(); readCfg(); renderChecklist(); renderRule(); resetSheet(); }
+
+  $('#exList').addEventListener('input', function (e) {
+    var t = e.target; if (!t.getAttribute || !t.getAttribute('data-f')) return;
+    B.ex[Number(t.getAttribute('data-i'))][t.getAttribute('data-f')] = t.value;
+    refresh();
+    if (t.getAttribute('data-f') === 'r') { t.classList.toggle('err', parseReps(t.value) === null); }
+  });
+  $('#exList').addEventListener('change', function (e) {
+    if (e.target && e.target.name === 'tonIdx') { B.ton = Number(e.target.value); renderList(); refresh(); }
+  });
+  $('#exList').addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('[data-rm]') : null;
+    if (!b || b.disabled) return;
+    var i = Number(b.getAttribute('data-rm'));
+    B.ex.splice(i, 1);
+    if (B.ton > i) B.ton -= 1;
+    if (B.ton >= B.ex.length) B.ton = B.ex.length - 1;
+    renderList(); refresh();
+  });
+  $('#addEx').addEventListener('click', function () {
+    if (B.ex.length >= 10) return;
+    B.ex.push({ n: 'Novo exercício', r: '10', l: '' });
+    renderList(); refresh();
+  });
+  document.querySelectorAll('[data-preset]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      if (btn.getAttribute('data-preset') === 't1') {
+        B.ex = [{ n: 'Pull Ups', r: '10', l: '' }, { n: 'Burpees', r: '10', l: '' }, { n: 'Squat Clean', r: '', l: '' }]; B.ton = 2; $('#win').value = '10:00';
+      } else {
+        B.ex = [{ n: 'Squat Snatch', r: '', l: '' }]; B.ton = 0; $('#win').value = '03:00';
+      }
+      renderList(); refresh();
+    });
+  });
+  ['input', 'change'].forEach(function (ev) {
+    ['#presc', '#step', '#win'].forEach(function (sel) { $(sel).addEventListener(ev, refresh); });
+    document.querySelectorAll('input[name="mode"], input[name="inc"]').forEach(function (el) { el.addEventListener(ev, refresh); });
+  });
+
+  renderList();
+  refresh();
+})();
+</script>

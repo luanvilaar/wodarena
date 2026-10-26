@@ -14,7 +14,7 @@ import { deriveLegacyWorkoutFields, validateWorkoutStructure, type WorkoutStruct
 // Story 1.61: o treino de referência do Intervalado (docs/design/intervalado/),
 // para conferir a prova gravada reabrindo em "Editar súmula".
 const INTERVAL_EXAMPLE: WorkoutStructure = {
-  version: 4,
+  version: 5,
   format: 'interval',
   totalReps: 21,
   timeCapSeconds: 1080,
@@ -30,12 +30,13 @@ const INTERVAL_EXAMPLE: WorkoutStructure = {
   maxLoad: null,
   scoreDisplay: null,
   interval: { rounds: 5, onSeconds: 120, offSeconds: 120, max: { id: 'mx', name: 'Squat Clean', load: { value: 80, unit: 'kg' }, note: '' } },
-  distance: null
+  distance: null,
+  tonnage: null
 };
 
 // Story 1.67: o treino de referência da Distância (docs/design/distancia/).
 const DISTANCE_EXAMPLE: WorkoutStructure = {
-  version: 4,
+  version: 5,
   format: 'distance',
   totalReps: 0,
   timeCapSeconds: 1200,
@@ -48,7 +49,8 @@ const DISTANCE_EXAMPLE: WorkoutStructure = {
   maxLoad: null,
   scoreDisplay: null,
   interval: null,
-  distance: { unit: 'm', note: '750 m corrida; máx. distância no remo. Os parceiros trocam a cada volta da corrida.' }
+  distance: { unit: 'm', note: '750 m corrida; máx. distância no remo. Os parceiros trocam a cada volta da corrida.' },
+  tonnage: null
 };
 
 export function EditorPreview() {

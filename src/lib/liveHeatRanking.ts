@@ -11,6 +11,8 @@ import type { WorkoutStructureFormat } from '@/lib/workoutStructure';
 //   registro (no intervalado, o último que conta, dentro da janela);
 // - Distância (Story 1.66): `repsDone` leva os metros do último lançamento →
 //   maior total → lançou antes (o instante do último lançamento que conta);
+// - Tonelagem (Story 1.77): `scoreKg` leva a tonelagem corrente → maior tonelagem
+//   → chegou antes à última repetição que conta;
 // - Carga máxima: maior carga → menos tentativas → chegou antes.
 
 export type LiveRankInput = {
@@ -24,6 +26,9 @@ const started = (progress: LiveProgress | null): progress is LiveProgress => Boo
 const later = (value: number | null) => (value === null ? Number.POSITIVE_INFINITY : value);
 
 const compareProgress = (format: WorkoutStructureFormat, a: LiveProgress, b: LiveProgress) => {
+  if (format === 'tonnage') {
+    return (b.scoreKg ?? 0) - (a.scoreKg ?? 0) || later(a.lastMarkAt) - later(b.lastMarkAt);
+  }
   if (format === 'max_load') {
     return (b.scoreKg ?? 0) - (a.scoreKg ?? 0)
       || later(a.attemptsUsed) - later(b.attemptsUsed)

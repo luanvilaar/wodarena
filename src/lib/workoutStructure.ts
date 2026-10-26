@@ -22,13 +22,17 @@
 // resultado é a soma das repetições do máximo nos rounds que pontuaram. A 4
 // (Story 1.66) acrescenta a Distância (`distance`): a prova tem só a duração, o
 // judge soma por fora e lança um total em metros (evento `dist`, vale o último
-// não desfeito); o resultado é esse total.
+// não desfeito); o resultado é esse total. A 5 (Story 1.77) acrescenta a
+// Tonelagem (`tonnage`): o gestor lista os exercícios e marca um deles; os
+// anteriores (em `segments`) liberam o atleta e não contam ponto, e o marcado
+// (em `tonnage`) soma carga × repetições válidas, com a carga declarada antes
+// de iniciar, subindo ou não durante a prova (eventos `load` e `lrep`).
 
 // ---------------------------------------------------------------------------
 // Contrato
 // ---------------------------------------------------------------------------
 
-export const WORKOUT_STRUCTURE_VERSION = 4;
+export const WORKOUT_STRUCTURE_VERSION = 5;
 
 export const WORKOUT_STRUCTURE_LIMITS = {
   minSegments: 1,
@@ -69,10 +73,16 @@ export const WORKOUT_STRUCTURE_LIMITS = {
   /** Teto de segurança das repetições do movimento máximo num round. */
   maxIntervalMaxRepsPerRound: 999,
   /** Distância (Story 1.66): o total lançado pelo judge, em metros inteiros. Fica abaixo do 999999 que a tabela pública usa como "sem resultado". */
-  maxDistanceMeters: 99999
+  maxDistanceMeters: 99999,
+  /** Tonelagem (Story 1.77): a carga é de 0,25 a 500 kg em múltiplos de 0,25, e o total da súmula chega a 99.999 kg (abaixo do 999999 da tabela pública). */
+  minTonnageLoadKg: 0.25,
+  tonnageLoadGranularityKg: 0.25,
+  maxTonnageKg: 99999,
+  /** Exercícios além do que conta (os de liberação e os de depois). */
+  maxTonnageSegments: 9
 } as const;
 
-export type WorkoutStructureFormat = 'for_time' | 'amrap' | 'max_load' | 'interval' | 'distance';
+export type WorkoutStructureFormat = 'for_time' | 'amrap' | 'max_load' | 'interval' | 'distance' | 'tonnage';
 /** Formatos contados por segmentos (toque e segure). */
 export type SegmentWorkoutFormat = 'for_time' | 'amrap';
 export type WorkoutSegmentMark = 'reps' | 'end';
@@ -166,8 +176,32 @@ export type WorkoutDistance = {
   note: string;
 };
 
+export type TonnageLoadMode = 'athlete' | 'prescribed';
+
+/** O exercício que conta para a tonelagem. `loadKg` é a carga prescrita; null quando a carga é livre. */
+export type WorkoutTonnageLift = {
+  id: string;
+  name: string;
+  loadKg: number | null;
+  note: string;
+};
+
+/**
+ * Tonelagem (Story 1.77). `position` é quantos exercícios de `segments` vêm
+ * antes do que conta: esses liberam o atleta (não contam ponto) e os de depois
+ * só aparecem na súmula. `increment.allowed` diz se a carga pode subir durante
+ * a prova, de `stepKg` em `stepKg`.
+ */
+export type WorkoutTonnage = {
+  position: number;
+  lift: WorkoutTonnageLift;
+  loadMode: TonnageLoadMode;
+  increment: { allowed: boolean; stepKg: number };
+  note: string;
+};
+
 export type WorkoutStructure = {
-  version: 4;
+  version: 5;
   format: WorkoutStructureFormat;
   /** Soma das quantidades dos segmentos (no AMRAP e no intervalado, as de um round; em carga máxima, 0). */
   totalReps: number;
@@ -188,6 +222,8 @@ export type WorkoutStructure = {
   interval: WorkoutInterval | null;
   /** Só na distância. */
   distance: WorkoutDistance | null;
+  /** Só na tonelagem. */
+  tonnage: WorkoutTonnage | null;
 };
 
 export type WorkoutStructureValidation =
@@ -195,7 +231,7 @@ export type WorkoutStructureValidation =
   | { ok: false; error: string };
 
 /** Campos legados da linha de `workouts` derivados da estrutura (camelCase). */
-export type LegacyWorkoutFields = { type: 'fortime' | 'amrap' | 'maxweight' | 'reps' | 'distance'; timeCap: string; tieBreaker: '' | 'Tempo' };
+export type LegacyWorkoutFields = { type: 'fortime' | 'amrap' | 'maxweight' | 'reps' | 'distance' | 'tonnage'; timeCap: string; tieBreaker: '' | 'Tempo' };
 
 export type SheetTimeTarget = 'final' | 'tiebreak';
 
@@ -207,7 +243,10 @@ export type SheetTimeTarget = 'final' | 'tiebreak';
  * tentativa de carga máxima (carga em kg, válida ou não). No intervalado,
  * `set` e `adj` levam `rd`, o round corrigido (a correção é feita com o
  * relógio parado, então o `at` não diz o round). Na distância, `dist` é o total
- * acumulado em metros lançado pelo judge (vale o último não desfeito). Campos
+ * acumulado em metros lançado pelo judge (vale o último não desfeito). Na
+ * tonelagem, `load` é a carga do exercício que conta (a declarada antes de
+ * iniciar ou a nova, num incremento) e `lrep` uma repetição válida com a carga
+ * que valia naquele toque; a liberação usa `rep`, `fill`, `set` e `adj`. Campos
  * extras são ignorados.
  */
 export type SheetEvent =
@@ -218,7 +257,9 @@ export type SheetEvent =
   | { t: 'undo'; of: number; at: number }
   | { t: 'time'; target: SheetTimeTarget; v: number; at: number }
   | { t: 'attempt'; lift: string; load: number; ok: boolean; at: number }
-  | { t: 'dist'; v: number; at: number };
+  | { t: 'dist'; v: number; at: number }
+  | { t: 'load'; v: number; at: number }
+  | { t: 'lrep'; load: number; at: number };
 
 export type SheetSegmentState = {
   id: string;
@@ -344,6 +385,11 @@ const STRUCTURE_KEYS_V1 = [
 const STRUCTURE_KEYS_V2 = [...STRUCTURE_KEYS_V1, 'maxLoad', 'scoreDisplay'] as const;
 const STRUCTURE_KEYS_V3 = [...STRUCTURE_KEYS_V2, 'interval'] as const;
 const STRUCTURE_KEYS_V4 = [...STRUCTURE_KEYS_V3, 'distance'] as const;
+const STRUCTURE_KEYS_V5 = [...STRUCTURE_KEYS_V4, 'tonnage'] as const;
+const TONNAGE_KEYS = ['position', 'lift', 'loadMode', 'increment', 'note'] as const;
+const TONNAGE_LIFT_KEYS = ['id', 'name', 'loadKg', 'note'] as const;
+const TONNAGE_INCREMENT_KEYS = ['allowed', 'stepKg'] as const;
+const TONNAGE_LOAD_MODES: readonly string[] = ['athlete', 'prescribed'];
 const DISTANCE_KEYS = ['unit', 'note'] as const;
 const INTERVAL_KEYS = ['rounds', 'onSeconds', 'offSeconds', 'max'] as const;
 const INTERVAL_MAX_KEYS = ['id', 'name', 'load', 'note'] as const;
@@ -358,7 +404,7 @@ const ENTRY_KEYS = ['mode', 'marking', 'publish'] as const;
 const MAX_LOAD_KEYS = ['lifts', 'order', 'scoring', 'loadStepKg'] as const;
 const LIFT_KEYS = ['id', 'name', 'reps', 'maxAttempts', 'startLoadKg', 'note'] as const;
 
-const FORMATS: readonly string[] = ['for_time', 'amrap', 'max_load', 'interval', 'distance'];
+const FORMATS: readonly string[] = ['for_time', 'amrap', 'max_load', 'interval', 'distance', 'tonnage'];
 const MARKS: readonly string[] = ['reps', 'end'];
 const UNITS: readonly string[] = ['reps', 'cal', 'm'];
 const GENERATOR_KINDS: readonly string[] = ['fixed', 'descending', 'ascending'];
@@ -378,8 +424,8 @@ const L = WORKOUT_STRUCTURE_LIMITS;
 const MESSAGES = {
   notObject: 'A estrutura da prova deve ser um objeto.',
   unknownKey: 'A estrutura da prova tem um campo que não faz parte do contrato.',
-  version: 'A versão da estrutura da prova deve ser 1, 2, 3 ou 4.',
-  format: 'O formato da prova deve ser for_time (For Time), amrap (AMRAP), max_load (Carga máxima), interval (Intervalado) ou distance (Distância).',
+  version: 'A versão da estrutura da prova deve ser 1, 2, 3, 4 ou 5.',
+  format: 'O formato da prova deve ser for_time (For Time), amrap (AMRAP), max_load (Carga máxima), interval (Intervalado), distance (Distância) ou tonnage (Tonelagem).',
   formatV1: 'A versão 1 da estrutura só aceita for_time (For Time) ou amrap (AMRAP); carga máxima exige a versão 2.',
   intervalVersion: 'O formato intervalado (interval) e o campo interval exigem a versão 3 da estrutura.',
   intervalShape: 'No intervalado, informe o campo interval com os rounds (rounds), o tempo de trabalho (onSeconds), o tempo de descanso (offSeconds) e o movimento máximo (max).',
@@ -399,6 +445,20 @@ const MESSAGES = {
   incompleteDistance: 'Na distância, a regra de não conclusão deve ficar vazia (null).',
   tieBreakDistance: 'A distância não tem desempate nesta versão: o campo fica vazio (null).',
   generatorDistance: 'Na distância o gerador deve ficar vazio (null).',
+  tonnageVersion: 'O formato tonelagem (tonnage) e o campo tonnage exigem a versão 5 da estrutura.',
+  tonnageShape: 'Na tonelagem, informe o campo tonnage com a posição do exercício que conta (position), o exercício (lift), a origem da carga (loadMode), o incremento (increment) e o resumo da prova (note, pode ficar vazio).',
+  tonnageUnknownKey: 'O campo tonnage tem um campo que não faz parte do contrato.',
+  tonnagePosition: 'Na tonelagem, a posição do exercício que conta (position) deve ser um número inteiro de 0 até a quantidade de exercícios da lista de segmentos.',
+  tonnageLoadMode: 'Na tonelagem, a origem da carga (loadMode) deve ser athlete (livre) ou prescribed (prescrita pelo gestor).',
+  tonnagePrescribed: `Na tonelagem com carga prescrita, informe a carga do exercício (loadKg) entre ${L.minTonnageLoadKg} e ${L.maxLoadKg} kg, em múltiplos de ${L.tonnageLoadGranularityKg}; com carga livre ela fica vazia (null).`,
+  tonnageIncrement: `Na tonelagem, o incremento deve informar se é permitido (allowed) e o passo (stepKg) entre ${L.minLoadStepKg} e ${L.maxLoadStepKg} kg, em múltiplos de ${L.tonnageLoadGranularityKg}.`,
+  tonnageNote: `Na tonelagem, o resumo da prova (note) deve ser um texto de até ${L.maxNoteLength} caracteres (pode ficar vazio).`,
+  tonnageOnlyThere: 'O campo tonnage só existe em provas de tonelagem: fora delas fica vazio (null).',
+  tonnageTimeCap: `Na tonelagem o time cap é obrigatório: informe um número inteiro de segundos entre ${L.minTimeCapSeconds} e ${L.maxTimeCapSeconds} (de 00:30 a 99:59).`,
+  tonnageSegments: `Na tonelagem, a lista de segmentos tem de 0 a ${L.maxTonnageSegments} exercícios além do que conta.`,
+  incompleteTonnage: 'Na tonelagem, a regra de não conclusão deve ficar vazia (null).',
+  tieBreakTonnage: 'A tonelagem não tem desempate nesta versão: o campo fica vazio (null).',
+  generatorTonnage: 'Na tonelagem o gerador deve ficar vazio (null).',
   intervalSegments: `No intervalado, a prova tem de 0 a ${L.maxIntervalFixedSegments} movimentos fixos por round.`,
   incompleteInterval: 'No intervalado, a regra de não conclusão deve ficar vazia (null).',
   tieBreakInterval: 'O intervalado não tem desempate nesta versão: o campo fica vazio (null).',
@@ -653,6 +713,67 @@ const validateDistance = (input: unknown): DistanceCheck => {
   return { ok: true, distance: { unit: 'm', note: input.note.trim() } };
 };
 
+type TonnageCheck = { ok: true; tonnage: WorkoutTonnage } | { ok: false; error: string };
+
+/** Carga válida na tonelagem: de 0,25 a 500 kg, em múltiplos de 0,25. */
+export const isTonnageLoad = (value: unknown): value is number => (
+  typeof value === 'number'
+  && Number.isFinite(value)
+  && value >= L.minTonnageLoadKg
+  && value <= L.maxLoadKg
+  && Math.abs(value / L.tonnageLoadGranularityKg - Math.round(value / L.tonnageLoadGranularityKg)) < 1e-9
+);
+
+const validateTonnage = (input: unknown): TonnageCheck => {
+  if (!isPlainObject(input)) return fail(MESSAGES.tonnageShape);
+  if (!hasOnlyKeys(input, TONNAGE_KEYS)) return fail(MESSAGES.tonnageUnknownKey);
+  if (!Number.isInteger(input.position) || (input.position as number) < 0 || (input.position as number) > L.maxTonnageSegments) {
+    return fail(MESSAGES.tonnagePosition);
+  }
+  if (!isOneOf(input.loadMode, TONNAGE_LOAD_MODES)) return fail(MESSAGES.tonnageLoadMode);
+  const loadMode = input.loadMode as TonnageLoadMode;
+
+  const lift = input.lift;
+  if (!isPlainObject(lift)) return fail(MESSAGES.tonnageShape);
+  if (!hasOnlyKeys(lift, TONNAGE_LIFT_KEYS)) return fail(MESSAGES.tonnageUnknownKey);
+  for (const key of ['id', 'name', 'note'] as const) {
+    if (hasNullCharacter(lift[key])) return fail(MESSAGES.nullCharacter);
+  }
+  const id = typeof lift.id === 'string' ? lift.id.trim() : '';
+  if (!id || id.length > L.maxIdLength || !SEGMENT_ID_PATTERN.test(id)) {
+    return fail(`Exercício da tonelagem: o identificador deve ter de 1 a ${L.maxIdLength} caracteres, só letras sem acento, números, _ e -.`);
+  }
+  const name = typeof lift.name === 'string' ? lift.name.trim() : '';
+  if (!name || name.length > L.maxNameLength) return fail(`Exercício da tonelagem: informe o nome do movimento, com até ${L.maxNameLength} caracteres.`);
+  if (typeof lift.note !== 'string' || lift.note.trim().length > L.maxNoteLength) {
+    return fail(`Exercício da tonelagem: a observação deve ser um texto de até ${L.maxNoteLength} caracteres (pode ficar vazia).`);
+  }
+  const prescribed = loadMode === 'prescribed';
+  if (prescribed ? !isTonnageLoad(lift.loadKg) : lift.loadKg !== null) return fail(MESSAGES.tonnagePrescribed);
+
+  const increment = input.increment;
+  if (!isPlainObject(increment) || !hasOnlyKeys(increment, TONNAGE_INCREMENT_KEYS)
+    || typeof increment.allowed !== 'boolean'
+    || !isFiniteBetween(increment.stepKg, L.minLoadStepKg, L.maxLoadStepKg)
+    || Math.abs((increment.stepKg as number) / L.tonnageLoadGranularityKg - Math.round((increment.stepKg as number) / L.tonnageLoadGranularityKg)) > 1e-9) {
+    return fail(MESSAGES.tonnageIncrement);
+  }
+
+  if (hasNullCharacter(input.note)) return fail(MESSAGES.nullCharacter);
+  if (typeof input.note !== 'string' || input.note.trim().length > L.maxNoteLength) return fail(MESSAGES.tonnageNote);
+
+  return {
+    ok: true,
+    tonnage: {
+      position: input.position as number,
+      lift: { id, name, loadKg: prescribed ? lift.loadKg as number : null, note: lift.note.trim() },
+      loadMode,
+      increment: { allowed: increment.allowed, stepKg: increment.stepKg as number },
+      note: input.note.trim()
+    }
+  };
+};
+
 type TieBreakCheck = { ok: true; tieBreak: WorkoutTieBreak | null } | { ok: false; error: string };
 
 const TIE_BREAK_MESSAGES: Record<WorkoutStructureFormat, string> = {
@@ -660,15 +781,17 @@ const TIE_BREAK_MESSAGES: Record<WorkoutStructureFormat, string> = {
   amrap: MESSAGES.tieBreakAmrap,
   max_load: MESSAGES.tieBreakMaxLoad,
   interval: MESSAGES.tieBreakInterval,
-  distance: MESSAGES.tieBreakDistance
+  distance: MESSAGES.tieBreakDistance,
+  tonnage: MESSAGES.tieBreakTonnage
 };
-// O intervalado e a distância não têm desempate nesta versão (decisão 7 do Intervalado e decisão 5 da Distância): nenhum tipo é aceito.
+// O intervalado, a distância e a tonelagem não têm desempate nesta versão (decisão 7 do Intervalado, 5 da Distância e 8 da Tonelagem): nenhum tipo é aceito.
 const TIE_BREAK_KINDS: Record<WorkoutStructureFormat, readonly string[]> = {
   for_time: ['split_time', 'last_split'],
   amrap: ['split_time', 'last_round'],
   max_load: ['finish_time', 'fewest_attempts'],
   interval: [],
-  distance: []
+  distance: [],
+  tonnage: []
 };
 
 const validateTieBreak = (
@@ -710,9 +833,9 @@ const validateTieBreak = (
 
 const validateStructureObject = (input: unknown): WorkoutStructureValidation => {
   if (!isPlainObject(input)) return fail(MESSAGES.notObject);
-  if (!hasOnlyKeys(input, STRUCTURE_KEYS_V4)) return fail(MESSAGES.unknownKey);
-  if (input.version !== 1 && input.version !== 2 && input.version !== 3 && input.version !== 4) return fail(MESSAGES.version);
-  const version: 1 | 2 | 3 | 4 = input.version;
+  if (!hasOnlyKeys(input, STRUCTURE_KEYS_V5)) return fail(MESSAGES.unknownKey);
+  if (input.version !== 1 && input.version !== 2 && input.version !== 3 && input.version !== 4 && input.version !== 5) return fail(MESSAGES.version);
+  const version: 1 | 2 | 3 | 4 | 5 = input.version;
   const legacy = version === 1;
   // A versão 1 e a 2 não conhecem o intervalado, nem no formato nem na chave.
   if (version < 3 && (Object.prototype.hasOwnProperty.call(input, 'interval') || input.format === 'interval')) {
@@ -722,6 +845,10 @@ const validateStructureObject = (input: unknown): WorkoutStructureValidation => 
   if (version < 4 && (Object.prototype.hasOwnProperty.call(input, 'distance') || input.format === 'distance')) {
     return fail(MESSAGES.distanceVersion);
   }
+  // A versão 1 a 4 não conhecem a tonelagem, nem no formato nem na chave.
+  if (version < 5 && (Object.prototype.hasOwnProperty.call(input, 'tonnage') || input.format === 'tonnage')) {
+    return fail(MESSAGES.tonnageVersion);
+  }
   if (legacy && !hasOnlyKeys(input, STRUCTURE_KEYS_V1)) return fail(MESSAGES.unknownKey);
   if (!isOneOf(input.format, FORMATS)) return fail(MESSAGES.format);
   const format = input.format as WorkoutStructureFormat;
@@ -729,6 +856,7 @@ const validateStructureObject = (input: unknown): WorkoutStructureValidation => 
   const isMaxLoad = format === 'max_load';
   const isInterval = format === 'interval';
   const isDistance = format === 'distance';
+  const isTonnage = format === 'tonnage';
 
   let interval: WorkoutInterval | null = null;
   if (isInterval) {
@@ -744,8 +872,17 @@ const validateStructureObject = (input: unknown): WorkoutStructureValidation => 
     const checked = validateDistance(input.distance);
     if (!checked.ok) return checked;
     distance = checked.distance;
-  } else if (version === 4 && input.distance !== null) {
+  } else if (version >= 4 && input.distance !== null) {
     return fail(MESSAGES.distanceOnlyThere);
+  }
+
+  let tonnage: WorkoutTonnage | null = null;
+  if (isTonnage) {
+    const checked = validateTonnage(input.tonnage);
+    if (!checked.ok) return checked;
+    tonnage = checked.tonnage;
+  } else if (version === 5 && input.tonnage !== null) {
+    return fail(MESSAGES.tonnageOnlyThere);
   }
 
   let timeCapSeconds: number | null = null;
@@ -762,7 +899,7 @@ const validateStructureObject = (input: unknown): WorkoutStructureValidation => 
     }
     timeCapSeconds = expected;
   } else {
-    if (!isIntegerBetween(input.timeCapSeconds, L.minTimeCapSeconds, L.maxTimeCapSeconds)) return fail(MESSAGES.timeCap);
+    if (!isIntegerBetween(input.timeCapSeconds, L.minTimeCapSeconds, L.maxTimeCapSeconds)) return fail(isTonnage ? MESSAGES.tonnageTimeCap : MESSAGES.timeCap);
     timeCapSeconds = input.timeCapSeconds;
   }
 
@@ -773,9 +910,11 @@ const validateStructureObject = (input: unknown): WorkoutStructureValidation => 
   } else if (isDistance) {
     if (!Array.isArray(rawSegments) || rawSegments.length !== 0) return fail(MESSAGES.distanceSegments);
   } else {
-    const [minSegments, maxSegments] = isInterval ? [0, L.maxIntervalFixedSegments] : [L.minSegments, L.maxSegments];
+    const [minSegments, maxSegments] = isInterval
+      ? [0, L.maxIntervalFixedSegments]
+      : isTonnage ? [0, L.maxTonnageSegments] : [L.minSegments, L.maxSegments];
     if (!Array.isArray(rawSegments) || rawSegments.length < minSegments || rawSegments.length > maxSegments) {
-      return fail(isInterval ? MESSAGES.intervalSegments : MESSAGES.segmentsCount);
+      return fail(isInterval ? MESSAGES.intervalSegments : isTonnage ? MESSAGES.tonnageSegments : MESSAGES.segmentsCount);
     }
     const ids = new Set<string>();
     for (const [index, rawSegment] of rawSegments.entries()) {
@@ -788,11 +927,19 @@ const validateStructureObject = (input: unknown): WorkoutStructureValidation => 
       if (isInterval && checked.segment.round !== 1) {
         return fail(segmentMessage(index + 1, 'no intervalado os movimentos fixos descrevem um round: a rodada (round) deve ser 1.'));
       }
+      // Na tonelagem os exercícios de fora da conta são uma lista simples, numa rodada só.
+      if (isTonnage && checked.segment.round !== 1) {
+        return fail(segmentMessage(index + 1, 'na tonelagem os exercícios descrevem uma rodada só: a rodada (round) deve ser 1.'));
+      }
       ids.add(checked.segment.id);
       segments.push(checked.segment);
     }
     if (interval && ids.has(interval.max.id)) {
       return fail(intervalMaxMessage('o identificador repete o de um movimento fixo.'));
+    }
+    if (tonnage) {
+      if (ids.has(tonnage.lift.id)) return fail('Exercício da tonelagem: o identificador repete o de outro exercício.');
+      if (tonnage.position > segments.length) return fail(MESSAGES.tonnagePosition);
     }
   }
 
@@ -813,7 +960,7 @@ const validateStructureObject = (input: unknown): WorkoutStructureValidation => 
     if (!valid) return fail(MESSAGES.incompleteForTime);
     incomplete = { rule: 'penalty_per_rep', secondsPerRep: raw.secondsPerRep as number, base: 'time_cap' };
   } else if (input.incomplete !== null) {
-    return fail(isMaxLoad ? MESSAGES.incompleteMaxLoad : isInterval ? MESSAGES.incompleteInterval : isDistance ? MESSAGES.incompleteDistance : MESSAGES.incompleteAmrap);
+    return fail(isMaxLoad ? MESSAGES.incompleteMaxLoad : isInterval ? MESSAGES.incompleteInterval : isDistance ? MESSAGES.incompleteDistance : isTonnage ? MESSAGES.incompleteTonnage : MESSAGES.incompleteAmrap);
   }
 
   const tieBreakCheck = validateTieBreak(input.tieBreak, format, segments, legacy);
@@ -824,6 +971,7 @@ const validateStructureObject = (input: unknown): WorkoutStructureValidation => 
     if (isMaxLoad) return fail(MESSAGES.generatorMaxLoad);
     if (isInterval) return fail(MESSAGES.generatorInterval);
     if (isDistance) return fail(MESSAGES.generatorDistance);
+    if (isTonnage) return fail(MESSAGES.generatorTonnage);
     const raw = input.generator;
     const valid = isPlainObject(raw)
       && hasOnlyKeys(raw, GENERATOR_KEYS)
@@ -884,18 +1032,19 @@ const validateStructureObject = (input: unknown): WorkoutStructureValidation => 
       maxLoad,
       scoreDisplay,
       interval,
-      distance
+      distance,
+      tonnage
     }
   };
 };
 
 /**
  * Valida a estrutura recebida (do cliente ou do banco) e devolve um objeto
- * novo e normalizado na versão 4 (textos sem espaços nas pontas, só as chaves
+ * novo e normalizado na versão 5 (textos sem espaços nas pontas, só as chaves
  * do contrato), nunca a referência recebida. A versão 1 é aceita e convertida
  * (segmentos em repetições, sem carga máxima, AMRAP em rounds + repetições), e
- * a 2 e a 3 também; a 1 e a 2 saem com `interval: null` e as três com
- * `distance: null`.
+ * a 2, a 3 e a 4 também; a 1 e a 2 saem com `interval: null`, as três
+ * primeiras com `distance: null` e todas as quatro com `tonnage: null`.
  * Nunca lança: a mensagem diz o campo e o limite, sem devolver o JSON enviado.
  * Não reconcilia: total diferente da soma ou desempate num segmento inexistente
  * são recusados.
@@ -947,7 +1096,14 @@ export const reconcileWorkoutStructure = (structure: WorkoutStructure): WorkoutS
         max: { ...structure.interval.max, load: structure.interval.max.load ? { ...structure.interval.max.load } : null }
       }
       : null,
-    distance: structure.distance ? { ...structure.distance } : null
+    distance: structure.distance ? { ...structure.distance } : null,
+    tonnage: structure.tonnage
+      ? {
+        ...structure.tonnage,
+        lift: { ...structure.tonnage.lift },
+        increment: { ...structure.tonnage.increment }
+      }
+      : null
   };
 };
 
@@ -956,7 +1112,8 @@ const LEGACY_TYPES: Record<WorkoutStructureFormat, LegacyWorkoutFields['type']> 
   amrap: 'amrap',
   max_load: 'maxweight',
   interval: 'reps',
-  distance: 'distance'
+  distance: 'distance',
+  tonnage: 'tonnage'
 };
 
 /**
@@ -966,7 +1123,8 @@ const LEGACY_TYPES: Record<WorkoutStructureFormat, LegacyWorkoutFields['type']> 
  * não é um tempo, então o legado fica sem desempate (''). O intervalado é
  * `reps` ("maior vence"), com a duração da prova como time cap e sem desempate.
  * A distância é `distance` ("maior vence"), com a duração como time cap e sem
- * desempate.
+ * desempate. A tonelagem é `tonnage` ("maior vence", em kg), com o time cap da
+ * prova e sem desempate.
  */
 export const deriveLegacyWorkoutFields = (structure: WorkoutStructure): LegacyWorkoutFields => ({
   type: LEGACY_TYPES[structure.format] ?? 'fortime',
@@ -1261,6 +1419,7 @@ const OFFICIAL_TIME_MESSAGES = {
   maxLoad: 'O ajuste manual do tempo ainda não vale para provas de carga máxima.',
   interval: 'O ajuste manual do tempo não vale para provas intervaladas: o resultado são as repetições e o tempo é o dos rounds.',
   distance: 'O ajuste manual do tempo não vale para provas de distância: o resultado são os metros lançados pelo judge.',
+  tonnage: 'O ajuste manual do tempo não vale para provas de tonelagem: o resultado são os kg das repetições registradas pelo judge.',
   finalAmrap: 'O ajuste do tempo final não se aplica a provas AMRAP: o tempo da prova é a duração.',
   finalNotCompleted: 'O tempo final só pode ser ajustado em prova concluída. Sem concluir, o tempo é o time cap.',
   noTieBreak: 'Esta prova não tem desempate por tempo.',
@@ -1288,6 +1447,8 @@ export const checkOfficialTime = (
     if (structure.format === 'interval') return fail(OFFICIAL_TIME_MESSAGES.interval);
     // A distância também tem time cap numérico (a duração), mas não tem tempo a ajustar.
     if (structure.format === 'distance') return fail(OFFICIAL_TIME_MESSAGES.distance);
+    // A tonelagem tem o time cap da prova, mas não tem tempo a ajustar.
+    if (structure.format === 'tonnage') return fail(OFFICIAL_TIME_MESSAGES.tonnage);
     if (structure.format === 'max_load' || typeof structure.timeCapSeconds !== 'number') return fail(OFFICIAL_TIME_MESSAGES.maxLoad);
     const timeCap = structure.timeCapSeconds;
     if (seconds < 1 || seconds > timeCap) {
@@ -1923,4 +2084,340 @@ export const parseMetersInput = (text: unknown): MetersInputResult => {
   const meters = Number(digits);
   if (meters > L.maxDistanceMeters) return fail(METERS_INPUT_MESSAGES.max);
   return { ok: true, meters };
+};
+
+// ---------------------------------------------------------------------------
+// Motor da súmula da tonelagem (Story 1.77)
+// ---------------------------------------------------------------------------
+
+export type TonnageGroup = {
+  /** Carga, em kg. */
+  loadKg: number;
+  /** Repetições válidas com essa carga. */
+  reps: number;
+  /** Carga × repetições, em kg. */
+  kg: number;
+};
+
+export type TonnageSheetState = {
+  format: 'tonnage';
+  /** Os exercícios de `segments` (liberação e os de depois), na ordem da prova; só os de liberação contam repetições. */
+  segments: SheetSegmentState[];
+  /** Quantos exercícios vêm antes do que conta (os que liberam o atleta). */
+  position: number;
+  /** Todos os exercícios de liberação chegaram à meta (verdadeiro sem nenhum). */
+  released: boolean;
+  /** Instante em que a liberação terminou; 0 sem exercícios de liberação; null enquanto não terminou. */
+  releasedAt: number | null;
+  /** O exercício de liberação da vez; null quando liberou. */
+  currentSegmentId: string | null;
+  /** A primeira carga declarada que valeu; null enquanto não houver. */
+  declaredKg: number | null;
+  /** A carga vigente (a declarada ou a última subida que valeu); null enquanto não houver. */
+  loadKg: number | null;
+  /** Repetições válidas e a tonelagem delas, em kg. */
+  reps: number;
+  tonnageKg: number;
+  /** Instante da última repetição que conta; null sem repetição. */
+  lastRepAt: number | null;
+  /** Repetições por carga, na ordem em que a carga apareceu. */
+  groups: TonnageGroup[];
+  /** Posições do log que não contaram: depois do time cap, antes da liberação, carga que não é a vigente, incremento recusado ou acima do teto. */
+  ignored: number[];
+};
+
+export type TonnageSheetResult = {
+  format: 'tonnage';
+  /** A tonelagem, em kg; o mesmo número que vai para `scores.value`. */
+  value: number;
+  /** Texto aceito por parseScoreForWorkout('tonnage', …): o número (ex.: "830" ou "1652.5"). */
+  display: string;
+  /** Sem desempate nesta versão (decisão 8). */
+  tieBreak: null;
+  /** A carga foi declarada (sem ela a súmula não pode ser enviada). */
+  entered: boolean;
+  /** Só informação: não entra no ranking. */
+  reps: number;
+  groups: TonnageGroup[];
+};
+
+type ParsedTonnageEvent =
+  | { kind: 'load'; v: number; at: number }
+  | { kind: 'lrep'; load: number; at: number }
+  | Extract<ParsedEvent, { kind: 'count' }>
+  | UndoEvent;
+
+// Evento malformado é ignorado por inteiro (null): carga fora da faixa ou que
+// não é múltiplo de 0,25, `at` inválido, segmento inexistente e os tipos de
+// outros formatos (`time`, `attempt`, `dist`).
+const parseTonnageEvent = (raw: unknown, segmentIndexById: Map<string, number>): ParsedTonnageEvent | null => {
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const event = raw as PlainObject;
+  const at = readAt(event.at);
+  if (at === null) return null;
+  if (event.t === 'load') return isTonnageLoad(event.v) ? { kind: 'load', v: event.v, at } : null;
+  if (event.t === 'lrep') return isTonnageLoad(event.load) ? { kind: 'lrep', load: event.load, at } : null;
+  const parsed = parseEvent(raw, segmentIndexById, L.maxTimeCapSeconds);
+  return parsed && parsed.kind !== 'time' ? parsed : null;
+};
+
+const roundTonnage = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
+
+/** O novo `load` de um incremento: maior que o vigente e em múltiplos do passo da prova. */
+const isIncrementOf = (current: number, next: number, stepKg: number) => {
+  const delta = next - current;
+  if (!(delta > 0) || !(stepKg > 0)) return false;
+  const steps = delta / stepKg;
+  return Math.abs(steps - Math.round(steps)) < 1e-9;
+};
+
+/**
+ * Estado da súmula da tonelagem derivado do log. Pura, determinística, sem
+ * lançar e sem mutar as entradas. Reproduz o log na ordem, como o motor de
+ * segmentos, e só conta o que vale naquele ponto:
+ * - `rep`, `fill`, `set` e `adj` valem só nos exercícios de liberação (os
+ *   `position` primeiros de `segments`) e dentro do time cap;
+ * - `load`: a primeira carga é a declaração (na prova com carga prescrita tem
+ *   que ser a prescrita); as seguintes só valem com o incremento permitido,
+ *   maiores que a vigente e em múltiplos do passo;
+ * - `lrep` conta se a liberação estava completa, se há carga declarada, se a
+ *   carga do registro é a vigente, se está dentro do time cap e se o total não
+ *   passa do teto. O resto fica em `ignored`.
+ * `undo` anula o evento apontado, como nos outros formatos, e nada é apagado.
+ */
+export const deriveTonnageState = (structure: WorkoutStructure, events: readonly unknown[]): TonnageSheetState => {
+  const tonnage = structure?.format === 'tonnage' ? structure.tonnage ?? null : null;
+  const definitions = tonnage && Array.isArray(structure?.segments) ? structure.segments : [];
+  const position = tonnage ? clamp(Math.floor(tonnage.position), 0, definitions.length) : 0;
+  const cap = typeof structure?.timeCapSeconds === 'number' ? structure.timeCapSeconds : null;
+
+  const segmentIndexById = new Map<string, number>();
+  definitions.forEach((segment, index) => {
+    if (typeof segment?.id === 'string' && !segmentIndexById.has(segment.id)) segmentIndexById.set(segment.id, index);
+  });
+  const targets = definitions.map((segment) => (Number.isInteger(segment?.reps) && segment.reps > 0 ? segment.reps : 0));
+  const done = definitions.map(() => 0);
+  const completedAt: (number | null)[] = definitions.map(() => null);
+
+  const parsed = tonnage && Array.isArray(events) ? events.map((event) => parseTonnageEvent(event, segmentIndexById)) : [];
+  const voided = collectVoided(parsed);
+
+  const releasedNow = () => {
+    for (let index = 0; index < position; index += 1) if (done[index] < targets[index]) return false;
+    return true;
+  };
+  const stepKg = tonnage?.increment.stepKg ?? 0;
+  const incrementAllowed = tonnage?.increment.allowed === true;
+  const prescribedKg = tonnage?.loadMode === 'prescribed' ? tonnage.lift.loadKg : null;
+
+  let declaredKg: number | null = null;
+  let loadKg: number | null = null;
+  let releasedAt: number | null = position === 0 ? 0 : null;
+  let reps = 0;
+  let tonnageKg = 0;
+  let lastRepAt: number | null = null;
+  const groups: TonnageGroup[] = [];
+  const ignored: number[] = [];
+
+  for (const [index, event] of parsed.entries()) {
+    if (!event || event.kind === 'undo' || voided.has(index)) continue;
+    const tooLate = cap !== null && event.at > cap;
+
+    if (event.kind === 'count') {
+      // Só os exercícios de liberação contam; os de depois são só texto.
+      if (event.segment >= position || tooLate) {
+        ignored.push(index);
+        continue;
+      }
+      const current = done[event.segment];
+      const raw = event.t === 'set' ? event.amount : current + event.amount;
+      const next = clamp(raw, 0, targets[event.segment]);
+      done[event.segment] = next;
+      completedAt[event.segment] = next === targets[event.segment]
+        ? (completedAt[event.segment] ?? event.at)
+        : null;
+      if (releasedNow()) {
+        if (releasedAt === null) releasedAt = event.at;
+      } else {
+        releasedAt = null;
+      }
+      continue;
+    }
+
+    if (event.kind === 'load') {
+      if (tooLate) {
+        ignored.push(index);
+        continue;
+      }
+      if (loadKg === null) {
+        if (prescribedKg !== null && event.v !== prescribedKg) {
+          ignored.push(index);
+          continue;
+        }
+        declaredKg = event.v;
+        loadKg = event.v;
+        continue;
+      }
+      if (!incrementAllowed || !isIncrementOf(loadKg, event.v, stepKg)) {
+        ignored.push(index);
+        continue;
+      }
+      loadKg = event.v;
+      continue;
+    }
+
+    // lrep
+    const over = roundTonnage(tonnageKg + event.load) > L.maxTonnageKg;
+    if (tooLate || loadKg === null || event.load !== loadKg || !releasedNow() || over) {
+      ignored.push(index);
+      continue;
+    }
+    reps += 1;
+    tonnageKg = roundTonnage(tonnageKg + event.load);
+    lastRepAt = event.at;
+    const group = groups.find((item) => item.loadKg === event.load);
+    if (group) {
+      group.reps += 1;
+      group.kg = roundTonnage(group.kg + event.load);
+    } else {
+      groups.push({ loadKg: event.load, reps: 1, kg: event.load });
+    }
+  }
+
+  const currentIndex = definitions.findIndex((_, index) => index < position && done[index] < targets[index]);
+
+  return {
+    format: 'tonnage',
+    segments: definitions.map((segment, index) => ({
+      id: String(segment?.id ?? ''),
+      target: targets[index],
+      done: done[index],
+      completedAt: completedAt[index]
+    })),
+    position,
+    released: releasedNow(),
+    releasedAt: releasedNow() ? releasedAt ?? 0 : null,
+    currentSegmentId: currentIndex >= 0 ? String(definitions[currentIndex]?.id ?? '') : null,
+    declaredKg,
+    loadKg,
+    reps,
+    tonnageKg,
+    lastRepAt,
+    groups,
+    ignored
+  };
+};
+
+/**
+ * Resultado da tonelagem: a soma de carga × repetições válidas, em kg (`value`
+ * e `display`), sem desempate. Sem carga declarada, `entered` é falso e o valor
+ * é 0. As repetições e os grupos por carga são só informação da súmula.
+ */
+export const computeTonnageResult = (state: TonnageSheetState): TonnageSheetResult => ({
+  format: 'tonnage',
+  value: state.tonnageKg,
+  display: String(state.tonnageKg),
+  tieBreak: null,
+  entered: state.declaredKg !== null,
+  reps: state.reps,
+  groups: state.groups.map((group) => ({ ...group }))
+});
+
+/** Quilos com vírgula decimal e ponto de milhar (830 → "830", 1652.5 → "1.652,5"), sem depender de Intl. */
+export const formatTonnageKg = (kg: number) => {
+  const value = roundTonnage(Math.max(0, Number.isFinite(kg) ? kg : 0));
+  const [whole, decimals] = String(value).split('.');
+  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return decimals ? `${grouped},${decimals}` : grouped;
+};
+
+export type KgInputResult = { ok: true; kg: number } | { ok: false; error: string };
+
+const KG_INPUT_MESSAGES = {
+  empty: 'Informe a tonelagem em kg.',
+  format: 'Use kg com até duas casas (ex.: 830 ou 1.652,5).',
+  max: `A tonelagem passa de ${formatTonnageKg(L.maxTonnageKg)} kg. Confira o número.`
+} as const;
+
+/**
+ * O total em kg que o gestor digitou na correção (0 a 99.999 kg, até duas
+ * casas). Aceita o formato brasileiro ("1.652,5": ponto de milhar e vírgula
+ * decimal) e o simples ("1652.5"); sem vírgula, o ponto seguido de exatamente
+ * três dígitos é de milhar ("1.652") e o seguido de um ou dois é decimal
+ * ("1652.5"). Recusa vazio, sinal, letras e mais de duas casas. Nunca lança.
+ */
+export const parseTonnageKgInput = (text: unknown): KgInputResult => {
+  if (typeof text !== 'string') return fail(KG_INPUT_MESSAGES.empty);
+  const typed = text.replace(/\s/g, '');
+  if (!typed) return fail(KG_INPUT_MESSAGES.empty);
+  let normalized: string | null = null;
+  if (typed.includes(',')) {
+    if (/^(\d{1,3}(\.\d{3})+|\d+),\d{1,2}$/.test(typed)) normalized = typed.replace(/\./g, '').replace(',', '.');
+  } else if (/^\d{1,3}(\.\d{3})+$/.test(typed)) {
+    normalized = typed.replace(/\./g, '');
+  } else if (/^\d+(\.\d{1,2})?$/.test(typed)) {
+    normalized = typed;
+  }
+  if (normalized === null) return fail(KG_INPUT_MESSAGES.format);
+  const kg = roundTonnage(Number(normalized));
+  if (!Number.isFinite(kg)) return fail(KG_INPUT_MESSAGES.format);
+  if (kg > L.maxTonnageKg) return fail(KG_INPUT_MESSAGES.max);
+  return { ok: true, kg };
+};
+
+export type TonnageEntryCheck = { ok: true } | { ok: false; error: string };
+
+const TONNAGE_ENTRY_MESSAGES = {
+  format: 'Esta prova não é de tonelagem.',
+  load: `A carga deve ficar entre ${L.minTonnageLoadKg} e ${L.maxLoadKg} kg, em múltiplos de ${L.tonnageLoadGranularityKg}.`,
+  prescribed: 'A carga desta prova é prescrita pelo gestor: use a carga indicada.',
+  locked: 'Nesta prova a carga não pode mudar durante o treino.',
+  onlyUp: 'A carga só pode subir.',
+  noLoad: 'Informe a carga do atleta antes das repetições.',
+  notReleased: 'Conclua os exercícios de liberação antes de registrar repetições.',
+  invalid: 'Não foi possível conferir o registro.'
+} as const;
+
+/**
+ * Porta que a súmula e o servidor usam antes de gravar `load` ou `lrep`: recusa
+ * com mensagem em português o que o motor ignoraria por regra da prova (carga
+ * fora da faixa, fora da prescrita, incremento não permitido ou que não sobe,
+ * repetição sem carga, antes da liberação ou com carga que não é a vigente,
+ * total acima do teto). Não recusa por causa do time cap: o registro depois
+ * dele é gravado e o motor o ignora (a súmula avisa). `events` é o log até
+ * aqui. Nunca lança.
+ */
+export const checkTonnageEntry = (
+  structure: WorkoutStructure,
+  events: readonly unknown[],
+  entry: { t: 'load'; v: unknown } | { t: 'lrep'; load: unknown }
+): TonnageEntryCheck => {
+  try {
+    const tonnage = structure.format === 'tonnage' ? structure.tonnage : null;
+    if (!tonnage) return fail(TONNAGE_ENTRY_MESSAGES.format);
+    const state = deriveTonnageState(structure, events);
+    if (entry.t === 'load') {
+      if (!isTonnageLoad(entry.v)) return fail(TONNAGE_ENTRY_MESSAGES.load);
+      if (state.loadKg === null) {
+        if (tonnage.loadMode === 'prescribed' && entry.v !== tonnage.lift.loadKg) return fail(TONNAGE_ENTRY_MESSAGES.prescribed);
+        return { ok: true };
+      }
+      if (!tonnage.increment.allowed) return fail(TONNAGE_ENTRY_MESSAGES.locked);
+      if (entry.v <= state.loadKg) return fail(TONNAGE_ENTRY_MESSAGES.onlyUp);
+      if (!isIncrementOf(state.loadKg, entry.v, tonnage.increment.stepKg)) {
+        return fail(`O incremento deve ser de ${formatTonnageKg(tonnage.increment.stepKg)} em ${formatTonnageKg(tonnage.increment.stepKg)} kg.`);
+      }
+      return { ok: true };
+    }
+    if (!isTonnageLoad(entry.load)) return fail(TONNAGE_ENTRY_MESSAGES.load);
+    if (state.loadKg === null) return fail(TONNAGE_ENTRY_MESSAGES.noLoad);
+    if (!state.released) return fail(TONNAGE_ENTRY_MESSAGES.notReleased);
+    if (entry.load !== state.loadKg) return fail(`A repetição deve usar a carga vigente (${formatTonnageKg(state.loadKg)} kg).`);
+    if (roundTonnage(state.tonnageKg + entry.load) > L.maxTonnageKg) {
+      return fail(`A tonelagem passaria de ${formatTonnageKg(L.maxTonnageKg)} kg. Confira os registros.`);
+    }
+    return { ok: true };
+  } catch {
+    return fail(TONNAGE_ENTRY_MESSAGES.invalid);
+  }
 };

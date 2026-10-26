@@ -8,6 +8,8 @@ import {
   INTERVAL_FIELDS,
   MAX_BUILDER_LINES,
   MAX_INTERVAL_FIXED_LINES,
+  MAX_TONNAGE_LINES,
+  TONNAGE_FIELDS,
   addLift,
   addLine,
   describeStructureRule,
@@ -19,11 +21,13 @@ import {
   removeLine,
   setDraftFormat,
   setForTimeTieBreak,
+  setTonnageLift,
   toggleStepMark,
   updateIntervalMax,
   updateIntervalTiming,
   updateLift,
   updateLine,
+  updateTonnage,
   type AmrapTieBreakMode,
   type BuilderLift,
   type BuilderLine,
@@ -44,7 +48,8 @@ import { UNIT_WORDS, WORKOUT_STRUCTURE_LIMITS, type WorkoutStructureFormat } fro
 // (etapas, conferência e estrutura gerada) vem de analyzeDraft. Sem rede e sem
 // armazenamento; texto em português fixo, como o restante do painel.
 // O Intervalado (Story 1.61) segue a Maquete 1 de docs/design/intervalado/ e a
-// Distância (Story 1.67) a Maquete 1 de docs/design/distancia/.
+// Distância (Story 1.67) a Maquete 1 de docs/design/distancia/, e a Tonelagem
+// (Story 1.79) a Maquete 1 de docs/design/tonelagem/tonelagem-aprovado.html.
 
 type SheetBuilderFormProps = {
   draft: SheetDraft;
@@ -67,7 +72,8 @@ const FORMATS: { value: WorkoutStructureFormat; title: string; detail: string }[
   { value: 'amrap', title: 'AMRAP', detail: 'Mais repetições dentro do tempo' },
   { value: 'max_load', title: 'Carga máxima', detail: 'Maior carga válida, por tentativas' },
   { value: 'interval', title: 'Intervalado', detail: 'Rounds de trabalho e descanso; soma das repetições' },
-  { value: 'distance', title: 'Distância', detail: 'Maior distância no tempo; o judge informa o total' }
+  { value: 'distance', title: 'Distância', detail: 'Maior distância no tempo; o judge informa o total' },
+  { value: 'tonnage', title: 'Tonelagem', detail: 'Soma de carga × repetições do exercício marcado' }
 ];
 
 function Section({ step, title, children, id }: { step: number; title: string; children: ReactNode; id: string }) {
@@ -254,6 +260,167 @@ function WorkLine({
   );
 }
 
+// Uma linha da Tonelagem (Maquete 1): reps, movimento, carga e o marcador "Conta".
+// No exercício que conta a quantidade é livre e a carga vem do passo 3.
+function TonnageLine({
+  line,
+  index,
+  count,
+  isLift,
+  position,
+  problem,
+  open,
+  idPrefix,
+  onPatch,
+  onRemove,
+  onMove,
+  onToggle,
+  onMark
+}: {
+  line: BuilderLine;
+  index: number;
+  count: number;
+  isLift: boolean;
+  /** Posição relativa ao exercício que conta: antes libera, depois só aparece. */
+  position: 'before' | 'lift' | 'after';
+  problem: string | undefined;
+  open: boolean;
+  idPrefix: string;
+  onPatch: (patch: Partial<BuilderLine>) => void;
+  onRemove: () => void;
+  onMove: (direction: 'up' | 'down') => void;
+  onToggle: () => void;
+  onMark: () => void;
+}) {
+  const base = `${idPrefix}-${line.key}`;
+  const parsedReps = parseRepsField(line.reps);
+  const meters = parsedReps.ok && parsedReps.unit === 'm';
+  const role = position === 'before'
+    ? 'Libera o atleta · não conta ponto'
+    : position === 'lift'
+      ? 'Conta para a tonelagem · repetições livres, carga definida no passo 3'
+      : 'Depois da tonelagem · não conta nem trava';
+  return (
+    <li className={`space-y-1.5 rounded-md ${isLift ? 'border border-primary/50 bg-primary/5 p-2' : ''}`}>
+      <div className="grid grid-cols-4 gap-2 sm:grid-cols-[6.5rem_minmax(0,1fr)_5.5rem_4.75rem_2.5rem_2.5rem]">
+        <input
+          id={`${base}-reps`}
+          type="text"
+          autoComplete="off"
+          inputMode="text"
+          disabled={isLift}
+          placeholder={isLift ? 'livre' : '10'}
+          aria-label={`Repetições do exercício ${index + 1}`}
+          aria-invalid={Boolean(problem)}
+          aria-describedby={problem ? `${base}-problem` : undefined}
+          value={isLift ? '' : line.reps}
+          onChange={(event) => onPatch({ reps: event.target.value })}
+          className={`${inputClass} col-span-1 text-center font-number ${problem && !isLift && !line.reps.trim() ? errorInputClass : ''}`}
+        />
+        <input
+          id={`${base}-name`}
+          type="text"
+          autoComplete="off"
+          placeholder="Movimento"
+          maxLength={WORKOUT_STRUCTURE_LIMITS.maxNameLength}
+          aria-label={`Movimento ${index + 1}`}
+          value={line.name}
+          onChange={(event) => onPatch({ name: event.target.value })}
+          className={`${inputClass} order-first col-span-4 sm:order-none sm:col-span-1 ${problem && !line.name.trim() ? errorInputClass : ''}`}
+        />
+        <input
+          id={`${base}-load`}
+          type="text"
+          autoComplete="off"
+          inputMode="decimal"
+          disabled={isLift}
+          placeholder={isLift ? 'passo 3' : 'kg'}
+          aria-label={`Carga do exercício ${index + 1} em kg`}
+          value={isLift ? '' : line.load}
+          onChange={(event) => onPatch({ load: event.target.value })}
+          className={`${inputClass} text-center font-number`}
+        />
+        <label
+          htmlFor={`${base}-count`}
+          className={`flex min-h-10 cursor-pointer items-center justify-center gap-1.5 text-xs font-bold ${isLift ? 'text-primary' : 'text-muted'}`}
+        >
+          <input
+            id={`${base}-count`}
+            type="radio"
+            name={`${idPrefix}-lift`}
+            checked={isLift}
+            onChange={onMark}
+            className="h-4 w-4 accent-primary"
+          />
+          Conta
+        </label>
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={open}
+          aria-controls={`${base}-more`}
+          aria-label={`Mais opções do exercício ${index + 1}`}
+          title="Mais opções"
+          className={`${iconButtonClass} ${open ? 'border-primary/60 text-primary' : ''}`}
+        >
+          <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          onClick={onRemove}
+          disabled={isLift || count <= 1}
+          aria-label={isLift ? `O exercício ${index + 1} conta para a tonelagem: marque outro para poder removê-lo` : `Remover o exercício ${index + 1}`}
+          title={isLift ? 'Marque outro exercício como o que conta para poder remover este' : undefined}
+          className={iconButtonClass}
+        >
+          <X className="h-4 w-4" aria-hidden="true" />
+        </button>
+      </div>
+      <p className={`text-[11px] ${isLift ? 'font-semibold text-primary' : 'text-muted'}`}>{role}</p>
+      {problem && <p id={`${base}-problem`} className="text-[11px] font-semibold text-trading-down">{problem}</p>}
+      {open && (
+        <div id={`${base}-more`} className="grid gap-2 rounded-md border border-dashed border-card-border p-3 sm:grid-cols-[11rem_minmax(0,1fr)_auto]">
+          <div>
+            <label htmlFor={`${base}-mark`} className={labelClass}>Como o judge conta</label>
+            <select
+              id={`${base}-mark`}
+              value={isLift ? 'reps' : meters ? 'end' : line.mark}
+              disabled={isLift || meters}
+              onChange={(event) => onPatch({ mark: event.target.value as BuilderLine['mark'] })}
+              className={inputClass}
+            >
+              <option value="reps">Toque a toque</option>
+              <option value="end">Só o bloco inteiro</option>
+            </select>
+            {isLift && <p className="mt-1 text-[10px] text-muted">Um toque por repetição válida.</p>}
+            {meters && <p className="mt-1 text-[10px] text-muted">Em metros o judge conclui o bloco.</p>}
+          </div>
+          <div>
+            <label htmlFor={`${base}-note`} className={labelClass}>Padrão do movimento (opcional)</label>
+            <input
+              id={`${base}-note`}
+              type="text"
+              autoComplete="off"
+              maxLength={WORKOUT_STRUCTURE_LIMITS.maxNoteLength}
+              value={line.note}
+              onChange={(event) => onPatch({ note: event.target.value })}
+              className={inputClass}
+            />
+          </div>
+          <div className="flex items-end gap-1.5">
+            <button type="button" onClick={() => onMove('up')} disabled={index === 0} aria-label={`Subir o exercício ${index + 1}`} className={iconButtonClass}>
+              <ArrowUp className="h-4 w-4" aria-hidden="true" />
+            </button>
+            <button type="button" onClick={() => onMove('down')} disabled={index === count - 1} aria-label={`Descer o exercício ${index + 1}`} className={iconButtonClass}>
+              <ArrowDown className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+      )}
+    </li>
+  );
+}
+
 function LinesHeader({ columns }: { columns: string[] }) {
   return (
     <div aria-hidden="true" className="hidden grid-cols-[6.5rem_minmax(0,1fr)_5.5rem_2.5rem_2.5rem] gap-2 sm:grid">
@@ -393,7 +560,7 @@ export function SheetBuilderForm({ draft, analysis, onChange, openLines, onToggl
   const formatSection = (
     <Section step={1} title="Formato da prova" id={id('format-title')}>
       <div role="radiogroup" aria-labelledby={id('format-title')} onKeyDown={handleFormatKeys} className="grid grid-cols-2 gap-2 sm:grid-cols-6">
-        {FORMATS.map((option, index) => {
+        {FORMATS.map((option) => {
           const selected = format === option.value;
           return (
             <button
@@ -405,8 +572,8 @@ export function SheetBuilderForm({ draft, analysis, onChange, openLines, onToggl
               tabIndex={selected ? 0 : -1}
               onClick={() => onChange(setDraftFormat(draft, option.value))}
               className={`flex min-h-16 flex-col items-start justify-center gap-0.5 rounded-md border px-3 py-2 text-left transition-colors ${
-                // Cinco cartões preenchem a grade: 3 + 2 no desktop (6 colunas) e 2 + 2 + 1 no celular (o último ocupa a linha).
-                index === FORMATS.length - 1 ? 'col-span-2 sm:col-span-3' : index >= 3 ? 'sm:col-span-3' : 'sm:col-span-2'
+                // Seis cartões preenchem a grade: 3 + 3 no desktop (6 colunas) e 2 + 2 + 2 no celular.
+                'sm:col-span-2'
               } ${selected ? 'border-primary bg-primary/10' : 'border-card-border bg-dark-gray hover:border-primary/60'}`}
             >
               <span className="flex items-center gap-1.5 text-sm font-bold text-white">
@@ -728,6 +895,138 @@ export function SheetBuilderForm({ draft, analysis, onChange, openLines, onToggl
           </div>
         </Section>
         {ruleSection(4)}
+      </div>
+    );
+  }
+
+  if (format === 'tonnage') {
+    const tn = draft.tonnage;
+    const liftIndex = tn.lines.findIndex((line) => line.key === tn.liftKey);
+    const prescribedProblem = analysis.lineProblems[TONNAGE_FIELDS.prescribed];
+    const stepProblem = analysis.lineProblems[TONNAGE_FIELDS.step];
+    const durationProblem = analysis.lineProblems[TONNAGE_FIELDS.duration];
+    const optionClass = (selected: boolean) => `flex min-h-10 items-center rounded-md border px-3 py-2 text-sm font-bold transition-colors ${
+      selected ? 'border-primary bg-primary/10 text-primary' : 'border-card-border bg-dark-gray text-white hover:border-primary/60'
+    }`;
+    return (
+      <div className="space-y-4">
+        {formatSection}
+        <Section step={2} title="Exercícios, na ordem" id={id('tn-lines-title')}>
+          <div aria-hidden="true" className="hidden grid-cols-[6.5rem_minmax(0,1fr)_5.5rem_4.75rem_2.5rem_2.5rem] gap-2 sm:grid">
+            {['Repetições', 'Movimento', 'Carga (kg)', '', '', ''].map((column, index) => <span key={`${column}-${index}`} className={labelClass}>{column}</span>)}
+          </div>
+          <ul className="space-y-2">
+            {tn.lines.map((line, index) => (
+              <TonnageLine
+                key={line.key}
+                line={line}
+                index={index}
+                count={tn.lines.length}
+                isLift={line.key === tn.liftKey}
+                position={index < liftIndex ? 'before' : index === liftIndex ? 'lift' : 'after'}
+                problem={analysis.lineProblems[line.key]}
+                open={openLines.includes(line.key)}
+                idPrefix={id('tn')}
+                onPatch={(patch) => onChange(updateLine(draft, 'tonnage', line.key, patch))}
+                onRemove={() => onChange(removeLine(draft, 'tonnage', line.key))}
+                onMove={(direction) => onChange(moveLine(draft, 'tonnage', line.key, direction))}
+                onToggle={() => onToggleLine(line.key)}
+                onMark={() => onChange(setTonnageLift(draft, line.key))}
+              />
+            ))}
+          </ul>
+          <button type="button" id={id('tn-add')} onClick={() => onChange(addLine(draft, 'tonnage'))} disabled={tn.lines.length >= MAX_TONNAGE_LINES} className={textButtonClass}>
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            Adicionar exercício
+          </button>
+          <p className="text-[11px] leading-relaxed text-muted">
+            Marque &quot;Conta&quot; em um deles. Os de antes liberam o atleta e não contam ponto: o judge conta as repetições e o levantamento só destrava quando todos terminam.
+          </p>
+        </Section>
+        <Section step={3} title="Carga e incremento do exercício que conta" id={id('tn-load-title')}>
+          <div role="radiogroup" aria-labelledby={id('tn-load-label')} className="space-y-1">
+            <span id={id('tn-load-label')} className={labelClass}>De onde vem a carga</span>
+            <div className="flex flex-wrap gap-2">
+              <label className={optionClass(tn.loadMode === 'athlete')}>
+                <input type="radio" name={id('tn-mode')} checked={tn.loadMode === 'athlete'} onChange={() => onChange(updateTonnage(draft, { loadMode: 'athlete' }))} className="sr-only" />
+                Livre (o atleta escolhe)
+              </label>
+              <label className={optionClass(tn.loadMode === 'prescribed')}>
+                <input type="radio" name={id('tn-mode')} checked={tn.loadMode === 'prescribed'} onChange={() => onChange(updateTonnage(draft, { loadMode: 'prescribed' }))} className="sr-only" />
+                Prescrita pelo gestor
+              </label>
+            </div>
+          </div>
+          {tn.loadMode === 'prescribed' && (
+            <div className="max-w-[12.5rem]">
+              <label htmlFor={id('tn-prescribed')} className={labelClass}>Carga prescrita (kg)</label>
+              <input
+                id={id('tn-prescribed')}
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
+                value={tn.prescribed}
+                aria-invalid={Boolean(prescribedProblem)}
+                aria-describedby={prescribedProblem ? id('tn-prescribed-problem') : undefined}
+                onChange={(event) => onChange(updateTonnage(draft, { prescribed: event.target.value }))}
+                className={`${inputClass} text-center font-number ${prescribedProblem ? errorInputClass : ''}`}
+              />
+              {prescribedProblem && <p id={id('tn-prescribed-problem')} className="mt-1 text-[11px] font-semibold text-trading-down">{prescribedProblem}</p>}
+            </div>
+          )}
+          <div role="radiogroup" aria-labelledby={id('tn-inc-label')} className="space-y-1">
+            <span id={id('tn-inc-label')} className={labelClass}>Incrementar a carga durante o treino</span>
+            <div className="flex flex-wrap gap-2">
+              <label className={optionClass(!tn.incrementAllowed)}>
+                <input type="radio" name={id('tn-inc')} checked={!tn.incrementAllowed} onChange={() => onChange(updateTonnage(draft, { incrementAllowed: false }))} className="sr-only" />
+                Não permitir
+              </label>
+              <label className={optionClass(tn.incrementAllowed)}>
+                <input type="radio" name={id('tn-inc')} checked={tn.incrementAllowed} onChange={() => onChange(updateTonnage(draft, { incrementAllowed: true }))} className="sr-only" />
+                Permitir subir
+              </label>
+            </div>
+          </div>
+          {tn.incrementAllowed && (
+            <div className="max-w-[12.5rem]">
+              <label htmlFor={id('tn-step')} className={labelClass}>Passo de cada incremento (kg)</label>
+              <input
+                id={id('tn-step')}
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
+                value={tn.step}
+                aria-invalid={Boolean(stepProblem)}
+                aria-describedby={stepProblem ? id('tn-step-problem') : undefined}
+                onChange={(event) => onChange(updateTonnage(draft, { step: event.target.value }))}
+                className={`${inputClass} text-center font-number ${stepProblem ? errorInputClass : ''}`}
+              />
+              {stepProblem && <p id={id('tn-step-problem')} className="mt-1 text-[11px] font-semibold text-trading-down">{stepProblem}</p>}
+            </div>
+          )}
+        </Section>
+        <Section step={4} title="Time cap da prova" id={id('tn-cap-title')}>
+          <div className="max-w-[12.5rem]">
+            <label htmlFor={id('tn-duration')} className={labelClass}>Duração (MM:SS)</label>
+            <input
+              id={id('tn-duration')}
+              type="text"
+              inputMode="numeric"
+              autoComplete="off"
+              placeholder="ex.: 03:00"
+              required
+              value={tn.duration}
+              aria-invalid={Boolean(durationProblem)}
+              aria-describedby={id('tn-duration-note')}
+              onChange={(event) => onChange(updateTonnage(draft, { duration: event.target.value }))}
+              className={`${inputClass} text-center font-number ${durationProblem ? errorInputClass : ''}`}
+            />
+            <p id={id('tn-duration-note')} className={`mt-1 text-[11px] ${durationProblem ? 'font-semibold text-trading-down' : 'text-muted'}`}>
+              {durationProblem ?? 'Obrigatório, de 00:30 a 99:59. Em branco, a prova não pode ser salva.'}
+            </p>
+          </div>
+        </Section>
+        {ruleSection(5)}
       </div>
     );
   }

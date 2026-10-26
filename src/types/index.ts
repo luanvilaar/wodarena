@@ -5,7 +5,7 @@ export type { ShirtMode };
 
 export type EventStatus = 'upcoming' | 'live' | 'finished';
 export type EventType = 'functional_fitness' | 'fitness_racing' | 'functional_fitness_qualifier';
-export type WorkoutType = 'fortime' | 'amrap' | 'maxweight' | 'reps' | 'points' | 'distance';
+export type WorkoutType = 'fortime' | 'amrap' | 'maxweight' | 'reps' | 'points' | 'distance' | 'tonnage';
 export type CategoryType = 'male' | 'female' | 'team';
 export type ShirtSize = 'PP' | 'P' | 'M' | 'G' | 'GG' | 'XG' | 'XXG';
 export type ManagerAccessStatus = 'active' | 'expired' | 'expiring_soon' | 'unconfigured';

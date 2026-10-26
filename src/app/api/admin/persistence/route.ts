@@ -137,7 +137,7 @@ const legacyTieBreaker = (value: unknown) => {
   return typeof value === 'string' ? value.trim().toLowerCase() : null;
 };
 
-const LEGACY_TYPE_LABELS: Record<LegacyWorkoutFields['type'], string> = { fortime: 'For Time', amrap: 'AMRAP', maxweight: 'Carga máxima', reps: 'Intervalado', distance: 'Distância' };
+const LEGACY_TYPE_LABELS: Record<LegacyWorkoutFields['type'], string> = { fortime: 'For Time', amrap: 'AMRAP', maxweight: 'Carga máxima', reps: 'Intervalado', distance: 'Distância', tonnage: 'Tonelagem' };
 
 // Campos legados (type, time_cap, tie_breaker) não podem divergir da estrutura
 // da prova (Story 1.43). Só os campos presentes entram na comparação; campo

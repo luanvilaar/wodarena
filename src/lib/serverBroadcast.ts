@@ -299,6 +299,19 @@ const distanceBoardLines = (structure: WorkoutStructure) => {
   return lines.length > 0 ? lines : [`Maior distância em ${formatWorkoutTime(structure.timeCapSeconds ?? 0)}`];
 };
 
+/**
+ * Linhas da chamada da tonelagem (Story 1.81): os exercícios na ordem da prova,
+ * com o que conta marcado e a carga prescrita quando houver. Só dados da prova,
+ * nada de pessoa.
+ */
+const tonnageBoardLines = (structure: WorkoutStructure) => {
+  const tonnage = structure.tonnage;
+  if (!tonnage) return [];
+  const labels = structure.segments.map((segment) => `${segment.reps}${unitText(segment.unit)} ${segment.name}${segment.load ? ` ${segment.load.value} kg` : ''}`);
+  const lift = `${tonnage.lift.name}${tonnage.loadMode === 'prescribed' && tonnage.lift.loadKg !== null ? ` ${tonnage.lift.loadKg} kg` : ''} · tonelagem`;
+  return [...labels.slice(0, tonnage.position), lift, ...labels.slice(tonnage.position)];
+};
+
 /** Bloco do formato Intervalado (Story 1.63); null nos outros formatos. Só dados da prova, nada de pessoa. */
 const describeIntervalSpec = (structure: WorkoutStructure): BroadcastIntervalSpec | null => {
   const interval = structure.format === 'interval' ? structure.interval : null;
@@ -313,7 +326,9 @@ const describeIntervalSpec = (structure: WorkoutStructure): BroadcastIntervalSpe
 
 /** A prova como o telão mostra: esquema, linhas da chamada e segmentos da barra de progresso. */
 export const describeWorkoutForBoard = (row: Pick<WorkoutRow, 'name' | 'code'>, structure: WorkoutStructure): BroadcastWorkout => {
-  const segments = structure.segments.map((segment) => {
+  // Tonelagem: a barra de progresso é a da liberação (só os exercícios antes do que conta); os de depois são só texto.
+  const barSegments = structure.format === 'tonnage' ? structure.segments.slice(0, structure.tonnage?.position ?? 0) : structure.segments;
+  const segments = barSegments.map((segment) => {
     const load = segment.load ? ` ${segment.load.value} kg` : '';
     return { id: segment.id, name: segment.name, reps: segment.reps, unit: segment.unit, label: `${segment.reps}${unitText(segment.unit)} ${segment.name}${load}` };
   });
@@ -322,7 +337,8 @@ export const describeWorkoutForBoard = (row: Pick<WorkoutRow, 'name' | 'code'>, 
     ? (generator.kind === 'fixed' ? `${generator.reps.length} rounds` : generator.reps.join('-'))
     : null;
   let lines: string[];
-  if (structure.format === 'distance') lines = distanceBoardLines(structure);
+  if (structure.format === 'tonnage') lines = tonnageBoardLines(structure);
+  else if (structure.format === 'distance') lines = distanceBoardLines(structure);
   else if (structure.format === 'max_load') {
     lines = (structure.maxLoad?.lifts ?? []).map((lift) => (lift.reps > 1 ? `${lift.name} · ${lift.reps}RM` : lift.name));
   } else if (scheme) {
@@ -341,7 +357,8 @@ export const describeWorkoutForBoard = (row: Pick<WorkoutRow, 'name' | 'code'>, 
     lifts: (structure.maxLoad?.lifts ?? []).map((lift) => ({ id: lift.id, name: lift.name })),
     totalReps: structure.totalReps,
     scoreDisplay: structure.scoreDisplay,
-    intervalSpec
+    intervalSpec,
+    tonnageLift: structure.format === 'tonnage' ? structure.tonnage?.lift.name ?? null : null
   };
 };
 

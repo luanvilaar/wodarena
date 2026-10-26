@@ -22,6 +22,7 @@ import {
   deriveMaxLoadState,
   deriveSheetState,
   formatMeters,
+  formatTonnageKg,
   formatWorkoutTime,
   type SheetEvent,
   type WorkoutStructure
@@ -40,7 +41,9 @@ import { maskTimeInput, parseTimeInput } from '@/lib/workoutStructureEditor';
 // (Story 1.68) também só revisa com o relógio parado, mostra o resultado em
 // metros ("6.330 m") e não tem ajuste pelo cronômetro oficial. O tempo oficial é
 // digitado só com algarismos (Story 1.70): o teclado numérico do celular não tem
-// ":", então a máscara preenche o MM:SS da direita para a esquerda.
+// ":", então a máscara preenche o MM:SS da direita para a esquerda. A Tonelagem
+// (Story 1.80) também só revisa com o relógio parado, mostra o resultado em kg
+// ("830 kg") e não tem ajuste pelo cronômetro oficial.
 
 type SheetPayload = {
   sheet: {
@@ -214,9 +217,11 @@ function SheetSession({ payload }: { payload: SheetPayload }) {
   const resultUnit = (value: number) => (
     structure.format === 'max_load' ? ' kg' : structure.format === 'interval' ? (value === 1 ? ' repetição' : ' repetições') : ''
   );
-  // O resultado como a conferência, a confirmação e o cartão publicado o escrevem: a distância em metros ("6.330 m"), os outros como estão.
+  // O resultado como a conferência, a confirmação e o cartão publicado o escrevem: a distância em metros ("6.330 m"), a tonelagem em kg ("1.652,5 kg"), os outros como estão.
   const resultText = (result: string, value: number) => (
-    structure.format === 'distance' ? `${formatMeters(value)} m` : `${result.replace('.', ',')}${resultUnit(value)}`
+    structure.format === 'distance' ? `${formatMeters(value)} m`
+      : structure.format === 'tonnage' ? `${formatTonnageKg(value)} kg`
+        : `${result.replace('.', ',')}${resultUnit(value)}`
   );
   const showReview = writable && (clock.phase === 'stopped' || finished);
   const syncReady = sync.pendingCount === 0 && sync.status === 'saved';
@@ -225,7 +230,9 @@ function SheetSession({ payload }: { payload: SheetPayload }) {
   // Só informativo (o servidor calcula de novo); com erro, a confirmação omite o resultado.
   const absentOutcome = useMemo(() => computeAbsentOutcome(structure), [structure]);
   const absentResultText = absentOutcome.ok
-    ? (structure.format === 'distance' ? `${formatMeters(absentOutcome.value)} m` : `${absentOutcome.result.replace('.', ',')}${structure.format === 'max_load' ? ' kg' : ''}`)
+    ? (structure.format === 'distance' ? `${formatMeters(absentOutcome.value)} m`
+      : structure.format === 'tonnage' ? `${formatTonnageKg(absentOutcome.value)} kg`
+        : `${absentOutcome.result.replace('.', ',')}${structure.format === 'max_load' ? ' kg' : ''}`)
     : '';
 
   const submit = async () => {
@@ -310,7 +317,9 @@ function SheetSession({ payload }: { payload: SheetPayload }) {
           <p className="text-[11px] font-bold uppercase tracking-widest text-trading-up">Publicada no ranking</p>
           {published.absent && <p className="text-lg font-extrabold">Atleta ausente</p>}
           <p className="font-number text-4xl font-extrabold">
-            {structure.format === 'distance' && published.result ? `${formatMeters(Number(published.result))} m` : published.result}
+            {structure.format === 'distance' && published.result
+              ? `${formatMeters(Number(published.result))} m`
+              : structure.format === 'tonnage' && published.result ? `${formatTonnageKg(Number(published.result))} kg` : published.result}
           </p>
           {published.tieBreak && <p className="text-sm font-semibold">Tie-break {published.tieBreak}</p>}
           {published.corrected && <p className="text-xs font-semibold text-muted">Corrigida pelo gestor.</p>}

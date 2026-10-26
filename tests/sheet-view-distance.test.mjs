@@ -277,10 +277,11 @@ test('sem resumo da prova: o cabeçalho e a duração aparecem e nenhum texto va
 test('CourtSheet: resultado em metros na conferência, na confirmação, no cartão publicado e no ausente; sem cronômetro oficial', () => {
   const court = read('../src/components/judge/CourtSheet.tsx');
   assert.match(court, /import \{[^}]*formatMeters[^}]*\} from '@\/lib\/workoutStructure';/s);
-  assert.match(court, /const resultText = \(result: string, value: number\) => \(\s*structure\.format === 'distance' \? `\$\{formatMeters\(value\)\} m` : `\$\{result\.replace\('\.', ','\)\}\$\{resultUnit\(value\)\}`\s*\);/);
+  // Story 1.80: a tonelagem entra no meio, em kg ("1.652,5 kg"); a distância e os outros formatos seguem como estavam.
+  assert.match(court, /const resultText = \(result: string, value: number\) => \(\s*structure\.format === 'distance' \? `\$\{formatMeters\(value\)\} m`\s*: structure\.format === 'tonnage' \? `\$\{formatTonnageKg\(value\)\} kg`\s*: `\$\{result\.replace\('\.', ','\)\}\$\{resultUnit\(value\)\}`\s*\);/);
   assert.match(court, /<p className="font-number text-4xl font-extrabold">\{resultText\(outcome\.result, outcome\.value\)\}<\/p>/);
   assert.match(court, /Enviar \{outcome\.ok \? resultText\(outcome\.result, outcome\.value\) : ''\} de \{context\.athleteName\}\?/);
-  assert.match(court, /structure\.format === 'distance' && published\.result \? `\$\{formatMeters\(Number\(published\.result\)\)\} m` : published\.result/);
+  assert.match(court, /structure\.format === 'distance' && published\.result\s*\? `\$\{formatMeters\(Number\(published\.result\)\)\} m`\s*: structure\.format === 'tonnage' && published\.result \? `\$\{formatTonnageKg\(Number\(published\.result\)\)\} kg` : published\.result/);
   assert.match(court, /structure\.format === 'distance' \? `\$\{formatMeters\(absentOutcome\.value\)\} m`/);
   // A revisão abre com o relógio parado (a distância nunca "termina antes") e o cronômetro oficial só vale para For Time e AMRAP.
   assert.match(court, /if \(structure\.format === 'interval'\) return false;/);

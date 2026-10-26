@@ -4,12 +4,16 @@ import {
   computeIntervalResult,
   computeMaxLoadResult,
   computeSheetResult,
+  computeTonnageResult,
   deriveDistanceState,
   deriveIntervalState,
   deriveMaxLoadState,
   deriveSheetState,
+  deriveTonnageState,
   formatMeters,
-  formatWorkoutTime
+  formatTonnageKg,
+  formatWorkoutTime,
+  isTonnageLoad
 } from '@/lib/workoutStructure';
 import type { SheetEvent, WorkoutStructure } from '@/lib/workoutStructure';
 
@@ -77,7 +81,11 @@ const isKg = (value: unknown): value is number => (
  * `fill` fora da janela de trabalho são aceitos e gravados: o motor os ignora
  * e a súmula avisa (decisão 6 do intervalado). Na distância (Story 1.66), o
  * único registro de contagem é `dist` (o total em metros, de 0 a 99.999); `dist`
- * fora dela é recusado.
+ * fora dela é recusado. Na tonelagem (Story 1.77), `load` e `lrep` levam a
+ * carga em kg (de 0,25 a 500, em múltiplos de 0,25) e a contagem da liberação
+ * só vale nos exercícios que vêm antes do que conta; o resto das regras
+ * (liberação concluída, carga vigente, incremento) é do motor e de
+ * `checkTonnageEntry`, que olha o log.
  */
 export const validateClientEvent = (raw: unknown, structure: WorkoutStructure, position: number): ClientEventCheck => {
   const fail = (error: string): ClientEventCheck => ({ ok: false, error: `Registro ${position + 1}: ${error}` });
@@ -90,8 +98,11 @@ export const validateClientEvent = (raw: unknown, structure: WorkoutStructure, p
   const isMaxLoad = structure.format === 'max_load';
   const isInterval = structure.format === 'interval';
   const isDistance = structure.format === 'distance';
+  const isTonnage = structure.format === 'tonnage';
   const maxId = isInterval ? structure.interval?.max.id ?? null : null;
-  const segmentIds = new Set(structure.segments.map((segment) => segment.id));
+  // Na tonelagem só os exercícios de liberação (os que vêm antes do que conta) têm contagem; os de depois são só texto.
+  const countable = isTonnage ? structure.segments.slice(0, structure.tonnage?.position ?? 0) : structure.segments;
+  const segmentIds = new Set(countable.map((segment) => segment.id));
   if (maxId) segmentIds.add(maxId);
   const liftIds = new Set((structure.maxLoad?.lifts ?? []).map((lift) => lift.id));
   const segment = (value: unknown) => typeof value === 'string' && segmentIds.has(value);
@@ -131,7 +142,7 @@ export const validateClientEvent = (raw: unknown, structure: WorkoutStructure, p
       return { ok: true, id: raw.id, event: { t: 'undo', of: event.of, at } };
     case 'time': {
       const cap = structure.timeCapSeconds;
-      if (isMaxLoad || isInterval || isDistance || typeof cap !== 'number') return fail('o ajuste do tempo não vale para esta prova.');
+      if (isMaxLoad || isInterval || isDistance || isTonnage || typeof cap !== 'number') return fail('o ajuste do tempo não vale para esta prova.');
       if (event.target !== 'final' && event.target !== 'tiebreak') return fail('ajuste de tempo sem alvo.');
       if (!isInt(event.v, 1, cap)) return fail(`o tempo oficial deve ficar entre 00:01 e ${formatWorkoutTime(cap)}.`);
       return { ok: true, id: raw.id, event: { t: 'time', target: event.target, v: event.v, at } };
@@ -147,6 +158,18 @@ export const validateClientEvent = (raw: unknown, structure: WorkoutStructure, p
         return fail(`o total deve ser um número inteiro de metros entre 0 e ${formatMeters(WORKOUT_STRUCTURE_LIMITS.maxDistanceMeters)}.`);
       }
       return { ok: true, id: raw.id, event: { t: 'dist', v: event.v, at } };
+    case 'load':
+      if (!isTonnage) return fail('a carga da tonelagem não vale para esta prova.');
+      if (!isTonnageLoad(event.v)) {
+        return fail(`a carga deve ficar entre ${WORKOUT_STRUCTURE_LIMITS.minTonnageLoadKg} e ${WORKOUT_STRUCTURE_LIMITS.maxLoadKg} kg, em múltiplos de ${WORKOUT_STRUCTURE_LIMITS.tonnageLoadGranularityKg}.`);
+      }
+      return { ok: true, id: raw.id, event: { t: 'load', v: event.v, at } };
+    case 'lrep':
+      if (!isTonnage) return fail('a repetição com carga não vale para esta prova.');
+      if (!isTonnageLoad(event.load)) {
+        return fail(`a carga deve ficar entre ${WORKOUT_STRUCTURE_LIMITS.minTonnageLoadKg} e ${WORKOUT_STRUCTURE_LIMITS.maxLoadKg} kg, em múltiplos de ${WORKOUT_STRUCTURE_LIMITS.tonnageLoadGranularityKg}.`);
+      }
+      return { ok: true, id: raw.id, event: { t: 'lrep', load: event.load, at } };
     default:
       return fail('tipo de registro desconhecido.');
   }
@@ -169,6 +192,17 @@ const plural = (count: number, one: string, many: string) => (count === 1 ? one 
  * foi digitado).
  */
 export const computeSheetOutcome = (structure: WorkoutStructure, events: readonly SheetEvent[]): SheetOutcome => {
+  if (structure.format === 'tonnage') {
+    const result = computeTonnageResult(deriveTonnageState(structure, events));
+    if (!result.entered) return { ok: false, error: 'Informe a carga do atleta antes de enviar.' };
+    return {
+      ok: true,
+      result: result.display,
+      value: result.value,
+      tieBreak: null,
+      summary: `${formatTonnageKg(result.value)} kg em ${result.reps} ${plural(result.reps, 'repetição', 'repetições')}`
+    };
+  }
   if (structure.format === 'distance') {
     const result = computeDistanceResult(deriveDistanceState(structure, events));
     if (!result.entered) return { ok: false, error: 'Informe a distância total antes de enviar.' };
@@ -235,10 +269,13 @@ export const ABSENT_OUTCOME_TOO_LONG = 'O resultado de ausência desta prova pas
  * log vazio (o mesmo de computeSheetOutcome(structure, [])): For Time = time
  * cap + total de repetições × segundos por repetição; AMRAP = 0 repetições.
  * Carga máxima = 0 kg. Intervalado = 0 repetições (o motor com o log vazio).
- * Distância = 0 m. Sem desempate em nenhum formato. O ranking põe o ausente depois de qualquer
+ * Distância = 0 m. Tonelagem = 0 kg. Sem desempate em nenhum formato. O ranking põe o ausente depois de qualquer
  * resultado real (result_status = 'absent').
  */
 export const computeAbsentOutcome = (structure: WorkoutStructure): SheetOutcome => {
+  if (structure.format === 'tonnage') {
+    return { ok: true, result: '0', value: 0, tieBreak: null, summary: 'Atleta ausente · 0 kg' };
+  }
   if (structure.format === 'distance') {
     return { ok: true, result: '0', value: 0, tieBreak: null, summary: 'Atleta ausente · 0 m' };
   }

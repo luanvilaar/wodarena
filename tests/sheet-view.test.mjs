@@ -364,7 +364,8 @@ test('gesto: constantes do desenho "Toque e segure" (700 ms, 12 px, 120 ms)', ()
 });
 
 test('anel do segurar: duração por classe (700 ms = HOLD_MS) e sem transição inline, para o reduced-motion valer', () => {
-  const component = read('../src/components/sheet/SheetView.tsx');
+  // Story 1.80: o segmento que o judge conta (com o anel) passou para SegmentParts.tsx, compartilhado com a liberação da Tonelagem.
+  const component = read('../src/components/sheet/SegmentParts.tsx');
   assert.equal(HOLD_MS, 700);
   assert.match(component, /transition-\[stroke-dashoffset\] duration-700 ease-linear motion-reduce:transition-none/);
   assert.doesNotMatch(component, /transition: holding/);

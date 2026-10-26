@@ -95,17 +95,18 @@ const DISTANCE = valid(distanceInput());
 const dist = (v, at = 1200) => ({ t: 'dist', v, at });
 const undo = (of, at = 1201) => ({ t: 'undo', of, at });
 
-const KEYS = ['version', 'format', 'totalReps', 'timeCapSeconds', 'incomplete', 'tieBreak', 'generator', 'customized', 'entry', 'segments', 'maxLoad', 'scoreDisplay', 'interval', 'distance'];
+const KEYS = ['version', 'format', 'totalReps', 'timeCapSeconds', 'incomplete', 'tieBreak', 'generator', 'customized', 'entry', 'segments', 'maxLoad', 'scoreDisplay', 'interval', 'distance', 'tonnage'];
 
 // ---------------------------------------------------------------------------
 // Contrato v4 (AC1)
 // ---------------------------------------------------------------------------
 
 test('versão 4: a distância é aceita, normalizada e idempotente, com as chaves do contrato na ordem', () => {
-  assert.equal(WORKOUT_STRUCTURE_VERSION, 4);
+  // Story 1.77: a versão do contrato passou a 5; a 4 continua aceita e sai normalizada na 5, com tonnage vazio.
+  assert.equal(WORKOUT_STRUCTURE_VERSION, 5);
   assert.equal(WORKOUT_STRUCTURE_LIMITS.maxDistanceMeters, 99999);
   assert.deepEqual(DISTANCE, {
-    version: 4,
+    version: 5,
     format: 'distance',
     totalReps: 0,
     timeCapSeconds: 1200,
@@ -118,7 +119,8 @@ test('versão 4: a distância é aceita, normalizada e idempotente, com as chave
     maxLoad: null,
     scoreDisplay: null,
     interval: null,
-    distance: { unit: 'm', note: NOTE }
+    distance: { unit: 'm', note: NOTE },
+    tonnage: null
   });
   assert.deepEqual(Object.keys(DISTANCE), KEYS);
   assert.deepEqual(valid(JSON.parse(JSON.stringify(DISTANCE))), DISTANCE, 'validar de novo devolve a mesma estrutura');
@@ -190,15 +192,15 @@ test('versão 4: o campo distance é obrigatório na distância e vazio nos outr
   assert.equal(validateWorkoutStructure(hostile).ok, false);
 });
 
-test('versões: a 1, a 2 e a 3 entram e saem na 4 com distance vazio; nelas a distância é recusada com mensagem própria', () => {
+test('versões: a 1, a 2 e a 3 entram e saem na 5 com distance vazio; nelas a distância é recusada com mensagem própria', () => {
   const fromV1 = valid(forTimeV1());
   const fromV2 = valid(forTimeV2());
   const fromV3 = valid(forTimeV3());
   for (const structure of [fromV1, fromV2, fromV3]) {
-    assert.equal(structure.version, 4);
+    assert.equal(structure.version, 5);
     assert.equal(structure.distance, null);
     assert.deepEqual(Object.keys(structure), KEYS);
-    assert.deepEqual(valid(structure), structure, 'a 4 revalidada é igual');
+    assert.deepEqual(valid(structure), structure, 'a 5 revalidada é igual');
   }
   assert.deepEqual(fromV1, fromV2);
   assert.deepEqual(fromV2, fromV3);
@@ -218,7 +220,7 @@ test('versões: a 1, a 2 e a 3 entram e saem na 4 com distance vazio; nelas a di
   // Com a chave interval, a recusa é a do intervalado (a versão 2 não conhece nenhum dos dois formatos novos).
   rejects({ ...distanceInput(), version: 2 }, /^O formato intervalado \(interval\) e o campo interval exigem a versão 3 da estrutura\.$/);
   rejects({ ...forTimeV3(), format: 'distance' }, ownMessage);
-  rejects({ ...forTimeV3(), version: 5 }, /^A versão da estrutura da prova deve ser 1, 2, 3 ou 4\.$/);
+  rejects({ ...forTimeV3(), version: 6 }, /^A versão da estrutura da prova deve ser 1, 2, 3, 4 ou 5\.$/);
   // O intervalado continua exigindo a versão 3 ou mais.
   rejects({ ...forTimeV2(), interval: null }, /^O formato intervalado \(interval\) e o campo interval exigem a versão 3 da estrutura\.$/);
 });

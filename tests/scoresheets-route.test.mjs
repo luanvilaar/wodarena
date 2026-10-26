@@ -1113,3 +1113,139 @@ test('distância: abrir, gravar o total (o último vale) e enviar publica os met
     { A: [1, 1], B: [1, 1], C: [3, 3], D: [4, 4] }
   );
 });
+
+// ---------------------------------------------------------------------------
+// Story 1.77: Tonelagem pelo caminho real (Treino 1: 10 Pull Ups e 10 Burpees liberam, Squat Clean conta)
+// ---------------------------------------------------------------------------
+
+test('tonelagem: liberação, carga declarada, incremento e envio publicam os kg; recusas do servidor; ausente 0 kg; posições 1, 1, 3, 4; correção em kg', async (t) => {
+  quiet(t);
+  const TONNAGE = validateWorkoutStructure({
+    version: 5, format: 'tonnage', totalReps: 20, timeCapSeconds: 600, incomplete: null, tieBreak: null, generator: null, customized: true,
+    entry: { mode: 'both', marking: 'reps', publish: 'after_review' },
+    segments: [
+      { id: 'pu', round: 1, name: 'Pull Ups', reps: 10, unit: 'reps', load: null, note: '', required: true, mark: 'reps' },
+      { id: 'bp', round: 1, name: 'Burpees', reps: 10, unit: 'reps', load: null, note: '', required: true, mark: 'reps' }
+    ],
+    maxLoad: null, scoreDisplay: null, interval: null, distance: null,
+    tonnage: {
+      position: 2, lift: { id: 'sc', name: 'Squat Clean', loadKg: null, note: '' }, loadMode: 'athlete',
+      increment: { allowed: true, stepKg: 10 }, note: '10 Pull Ups; 10 Burpees; Max. Squat Clean'
+    }
+  }).structure;
+  const athletes = ['A', 'B', 'C', 'D', 'E'];
+  seed();
+  database = createFakeSupabase({
+    users: [MANAGER, JUDGE],
+    events: [{ id: 'ev-ton', name: 'Tonelagem', date: '2026-11-01', location: 'Recife', organizer_id: MANAGER.id, event_type: 'functional_fitness', status: 'upcoming',
+      event_schedule: [{ id: 'h-ton', kind: 'heat', workoutId: 'wod-ton', heatNumber: 1, athleteIds: athletes }] }],
+    event_judges: [{ event_id: 'ev-ton', judge_user_id: JUDGE.id }],
+    divisions: [{ id: 'd-ton', event_id: 'ev-ton', name: 'RX' }],
+    athletes: athletes.map((id) => ({ id, name: `Atleta ${id}`, box: 'Box', division_id: 'd-ton' })),
+    workouts: [{ id: 'wod-ton', event_id: 'ev-ton', name: 'Squat Clean', code: 'W1', order_index: 1, type: 'tonnage', time_cap: '10:00', tie_breaker: '', division_id: null, structure: TONNAGE }],
+    scores: [],
+    registrations: []
+  });
+  const open = (athleteId, lane) => post(JUDGE, { action: 'open', eventId: 'ev-ton', workoutId: 'wod-ton', athleteId, heatId: 'h-ton', lane });
+  const reps = (loadKg, count, from) => Array.from({ length: count }, (_, index) => e({ t: 'lrep', load: loadKg, at: from + index }));
+  const liberate = (from = 1) => [e({ t: 'fill', seg: 'pu', n: 10, at: from }), e({ t: 'fill', seg: 'bp', n: 10, at: from + 1 })];
+  const send = async (athleteId, lane, events) => {
+    const sheetId = (await open(athleteId, lane)).body.sheet.id;
+    const appended = await post(JUDGE, { action: 'append', sheetId, fromSeq: 0, events });
+    assert.equal(appended.status, 200, appended.body.error);
+    return { sheetId, submitted: await post(JUDGE, { action: 'submit', sheetId, expectedCount: events.length }) };
+  };
+
+  // Atleta A: declara 60 kg, libera (10 + 10), faz 8 repetições com 60, sobe para 70 e faz 5: 830 kg.
+  const openedA = await open('A', 1);
+  assert.equal(openedA.status, 200, openedA.body.error);
+  assert.deepEqual(openedA.body.sheet.structure, TONNAGE, 'a súmula guarda a cópia da estrutura v5');
+  const sheetA = openedA.body.sheet.id;
+  const logA = [e({ t: 'load', v: 60, at: 0 }), ...liberate(1), ...reps(60, 8, 10), e({ t: 'load', v: 70, at: 30 }), ...reps(70, 5, 31)];
+  assert.deepEqual((await post(JUDGE, { action: 'append', sheetId: sheetA, fromSeq: 0, events: logA })).body, { count: logA.length });
+
+  // O servidor confere cada registro contra o log: nada é gravado nas recusas.
+  const stored = rows('scoresheet_events').filter((row) => row.sheet_id === sheetA).length;
+  const refuse = async (event, message) => {
+    const response = await post(JUDGE, { action: 'append', sheetId: sheetA, fromSeq: stored, events: [e(event)] });
+    assert.equal(response.status, 400, JSON.stringify(event));
+    assert.match(response.body.error, message, JSON.stringify(event));
+  };
+  await refuse({ t: 'load', v: 75, at: 40 }, /O incremento deve ser de 10 em 10 kg\./);
+  await refuse({ t: 'load', v: 65, at: 40 }, /A carga só pode subir\./);
+  await refuse({ t: 'load', v: 70, at: 40 }, /A carga só pode subir\./);
+  await refuse({ t: 'load', v: 60.3, at: 40 }, /a carga deve ficar entre 0\.25 e 500 kg/);
+  await refuse({ t: 'lrep', load: 60, at: 40 }, /A repetição deve usar a carga vigente \(70 kg\)\./);
+  await refuse({ t: 'lrep', load: 0, at: 40 }, /a carga deve ficar entre 0\.25 e 500 kg/);
+  await refuse({ t: 'rep', seg: 'sc', at: 40 }, /etapa inexistente na prova/);
+  await refuse({ t: 'time', target: 'final', v: 300, at: 40 }, /o ajuste do tempo não vale para esta prova/);
+  await refuse({ t: 'dist', v: 100, at: 40 }, /o total de distância não vale para esta prova/);
+  await refuse({ t: 'attempt', lift: 'sc', load: 60, ok: true, at: 40 }, /movimento inexistente na prova/);
+  assert.equal(rows('scoresheet_events').filter((row) => row.sheet_id === sheetA).length, stored, 'nada foi gravado nas recusas');
+
+  const submittedA = await post(JUDGE, { action: 'submit', sheetId: sheetA, expectedCount: stored });
+  assert.equal(submittedA.status, 200, submittedA.body.error);
+  assert.deepEqual([submittedA.body.sheet.officialResult, submittedA.body.sheet.officialTieBreak, submittedA.body.summary], ['830', null, '830 kg em 13 repetições']);
+  assert.deepEqual(scoreOf('A', 'wod-ton'), { athlete_id: 'A', workout_id: 'wod-ton', result: '830', value: 830, splits: {}, scoresheet_id: sheetA, result_status: null, rank: 1, points: 1 });
+
+  // Liberação e declaração valem no servidor: sem carga, sem liberar ou fora da prescrita a repetição é recusada.
+  const sheetX = (await open('E', 5)).body.sheet.id;
+  const gate = async (fromSeq, events, message) => {
+    const response = await post(JUDGE, { action: 'append', sheetId: sheetX, fromSeq, events });
+    assert.equal(response.status, message ? 400 : 200, response.body.error);
+    if (message) assert.match(response.body.error, message);
+  };
+  await gate(0, [e({ t: 'lrep', load: 60, at: 5 })], /Informe a carga do atleta antes das repetições\./);
+  await gate(0, [e({ t: 'load', v: 60, at: 0 }), e({ t: 'lrep', load: 60, at: 5 })], /Conclua os exercícios de liberação antes de registrar repetições\./);
+  assert.equal(rows('scoresheet_events').filter((row) => row.sheet_id === sheetX).length, 0, 'um lote recusado não grava nem o que veio antes');
+  await gate(0, [e({ t: 'load', v: 60, at: 0 }), e({ t: 'fill', seg: 'pu', n: 10, at: 1 }), e({ t: 'fill', seg: 'bp', n: 4, at: 2 })]);
+  await gate(3, [e({ t: 'lrep', load: 60, at: 5 })], /Conclua os exercícios de liberação/);
+  // Enviar sem repetição vale 0 kg (a carga foi declarada); sem carga declarada é recusado.
+  const withoutLoad = (await open('D', 4)).body.sheet.id;
+  const noLoad = await post(JUDGE, { action: 'submit', sheetId: withoutLoad, expectedCount: 0 });
+  assert.equal(noLoad.status, 400);
+  assert.equal(noLoad.body.error, 'Informe a carga do atleta antes de enviar.');
+  assert.equal(scoreOf('D', 'wod-ton'), undefined, 'nada foi publicado');
+  const zero = await post(JUDGE, { action: 'submit', sheetId: sheetX, expectedCount: 3 });
+  assert.equal(zero.status, 200, zero.body.error);
+  assert.deepEqual([scoreOf('E', 'wod-ton').result, scoreOf('E', 'wod-ton').value], ['0', 0]);
+
+  // B e C no mesmo caminho; D ausente publica 0 kg depois de qualquer resultado real.
+  const B = await send('B', 2, [e({ t: 'load', v: 83, at: 0 }), ...liberate(1), ...reps(83, 10, 10)]);
+  const C = await send('C', 3, [e({ t: 'load', v: 55, at: 0 }), ...liberate(1), ...reps(55, 12, 10)]);
+  for (const [athleteId, expected] of [['B', 830], ['C', 660]]) {
+    const submitted = athleteId === 'B' ? B.submitted : C.submitted;
+    assert.equal(submitted.status, 200, submitted.body.error);
+    assert.deepEqual([scoreOf(athleteId, 'wod-ton').result, scoreOf(athleteId, 'wod-ton').value, scoreOf(athleteId, 'wod-ton').result_status], [String(expected), expected, null]);
+  }
+  const absent = await post(JUDGE, { action: 'absent', sheetId: withoutLoad });
+  assert.equal(absent.status, 200, absent.body.error);
+  assert.deepEqual([absent.body.sheet.officialResult, absent.body.sheet.absent], ['0', true]);
+  assert.deepEqual([scoreOf('D', 'wod-ton').result, scoreOf('D', 'wod-ton').value, scoreOf('D', 'wod-ton').result_status, scoreOf('D', 'wod-ton').splits], ['0', 0, 'absent', {}]);
+
+  // Ranking e pontos: mesma tonelagem divide a posição; o ausente fica depois de qualquer resultado real (inclusive o 0 kg do E).
+  assert.deepEqual(
+    Object.fromEntries(['A', 'B', 'C', 'E', 'D'].map((id) => [id, [scoreOf(id, 'wod-ton').rank, scoreOf(id, 'wod-ton').points]])),
+    { A: [1, 1], B: [1, 1], C: [3, 3], E: [4, 4], D: [5, 5] }
+  );
+
+  // Correção do gestor: kg com vírgula decimal e ponto de milhar. "1.652,5" é 1652,5, nunca 1,6525.
+  const correct = (result) => post(MANAGER, { action: 'review', sheetId: sheetA, review: 'correct', reason: 'Conferi o total com a súmula de papel', result });
+  for (const [typed, message] of [
+    ['830,255', /^Use kg com até duas casas \(ex\.: 830 ou 1\.652,5\)\.$/],
+    ['1,652.5', /^Use kg com até duas casas/],
+    ['abc', /^Use kg com até duas casas/],
+    ['100000', /^A tonelagem passa de 99\.999 kg\. Confira o número\.$/],
+    ['', /^Informe a tonelagem em kg\.$/]
+  ]) {
+    const refused = await correct(typed);
+    assert.equal(refused.status, 400, JSON.stringify(typed));
+    assert.match(refused.body.error, message, JSON.stringify(typed));
+  }
+  assert.equal(scoreOf('A', 'wod-ton').value, 830, 'nada mudou nas recusas');
+  const fixed = await correct('1.652,5');
+  assert.equal(fixed.status, 200, fixed.body.error);
+  assert.deepEqual([scoreOf('A', 'wod-ton').result, scoreOf('A', 'wod-ton').value, fixed.body.sheet.corrected], ['1652.5', 1652.5, true]);
+  assert.equal((await correct('830')).status, 200);
+  assert.deepEqual([scoreOf('A', 'wod-ton').result, scoreOf('A', 'wod-ton').value], ['830', 830]);
+});

@@ -316,6 +316,7 @@
       "typeMaxWeight": "Carga Máxima",
       "typeReps": "Reps",
       "typeDistance": "Distância",
+      "typeTonnage": "Tonelagem",
       "capLabel": "Cap: {cap}"
     },
     "sidebar": {

@@ -1071,7 +1071,8 @@ test('telão 1.63 pelas rotas: chamada com o bloco do intervalado, bateria ao vi
 test('telão 1.63: a tela mostra "Intervalado", "Duração", o esquema e a fase pela função da súmula, sem rede nova', () => {
   const screen = read('../src/components/broadcast/BroadcastScreen.tsx');
   // Story 1.69: a distância entra nas duas funções (o intervalado, o AMRAP, a carga máxima e o For Time seguem como antes).
-  assert.match(screen, /format === 'interval' \? 'Intervalado' : format === 'distance' \? 'Distância' : 'For Time'/);
+  // Story 1.81: a tonelagem entra depois da distância.
+  assert.match(screen, /format === 'interval' \? 'Intervalado' : format === 'distance' \? 'Distância' : format === 'tonnage' \? 'Tonelagem' : 'For Time'/);
   assert.match(screen, /format === 'amrap' \|\| format === 'interval' \|\| format === 'distance' \? 'Duração'/);
   assert.match(screen, /capWord\(workout\.format\)/);
   assert.match(screen, /intervalSchemeText\(workout\.intervalSpec\)/);
@@ -1218,5 +1219,153 @@ test('telão 1.69 pelas rotas: chamada com as linhas do resumo, bateria ao vivo 
     [cellOf('Dupla Cometa'), cellOf('Dupla Boreal'), cellOf('Dupla Atlas')],
     [{ rank: 1, result: '6330' }, { rank: 1, result: '6330' }, { rank: 3, result: '5915' }],
     'empate divide a posição, sem desempate'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Story 1.81: Tonelagem no telão (rótulo, chamada, tonelagem ao vivo em kg, ordem e vantagem)
+// ---------------------------------------------------------------------------
+
+const { describeTonnageEntry, tonnageGapText } = await importServerModule('lib/broadcastPayload.ts');
+const tonnageSegment = (id, name, reps) => ({ id, round: 1, name, reps, unit: 'reps', load: null, note: '', required: true, mark: 'reps' });
+const tonnageStructure = (blockOverrides = {}, overrides = {}) => {
+  const checked = validateWorkoutStructure({
+    version: 5, format: 'tonnage', totalReps: 20, timeCapSeconds: 600, incomplete: null, tieBreak: null, generator: null, customized: true,
+    entry: { mode: 'both', marking: 'reps', publish: 'after_review' },
+    segments: [tonnageSegment('pu', 'Pull Ups', 10), tonnageSegment('bp', 'Burpees', 10)],
+    maxLoad: null, scoreDisplay: null, interval: null, distance: null,
+    tonnage: {
+      position: 2, lift: { id: 'tn', name: 'Squat Clean', loadKg: null, note: '' }, loadMode: 'athlete',
+      increment: { allowed: false, stepKg: 2.5 }, note: '', ...blockOverrides
+    },
+    ...overrides
+  });
+  assert.equal(checked.ok, true, checked.error);
+  return checked.structure;
+};
+
+test('telão 1.81: payload da prova de tonelagem com a chamada na ordem da prova, o exercício que conta e a barra só da liberação', () => {
+  const board = describeWorkoutForBoard({ name: 'Squat Clean', code: 'W5' }, tonnageStructure());
+  assert.deepEqual(
+    [board.format, board.timeCapSeconds, board.scheme, board.totalReps, board.scoreDisplay, board.intervalSpec, board.tonnageLift],
+    ['tonnage', 600, null, 20, null, null, 'Squat Clean']
+  );
+  assert.deepEqual(board.lines, ['10 Pull Ups', '10 Burpees', 'Squat Clean · tonelagem']);
+  assert.deepEqual(board.segments.map((segment) => [segment.id, segment.label]), [['pu', '10 Pull Ups'], ['bp', '10 Burpees']]);
+  // O que conta em qualquer posição: a barra só leva os de antes; a chamada mantém a ordem da prova.
+  const middle = describeWorkoutForBoard({ name: 'Meio', code: '' }, tonnageStructure({ position: 1 }));
+  assert.deepEqual(middle.lines, ['10 Pull Ups', 'Squat Clean · tonelagem', '10 Burpees']);
+  assert.deepEqual(middle.segments.map((segment) => segment.id), ['pu']);
+  // Sem liberação e com carga prescrita.
+  const single = describeWorkoutForBoard({ name: 'Snatch', code: '' }, tonnageStructure({ position: 0, loadMode: 'prescribed', lift: { id: 'tn', name: 'Squat Snatch', loadKg: 60, note: '' } }, { totalReps: 0, timeCapSeconds: 180, segments: [] }));
+  assert.deepEqual([single.lines, single.segments, single.timeCapSeconds], [['Squat Snatch 60 kg · tonelagem'], [], 180]);
+  // Os outros formatos não levam o campo.
+  assert.equal(describeWorkoutForBoard({ name: 'Fran', code: '' }, validateWorkoutStructure({
+    version: 5, format: 'amrap', totalReps: 5, timeCapSeconds: 300, incomplete: null, tieBreak: null, generator: null, customized: true,
+    entry: { mode: 'both', marking: 'reps', publish: 'after_review' }, segments: [tonnageSegment('a', 'Thruster', 5)],
+    maxLoad: null, scoreDisplay: 'total', interval: null, distance: null, tonnage: null
+  }).structure).tonnageLift, null);
+});
+
+test('telão 1.81: a raia da tonelagem mostra os kg com a unidade, a liberação da vez, "–" sem repetição e o selo Oficial', () => {
+  const workout = describeWorkoutForBoard({ name: 'Squat Clean', code: 'W5' }, tonnageStructure());
+  const entry = (overrides = {}) => ({ status: 'in_progress', repsDone: 0, scoreKg: 0, officialResult: null, currentSegmentId: null, segments: [], ...overrides });
+  assert.deepEqual(describeTonnageEntry(entry({ status: 'waiting' }), workout), { value: '–', unit: '', line: 'Aguardando o primeiro registro', lineStrong: '', official: false });
+  // Na liberação: o exercício da vez com o que falta, sem kg ainda.
+  assert.deepEqual(describeTonnageEntry(entry({ currentSegmentId: 'bp', segments: [10, 4] }), workout), { value: '–', unit: '', line: ' · faltam 6', lineStrong: '10 Burpees', official: false });
+  // Liberado e levantando: os kg, o exercício que conta e as repetições.
+  assert.deepEqual(describeTonnageEntry(entry({ repsDone: 8, scoreKg: 480, segments: [10, 10] }), workout), { value: '480', unit: 'kg', line: ' · 8 repetições', lineStrong: 'Squat Clean', official: false });
+  assert.equal(describeTonnageEntry(entry({ repsDone: 1, scoreKg: 42.5 }), workout).line, ' · 1 repetição');
+  assert.equal(describeTonnageEntry(entry({ repsDone: 40, scoreKg: 1652.5 }), workout).value, '1.652,5');
+  assert.equal(describeTonnageEntry(entry({ segments: [10, 10] }), workout).line, ' · sem repetição ainda');
+  assert.equal(describeTonnageEntry(entry({ segments: [10, 10] }), workout).value, '–', 'sem kg, "–"');
+  assert.equal(describeTonnageEntry(entry({ repsDone: 3, scoreKg: 180 }), null).lineStrong, 'Tonelagem', 'sem a prova na mão, o rótulo geral');
+  // Enviada, em correção e oficial (o resultado publicado vale por cima do ao vivo, mesmo 0 kg).
+  assert.equal(describeTonnageEntry(entry({ status: 'submitted', scoreKg: 480, repsDone: 8 }), workout).line, 'Enviada');
+  assert.equal(describeTonnageEntry(entry({ status: 'returned', scoreKg: 480 }), workout).line, 'Súmula em correção');
+  assert.deepEqual(describeTonnageEntry(entry({ status: 'submitted', officialResult: '830', scoreKg: 480 }), workout), { value: '830', unit: 'kg', line: '', lineStrong: 'Oficial', official: true });
+  assert.deepEqual(describeTonnageEntry(entry({ status: 'submitted', officialResult: '0' }), workout), { value: '0', unit: 'kg', line: '', lineStrong: 'Oficial', official: true });
+  assert.equal(tonnageGapText(830, 480), '+350 kg');
+  assert.equal(tonnageGapText(830, 830), '+0 kg');
+  assert.equal(tonnageGapText(1652.5, 600), '+1.052,5 kg');
+  assert.equal(tonnageGapText(100, 500), '+0 kg', 'nunca negativa');
+});
+
+test('telão 1.81: a tela escolhe o rótulo, o valor e a vantagem da tonelagem pelas funções puras, sem rede nova', () => {
+  const screen = read('../src/components/broadcast/BroadcastScreen.tsx');
+  assert.match(screen, /format === 'distance' \? 'Distância' : format === 'tonnage' \? 'Tonelagem' : 'For Time'/);
+  // A tonelagem tem time cap (obrigatório), então a palavra do tempo segue "Time cap".
+  assert.doesNotMatch(screen, /format === 'tonnage' \? 'Duração'/);
+  assert.match(screen, /if \(workout\?\.format === 'tonnage'\) return \{ \.\.\.describeTonnageEntry\(entry, workout\), capped: false \};/);
+  assert.match(screen, /workout\?\.format === 'tonnage'\) \{ gapLabel = 'Vantagem sobre o 2º'; gapValue = tonnageGapText\(leader\.scoreKg \?\? 0, second\.scoreKg \?\? 0\); \}/);
+  const payload = read('../src/lib/broadcastPayload.ts');
+  assert.match(payload, /export const describeTonnageEntry/);
+  assert.match(payload, /export const tonnageGapText/);
+});
+
+test('telão 1.81 pelas rotas: chamada com a ordem da prova, bateria ao vivo com a liberação e os kg (maior primeiro) e geral com o resultado publicado', async (t) => {
+  quiet(t);
+  seed();
+  const EV = 'ev-tonelagem';
+  const people = [['ath-ta', 'Atleta Atlas'], ['ath-tb', 'Atleta Boreal 85911112222'], ['ath-tc', 'Atleta Cometa']];
+  database.rows('events').push({ id: EV, name: 'Tonelagem Litoral', date: '2026-11-01', organizer_id: MANAGER.id, event_type: 'functional_fitness', status: 'upcoming', logo_url: null,
+    event_schedule: [{ id: 'heat-t1', kind: 'heat', workoutId: 'wod-ton', heatNumber: 1, date: '2026-11-01', time: '09:00', title: 'BATERIA 1', athleteIds: people.map(([id]) => id) }] });
+  database.rows('event_judges').push({ event_id: EV, judge_user_id: JUDGE.id });
+  database.rows('divisions').push({ id: 'div-ton', event_id: EV, name: 'RX', order_index: 1 });
+  database.rows('athletes').push(...people.map(([id, name]) => ({ id, name, box: 'Box Sul', division_id: 'div-ton', is_team: false })));
+  database.rows('leaderboard_entries').push(...people.map(([id]) => ({ id: `le-${id}`, event_id: EV, division_id: 'div-ton', athlete_id: id })));
+  database.rows('workouts').push({ id: 'wod-ton', event_id: EV, name: 'Squat Clean', code: 'W1', order_index: 1, type: 'tonnage', time_cap: '10:00', tie_breaker: '', division_id: null, structure: tonnageStructure() });
+  const { token } = (await control(MANAGER, { action: 'generate_link', eventId: EV })).body;
+  const openLane = async (athleteId, lane) => {
+    const opened = await sheets({ action: 'open', eventId: EV, workoutId: 'wod-ton', athleteId, heatId: 'heat-t1', lane });
+    assert.equal(opened.status, 200, opened.body.error);
+    return opened.body.sheet.id;
+  };
+  const [ta, tb, tc] = [await openLane('ath-ta', 1), await openLane('ath-tb', 2), await openLane('ath-tc', 3)];
+
+  const call = await telao(token);
+  assert.equal(call.body.screen, 'call');
+  const workout = call.body.call.heat.workout;
+  assert.deepEqual(
+    [workout.format, workout.timeCapSeconds, workout.lines, workout.intervalSpec, workout.tonnageLift, workout.segments.map((segment) => segment.id)],
+    ['tonnage', 600, ['10 Pull Ups', '10 Burpees', 'Squat Clean · tonelagem'], null, 'Squat Clean', ['pu', 'bp']]
+  );
+
+  // Atlas: 60 kg × 8 (480 kg); Boreal: 83 kg × 10 (830 kg); Cometa ainda na liberação (10 + 4), com a carga já declarada.
+  const liberate = (from) => [e({ t: 'fill', seg: 'pu', n: 10, at: from }), e({ t: 'fill', seg: 'bp', n: 10, at: from + 1 })];
+  const reps = (kg, count, from) => Array.from({ length: count }, (_, index) => e({ t: 'lrep', load: kg, at: from + index }));
+  await append(ta, [e({ t: 'load', v: 60, at: 0 }), ...liberate(1), ...reps(60, 8, 10)]);
+  await append(tb, [e({ t: 'load', v: 83, at: 0 }), ...liberate(1), ...reps(83, 10, 10)]);
+  await append(tc, [e({ t: 'load', v: 55, at: 0 }), e({ t: 'fill', seg: 'pu', n: 10, at: 1 }), e({ t: 'set', seg: 'bp', v: 4, at: 5 })]);
+  const live = await telao(token);
+  assert.equal(live.body.screen, 'live');
+  assert.equal(live.body.live.heat.workout.format, 'tonnage');
+  assert.deepEqual(
+    live.body.live.entries.map((entry) => [entry.name, entry.position, entry.scoreKg, entry.repsDone, entry.status, entry.round, entry.segments, entry.currentSegmentId]),
+    [
+      ['Atleta Boreal', 1, 830, 10, 'in_progress', null, [10, 10], null],
+      ['Atleta Atlas', 2, 480, 8, 'in_progress', null, [10, 10], null],
+      ['Atleta Cometa', 3, 0, 0, 'in_progress', null, [10, 4], 'bp']
+    ]
+  );
+  assert.doesNotMatch(JSON.stringify(live.body), /85911112222|@example\.com|ath-t[abc]|judge-telao/, 'sem dado pessoal novo');
+
+  // Desfazer a última repetição do Boreal tira 83 kg (o telão segue o log, não o último toque).
+  const countB = (await telao(token)).body.live.entries.find((entry) => entry.name === 'Atleta Boreal').repsDone;
+  assert.equal(countB, 10);
+  await append(tb, [e({ t: 'undo', of: 12, at: 30 })]);
+  assert.deepEqual((await telao(token)).body.live.entries.map((entry) => entry.scoreKg), [747, 480, 0]);
+  await append(tb, [e({ t: 'lrep', load: 83, at: 31 })]);
+
+  // Envio das três súmulas: o geral mostra o resultado publicado em kg.
+  for (const sheetId of [ta, tb, tc]) await submit(sheetId);
+  const interval = await telao(token);
+  assert.equal(interval.body.screen, 'interval');
+  const [standings] = interval.body.interval.boards;
+  assert.deepEqual(standings.columns, [{ label: 'W1', fresh: true }]);
+  const cellOf = (name) => standings.rows.find((row) => row.name === name).cells[0];
+  assert.deepEqual(
+    [cellOf('Atleta Boreal'), cellOf('Atleta Atlas'), cellOf('Atleta Cometa')],
+    [{ rank: 1, result: '830' }, { rank: 2, result: '480' }, { rank: 3, result: '0' }]
   );
 });

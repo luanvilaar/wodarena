@@ -3,8 +3,10 @@ import {
   WORKOUT_STRUCTURE_LIMITS,
   checkIntervalEntry,
   formatMeters,
+  formatTonnageKg,
   formatWorkoutTime,
   intervalPhaseAt,
+  isTonnageLoad,
   parseMetersInput,
   workUnitWord
 } from '@/lib/workoutStructure';
@@ -19,13 +21,15 @@ import type {
   SheetEvent,
   SheetResult,
   SheetState,
+  TonnageSheetResult,
+  TonnageSheetState,
   WorkoutSegmentUnit,
   WorkoutStructure
 } from '@/lib/workoutStructure';
 
 // Modelo de tela da súmula digital do judge (Story 1.44; unidades e novos
 // desempates na 1.48, carga máxima na 1.47, intervalado na 1.62, distância na
-// 1.68). Puro e sem
+// 1.68, tonelagem na 1.80). Puro e sem
 // DOM: pega a estrutura da prova, o estado e o resultado que o motor calculou
 // e devolve o que a tela precisa mostrar. Nenhum score é calculado aqui; o texto é português fixo,
 // como no restante da área do judge.
@@ -1004,4 +1008,205 @@ export const decideDistanceEntry = (text: unknown, current: number | null, at: n
   if (!parsed.ok) return { kind: 'refused', error: parsed.error };
   if (parsed.meters === current) return { kind: 'same' };
   return { kind: 'emit', event: { t: 'dist', v: parsed.meters, at } };
+};
+
+// ---------------------------------------------------------------------------
+// Tonelagem (Story 1.80, Maquete 2 de docs/design/tonelagem/)
+// ---------------------------------------------------------------------------
+
+// A contagem da liberação, as repetições com carga e o aumento de carga podem ser
+// desfeitos; a declaração da carga (o primeiro `load` que conta) não: sem ela
+// nenhuma repetição vale, e o gestor corrige o resultado depois, se preciso.
+const TONNAGE_UNDOABLE_EVENT_TYPES = new Set<string>(['rep', 'fill', 'set', 'adj', 'lrep', 'load']);
+
+/**
+ * Posição do último registro da tonelagem que ainda pode ser desfeito: uma
+ * contagem da liberação, uma repetição ou um aumento de carga que nenhum `undo`
+ * posterior anulou. A declaração da carga não é alvo. `null` sem o que desfazer.
+ */
+export const findTonnageUndoTarget = (events: readonly SheetEvent[]): number | null => {
+  const undone = new Set<number>();
+  events.forEach((event, index) => {
+    if (event.t === 'undo' && Number.isInteger(event.of) && event.of >= 0 && event.of < index) undone.add(event.of);
+  });
+  const declaration = events.findIndex((event, index) => event.t === 'load' && !undone.has(index));
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    if (index === declaration || undone.has(index)) continue;
+    if (TONNAGE_UNDOABLE_EVENT_TYPES.has(events[index].t)) return index;
+  }
+  return null;
+};
+
+export type TonnageGroupRow = {
+  /** "60 kg × 8". */
+  label: string;
+  /** "480 kg". */
+  kgLabel: string;
+};
+
+export type TonnageAfterRow = { id: string; label: string };
+
+export type TonnageViewModel = {
+  durationSeconds: number;
+  /** "10:00". */
+  durationLabel: string;
+  /** O segundo do relógio que o evento grava ("03:12"). */
+  clockLabel: string;
+  /** Do relógio em relação ao time cap, de 0 a 100. */
+  clockPercent: number;
+  /** Relógio rodando além do time cap: os registros depois dele não contam. */
+  timeUp: boolean;
+  /** Resumo da prova para o judge (pode ser vazio). */
+  note: string;
+  liftName: string;
+  /** "Padrão do movimento" do exercício que conta (pode ser vazio). */
+  liftNote: string;
+  loadMode: 'athlete' | 'prescribed';
+  prescribedKg: number | null;
+  incrementAllowed: boolean;
+  stepKg: number;
+  /** Exercícios que liberam o atleta, com o feito de cada um. */
+  liberation: SheetRow[];
+  /** O exercício de liberação da vez; null quando liberou (ou sem liberação). */
+  current: SheetRow | null;
+  released: boolean;
+  /** Exercícios depois do que conta: só texto. */
+  after: TonnageAfterRow[];
+  declared: boolean;
+  loadKg: number | null;
+  /** "60 kg"; null sem carga. */
+  loadLabel: string | null;
+  /** A próxima carga do botão "Subir carga"; null se não permitido ou se passaria de 500 kg. */
+  nextLoadKg: number | null;
+  reps: number;
+  /** "830 kg". */
+  tonnageLabel: string;
+  groups: TonnageGroupRow[];
+  /** Registros que não contaram (time cap, liberação, carga que não é a vigente, incremento recusado). */
+  ignored: number;
+  undoTarget: number | null;
+  canUndo: boolean;
+};
+
+/**
+ * Modelo de tela da súmula da tonelagem. O estado vem do motor
+ * (deriveTonnageState); aqui só há rótulos, as linhas da liberação e a posição
+ * do desfazer.
+ */
+export const buildTonnageViewModel = (
+  structure: WorkoutStructure,
+  state: TonnageSheetState,
+  events: readonly SheetEvent[],
+  seconds: number,
+  running: boolean
+): TonnageViewModel => {
+  const tonnage = structure.tonnage;
+  const durationSeconds = structure.timeCapSeconds ?? 0;
+  const raw = Number.isFinite(seconds) ? seconds : 0;
+  const at = Math.max(0, Math.floor(raw));
+  const stateById = new Map(state.segments.map((segment) => [segment.id, segment]));
+
+  const toRow = (segment: WorkoutStructure['segments'][number]): SheetRow => {
+    const segmentState = stateById.get(segment.id);
+    const target = segmentState?.target ?? segment.reps;
+    const done = segmentState?.done ?? 0;
+    const unit = segment.unit ?? 'reps';
+    return {
+      id: segment.id,
+      round: segment.round,
+      name: segment.name,
+      loadLabel: segment.load ? `${formatKg(segment.load.value)} ${segment.load.unit}` : null,
+      note: segment.note,
+      unit,
+      unitShort: UNIT_WORDS[unit].short,
+      unitWord: target === 1 ? UNIT_WORDS[unit].one : UNIT_WORDS[unit].many,
+      target,
+      done,
+      remaining: Math.max(0, target - done),
+      percent: clampPercent(done, target),
+      status: state.currentSegmentId === segment.id ? 'current' : done >= target ? 'done' : 'pending',
+      mark: segment.mark,
+      isTieBreak: false,
+      tieBreakTimeLabel: null
+    };
+  };
+  const liberation = structure.segments.slice(0, state.position).map(toRow);
+  const stepKg = tonnage?.increment.stepKg ?? 0;
+  const nextLoad = state.loadKg !== null ? state.loadKg + stepKg : null;
+  const undoTarget = findTonnageUndoTarget(events);
+
+  return {
+    durationSeconds,
+    durationLabel: formatWorkoutTime(durationSeconds),
+    clockLabel: formatWorkoutTime(at),
+    clockPercent: durationSeconds > 0 ? Math.max(0, Math.min(100, Math.round((raw / durationSeconds) * 100))) : 0,
+    timeUp: running && durationSeconds > 0 && at > durationSeconds,
+    note: tonnage?.note ?? '',
+    liftName: tonnage?.lift.name ?? '',
+    liftNote: tonnage?.lift.note ?? '',
+    loadMode: tonnage?.loadMode ?? 'athlete',
+    prescribedKg: tonnage?.lift.loadKg ?? null,
+    incrementAllowed: tonnage?.increment.allowed === true,
+    stepKg,
+    liberation,
+    current: liberation.find((row) => row.status === 'current') ?? null,
+    released: state.released,
+    after: structure.segments.slice(state.position).map((segment) => ({
+      id: segment.id,
+      label: `${segment.reps} ${segment.unit === 'reps' ? '' : `${UNIT_WORDS[segment.unit].short} de `}${segment.name}`
+    })),
+    declared: state.declaredKg !== null,
+    loadKg: state.loadKg,
+    loadLabel: state.loadKg === null ? null : `${formatTonnageKg(state.loadKg)} kg`,
+    nextLoadKg: tonnage?.increment.allowed && nextLoad !== null && isTonnageLoad(nextLoad) ? nextLoad : null,
+    reps: state.reps,
+    tonnageLabel: `${formatTonnageKg(state.tonnageKg)} kg`,
+    groups: state.groups.map((group) => ({
+      label: `${formatTonnageKg(group.loadKg)} kg × ${group.reps}`,
+      kgLabel: `${formatTonnageKg(group.kg)} kg`
+    })),
+    ignored: state.ignored.length,
+    undoTarget,
+    canUndo: undoTarget !== null
+  };
+};
+
+export type TonnageResultSummary = {
+  entered: boolean;
+  /** "830 kg", ou "Nenhuma carga informada". */
+  headline: string;
+  /** "13 repetições válidas"; null sem carga. */
+  detail: string | null;
+  /** "Informe a carga do atleta antes de enviar."; null com carga. */
+  warning: string | null;
+  /** Aviso de registros que ficaram fora do cálculo; null sem eles. */
+  ignoredNote: string | null;
+  note: string;
+};
+
+/** Texto do resultado da tonelagem que o motor calculou (nada é recalculado aqui). */
+export const buildTonnageResultSummary = (result: TonnageSheetResult, state: TonnageSheetState): TonnageResultSummary => ({
+  entered: result.entered,
+  headline: result.entered ? `${formatTonnageKg(result.value)} kg` : 'Nenhuma carga informada',
+  detail: result.entered ? `${result.reps} ${plural(result.reps, 'repetição válida', 'repetições válidas')}` : null,
+  warning: result.entered ? null : 'Informe a carga do atleta antes de enviar.',
+  ignoredNote: state.ignored.length > 0
+    ? `${state.ignored.length} ${plural(state.ignored.length, 'registro ficou fora', 'registros ficaram fora')} do cálculo (depois do time cap, antes da liberação ou com carga que não é a vigente).`
+    : null,
+  note: 'Mesma tonelagem divide a posição no ranking. As repetições aparecem só como informação. O servidor calcula o mesmo resultado a partir dos registros: o número do aparelho não é aceito como está.'
+});
+
+/** Dica sob o campo da carga (Maquete 2 da tonelagem). */
+export const TONNAGE_LOAD_HINT_FREE = 'Informe a carga que o atleta vai usar. Ela vale para as repetições até a próxima subida.';
+export const TONNAGE_LOAD_HINT_PRESCRIBED = 'Carga prescrita pelo gestor. Confira com o atleta.';
+
+export type TonnageLoadInput = { ok: true; kg: number } | { ok: false; error: string };
+
+/** A carga que o judge digitou antes de iniciar: kg com vírgula ou ponto (de 0,25 a 500, em múltiplos de 0,25). */
+export const readTonnageLoadInput = (text: unknown): TonnageLoadInput => {
+  const typed = typeof text === 'string' ? text.trim().replace(',', '.') : '';
+  if (!typed) return { ok: false, error: 'Informe a carga do atleta em kg.' };
+  const kg = /^\d{1,3}(\.\d{1,2})?$/.test(typed) ? Number(typed) : Number.NaN;
+  if (!isTonnageLoad(kg)) return { ok: false, error: 'Use de 0,25 a 500 kg, em múltiplos de 0,25.' };
+  return { ok: true, kg };
 };

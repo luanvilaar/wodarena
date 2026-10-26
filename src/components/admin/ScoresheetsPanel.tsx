@@ -71,7 +71,7 @@ const STATUS_CHIP: Record<ScoresheetStatus, string> = {
   cancelled: 'border-card-border text-muted'
 };
 
-const RESULT_HINT: Record<string, string> = { fortime: 'Tempo (MM:SS)', amrap: 'Total de repetições', maxweight: 'Carga em kg', reps: 'Repetições', distance: 'Distância em metros' };
+const RESULT_HINT: Record<string, string> = { fortime: 'Tempo (MM:SS)', amrap: 'Total de repetições', maxweight: 'Carga em kg', reps: 'Repetições', distance: 'Distância em metros', tonnage: 'Tonelagem em kg (ex.: 830 ou 1.652,5)' };
 
 const formatWhen = (iso: string) => {
   const date = new Date(iso);

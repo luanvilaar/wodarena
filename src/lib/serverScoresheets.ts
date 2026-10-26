@@ -13,7 +13,7 @@ import {
 import { SCORE_TIE_BREAKER_SPLIT_KEY, parseScoreForWorkout, rankWorkoutScores, secondsToTime, timeToSeconds, type WorkoutScoreForRanking } from '@/lib/scoring';
 import { estimateClockStart, summarizeLiveProgress, type LiveProgress } from '@/lib/liveProgress';
 import type { SessionUser } from '@/lib/serverSecurity';
-import { parseMetersInput, validateWorkoutStructure, type SheetEvent, type WorkoutStructure } from '@/lib/workoutStructure';
+import { checkTonnageEntry, parseMetersInput, parseTonnageKgInput, validateWorkoutStructure, type SheetEvent, type WorkoutStructure } from '@/lib/workoutStructure';
 import type { Score, WorkoutType } from '@/types';
 
 // Súmula gravada no servidor (Stories 1.49 a 1.52, etapa E3). Abrir a súmula
@@ -554,6 +554,13 @@ export const appendSheetEvents = async (
     const seq = count + index;
     const checked = validateClientEvent(raw, row.structure, seq);
     if (!checked.ok) throw new SheetError(checked.error);
+    // Tonelagem (Story 1.77): a carga e a repetição dependem do log até aqui (liberação concluída, carga vigente, incremento permitido).
+    if (row.structure.format === 'tonnage' && (checked.event.t === 'load' || checked.event.t === 'lrep')) {
+      const history = [...stored.map((item) => item.event), ...rows.map((item) => item.event)];
+      const entry = checked.event.t === 'load' ? { t: 'load' as const, v: checked.event.v } : { t: 'lrep' as const, load: checked.event.load };
+      const gate = checkTonnageEntry(row.structure, history, entry);
+      if (!gate.ok) throw new SheetError(`Registro ${seq + 1}: ${gate.error}`);
+    }
     rows.push({ sheet_id: row.id, seq, client_event_id: checked.id, event: checked.event, author_user_id: actor.id, recorded_at: nowIso() });
   }
   if (rows.length > 0) {
@@ -1003,7 +1010,12 @@ export const reviewSheet = async (
     const workout = check(await supabaseAdmin.from('workouts').select('id, type').eq('id', row.workout_id).maybeSingle()) as { type: WorkoutType } | null;
     if (!workout) throw new SheetError('Prova não encontrada.', 404);
     let parsed;
-    if (row.structure.format === 'distance') {
+    if (row.structure.format === 'tonnage') {
+      // Tonelagem (Story 1.77): kg com até duas casas, como o gestor digita ("1.652,5"). O parser legado leria a vírgula como erro e o ponto de milhar como decimal.
+      const kg = parseTonnageKgInput(input.result);
+      if (!kg.ok) throw new SheetError(kg.error);
+      parsed = { result: String(kg.kg), value: kg.kg };
+    } else if (row.structure.format === 'distance') {
       // Distância (Story 1.68): metros inteiros, como o judge digita. O parser legado leria "6.330" como 6,33.
       const meters = parseMetersInput(input.result);
       if (!meters.ok) throw new SheetError(meters.error);
