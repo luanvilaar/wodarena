@@ -1,0 +1,1159 @@
+<title>Comprovante Único de Inscrição</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=IBM+Plex+Sans:wght@500;600;700&family=Inter:wght@400;500;600;700;800;900&display=swap">
+<style>
+/* Layout: relatório em uma coluna de leitura; os blocos largos (modelos de hoje, propostas) abrem em faixas de maquetes lado a lado. */
+:root{
+  --font-body:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --font-num:"IBM Plex Sans","JetBrains Mono",ui-monospace,Menlo,monospace;
+  --font-display:"Anton","Arial Narrow",sans-serif;
+  /* página: escura primeiro, como o painel do WODArena */
+  --bg:#0b0e11; --surface:#14181d; --surface-2:#1e2329; --line:#2b3139;
+  --fg:#eaecef; --muted:#929aa5; --accent:#fcd535; --accent-text:#fcd535; --on-accent:#181a20;
+  --up:#0ecb81; --down:#f6465d; --warn:#f0b90b; --info:#7db4ff;
+  --code-bg:#0f1317;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --bg:#f4f5f7; --surface:#ffffff; --surface-2:#eceef2; --line:#d6dae1;
+    --fg:#181a20; --muted:#566070; --accent-text:#7a5c00; --up:#0a7d52; --down:#b8243a; --warn:#8a6a00; --info:#1f5fd1;
+    --code-bg:#f7f8fa;
+    color-scheme:light;
+  }
+}
+:root[data-theme="light"]{
+  --bg:#f4f5f7; --surface:#ffffff; --surface-2:#eceef2; --line:#d6dae1;
+  --fg:#181a20; --muted:#566070; --accent-text:#7a5c00; --up:#0a7d52; --down:#b8243a; --warn:#8a6a00; --info:#1f5fd1;
+  --code-bg:#f7f8fa;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+::selection{background:#fcd535;color:#181a20}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:15px;line-height:1.55;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1,h2,h3,h4{text-wrap:balance;line-height:1.2;margin:0}
+p{margin:0}
+a{color:var(--accent-text);text-underline-offset:3px}
+:focus-visible{outline:2px solid var(--info);outline-offset:3px}
+code,.mono{font-family:var(--font-num);font-size:.92em}
+.num{font-family:var(--font-num);font-variant-numeric:tabular-nums}
+.wrap{max-width:1160px;margin:0 auto;padding-block:36px 80px;display:grid;gap:64px}
+.read{max-width:760px}
+h1{font-size:clamp(30px,5.4vw,46px);font-weight:900;letter-spacing:-.025em}
+h2{font-size:24px;font-weight:800;letter-spacing:-.015em}
+h3{font-size:17px;font-weight:800}
+.lead{max-width:68ch;color:var(--muted);font-size:16.5px}
+.head{display:grid;gap:16px}
+.pills{display:flex;flex-wrap:wrap;gap:8px}
+.pill{font-size:12px;font-weight:600;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:4px 12px}
+.pill.hold{border-color:color-mix(in srgb,var(--warn) 55%,var(--line));color:var(--warn)}
+.toc{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13px;font-weight:600}
+.toc a{color:var(--muted);text-decoration:none}
+.toc a:hover{color:var(--accent-text)}
+section{display:grid;gap:20px;min-width:0;scroll-margin-top:16px}
+.sec-lead{max-width:72ch;color:var(--muted)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px;min-width:0}
+.small{font-size:13px;color:var(--muted)}
+ul.tight{margin:0;padding-left:18px;display:grid;gap:6px}
+.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+.summary .card{display:grid;gap:8px}
+.summary strong{font-size:15px}
+.tag{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border-radius:4px;padding:3px 8px;border:1px solid var(--line);color:var(--muted);width:max-content}
+.tag.bad{color:var(--down);border-color:color-mix(in srgb,var(--down) 45%,var(--line))}
+.tag.warn{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 45%,var(--line))}
+.tag.ok{color:var(--up);border-color:color-mix(in srgb,var(--up) 45%,var(--line))}
+
+/* tabelas */
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:680px}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700;background:var(--surface-2)}
+tr:last-child td{border-bottom:0}
+td .y{color:var(--up);font-weight:700}
+td .n{color:var(--muted)}
+td .x{color:var(--down);font-weight:700}
+
+/* defeitos */
+.defects{display:grid;gap:14px}
+.defect{display:grid;grid-template-columns:52px 1fr;gap:4px 16px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px}
+.defect .id{font-family:var(--font-num);font-weight:700;font-size:15px;color:var(--down);grid-row:span 3}
+.defect.med .id{color:var(--warn)}
+.defect.low .id{color:var(--muted)}
+.defect h3{font-size:16px}
+.defect p{color:var(--muted);max-width:76ch}
+.defect .where{font-size:12.5px;color:var(--muted)}
+.defect .where code{color:var(--fg)}
+pre{margin:6px 0 0;background:var(--code-bg);border:1px solid var(--line);border-radius:8px;padding:12px 14px;overflow-x:auto;font-family:var(--font-num);font-size:12.5px;line-height:1.55;color:var(--fg);grid-column:2}
+pre .c{color:var(--muted)}
+pre .hl{background:color-mix(in srgb,var(--down) 18%,transparent);border-radius:3px;padding:0 2px}
+
+/* sequência do erro */
+.seq{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:28px;align-items:start}
+@media (max-width:820px){.seq{grid-template-columns:1fr}}
+.steps{list-style:none;margin:0;padding:0;display:grid;gap:12px;counter-reset:s}
+.steps li{display:grid;grid-template-columns:30px 1fr;gap:12px;counter-increment:s}
+.steps li::before{content:counter(s);font-family:var(--font-num);font-weight:700;font-size:13px;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--surface-2);border:1px solid var(--line);color:var(--fg)}
+.steps li.hot::before{background:var(--down);border-color:var(--down);color:#fff}
+.steps b{font-weight:700}
+.stack{position:relative;height:330px;max-width:420px;width:100%;justify-self:center}
+.layer{position:absolute;border-radius:12px;padding:14px;display:grid;gap:6px;align-content:start;font-size:12.5px}
+.layer.back{inset:0 70px 40px 0;background:#ffffff;color:#181a20;border:1px solid #d6dae1;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+.layer.front{inset:56px 0 0 70px;background:#0b0e11;color:#eaecef;border:1px solid #2b3139;box-shadow:0 22px 50px rgba(0,0,0,.55)}
+.layer .lt{font-weight:800;font-size:13.5px}
+.layer .lz{font-family:var(--font-num);font-size:11px;opacity:.75}
+.layer .mini-ticket{margin-top:8px;height:120px;border-radius:10px;background:#16181e;display:grid;place-items:center;color:#fcd535;font-weight:800;font-size:11px;letter-spacing:.1em}
+.layer .mini-voucher{margin-top:8px;height:150px;border-radius:10px;overflow:hidden;display:grid;grid-template-rows:6px 50px 1fr}
+.layer .mini-voucher i{display:block}
+.stack-note{position:absolute;right:0;bottom:-6px;left:70px;font-size:12px;color:var(--muted);text-align:center}
+
+/* faixa de maquetes */
+.mocks{display:flex;flex-wrap:wrap;gap:28px;justify-content:center;align-items:flex-start}
+.mock{display:grid;gap:10px;justify-items:center;min-width:0;max-width:100%}
+.mock figcaption{font-size:12.5px;color:var(--muted);text-align:center;max-width:300px}
+.mock figcaption b{color:var(--fg);display:block;font-size:13.5px}
+figure{margin:0}
+
+/* ====== maquetes: cores fixas do produto, em qualquer tema da página ====== */
+.phone{width:300px;max-width:100%;background:#000;border-radius:30px;padding:10px;border:1px solid #2b3139;box-shadow:0 20px 50px rgba(0,0,0,.35)}
+.screen{border-radius:22px;overflow:hidden;background:#0b0e11;min-height:560px;position:relative}
+.screen.dim{background:rgba(0,0,0,.8);padding:14px 10px}
+.banner-synth{position:relative;background:
+  radial-gradient(circle at 1px 1px,rgba(252,213,53,.30) 1px,transparent 1.6px) 0 0/7px 7px,
+  linear-gradient(140deg,#3a4049 0%,#1e2329 45%,#0b0e11 100%);overflow:hidden}
+.banner-synth::after{content:"";position:absolute;inset:0;background:#fcd535;opacity:.16;clip-path:polygon(58% 0,100% 0,100% 100%,30% 100%)}
+.synth-tag{position:absolute;right:6px;bottom:5px;z-index:2;font-size:8px;font-weight:600;color:rgba(234,236,239,.75);background:rgba(11,14,17,.6);border-radius:3px;padding:1px 5px;letter-spacing:.02em}
+.evlogo{width:34px;height:34px;border-radius:8px;background:#ffffff;color:#0b0e11;display:grid;place-items:center;font-family:var(--font-display);font-size:15px;letter-spacing:.02em;flex:none}
+.evlogo.round{border-radius:50%}
+
+/* --- A: ticket do modal de checkout --- */
+.mA{background:#ffffff;color:#181a20;border-radius:12px;overflow:hidden}
+.mA-h{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid #eaecef}
+.mA-h .ic{width:26px;height:26px;border-radius:6px;background:#fcd535;display:grid;place-items:center}
+.mA-h small{display:block;font-size:7.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#9a7200}
+.mA-h b{font-size:12px}
+.mA-b{padding:12px;text-align:center;display:grid;gap:10px}
+.mA-check{width:30px;height:30px;border-radius:50%;margin:0 auto;background:rgba(252,213,53,.1);border:1px solid rgba(252,213,53,.25);display:grid;place-items:center}
+.mA-title{font-size:14px;font-weight:900;text-transform:uppercase;color:#ffffff;outline:1.5px dashed #f6465d;outline-offset:2px;border-radius:2px}
+.mA-desc{font-size:9px;color:#5b6472;line-height:1.4}
+.tk{background:#16181e;border-radius:14px;overflow:hidden;text-align:left;border:1px solid #262626}
+.tk-top{height:66px;position:relative;display:flex;align-items:flex-end;padding:8px 10px}
+.tk-top .shade{position:absolute;inset:0;background:linear-gradient(to top,#16181e,rgba(22,24,30,.85) 45%,rgba(0,0,0,.4))}
+.tk-top .row{position:relative;z-index:1;display:flex;align-items:flex-end;justify-content:space-between;width:100%;gap:6px}
+.tk-top small{display:block;font-size:6.5px;font-weight:900;letter-spacing:.1em;color:#fcd535;text-transform:uppercase}
+.tk-top b{font-size:9.5px;color:#fff;text-transform:uppercase;font-weight:900}
+.tk-pill{background:#fcd535;color:#181a20;font-size:6.5px;font-weight:900;letter-spacing:.12em;border-radius:3px;padding:2px 5px}
+.tk-cut{position:relative;height:12px;display:flex;align-items:center}
+.tk-cut::before,.tk-cut::after{content:"";position:absolute;width:16px;height:16px;border-radius:50%;background:rgba(0,0,0,.9);top:-2px}
+.tk-cut::before{left:-8px}.tk-cut::after{right:-8px}
+.tk-cut i{flex:1;border-top:1px dashed rgba(64,64,64,.6);margin:0 10px}
+.tk-body{padding:8px 12px 10px;display:grid;gap:8px}
+.tk-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px}
+.tk-grid small,.tk-pay small{display:block;font-size:6px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#707a8a}
+.tk-grid span,.tk-pay span{font-size:8.5px;font-weight:800;color:#fff;text-transform:uppercase}
+.tk-pay{border-top:1px solid #262626;padding-top:7px;display:flex;justify-content:space-between;align-items:flex-end}
+.tk-pay .v{color:#fcd535;font-family:var(--font-num);font-size:11px}
+.tk-bars{border-top:1px solid #262626;padding-top:7px;display:grid;gap:4px}
+.bars{display:flex;justify-content:center;gap:1.5px;height:22px;align-items:flex-end;opacity:.6}
+.bars i{display:block;background:#fff;border-radius:1px}
+.tk-id{display:flex;justify-content:space-between;align-items:center;font-family:var(--font-num);font-size:6px;letter-spacing:.2em;color:#737373}
+.tk-id em{font-style:normal;outline:1.5px dashed #f6465d;outline-offset:1px;border-radius:2px}
+.mpay{font-size:6.5px;font-weight:800;letter-spacing:.02em;color:#666;outline:1.5px dashed #f6465d;outline-offset:1px;border-radius:2px;padding:0 2px}
+.mA-btn{background:#fcd535;color:#181a20;font-size:9px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;border-radius:6px;padding:9px}
+.mA-ig{font-size:8px;color:#5b6472;font-style:italic}
+
+/* --- B: overlay do comprovante --- */
+.mB{display:grid;gap:8px}
+.mB-bar{display:flex;align-items:center;justify-content:space-between;background:#1e2329;border:1px solid #2b3139;border-radius:8px;padding:6px 10px;color:#fff;font-size:8.5px;font-weight:800;text-transform:uppercase}
+.mB-bar span{display:flex;align-items:center;gap:6px}
+.mB-card{position:relative;border:1px solid #2b3139;border-radius:12px;overflow:hidden;background:#0b0e11;color:#fff}
+.mB-card::before{content:"";position:absolute;inset:0 0 auto;height:4px;background:#fcd535;z-index:2}
+.mB-head{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:12px 12px 9px;border-bottom:1px solid #2b3139}
+.mB-head small{font-size:7px;font-weight:800;color:#fcd535;text-transform:uppercase;display:block}
+.mB-head b{font-size:10px;font-weight:900;text-transform:uppercase}
+.mB-ban{height:78px;position:relative}
+.mB-ban .t{position:absolute;left:8px;top:8px;z-index:2;border:1px solid rgba(252,213,53,.5);background:#0b0e11;color:#fcd535;font-size:6.5px;font-weight:900;text-transform:uppercase;border-radius:4px;padding:2px 6px}
+.mB-who{background:#fcd535;color:#181a20;padding:10px 12px}
+.mB-who small{font-size:6.5px;font-weight:800;text-transform:uppercase;opacity:.7}
+.mB-who b{display:block;font-size:16px;font-weight:900;text-transform:uppercase;line-height:1.05}
+.mB-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#2b3139}
+.mB-grid div{background:#0b0e11;padding:7px 10px;min-height:42px}
+.mB-grid div.w{grid-column:span 2}
+.mB-grid small{display:block;font-size:6px;font-weight:800;text-transform:uppercase;color:#707a8a}
+.mB-grid span{display:block;font-size:8.5px;font-weight:800;text-transform:uppercase;margin-top:3px}
+.mB-grid .gold{color:#fcd535;font-size:11px;font-weight:900}
+.mB-grid .mono{font-size:7px;text-transform:none;word-break:break-all}
+.mB-foot{padding:9px 12px;display:grid;gap:6px}
+.mB-ok{border:1px solid #2b3139;background:#1e2329;border-radius:8px;padding:8px;font-size:7px;color:#929aa5;line-height:1.4}
+.mB-ok b{display:block;color:#fff;font-size:7.5px;text-transform:uppercase}
+.mB-btns{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.mB-btns span{border-radius:6px;padding:8px;text-align:center;font-size:8px;font-weight:800;text-transform:uppercase}
+.mB-btns .s{border:1px solid #2b3139;background:#1e2329;color:#fff}
+.mB-btns .p{background:#fcd535;color:#181a20}
+
+/* --- C: e-mail de hoje (e base dos e-mails propostos) --- */
+.mail{width:300px;max-width:100%;background:#fafafa;border-radius:14px;padding:10px;border:1px solid #d6dae1;color:#181a20;box-shadow:0 20px 50px rgba(0,0,0,.25)}
+.mail-chrome{display:flex;gap:4px;padding:2px 2px 8px}
+.mail-chrome i{width:7px;height:7px;border-radius:50%;background:#d6dae1;display:block}
+.mail-meta{font-size:8.5px;color:#5b6472;padding:0 2px 8px;display:grid;gap:1px}
+.mail-meta b{color:#181a20;font-size:9.5px}
+.mail-card{background:#fff;border:1px solid #eaecef;border-radius:10px;overflow:hidden}
+.mail-bar{background:#181a20;border-bottom:2px solid #fcd535;padding:6px;text-align:center;font-size:7.5px;font-weight:900;letter-spacing:.16em;color:#fcd535}
+.mail-bar span{color:#707a8a;font-size:6px;letter-spacing:.1em;margin-left:5px}
+.mail-ban{height:84px}
+.mail-logo{display:flex;justify-content:center;margin-top:-22px;position:relative;z-index:2}
+.mail-logo .evlogo{width:44px;height:44px;border:4px solid #fff;box-shadow:0 3px 10px rgba(0,0,0,.12);font-size:18px}
+.mail-body{padding:12px 14px;display:grid;gap:8px}
+.mail-badges{display:flex;gap:4px;flex-wrap:wrap}
+.mail-badges span{font-size:6px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;border-radius:3px;padding:3px 6px}
+.b-green{background:#0ecb81;color:#fff}
+.b-yel{background:#fff7d6;color:#8a6a00;border:1px solid #d4a900}
+.mail-title{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:-.01em}
+.mail-sub{font-size:8px;color:#707a8a;line-height:1.45}
+.mail-tbl{display:grid;gap:0;border-top:1px solid #eaecef;padding-top:6px}
+.mail-tbl div{display:grid;grid-template-columns:40% 1fr;gap:6px;padding:3.5px 0;font-size:7.5px}
+.mail-tbl small{font-size:6px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#707a8a}
+.mail-tbl span{font-weight:700}
+.mail-tbl .grn{color:#0ecb81;font-size:9px}
+.mail-tbl .mono{font-family:var(--font-num);font-size:6.5px;word-break:break-all}
+.mail-val{border:1px solid #eaecef;background:#fafafa;border-radius:6px;padding:8px;text-align:center;font-size:6.5px;color:#707a8a;line-height:1.4}
+.mail-val b{display:block;color:#181a20;font-size:7px;letter-spacing:.1em}
+.mail-foot{background:#fafafa;border-top:1px solid #eaecef;padding:10px;text-align:center;font-size:6.5px;color:#707a8a;line-height:1.5}
+.mail-foot a{color:#9a7200}
+.mail-btn{background:#181a20;color:#fcd535;font-size:8px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;text-align:center;border-radius:6px;padding:8px}
+.mail-hint{font-size:7px;color:#707a8a;text-align:center}
+.mail-fade{position:relative;max-height:170px;overflow:hidden}
+.mail-fade::after{content:"";position:absolute;inset:auto 0 0;height:50px;background:linear-gradient(to bottom,rgba(255,255,255,0),#fff)}
+
+/* marcadores de defeito sobre as maquetes */
+.pin{position:absolute;z-index:5;width:18px;height:18px;border-radius:50%;background:#f6465d;color:#fff;font-family:var(--font-num);font-size:8.5px;font-weight:700;display:grid;place-items:center;box-shadow:0 2px 6px rgba(0,0,0,.4)}
+.rel{position:relative}
+
+/* ====== propostas ====== */
+.proposal{display:grid;gap:22px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:clamp(18px,3vw,30px)}
+.p-head{display:grid;gap:8px;max-width:76ch}
+.p-head h3{font-size:22px;font-weight:900;letter-spacing:-.01em}
+.p-head p{color:var(--muted)}
+.p-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px}
+.p-meta h4{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.p-meta ul{margin:0;padding-left:18px;display:grid;gap:5px;font-size:14px}
+.rec{display:inline-flex;align-items:center;gap:6px;width:max-content;background:#fcd535;color:#181a20;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;border-radius:4px;padding:3px 8px}
+
+.story{width:270px;max-width:100%;aspect-ratio:9/16;border-radius:16px;overflow:hidden;position:relative;box-shadow:0 20px 50px rgba(0,0,0,.4);isolation:isolate}
+.story-chrome{position:absolute;inset:8px 10px auto;z-index:6;display:flex;gap:3px}
+.story-chrome i{flex:1;height:2px;border-radius:2px;background:rgba(255,255,255,.35)}
+.story-chrome i:first-child{background:rgba(255,255,255,.95)}
+.story.on-yellow .story-chrome i{background:rgba(24,26,32,.25)}
+.story.on-yellow .story-chrome i:first-child{background:rgba(24,26,32,.85)}
+
+/* P1 pôster de atleta */
+.s1{background:#0b0e11;color:#fff}
+.s1-ban{position:absolute;inset:0 0 40% 0}
+.s1-ban::before{content:"";position:absolute;inset:0;z-index:1;background:linear-gradient(to bottom,rgba(11,14,17,0) 35%,#0b0e11 98%)}
+.s1-top{position:absolute;top:20px;left:14px;right:14px;z-index:3;display:flex;justify-content:space-between;align-items:center}
+.wa-mark{font-size:8px;font-weight:900;letter-spacing:.2em;color:#fcd535;background:rgba(11,14,17,.7);padding:3px 6px;border-radius:3px}
+.s1-body{position:absolute;left:14px;right:14px;bottom:16px;z-index:3;display:grid;gap:10px}
+.s1-event{font-size:9px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#eaecef}
+.s1-name{font-family:var(--font-display);font-size:66px;line-height:.88;text-transform:uppercase;letter-spacing:.005em;color:#fff}
+.s1-strip{display:flex;justify-content:space-between;align-items:center;background:#fcd535;color:#181a20;font-size:9px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;padding:6px 8px;border-radius:3px}
+.s1-meta{display:grid;grid-template-columns:auto auto 1fr;gap:12px;margin:0;border-top:1px solid #2b3139;padding-top:9px}
+.s1-meta dt{font-size:6.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#929aa5}
+.s1-meta dd{margin:2px 0 0;font-size:9.5px;font-weight:800;text-transform:uppercase}
+.s1-foot{font-size:7.5px;color:#929aa5;display:flex;justify-content:space-between}
+.s1-foot b{color:#fcd535;font-weight:800}
+
+/* P2 número de peito */
+.s2{background:#14181d;color:#fff;display:grid;align-content:center;justify-items:center;gap:16px;padding:30px 14px 18px}
+.s2::before{content:"";position:absolute;inset:0;z-index:-1;background:
+  repeating-linear-gradient(115deg,rgba(252,213,53,.05) 0 2px,transparent 2px 18px)}
+.s2-top{font-size:9px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#929aa5;text-align:center}
+.bib{width:216px;background:#f4f5f7;color:#0b0e11;border-radius:9px;transform:rotate(-4deg);box-shadow:0 22px 40px rgba(0,0,0,.55),0 2px 0 rgba(0,0,0,.25);position:relative;overflow:hidden}
+.bib-hole{position:absolute;width:9px;height:9px;border-radius:50%;background:#14181d;box-shadow:inset 0 1px 2px rgba(0,0,0,.6),0 0 0 2px #d6dae1;z-index:3}
+.bib-band{background:#fcd535;display:flex;align-items:center;gap:7px;padding:9px 18px 8px}
+.bib-band .evlogo{width:22px;height:22px;font-size:10px;border-radius:5px;background:#0b0e11;color:#fcd535}
+.bib-band b{font-size:8.5px;font-weight:900;text-transform:uppercase;line-height:1.1}
+.bib-band small{display:block;font-size:7px;font-weight:700;opacity:.75}
+.bib-num{font-family:var(--font-display);font-size:92px;line-height:.95;text-align:center;letter-spacing:.01em;padding:8px 0 0;font-variant-numeric:tabular-nums}
+.bib-name{text-align:center;font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:.02em}
+.bib-cat{text-align:center;font-size:7.5px;font-weight:700;color:#3f4652;text-transform:uppercase;letter-spacing:.06em;padding:3px 0 10px}
+.bib-tear{border-top:1.5px dashed #b9c0cb;display:flex;justify-content:space-between;padding:6px 16px 8px;font-size:6.5px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:#3f4652}
+.s2-say{font-family:var(--font-display);font-size:32px;line-height:1;text-transform:uppercase;text-align:center;color:#fff}
+.s2-say span{color:#fcd535}
+.s2-foot{font-size:7.5px;color:#929aa5;text-align:center}
+
+/* P3 súmula */
+.s3{background:#fcd535;color:#181a20;display:grid;align-content:center;justify-items:center;gap:14px;padding:28px 12px 16px}
+.sheet{width:226px;background:#ffffff;border-radius:4px;transform:rotate(2deg);box-shadow:0 16px 30px rgba(24,26,32,.35);position:relative;overflow:hidden}
+.sheet-h{background:#0b0e11;color:#fff;padding:7px 9px;display:flex;justify-content:space-between;align-items:center;font-size:7px;font-weight:900;letter-spacing:.12em;text-transform:uppercase}
+.sheet-h span{color:#fcd535}
+.sheet-grid{display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid #b9c0cb}
+.sheet-grid div{padding:5px 8px;border-right:1px solid #b9c0cb;border-top:1px solid #b9c0cb}
+.sheet-grid div:nth-child(2n){border-right:0}
+.sheet-grid div:nth-child(-n+2){border-top:0}
+.sheet-grid div.w{grid-column:span 2;border-right:0}
+.sheet-grid small{display:block;font-size:5.5px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#4f5866}
+.sheet-grid b{font-size:9px;font-weight:900;text-transform:uppercase}
+.sheet-grid b.big{font-size:14px}
+.sheet-rows{padding:5px 8px 10px;display:grid;gap:5px}
+.sheet-rows div{display:grid;grid-template-columns:auto 1fr 46px;gap:6px;align-items:end;font-size:7.5px;font-weight:700}
+.sheet-rows i{border-bottom:1px solid #b9c0cb;height:10px}
+.sheet-rows em{border:1px solid #b9c0cb;height:15px;border-radius:2px}
+.sheet-rows .lbl{font-size:5.5px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#4f5866;grid-template-columns:1fr}
+.stamp{position:absolute;right:10px;top:84px;transform:rotate(-13deg);border:2.5px double #0a7d52;color:#0a7d52;border-radius:5px;padding:4px 7px;text-align:center;font-weight:900;font-size:9px;letter-spacing:.06em;text-transform:uppercase;line-height:1.15;background:rgba(255,255,255,.82);mix-blend-mode:multiply}
+.stamp small{display:block;font-family:var(--font-num);font-size:7px;letter-spacing:.1em}
+.s3-say{font-family:var(--font-display);font-size:26px;line-height:1;text-transform:uppercase;text-align:center}
+.s3-foot{font-size:7.5px;font-weight:700;text-align:center;color:#3f4652}
+
+/* heróis 2:1 do e-mail por proposta */
+.hero{height:132px;position:relative;overflow:hidden}
+.h1{background:#0b0e11;display:grid;grid-template-columns:44% 1fr}
+.h1 .banner-synth{height:100%}
+.h1 .t{padding:12px 10px;display:grid;align-content:center;gap:5px;color:#fff}
+.h1 .t small{font-size:6px;font-weight:800;letter-spacing:.14em;color:#929aa5;text-transform:uppercase}
+.h1 .t b{font-family:var(--font-display);font-size:28px;line-height:.9;text-transform:uppercase;font-weight:400}
+.h1 .t span{background:#fcd535;color:#181a20;font-size:6px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;padding:3px 5px;border-radius:2px;width:max-content}
+.h2{background:#14181d;display:grid;place-items:center}
+.h2 .bib{width:190px;transform:rotate(-3deg);display:grid;grid-template-columns:auto 1fr;align-items:center}
+.h2 .bib-band{writing-mode:vertical-rl;transform:rotate(180deg);padding:10px 6px;height:100%;justify-content:center}
+.h2 .bib-num{font-size:46px;padding:4px 0 0}
+.h2 .bib-name{font-size:9px}
+.h2 .bib-cat{font-size:5.5px;padding-bottom:6px}
+.h3{background:#fcd535;display:grid;place-items:center}
+.h3 .sheet{width:230px;transform:rotate(-1.5deg)}
+.h3 .stamp{top:26px;right:12px;font-size:8px}
+
+/* anatomia compartilhada: verso no app */
+.verso{padding:14px 10px;display:grid;gap:10px;color:#eaecef}
+.v-bar{display:flex;justify-content:space-between;align-items:center;font-size:9px;font-weight:800;text-transform:uppercase}
+.v-bar .ok{display:flex;align-items:center;gap:6px;color:#0ecb81}
+.v-bar .ok i{width:7px;height:7px;border-radius:50%;background:#0ecb81;display:block}
+.v-x{width:24px;height:24px;border-radius:6px;display:grid;place-items:center;color:#929aa5;background:#1e2329}
+.seg{display:grid;grid-template-columns:1fr 1fr;background:#1e2329;border-radius:8px;padding:3px;font-size:9px;font-weight:800;text-align:center}
+.seg span{padding:6px;border-radius:6px;color:#929aa5}
+.seg span.on{background:#2b3139;color:#fff}
+.v-card{background:#14181d;border:1px solid #2b3139;border-radius:12px;overflow:hidden}
+.v-head{display:flex;gap:9px;align-items:center;padding:10px;border-bottom:1px solid #2b3139}
+.v-head b{display:block;font-size:10.5px;font-weight:900;text-transform:uppercase}
+.v-head small{font-size:8px;color:#929aa5}
+.v-dl{margin:0;display:grid}
+.v-dl div{display:grid;grid-template-columns:38% 1fr;gap:8px;padding:6px 10px;border-bottom:1px solid #1e2329}
+.v-dl div:last-child{border-bottom:0}
+.v-dl dt{font-size:7px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#707a8a;padding-top:1px}
+.v-dl dd{margin:0;font-size:9px;font-weight:700}
+.v-dl dd.gold{color:#fcd535;font-family:var(--font-num);font-size:11px}
+.v-dl dd.mono{font-family:var(--font-num);font-size:7.5px;display:flex;gap:6px;align-items:center;word-break:break-all}
+.v-note{font-size:7.5px;color:#929aa5;line-height:1.45;padding:0 2px}
+.v-btn{border-radius:8px;padding:10px;text-align:center;font-size:9px;font-weight:900;letter-spacing:.06em;text-transform:uppercase;display:flex;align-items:center;justify-content:center;gap:6px}
+.v-btn.p{background:#fcd535;color:#181a20}
+.v-btn.s{background:#1e2329;color:#fff;border:1px solid #2b3139}
+
+.flow{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}
+.flow .card{display:grid;gap:8px;align-content:start}
+.flow .card h3{font-size:15px}
+.flow .card p{font-size:14px;color:var(--muted)}
+
+.plan{display:grid;gap:12px}
+.plan .card{display:grid;grid-template-columns:110px 1fr;gap:6px 18px}
+@media (max-width:620px){.plan .card{grid-template-columns:1fr}.defect{grid-template-columns:1fr}.defect .id{grid-row:auto}pre{grid-column:1}}
+.plan .sid{font-family:var(--font-num);font-weight:700;color:var(--accent-text)}
+.plan h3{font-size:15px}
+.plan p,.plan li{font-size:14px;color:var(--muted)}
+
+.decisions{display:grid;gap:12px;counter-reset:d}
+.decision{display:grid;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px 18px}
+.decision h3{font-size:15.5px}
+.decision p{color:var(--muted);font-size:14px;max-width:80ch}
+.decision .reco{color:var(--fg)}
+.note-ex{font-size:12.5px;color:var(--muted);border:1px dashed var(--line);border-radius:8px;padding:10px 12px;max-width:80ch}
+@media (prefers-reduced-motion:no-preference){
+  .story,.phone,.mail{transition:transform .5s cubic-bezier(.16,1,.3,1)}
+  .story:hover{transform:translateY(-4px)}
+}
+
+/* ====== variações do pôster (1A, 1B, 1C) ====== */
+.shrink{width:200px;height:356px;max-width:100%}
+.shrink>.story,.shrink>.story:hover{transform:scale(.7407);transform-origin:0 0}
+.photo-ph{position:relative;background:
+  radial-gradient(circle at 1px 1px,rgba(234,236,239,.2) 1px,transparent 1.6px) 0 0/6px 6px,
+  linear-gradient(165deg,#56606c 0%,#2b3139 45%,#0b0e11 100%);display:grid;place-items:center}
+.photo-ph .ph-l{display:grid;justify-items:center;gap:6px;font-size:9px;font-weight:700;color:rgba(234,236,239,.75);text-transform:uppercase;letter-spacing:.12em;margin-top:-40px}
+
+/* 1A com foto */
+.s1a{background:#0b0e11;color:#fff}
+.s1a .photo-ph{position:absolute;inset:0 0 26% 0}
+.s1a .photo-ph::after{content:"";position:absolute;inset:0;background:linear-gradient(to bottom,rgba(11,14,17,0) 55%,#0b0e11 100%)}
+.s1a-band{position:absolute;left:-14px;right:-14px;top:60%;z-index:3;transform:rotate(-6deg);background:#fcd535;color:#181a20;padding:6px 24px;display:flex;justify-content:space-between;font-size:9.5px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;box-shadow:0 6px 16px rgba(0,0,0,.35)}
+.s1a-body{position:absolute;left:14px;right:14px;bottom:16px;z-index:3;display:grid;gap:8px}
+.s1a-name{font-family:var(--font-display);font-size:54px;line-height:.88;text-transform:uppercase}
+.s1a-meta{display:flex;justify-content:space-between;gap:8px;font-size:8.5px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#eaecef;border-top:1px solid #2b3139;padding-top:8px}
+.s1a-meta span:last-child{color:#fcd535}
+.pick{padding:16px 12px;display:grid;gap:12px;color:#eaecef}
+.pick-t{font-size:12px;font-weight:800}
+.pick-prev{display:grid;grid-template-columns:96px 1fr;gap:12px;align-items:center}
+.pick-prev .mini{width:96px;height:171px;border-radius:10px;overflow:hidden;position:relative;background:#0b0e11;border:1px solid #2b3139}
+.pick-prev .mini .photo-ph{position:absolute;inset:0 0 26% 0}
+.pick-prev .mini b{position:absolute;left:7px;bottom:8px;font-family:var(--font-display);font-weight:400;font-size:19px;line-height:.9;text-transform:uppercase;color:#fff}
+.pick-prev .mini i{position:absolute;left:-6px;right:-6px;top:60%;height:9px;background:#fcd535;transform:rotate(-6deg)}
+.pick-prev p{font-size:9.5px;color:#929aa5;line-height:1.45}
+.pick-prev p b{color:#eaecef}
+.pick .opt{display:flex;align-items:center;gap:8px;border:1px solid #2b3139;background:#1e2329;border-radius:8px;padding:9px 10px;font-size:10px;font-weight:700}
+.pick .opt.on{border-color:#fcd535}
+.pick .opt i{width:12px;height:12px;border-radius:50%;border:2px solid #707a8a;display:block;flex:none}
+.pick .opt.on i{border-color:#fcd535;background:radial-gradient(circle,#fcd535 0 3px,transparent 3.5px)}
+.pick .lock{display:flex;gap:7px;align-items:flex-start;font-size:8.5px;color:#929aa5;line-height:1.4}
+
+/* 1B tipográfico */
+.s1b{background:#fcd535;color:#181a20;display:grid;grid-template-rows:auto 1fr auto;padding:26px 14px 0}
+.s1b-top{display:flex;align-items:center;gap:8px;font-size:8.5px;font-weight:900;letter-spacing:.1em;text-transform:uppercase}
+.s1b-top .evlogo{background:#181a20;color:#fcd535;width:26px;height:26px;font-size:11px;border-radius:6px}
+.s1b-type{display:grid;align-content:center;font-family:var(--font-display);text-transform:uppercase;line-height:.86;overflow:hidden}
+.s1b-type .g{color:rgba(24,26,32,.13);font-size:64px}
+.s1b-type .s{color:#181a20;font-size:78px}
+.s1b-type.team .s{font-size:46px}
+.s1b-type.team .g{font-size:42px}
+.s1b-members{font-family:var(--font-body);font-size:8.5px;font-weight:800;letter-spacing:.06em;line-height:1.4;text-transform:uppercase;margin-top:8px;color:#181a20}
+.s1b-foot{margin:0 -14px;background:#181a20;color:#fff;padding:12px 14px 14px;display:grid;gap:8px}
+.s1b-foot b{font-family:var(--font-display);font-weight:400;font-size:22px;letter-spacing:.01em;text-transform:uppercase;color:#fcd535;line-height:1}
+.s1b-foot dl{margin:0;display:grid;grid-template-columns:auto auto 1fr;gap:12px}
+.s1b-foot dt{font-size:6.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#929aa5}
+.s1b-foot dd{margin:2px 0 0;font-size:9px;font-weight:800;text-transform:uppercase}
+.s1b-foot small{font-size:7.5px;color:#929aa5}
+
+/* 1C contagem regressiva */
+.s1c{background:#0b0e11;color:#fff}
+.s1c-ban{position:absolute;inset:0 0 auto;height:30%}
+.s1c-ban::before{content:"";position:absolute;inset:0;z-index:1;background:linear-gradient(to bottom,rgba(11,14,17,.1),#0b0e11)}
+.s1c-body{position:absolute;inset:auto 14px 16px;z-index:3;display:grid;gap:8px}
+.s1c-count{display:flex;align-items:flex-end;gap:8px;font-family:var(--font-display);text-transform:uppercase;color:#fcd535}
+.s1c-count .n{font-size:150px;line-height:.8;font-variant-numeric:tabular-nums}
+.s1c-count .u{font-size:30px;line-height:.9;padding-bottom:6px}
+.s1c-count .u small{display:block;font-family:var(--font-body);font-size:8px;font-weight:800;letter-spacing:.1em;color:#eaecef}
+.s1c-count.today .n{font-size:110px}
+.s1c-name{font-family:var(--font-display);font-size:40px;line-height:.9;text-transform:uppercase;border-top:1px solid #2b3139;padding-top:10px}
+.s1c-strip{display:flex;justify-content:space-between;background:#fcd535;color:#181a20;font-size:8.5px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;padding:6px 8px;border-radius:3px}
+.s1c-meta{display:flex;justify-content:space-between;font-size:7.5px;color:#929aa5}
+.s1c-meta b{color:#fcd535}
+
+/* heróis de e-mail das variações */
+.h1b{background:#fcd535;display:grid;grid-template-columns:1fr auto;align-items:end;padding:12px 14px;gap:10px}
+.h1b b{font-family:var(--font-display);font-weight:400;font-size:40px;line-height:.86;text-transform:uppercase;color:#181a20}
+.h1b span{background:#181a20;color:#fcd535;font-size:6.5px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;padding:4px 6px;border-radius:2px;white-space:nowrap}
+.h1c{background:#0b0e11;display:grid;grid-template-columns:auto 1fr;align-items:center;gap:12px;padding:10px 14px;color:#fff}
+.h1c .n{font-family:var(--font-display);font-size:86px;line-height:.8;color:#fcd535}
+.h1c small{display:block;font-size:6.5px;font-weight:800;letter-spacing:.12em;color:#929aa5;text-transform:uppercase}
+.h1c b{display:block;font-family:var(--font-display);font-weight:400;font-size:24px;line-height:.9;text-transform:uppercase;margin:4px 0 6px}
+.h1c span{background:#fcd535;color:#181a20;font-size:6px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;padding:3px 5px;border-radius:2px}
+.hero-only{width:300px;max-width:100%;border-radius:10px;overflow:hidden;border:1px solid #d6dae1;box-shadow:0 14px 30px rgba(0,0,0,.25);background:#fff}
+.hero-only .mail-bar{border-radius:0}
+</style>
+
+<div class="wrap">
+
+<header class="head read">
+  <h1>Um comprovante só, do checkout ao e-mail</h1>
+  <p class="lead">Hoje o atleta que paga pelo Pix dentro do modal de inscrição recebe dois comprovantes diferentes na tela, um empilhado sobre o outro, e dois e-mails com conteúdo diferente. Este relatório descreve o erro, mostra a causa no código e propõe um comprovante único, pensado para ser postado no Instagram, com o e-mail no mesmo desenho.</p>
+  <div class="pills">
+    <span class="pill hold">Aguardando aprovação: nada foi alterado em código, banco, autenticação ou infraestrutura</span>
+    <span class="pill">Análise de 26/10/2026 sobre o commit 1b9989f</span>
+    <span class="pill">Escopo: tela de sucesso, comprovante do painel e e-mail de confirmação</span>
+  </div>
+  <nav class="toc" aria-label="Seções">
+    <a href="#erro">O erro</a><a href="#hoje">Os três modelos de hoje</a><a href="#causa">Causa técnica</a><a href="#base">Base da solução</a><a href="#propostas">Três propostas</a><a href="#variacoes">Variações do pôster</a><a href="#email">Alinhamento do e-mail</a><a href="#plano">Plano</a><a href="#decisoes">Decisões</a>
+  </nav>
+</header>
+
+<section id="erro">
+  <div class="read" style="display:grid;gap:10px">
+    <h2>O erro, em detalhe</h2>
+    <p class="sec-lead">O sucesso da inscrição dispara duas telas ao mesmo tempo. O modal de inscrição troca o formulário pelo seu próprio “ticket digital” e, no mesmo instante, avisa a página do evento, que abre o “comprovante oficial” por cima. São dois componentes distintos, com dados, visual e textos diferentes, e nenhum deles é o e-mail, que é um terceiro desenho.</p>
+  </div>
+
+  <div class="seq">
+    <ol class="steps">
+      <li><div>O atleta preenche a inscrição, escolhe Pix e o modal mostra o QR Code. A cada 5 s o modal consulta <code>/api/checkout/status</code>.</div></li>
+      <li><div>O pagamento é aprovado. O servidor grava <code>payment_approved</code> e <b>envia o 1º e-mail</b> (sem CPF).</div></li>
+      <li class="hot"><div>No navegador, o modal chama <code>onSuccess(...)</code>: a página do evento abre o <b>comprovante B</b> (camada z-100).</div></li>
+      <li class="hot"><div>Na linha seguinte o modal faz <code>setIsSuccess(true)</code> e passa a mostrar o <b>ticket A</b> (camada z-60), escondido atrás do B.</div></li>
+      <li class="hot"><div>Antes disso, o modal já tinha chamado <code>/api/checkout/email</code>: <b>2º e-mail</b>, agora com CPF mascarado.</div></li>
+      <li><div>O atleta toca em “Concluir” no B. O B fecha e o ticket A aparece, com o título “Inscrição confirmada!” em branco sobre fundo branco e o ID “WODA-REG-OK”.</div></li>
+    </ol>
+    <div class="stack" role="img" aria-label="Duas camadas empilhadas: o ticket A do modal fica atrás e o comprovante B da página do evento fica na frente">
+      <div class="layer back">
+        <span class="lt">A · Ticket do modal</span>
+        <span class="lz">RegisterModal.tsx · z-[60] · fundo branco</span>
+        <div class="mini-ticket">WODARENA TICKET</div>
+      </div>
+      <div class="layer front">
+        <span class="lt">B · Comprovante oficial</span>
+        <span class="lz">RegistrationVoucher.tsx · z-[100]</span>
+        <div class="mini-voucher"><i style="background:#fcd535"></i><i class="banner-synth"></i><i style="background:#fcd535"></i></div>
+      </div>
+      <p class="stack-note">“Concluir” fecha só o B; o A continua aberto atrás.</p>
+    </div>
+  </div>
+
+  <div class="tbl-wrap">
+    <table>
+      <caption class="small" style="caption-side:bottom;text-align:left;padding:10px 14px">Levantado pela leitura do código. Os e-mails duplicados batem com a lógica das rotas, mas não foram conferidos nos logs do Resend.</caption>
+      <thead><tr><th>Caminho de pagamento</th><th>O que o atleta vê</th><th>E-mails de confirmação</th></tr></thead>
+      <tbody>
+        <tr><td>Pix dentro do modal</td><td><span class="x">B por cima e A por baixo</span></td><td><span class="x">2</span>: o servidor ao aprovar (<code>/api/checkout/status</code> ou webhook) e o navegador em seguida (<code>/api/checkout/email</code>). Se webhook e consulta chegarem juntos, podem ser 3.</td></tr>
+        <tr><td>Inscrição gratuita (total zero)</td><td><span class="x">B por cima e A por baixo</span></td><td>1, disparado pelo navegador</td></tr>
+        <tr><td>Cartão (Checkout Pro ou Stripe) com volta no mesmo navegador</td><td>Só o B, montado a partir do parâmetro <code>?payment=success</code> da URL</td><td>1, pelo webhook</td></tr>
+        <tr><td>Cartão com volta em outra aba ou aparelho</td><td><span class="x">Nenhum comprovante</span>, só o aviso “Pagamento confirmado!”</td><td>1, pelo webhook</td></tr>
+        <tr><td>“Ver comprovante” no painel do gestor ou na área do atleta</td><td>B</td><td>—</td></tr>
+        <tr><td>“Segunda via” no painel do gestor</td><td>—</td><td>1 (modelo C)</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="hoje">
+  <div class="read" style="display:grid;gap:10px">
+    <h2>Os três modelos de hoje</h2>
+    <p class="sec-lead">Reproduções fiéis do código atual, com dados de exemplo. Os marcadores vermelhos apontam os defeitos descritos na seção seguinte.</p>
+  </div>
+  <div class="mocks">
+
+    <figure class="mock">
+      <div class="phone"><div class="screen dim">
+        <div class="mA rel">
+          <span class="pin" style="left:46px;top:84px">D4</span>
+          <span class="pin" style="right:6px;bottom:96px">D3</span>
+          <span class="pin" style="left:6px;bottom:96px">D3</span>
+          <div class="mA-h"><span class="ic"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#181a20" stroke-width="2.4" aria-hidden="true"><path d="M3 9a3 3 0 0 0 0 6v3h18v-3a3 3 0 0 1 0-6V6H3z"/></svg></span><div><small>Checkout WODArena</small><b>Confirmar inscrição</b></div></div>
+          <div class="mA-b">
+            <span class="mA-check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fcd535" stroke-width="3" aria-hidden="true"><path d="m5 12 5 5L20 7"/></svg></span>
+            <span class="mA-title">Inscrição Confirmada!</span>
+            <p class="mA-desc">Você está garantido na arena. Tire um print do seu ticket abaixo para postar nos seus Stories do Instagram! 🚀</p>
+            <div class="tk">
+              <div class="tk-top banner-synth"><div class="shade"></div>
+                <div class="row"><div style="display:flex;gap:6px;align-items:flex-end"><span class="evlogo round" style="width:26px;height:26px;font-size:11px">TB</span><div><small>WODArena ticket</small><b>Throwdown Beira-Mar 2026</b></div></div><span class="tk-pill">CONFIRMADO</span></div>
+              </div>
+              <div class="tk-cut"><i></i></div>
+              <div class="tk-body">
+                <div class="tk-grid">
+                  <div><small>Atleta / Equipe</small><span>Marina Costa</span></div>
+                  <div><small>Divisão / Categoria</small><span>RX Feminino</span></div>
+                  <div><small>Arena / Local</small><span>Arena Beira-Mar</span></div>
+                  <div><small>Data do evento</small><span>15/11/2026</span></div>
+                </div>
+                <div class="tk-pay"><div><small>Forma de pagamento</small><span>Pix (Confirmado)</span></div><div style="text-align:right"><small>Valor pago</small><span class="v">R$ 180,00</span></div></div>
+                <div class="tk-bars">
+                  <div class="bars" aria-hidden="true"><i style="width:1px;height:16px"></i><i style="width:3px;height:22px"></i><i style="width:1px;height:22px"></i><i style="width:2px;height:22px"></i><i style="width:4px;height:16px"></i><i style="width:1px;height:22px"></i><i style="width:3px;height:22px"></i><i style="width:2px;height:22px"></i><i style="width:1px;height:16px"></i><i style="width:4px;height:22px"></i><i style="width:1px;height:22px"></i><i style="width:2px;height:22px"></i><i style="width:3px;height:16px"></i><i style="width:1px;height:22px"></i><i style="width:2px;height:22px"></i><i style="width:4px;height:22px"></i><i style="width:1px;height:16px"></i><i style="width:3px;height:22px"></i><i style="width:1px;height:22px"></i><i style="width:2px;height:22px"></i></div>
+                  <div class="tk-id"><em>SECURE TICKET ID: WODA-REG-OK</em><span class="mpay">mercado pago</span></div>
+                </div>
+              </div>
+            </div>
+            <span class="mA-btn">Voltar aos eventos</span>
+            <span class="mA-ig">📸 Não esqueça de marcar o instagram oficial @wodarena na sua postagem!</span>
+          </div>
+        </div>
+      </div></div>
+      <figcaption><b>A · Ticket do modal de inscrição</b><code>RegisterModal.tsx:763–911</code>. Só existe no momento do sucesso; não pode ser reaberto.</figcaption>
+    </figure>
+
+    <figure class="mock">
+      <div class="phone"><div class="screen" style="padding:12px 10px;background:rgba(11,14,17,.97)">
+        <div class="mB rel">
+          <span class="pin" style="right:8px;top:250px">D5</span>
+          <div class="mB-bar"><span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#0ecb81" stroke-width="2.6" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></svg>Inscrição confirmada</span><span style="color:#929aa5">✕</span></div>
+          <div class="mB-card">
+            <div class="mB-head"><div><small>WODArena</small><b>Throwdown Beira-Mar 2026</b></div><span class="evlogo">TB</span></div>
+            <div class="mB-ban banner-synth"><span class="t">Comprovante oficial</span></div>
+            <div class="mB-who"><small>Participante</small><b>Marina Costa</b></div>
+            <div class="mB-grid">
+              <div><small>Categoria</small><span>RX Feminino</span></div>
+              <div><small>Valor pago</small><span class="gold">R$ 180,00</span></div>
+              <div><small>Data</small><span>15/11/2026</span></div>
+              <div><small>Local</small><span>Arena Beira-Mar</span></div>
+              <div><small>Box</small><span>Box Exemplo</span></div>
+              <div><small>Emissão</small><span>26/10/2026 14:32</span></div>
+              <div><small>Status</small><span>Inscrição confirmada</span></div>
+              <div><small>CPF</small><span>***.456.789-**</span></div>
+              <div class="w"><small>ID</small><span class="mono">reg-3f9c2a71-8b4e-4d2a-9c11-6e0f5a7b2d34</span></div>
+            </div>
+            <div class="mB-foot">
+              <div class="mB-ok"><b>Inscrição validada</b>Este comprovante confirma a inscrição no evento e pode ser salvo ou compartilhado pelo atleta.</div>
+            </div>
+          </div>
+          <div class="mB-btns"><span class="s">Imprimir</span><span class="p">Concluir</span></div>
+        </div>
+      </div></div>
+      <figcaption><b>B · Comprovante oficial</b><code>RegistrationVoucher.tsx</code>. Usado no sucesso, no painel do gestor e na área do atleta.</figcaption>
+    </figure>
+
+    <figure class="mock">
+      <div class="mail">
+        <div class="mail-chrome"><i></i><i></i><i></i></div>
+        <div class="mail-meta"><b>Inscrição Confirmada - Throwdown Beira-Mar 2026</b>WODArena &lt;noreply@wodarena.com.br&gt;</div>
+        <div class="mail-card">
+          <div class="mail-bar">WODARENA<span>PLATAFORMA OFICIAL DE INSCRIÇÕES</span></div>
+          <div class="mail-ban banner-synth"></div>
+          <div class="mail-logo"><span class="evlogo">TB</span></div>
+          <div class="mail-body">
+            <div class="mail-badges"><span class="b-green">Inscrição confirmada</span><span class="b-yel">Functional Fitness</span></div>
+            <div class="mail-title">Sua inscrição está confirmada!</div>
+            <p class="mail-sub">Olá, <b>Marina Costa</b>. Sua inscrição para <b>Throwdown Beira-Mar 2026</b> foi registrada na WODArena. Status atual: <b>Pagamento aprovado</b>. Abaixo estão os detalhes oficiais de sua bateria.</p>
+            <div class="mail-tbl">
+              <div><small>ID da inscrição</small><span class="mono">reg-3f9c2a71-8b4e-4d2a-9c11-6e0f5a7b2d34</span></div>
+              <div><small>Competição</small><span>Throwdown Beira-Mar 2026</span></div>
+              <div><small>Categoria / Divisão</small><span>RX Feminino</span></div>
+              <div><small>Atleta / Equipe</small><span>Marina Costa</span></div>
+              <div><small>Box / Afiliado</small><span>Box Exemplo</span></div>
+              <div><small>Data do evento</small><span>15/11/2026</span></div>
+              <div><small>Local</small><span>Arena Beira-Mar</span></div>
+              <div><small>Cidade / Estado</small><span>Fortaleza / CE</span></div>
+              <div><small>Total pago</small><span class="grn">R$ 180,00</span></div>
+              <div><small>Status do pagamento</small><span>Pagamento aprovado</span></div>
+            </div>
+            <div class="mail-val"><b>INSCRIÇÃO VALIDADA</b>Este comprovante confirma a sua inscrição no evento. Guarde o ID da inscrição para consultas com a organização.</div>
+          </div>
+          <div class="mail-foot">Este comprovante foi emitido digitalmente e de forma automática pela <b>WODArena</b>.<br><a href="#hoje">Termos de Inscrição</a> • <a href="#hoje">Privacidade</a></div>
+        </div>
+      </div>
+      <figcaption><b>C · E-mail de confirmação</b><code>resend.ts:422–897</code>. Tema claro, sem forma de pagamento nem camisa quando inclusa.</figcaption>
+    </figure>
+  </div>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Campo</th><th>A · Ticket do modal</th><th>B · Comprovante oficial</th><th>C · E-mail</th></tr></thead>
+      <tbody>
+        <tr><td>Fonte dos dados</td><td><span class="x">Estado do formulário no navegador</span></td><td>Inscrição devolvida ao app (ou montada da URL no retorno do cartão)</td><td>Banco, lido no servidor</td></tr>
+        <tr><td>Atleta ou equipe</td><td><span class="y">sim</span></td><td><span class="y">sim</span></td><td><span class="y">sim</span></td></tr>
+        <tr><td>Integrantes da equipe</td><td><span class="n">não</span></td><td><span class="y">sim</span></td><td><span class="y">sim</span></td></tr>
+        <tr><td>Categoria</td><td><span class="y">sim</span></td><td><span class="y">sim</span></td><td><span class="y">sim</span></td></tr>
+        <tr><td>Box</td><td><span class="n">não</span></td><td><span class="y">sim</span></td><td><span class="y">sim</span></td></tr>
+        <tr><td>Data e local</td><td><span class="y">sim</span></td><td><span class="y">sim</span></td><td><span class="y">sim</span> + cidade/UF</td></tr>
+        <tr><td>Camisa e adicional</td><td><span class="n">não</span></td><td>só quando opcional</td><td>só quando opcional</td></tr>
+        <tr><td>Valor pago</td><td><span class="y">sim</span> (valor cobrado)</td><td><span class="y">sim</span> (total da inscrição)</td><td><span class="y">sim</span> (total da inscrição)</td></tr>
+        <tr><td>Forma de pagamento</td><td><span class="y">sim</span></td><td><span class="n">não</span></td><td><span class="n">não</span></td></tr>
+        <tr><td>CPF mascarado</td><td><span class="n">não</span></td><td>só quando o app tem o CPF</td><td>só no e-mail disparado pelo navegador</td></tr>
+        <tr><td>ID da inscrição</td><td><span class="x">“WODA-REG-OK” ou id antigo</span></td><td><span class="y">sim</span></td><td><span class="y">sim</span></td></tr>
+        <tr><td>Instagram e site do evento</td><td><span class="n">não</span> (pede para marcar @wodarena)</td><td><span class="n">não</span></td><td><span class="y">sim</span></td></tr>
+        <tr><td>Ação para salvar</td><td>“Tire um print”</td><td>“Imprimir”</td><td>—</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="causa">
+  <div class="read" style="display:grid;gap:10px">
+    <h2>Causa técnica</h2>
+    <p class="sec-lead">O ticket A nasceu no commit <code>898e82c</code> (“design premium de ticket digital”) dentro do <code>RegisterModal</code>. O B já existia e continuou sendo aberto pelo mesmo evento de sucesso. Nenhum dos dois foi removido, e o e-mail evoluiu separado em <code>resend.ts</code>. Os itens D1 e D2 causam o problema relatado; os demais são defeitos do mesmo fluxo que a unificação resolve.</p>
+  </div>
+  <div class="defects">
+    <article class="defect">
+      <span class="id">D1</span>
+      <h3>Dois componentes de sucesso disparados pelo mesmo evento</h3>
+      <p>No Pix e na inscrição gratuita, o modal avisa a página do evento e, logo depois, muda o próprio estado para sucesso. A página abre o B numa camada acima (z-100) e o modal continua aberto por baixo (z-60) mostrando o A.</p>
+<pre><span class="c">// src/components/RegisterModal.tsx:246 (Pix) e :592 (gratuita)</span>
+<span class="hl">if (onSuccess) onSuccess(createdReg, parsedAthlete, parsedCpf);</span>  <span class="c">// abre o B na página</span>
+<span class="hl">setIsSuccess(true);</span>                                        <span class="c">// mostra o A no modal</span>
+
+<span class="c">// src/app/[locale]/event/[id]/EventView.tsx:1546</span>
+onSuccess={(registration, athlete, cpf) =&gt; { setConfirmedVoucher({ registration, athlete, cpf }); }}
+<span class="c">// o onClose do modal não é chamado: o modal segue aberto</span></pre>
+    </article>
+    <article class="defect">
+      <span class="id">D2</span>
+      <h3>E-mail de confirmação enviado pelo servidor e de novo pelo navegador</h3>
+      <p>O servidor já envia o e-mail quando a inscrição vira aprovada (consulta de status, webhook do Mercado Pago, webhook do Stripe e rota de cartão). O modal, ao ver a aprovação, chama <code>/api/checkout/email</code>, que envia outra vez sem checar se já foi enviado. Os dois e-mails saem diferentes: o do servidor sem CPF, o do navegador com CPF. A consulta de status e o webhook leem “ainda não aprovada” antes de gravar, então podem enviar os dois.</p>
+<pre><span class="c">// src/app/api/checkout/status/route.ts:217</span>
+if (!wasAlreadyApproved) await triggerRegistrationApprovedEmail(supabaseAdmin, registrationId);
+<span class="c">// src/app/api/webhooks/mercadopago/route.ts:170</span>
+if (nextPaymentStatus === 'payment_approved' &amp;&amp; !wasApproved) await triggerRegistrationApprovedEmail(...);
+<span class="c">// src/components/RegisterModal.tsx:236 · PixPaymentModal.tsx:101</span>
+<span class="hl">fetch('/api/checkout/email', { method: 'POST', body: JSON.stringify({ registrationId, accessToken, cpf }) })</span>
+<span class="c">// src/app/api/checkout/email/route.ts: só limita 3 envios por hora por IP; não sabe se já enviou</span></pre>
+    </article>
+    <article class="defect">
+      <span class="id">D3</span>
+      <h3>ID falso, código de barras decorativo e marca de pagamento fixa no ticket A</h3>
+      <p>O ID do A é lido de <code>pending_registration</code> no <code>sessionStorage</code>, que o fluxo do Pix apaga antes de mostrar o ticket e que a inscrição gratuita nunca grava. Resultado: aparece “WODA-REG-OK” ou, se sobrou um registro de uma tentativa anterior, o ID de outra inscrição. O código de barras não codifica nada e parece escaneável. O logo do Mercado Pago aparece até em inscrição gratuita e em evento cobrado pelo Stripe.</p>
+<pre><span class="c">// src/components/RegisterModal.tsx:889</span>
+id: sessionStorage.getItem('pending_registration') ? JSON.parse(...)?.registrationData?.id <span class="hl">|| 'WODA-REG-OK' : 'WODA-REG-OK'</span>
+<span class="c">// :223 (Pix) já executou sessionStorage.removeItem('pending_registration')</span></pre>
+    </article>
+    <article class="defect med">
+      <span class="id">D4</span>
+      <h3>Título do ticket A invisível</h3>
+      <p>O modal de inscrição usa a superfície clara (<code>.transactional-surface</code>, fundo branco), mas o título “Inscrição confirmada!” está em <code>text-white</code>. A mensagem principal da tela não aparece. O ícone de confirmação é amarelo sobre branco, com contraste baixo.</p>
+<pre><span class="c">// src/components/RegisterModal.tsx:769</span>
+&lt;h4 className="text-xl font-black tracking-tight <span class="hl">text-white</span> uppercase"&gt;{t('successTitle')}&lt;/h4&gt;</pre>
+    </article>
+    <article class="defect med">
+      <span class="id">D5</span>
+      <h3>Status de “confirmada” montado no navegador no retorno do cartão</h3>
+      <p>Na volta do Checkout Pro, a página monta o B com <code>paymentStatus: 'payment_approved'</code> a partir do parâmetro da URL, sem perguntar ao servidor. O princípio do produto é que o oficial vem do servidor. Na volta em outra aba ou aparelho, não há comprovante nenhum.</p>
+<pre><span class="c">// src/app/[locale]/event/[id]/EventView.tsx:234</span>
+const approvedRegistrationData = { ...registrationData, <span class="hl">paymentStatus: 'payment_approved' as const</span>, ... };</pre>
+    </article>
+    <article class="defect med">
+      <span class="id">D6</span>
+      <h3>Campos do corpo do e-mail entram no HTML sem escape</h3>
+      <p>O cabeçalho do e-mail escapa o nome do evento, mas a tabela do corpo insere nome do atleta, categoria, box, data e local direto no HTML. Esses campos vêm de texto digitado. É um ajuste de robustez que entra junto com o novo e-mail.</p>
+    </article>
+    <article class="defect low">
+      <span class="id">D7</span>
+      <h3>Detalhes menores</h3>
+      <p>O B usa 04/06/2026 como data de emissão quando a inscrição não tem <code>createdAt</code> (<code>RegistrationVoucher.tsx:42</code>). O botão “Imprimir” não serve no celular, onde está quem quer postar. O A pede para marcar @wodarena, mas não mostra o Instagram do evento, que é quem o atleta marcaria.</p>
+    </article>
+  </div>
+</section>
+
+<section id="base">
+  <div class="read" style="display:grid;gap:10px">
+    <h2>Base da solução, igual nas três propostas</h2>
+    <p class="sec-lead">As propostas mudam só a frente, a peça que vai para o Instagram. A regra por trás é a mesma para as três.</p>
+  </div>
+  <div class="flow">
+    <div class="card"><span class="tag ok">Uma fonte</span><h3>Dados só do servidor</h3><p>Tela, imagem e e-mail leem a mesma inscrição gravada. Nada vem do formulário nem da URL.</p></div>
+    <div class="card"><span class="tag ok">Um componente</span><h3>Frente e verso</h3><p>A frente é pública e compartilhável. O verso é o comprovante completo, com valor, pagamento, CPF mascarado e ID. O ticket A sai do modal.</p></div>
+    <div class="card"><span class="tag ok">Uma imagem</span><h3>Um gerador para tudo</h3><p>Uma rota do servidor desenha a frente em PNG (1080×1920 para Stories, 1200×600 para o e-mail), com <code>next/og</code>, que já vem no Next 16. O botão “Salvar para Stories” e o e-mail usam o mesmo arquivo.</p></div>
+    <div class="card"><span class="tag ok">Um envio</span><h3>E-mail só pelo servidor</h3><p>O navegador para de chamar <code>/api/checkout/email</code> no sucesso. O envio fica nos pontos de aprovação do servidor com chave de idempotência por inscrição. A segunda via do painel continua manual.</p></div>
+  </div>
+
+  <div class="mocks">
+    <figure class="mock">
+      <div class="phone"><div class="screen"><div class="verso">
+        <div class="v-bar"><span class="ok"><i></i>Pagamento aprovado</span><span class="v-x" aria-hidden="true">✕</span></div>
+        <div class="seg" role="presentation"><span>Frente</span><span class="on">Comprovante</span></div>
+        <div class="v-card">
+          <div class="v-head"><span class="evlogo">TB</span><div><b>Throwdown Beira-Mar 2026</b><small>15 nov 2026 · Arena Beira-Mar, Fortaleza/CE</small></div></div>
+          <dl class="v-dl">
+            <div><dt>Atleta</dt><dd>Marina Costa</dd></div>
+            <div><dt>Categoria</dt><dd>RX Feminino</dd></div>
+            <div><dt>Box</dt><dd>Box Exemplo</dd></div>
+            <div><dt>Camisa</dt><dd>M · adicional R$ 40,00</dd></div>
+            <div><dt>Valor pago</dt><dd class="gold">R$ 180,00</dd></div>
+            <div><dt>Pagamento</dt><dd>Pix · aprovado em 26/10/2026 14:32</dd></div>
+            <div><dt>CPF</dt><dd>***.456.789-**</dd></div>
+            <div><dt>Inscrição</dt><dd class="mono">reg-3f9c2a71-8b4e-…-6e0f5a7b2d34 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#929aa5" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5h10"/></svg></dd></div>
+          </dl>
+        </div>
+        <p class="v-note">Este comprovante confirma a inscrição no evento. Dúvidas sobre cronograma, kit e local: @throwdownbeiramar.</p>
+        <span class="v-btn p"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#181a20" stroke-width="2.4" aria-hidden="true"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14"/></svg>Salvar imagem para Stories</span>
+        <span class="v-btn s">Compartilhar</span>
+      </div></div></div>
+      <figcaption><b>Verso no app (comum às três)</b>Mesmo componente no sucesso, no painel do gestor e na área do atleta. “Frente” mostra a peça da proposta escolhida.</figcaption>
+    </figure>
+  </div>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Campo</th><th>Frente (Stories)</th><th>Verso no app</th><th>E-mail</th></tr></thead>
+      <tbody>
+        <tr><td>Evento, logo e banner</td><td><span class="y">sim</span></td><td><span class="y">sim</span></td><td><span class="y">sim</span> (imagem do cabeçalho)</td></tr>
+        <tr><td>Atleta ou equipe, integrantes</td><td><span class="y">sim</span></td><td><span class="y">sim</span></td><td><span class="y">sim</span></td></tr>
+        <tr><td>Categoria e box</td><td><span class="y">sim</span></td><td><span class="y">sim</span></td><td><span class="y">sim</span></td></tr>
+        <tr><td>Data, local, cidade/UF</td><td><span class="y">sim</span></td><td><span class="y">sim</span></td><td><span class="y">sim</span></td></tr>
+        <tr><td>Instagram do evento</td><td><span class="y">sim</span>, para facilitar a marcação</td><td><span class="y">sim</span></td><td><span class="y">sim</span></td></tr>
+        <tr><td>Camisa e adicional</td><td><span class="n">não</span></td><td><span class="y">sim</span></td><td><span class="y">sim</span></td></tr>
+        <tr><td>Valor pago e forma de pagamento</td><td><span class="n">não</span></td><td><span class="y">sim</span></td><td><span class="y">sim</span></td></tr>
+        <tr><td>CPF/NIF mascarado</td><td><span class="n">não</span></td><td><span class="y">sim</span></td><td><span class="y">sim</span>, sempre igual ao app</td></tr>
+        <tr><td>ID da inscrição</td><td>código curto (4 caracteres do ID)</td><td>completo, com copiar</td><td>completo</td></tr>
+        <tr><td>Pagamento pendente ou em análise</td><td><span class="n">sem frente</span>: o botão de Stories não aparece</td><td>“Registro de inscrição”, como hoje</td><td>“Inscrição registrada”, como hoje</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="propostas">
+  <div class="read" style="display:grid;gap:10px">
+    <h2>Três propostas de frente</h2>
+    <p class="sec-lead">Cada uma parte de um objeto que o atleta de Functional Fitness e Fitness Race já conhece. Todas usam a paleta do produto (preto, cinza-grafite e o amarelo da marca) e acrescentam uma fonte de título condensada só para a peça compartilhável. Ao lado de cada frente está o e-mail com o mesmo cabeçalho.</p>
+    <p class="note-ex">Dados de exemplo: evento, atleta, box e valores são fictícios. O banner hachurado representa o banner que o gestor sobe no evento; o quadrado “TB”, o logo dele.</p>
+  </div>
+
+  <article class="proposal">
+    <div class="p-head">
+      <h3>1 · Pôster de atleta</h3>
+      <p>O formato dos anúncios de atleta confirmado que eventos e equipes postam: banner do evento no alto, nome do atleta em letras enormes, uma faixa amarela com a confirmação e a categoria. O evento aparece tanto quanto o atleta, e isso interessa ao gestor.</p>
+    </div>
+    <div class="mocks">
+      <figure class="mock">
+        <div class="story s1">
+          <div class="story-chrome"><i></i><i></i><i></i></div>
+          <div class="s1-ban banner-synth"><span class="synth-tag" style="bottom:auto;top:30px">banner do evento</span></div>
+          <div class="s1-top"><span class="evlogo">TB</span><span class="wa-mark">WODARENA</span></div>
+          <div class="s1-body">
+            <div class="s1-event">Throwdown Beira-Mar 2026</div>
+            <div class="s1-name">Marina<br>Costa</div>
+            <div class="s1-strip"><span>Inscrição confirmada</span><span>RX Feminino</span></div>
+            <dl class="s1-meta"><div><dt>Data</dt><dd>15 nov 2026</dd></div><div><dt>Local</dt><dd>Fortaleza/CE</dd></div><div><dt>Box</dt><dd>Box Exemplo</dd></div></dl>
+            <div class="s1-foot"><b>@throwdownbeiramar</b><span>inscrição via WODArena</span></div>
+          </div>
+        </div>
+        <figcaption><b>Frente · Stories 1080×1920</b>Nome longo quebra em até 3 linhas e reduz o corpo; equipe mostra o nome do time e os integrantes abaixo.</figcaption>
+      </figure>
+      <figure class="mock">
+        <div class="mail">
+          <div class="mail-chrome"><i></i><i></i><i></i></div>
+          <div class="mail-meta"><b>Inscrição confirmada · Throwdown Beira-Mar 2026</b>WODArena &lt;noreply@wodarena.com.br&gt;</div>
+          <div class="mail-card">
+            <div class="mail-bar">WODARENA</div>
+            <div class="hero h1"><div class="banner-synth"></div><div class="t"><small>Throwdown Beira-Mar 2026</small><b>Marina<br>Costa</b><span>Inscrição confirmada · RX Feminino</span></div></div>
+            <div class="mail-fade"><div class="mail-body">
+              <div class="mail-badges"><span class="b-green">Pagamento aprovado</span></div>
+              <div class="mail-title">Sua inscrição está confirmada</div>
+              <div class="mail-tbl">
+                <div><small>Categoria</small><span>RX Feminino</span></div>
+                <div><small>Data e local</small><span>15 nov 2026 · Arena Beira-Mar, Fortaleza/CE</span></div>
+                <div><small>Valor pago</small><span class="grn">R$ 180,00 · Pix</span></div>
+                <div><small>Inscrição</small><span class="mono">reg-3f9c2a71-…-6e0f5a7b2d34</span></div>
+              </div>
+            </div></div>
+            <div class="mail-body" style="padding-top:0"><span class="mail-btn">Abrir meu comprovante</span><span class="mail-hint">No app você salva a imagem para os Stories.</span></div>
+          </div>
+        </div>
+        <figcaption><b>E-mail</b>Cabeçalho 1200×600 gerado pela mesma rota da imagem; corpo igual ao verso.</figcaption>
+      </figure>
+    </div>
+    <div class="p-meta">
+      <div><h4>Por que funciona</h4><ul><li>É o formato que o público já reconhece como “anúncio”, e o banner do gestor ganha alcance.</li><li>Funciona sem foto do atleta (que o produto não coleta na inscrição).</li></ul></div>
+      <div><h4>Riscos</h4><ul><li>Depende do banner do evento: sem banner, o topo vira um campo grafite com o nome do evento em letras grandes.</li><li>É o mais próximo do que outras plataformas já fazem.</li></ul></div>
+      <div><h4>Esforço</h4><ul><li>Médio. Composição simples de gerar em PNG.</li></ul></div>
+    </div>
+  </article>
+
+  <article class="proposal">
+    <div class="p-head">
+      <span class="rec">Recomendada</span>
+      <h3>2 · Número de peito</h3>
+      <p>O comprovante vira o número de peito: Tyvek claro, quatro furos de alfinete, faixa amarela com o evento, o código da inscrição em números grandes e o canhoto picotado. Foto do número de peito é um ritual de quem compete em prova de corrida e de Fitness Race, e o objeto se explica sozinho no feed.</p>
+    </div>
+    <div class="mocks">
+      <figure class="mock">
+        <div class="story s2">
+          <div class="story-chrome"><i></i><i></i><i></i></div>
+          <div class="s2-top">Throwdown Beira-Mar 2026 · 15 nov</div>
+          <div class="bib">
+            <span class="bib-hole" style="left:7px;top:40px"></span><span class="bib-hole" style="right:7px;top:40px"></span>
+            <span class="bib-hole" style="left:7px;bottom:34px"></span><span class="bib-hole" style="right:7px;bottom:34px"></span>
+            <div class="bib-band"><span class="evlogo">TB</span><div><b>Throwdown Beira-Mar 2026</b><small>Arena Beira-Mar · Fortaleza/CE</small></div></div>
+            <div class="bib-num">3F9C</div>
+            <div class="bib-name">Marina Costa</div>
+            <div class="bib-cat">RX Feminino · Box Exemplo</div>
+            <div class="bib-tear"><span>Código de inscrição</span><span>WODArena</span></div>
+          </div>
+          <div class="s2-say">Inscrição <span>confirmada</span></div>
+          <div class="s2-foot">@throwdownbeiramar · inscrição via WODArena</div>
+        </div>
+        <figcaption><b>Frente · Stories 1080×1920</b>O número é o código da inscrição (início do ID), não o número oficial de peito do evento.</figcaption>
+      </figure>
+      <figure class="mock">
+        <div class="mail">
+          <div class="mail-chrome"><i></i><i></i><i></i></div>
+          <div class="mail-meta"><b>Inscrição confirmada · Throwdown Beira-Mar 2026</b>WODArena &lt;noreply@wodarena.com.br&gt;</div>
+          <div class="mail-card">
+            <div class="mail-bar">WODARENA</div>
+            <div class="hero h2"><div class="bib"><div class="bib-band"><b>Throwdown 2026</b></div><div><div class="bib-num">3F9C</div><div class="bib-name">Marina Costa</div><div class="bib-cat">RX Feminino · Box Exemplo</div></div></div></div>
+            <div class="mail-fade"><div class="mail-body">
+              <div class="mail-badges"><span class="b-green">Pagamento aprovado</span></div>
+              <div class="mail-title">Sua inscrição está confirmada</div>
+              <div class="mail-tbl">
+                <div><small>Categoria</small><span>RX Feminino</span></div>
+                <div><small>Data e local</small><span>15 nov 2026 · Arena Beira-Mar, Fortaleza/CE</span></div>
+                <div><small>Valor pago</small><span class="grn">R$ 180,00 · Pix</span></div>
+                <div><small>Inscrição</small><span class="mono">reg-3f9c2a71-…-6e0f5a7b2d34</span></div>
+              </div>
+            </div></div>
+            <div class="mail-body" style="padding-top:0"><span class="mail-btn">Abrir meu comprovante</span><span class="mail-hint">No app você salva a imagem para os Stories.</span></div>
+          </div>
+        </div>
+        <figcaption><b>E-mail</b>O número de peito deitado no cabeçalho; o código grande também ajuda no atendimento (“qual seu código?”).</figcaption>
+      </figure>
+    </div>
+    <div class="p-meta">
+      <div><h4>Por que funciona</h4><ul><li>Objeto conhecido nos dois tipos de evento, reconhecível em miniatura no feed.</li><li>Não depende de banner nem de foto: o evento entra pela faixa e pelo logo.</li><li>O código curto vira referência de suporte, igual no app, no e-mail e na imagem.</li></ul></div>
+      <div><h4>Riscos</h4><ul><li>Pode ser confundido com o número oficial de peito. Mitigação: rótulo “código de inscrição” no canhoto; se o gestor quiser numeração oficial, é outra feature.</li><li>Código de 4 caracteres pode repetir entre inscrições do mesmo evento; o verso e o e-mail mantêm o ID completo.</li></ul></div>
+      <div><h4>Esforço</h4><ul><li>Médio. Os furos e o picote são formas simples no gerador de imagem.</li></ul></div>
+    </div>
+  </article>
+
+  <article class="proposal">
+    <div class="p-head">
+      <h3>3 · Súmula do atleta</h3>
+      <p>A frente imita a súmula da quadra: folha branca sobre o amarelo da marca, cabeçalho com evento, categoria, atleta e box, linhas das provas em branco e um carimbo verde de inscrição confirmada. Puxa o posicionamento do produto: o resultado nasce na quadra, e a súmula do atleta já está pronta.</p>
+    </div>
+    <div class="mocks">
+      <figure class="mock">
+        <div class="story s3 on-yellow">
+          <div class="story-chrome"><i></i><i></i><i></i></div>
+          <div class="sheet">
+            <div class="sheet-h">Súmula · <span>Throwdown Beira-Mar 2026</span></div>
+            <div class="sheet-grid">
+              <div class="w"><small>Atleta</small><b class="big">Marina Costa</b></div>
+              <div><small>Categoria</small><b>RX Feminino</b></div>
+              <div><small>Box</small><b>Box Exemplo</b></div>
+              <div><small>Data</small><b>15/11/2026</b></div>
+              <div><small>Local</small><b>Fortaleza/CE</b></div>
+            </div>
+            <div class="sheet-rows">
+              <div class="lbl"><span>Provas</span></div>
+              <div><span>Prova 1</span><i></i><em></em></div>
+              <div><span>Prova 2</span><i></i><em></em></div>
+              <div><span>Prova 3</span><i></i><em></em></div>
+              <div><span>Final</span><i></i><em></em></div>
+            </div>
+            <div class="stamp">Inscrição<br>confirmada<small>26.10.2026</small></div>
+          </div>
+          <div class="s3-say">Minha súmula<br>já está pronta</div>
+          <div class="s3-foot">@throwdownbeiramar · inscrição via WODArena</div>
+        </div>
+        <figcaption><b>Frente · Stories 1080×1920</b>Com provas publicadas, as linhas mostram os nomes delas; sem provas, “Prova 1, 2, 3”.</figcaption>
+      </figure>
+      <figure class="mock">
+        <div class="mail">
+          <div class="mail-chrome"><i></i><i></i><i></i></div>
+          <div class="mail-meta"><b>Inscrição confirmada · Throwdown Beira-Mar 2026</b>WODArena &lt;noreply@wodarena.com.br&gt;</div>
+          <div class="mail-card">
+            <div class="mail-bar">WODARENA</div>
+            <div class="hero h3"><div class="sheet"><div class="sheet-h">Súmula · <span>Throwdown Beira-Mar 2026</span></div><div class="sheet-grid"><div class="w"><small>Atleta</small><b class="big">Marina Costa</b></div><div><small>Categoria</small><b>RX Feminino</b></div><div><small>Box</small><b>Box Exemplo</b></div></div><div class="stamp">Inscrição<br>confirmada</div></div></div>
+            <div class="mail-fade"><div class="mail-body">
+              <div class="mail-badges"><span class="b-green">Pagamento aprovado</span></div>
+              <div class="mail-title">Sua inscrição está confirmada</div>
+              <div class="mail-tbl">
+                <div><small>Categoria</small><span>RX Feminino</span></div>
+                <div><small>Data e local</small><span>15 nov 2026 · Arena Beira-Mar, Fortaleza/CE</span></div>
+                <div><small>Valor pago</small><span class="grn">R$ 180,00 · Pix</span></div>
+                <div><small>Inscrição</small><span class="mono">reg-3f9c2a71-…-6e0f5a7b2d34</span></div>
+              </div>
+            </div></div>
+            <div class="mail-body" style="padding-top:0"><span class="mail-btn">Abrir meu comprovante</span><span class="mail-hint">No app você salva a imagem para os Stories.</span></div>
+          </div>
+        </div>
+        <figcaption><b>E-mail</b>O cabeçalho amarelo destaca o e-mail na caixa de entrada.</figcaption>
+      </figure>
+    </div>
+    <div class="p-meta">
+      <div><h4>Por que funciona</h4><ul><li>É o único dos três que só o WODArena pode fazer: liga a inscrição à súmula digital.</li><li>O fundo amarelo é a marca inteira na tela, fácil de reconhecer no feed.</li></ul></div>
+      <div><h4>Riscos</h4><ul><li>Linhas em branco podem parecer formulário a preencher.</li><li>O evento aparece menos: sem banner, só o nome no cabeçalho.</li><li>No Fitness Race, “súmula” combina menos com estações e percurso.</li></ul></div>
+      <div><h4>Esforço</h4><ul><li>Médio. Lê as provas publicadas do evento, que já estão nos dados públicos.</li></ul></div>
+    </div>
+  </article>
+</section>
+
+<section id="variacoes">
+  <div class="read" style="display:grid;gap:10px">
+    <h2>Variações do pôster de atleta</h2>
+    <p class="sec-lead">Três caminhos a partir da proposta 1. Cada um ataca um ponto fraco dela: a dependência do banner do gestor, a falta de rosto na peça e a semelhança com o que outras plataformas já fazem. Ao lado de cada frente está o caso difícil de cada formato (equipe, dia do evento, escolha da foto) e o cabeçalho do e-mail.</p>
+  </div>
+
+  <article class="proposal">
+    <div class="p-head">
+      <span class="rec">Recomendada, com a 1B como versão sem foto</span>
+      <h3>1A · Pôster com a foto do atleta</h3>
+      <p>Na hora de salvar para os Stories, o atleta escolhe uma foto da galeria. Ela ocupa o fundo do pôster, uma faixa amarela inclinada corta a imagem com a confirmação e o nome fica embaixo, em letras enormes. A foto é montada no próprio celular e não é enviada para o servidor.</p>
+    </div>
+    <div class="mocks">
+      <figure class="mock">
+        <div class="story s1a">
+          <div class="story-chrome"><i></i><i></i><i></i></div>
+          <div class="photo-ph"><span class="ph-l"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>foto do atleta</span></div>
+          <div class="s1-top"><span class="evlogo">TB</span><span class="wa-mark">WODARENA</span></div>
+          <div class="s1a-band"><span>Inscrição confirmada</span><span>RX Feminino</span></div>
+          <div class="s1a-body">
+            <div class="s1-event">Throwdown Beira-Mar 2026</div>
+            <div class="s1a-name">Marina<br>Costa</div>
+            <div class="s1a-meta"><span>15 nov 2026 · Fortaleza/CE</span><span>@throwdownbeiramar</span></div>
+          </div>
+        </div>
+        <figcaption><b>Frente com foto · Stories 1080×1920</b>Logo do evento e a faixa ficam sempre por cima da foto, então qualquer imagem vira peça do evento.</figcaption>
+      </figure>
+      <figure class="mock">
+        <div class="phone"><div class="screen"><div class="pick">
+          <div class="v-bar"><span class="pick-t">Imagem para os Stories</span><span class="v-x" aria-hidden="true">✕</span></div>
+          <div class="pick-prev">
+            <div class="mini"><div class="photo-ph"></div><i></i><b>Marina<br>Costa</b></div>
+            <p><b>Prévia.</b> Escolha uma foto sua treinando ou competindo. Fotos na vertical funcionam melhor.</p>
+          </div>
+          <span class="opt on"><i></i>Usar uma foto minha</span>
+          <span class="opt"><i></i>Sem foto (versão tipográfica)</span>
+          <span class="lock"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#929aa5" stroke-width="2" aria-hidden="true" style="flex:none;margin-top:1px"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>A foto é usada só no seu celular para montar a imagem. Ela não é enviada nem guardada pela WODArena.</span>
+          <span class="v-btn p" style="margin-top:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#181a20" stroke-width="2.4" aria-hidden="true"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14"/></svg>Salvar imagem</span>
+          <span class="v-btn s">Compartilhar nos Stories</span>
+        </div></div></div>
+        <figcaption><b>Caso difícil: escolher a foto</b>Uma etapa a mais antes de salvar, com a opção sem foto sempre à mão.</figcaption>
+      </figure>
+      <figure class="mock">
+        <div class="hero-only">
+          <div class="mail-bar">WODARENA</div>
+          <div class="hero h1b"><b>Marina<br>Costa</b><span>Inscrição confirmada · RX Feminino</span></div>
+        </div>
+        <figcaption><b>Cabeçalho do e-mail</b>O e-mail sai do servidor e não tem a foto, então usa a versão tipográfica (1B).</figcaption>
+      </figure>
+    </div>
+    <div class="p-meta">
+      <div><h4>Por que funciona</h4><ul><li>O rosto do atleta é o que mais engaja no Instagram, e o produto não precisa guardar a foto.</li><li>A peça funciona igual com ou sem banner do gestor.</li></ul></div>
+      <div><h4>Riscos</h4><ul><li>A imagem é montada no navegador (canvas), separada do gerador do servidor: são dois desenhos para manter iguais.</li><li>Foto escura ou com texto pode brigar com o nome; a faixa e o degradê inferior seguram a leitura, mas não em todos os casos.</li></ul></div>
+      <div><h4>Esforço</h4><ul><li>Alto. Seletor de foto, enquadramento e montagem no celular, além da versão sem foto.</li></ul></div>
+    </div>
+  </article>
+
+  <article class="proposal">
+    <div class="p-head">
+      <h3>1B · Pôster tipográfico</h3>
+      <p>Sem banner e sem foto: o amarelo da marca ocupa a tela inteira e o nome do atleta é a imagem. O primeiro nome se repete apagado acima e abaixo, como um cartaz de evento impresso em camadas. Um bloco preto no pé leva a confirmação, a categoria, a data e o box.</p>
+    </div>
+    <div class="mocks">
+      <figure class="mock">
+        <div class="story s1b on-yellow">
+          <div class="story-chrome"><i></i><i></i><i></i></div>
+          <div class="s1b-top"><span class="evlogo">TB</span>Throwdown Beira-Mar 2026</div>
+          <div class="s1b-type">
+            <span class="g">Marina</span><span class="g">Marina</span>
+            <span class="s">Marina<br>Costa</span>
+            <span class="g">Costa</span><span class="g">Costa</span>
+          </div>
+          <div class="s1b-foot">
+            <b>Inscrição confirmada</b>
+            <dl><div><dt>Categoria</dt><dd>RX Feminino</dd></div><div><dt>Data</dt><dd>15 nov 2026</dd></div><div><dt>Box</dt><dd>Box Exemplo</dd></div></dl>
+            <small>@throwdownbeiramar · inscrição via WODArena</small>
+          </div>
+        </div>
+        <figcaption><b>Frente · Stories 1080×1920</b>Mesma peça em qualquer evento, com ou sem banner.</figcaption>
+      </figure>
+      <figure class="mock">
+        <div class="shrink"><div class="story s1b on-yellow">
+          <div class="story-chrome"><i></i><i></i><i></i></div>
+          <div class="s1b-top"><span class="evlogo">TB</span>Throwdown Beira-Mar 2026</div>
+          <div class="s1b-type team">
+            <span class="g">Maré Alta</span>
+            <span class="s">Team<br>Maré Alta</span>
+            <span class="g">Maré Alta</span>
+            <span class="s1b-members">Ana Lima · Bruno Reis · Carla Nunes · Davi Rocha</span>
+          </div>
+          <div class="s1b-foot">
+            <b>Equipe confirmada</b>
+            <dl><div><dt>Categoria</dt><dd>Times Scaled</dd></div><div><dt>Data</dt><dd>15 nov 2026</dd></div><div><dt>Box</dt><dd>Box Exemplo</dd></div></dl>
+          </div>
+        </div></div>
+        <figcaption><b>Caso difícil: equipe</b>Nome do time no lugar do nome do atleta, corpo menor e os integrantes logo abaixo.</figcaption>
+      </figure>
+      <figure class="mock">
+        <div class="hero-only">
+          <div class="mail-bar">WODARENA</div>
+          <div class="hero h1b"><b>Marina<br>Costa</b><span>Inscrição confirmada · RX Feminino</span></div>
+        </div>
+        <figcaption><b>Cabeçalho do e-mail</b>O amarelo destaca a mensagem na caixa de entrada.</figcaption>
+      </figure>
+    </div>
+    <div class="p-meta">
+      <div><h4>Por que funciona</h4><ul><li>Não depende de nada que o gestor ou o atleta precisem subir.</li><li>Lê bem em miniatura: no feed, é um bloco amarelo com um nome.</li><li>É o mais simples de gerar no servidor, igual no app e no e-mail.</li></ul></div>
+      <div><h4>Riscos</h4><ul><li>O evento aparece pouco: só o logo e o nome no topo.</li><li>Nomes muito longos (três ou mais palavras) reduzem o corpo e perdem impacto; a regra precisa de limite de linhas.</li></ul></div>
+      <div><h4>Esforço</h4><ul><li>Baixo. Só texto e cor, sem imagem de fundo.</li></ul></div>
+    </div>
+  </article>
+
+  <article class="proposal">
+    <div class="p-head">
+      <h3>1C · Pôster de contagem regressiva</h3>
+      <p>Os dias que faltam para o evento viram o número gigante do pôster, com o nome do atleta logo abaixo. A imagem é gerada na hora em que o atleta salva, então quem posta perto da prova mostra “3 dias” e quem posta no dia mostra “Hoje”. Usa as datas estruturadas do evento que entraram nas stories 1.71 e 1.72.</p>
+    </div>
+    <div class="mocks">
+      <figure class="mock">
+        <div class="story s1c">
+          <div class="story-chrome"><i></i><i></i><i></i></div>
+          <div class="s1c-ban banner-synth"><span class="synth-tag" style="bottom:auto;top:30px">banner do evento</span></div>
+          <div class="s1-top"><span class="evlogo">TB</span><span class="wa-mark">WODARENA</span></div>
+          <div class="s1c-body">
+            <div class="s1c-count"><span class="n">20</span><span class="u"><small>faltam</small>dias</span></div>
+            <div class="s1-event">para o Throwdown Beira-Mar 2026</div>
+            <div class="s1c-name">Marina Costa</div>
+            <div class="s1c-strip"><span>Inscrição confirmada</span><span>RX Feminino</span></div>
+            <div class="s1c-meta"><span>15 nov 2026 · Fortaleza/CE</span><b>@throwdownbeiramar</b></div>
+          </div>
+        </div>
+        <figcaption><b>Frente · Stories 1080×1920</b>Exemplo salvo em 26/10/2026 para um evento em 15/11/2026.</figcaption>
+      </figure>
+      <figure class="mock">
+        <div class="shrink"><div class="story s1c">
+          <div class="story-chrome"><i></i><i></i><i></i></div>
+          <div class="s1c-ban banner-synth"></div>
+          <div class="s1-top"><span class="evlogo">TB</span><span class="wa-mark">WODARENA</span></div>
+          <div class="s1c-body">
+            <div class="s1c-count today"><span class="n">Hoje</span></div>
+            <div class="s1-event">é dia de Throwdown Beira-Mar 2026</div>
+            <div class="s1c-name">Marina Costa</div>
+            <div class="s1c-strip"><span>Inscrição confirmada</span><span>RX Feminino</span></div>
+          </div>
+        </div></div>
+        <figcaption><b>Caso difícil: no dia do evento</b>Durante o evento aparece “Hoje”. Depois dele, ou sem data estruturada, a peça vira o pôster da proposta 1.</figcaption>
+      </figure>
+      <figure class="mock">
+        <div class="hero-only">
+          <div class="mail-bar">WODARENA</div>
+          <div class="hero h1c"><span class="n">20</span><div><small>dias para o Throwdown Beira-Mar 2026</small><b>Marina Costa</b><span>Inscrição confirmada · RX Feminino</span></div></div>
+        </div>
+        <figcaption><b>Cabeçalho do e-mail</b>Conta os dias na hora do envio. Na segunda via, a conta é refeita.</figcaption>
+      </figure>
+    </div>
+    <div class="p-meta">
+      <div><h4>Por que funciona</h4><ul><li>Dá motivo para postar mais de uma vez: na inscrição, na semana da prova e no dia.</li><li>Cada post anuncia o evento com a data, o que ajuda o gestor a vender as vagas restantes.</li></ul></div>
+      <div><h4>Riscos</h4><ul><li>Eventos com data só em texto livre não têm contagem e caem no pôster da proposta 1.</li><li>A conta precisa usar o fuso do evento; perto da meia-noite, o dia pode virar errado se usar o fuso do aparelho.</li></ul></div>
+      <div><h4>Esforço</h4><ul><li>Médio. A base é a proposta 1, mais a regra de dias e os estados “Hoje” e “evento encerrado”.</li></ul></div>
+    </div>
+  </article>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Critério</th><th>1 · Pôster</th><th>1A · Com foto</th><th>1B · Tipográfico</th><th>1C · Contagem</th></tr></thead>
+      <tbody>
+        <tr><td>Depende do banner do gestor</td><td><span class="x">sim</span></td><td><span class="y">não</span></td><td><span class="y">não</span></td><td>em parte (faixa do topo)</td></tr>
+        <tr><td>Mostra o rosto do atleta</td><td><span class="n">não</span></td><td><span class="y">sim</span>, se ele quiser</td><td><span class="n">não</span></td><td><span class="n">não</span></td></tr>
+        <tr><td>Motivo para postar de novo</td><td><span class="n">não</span></td><td>troca de foto</td><td><span class="n">não</span></td><td><span class="y">sim</span>, muda a cada dia</td></tr>
+        <tr><td>Destaque para o evento</td><td>alto</td><td>médio (logo e faixa)</td><td>baixo</td><td>alto (data e banner)</td></tr>
+        <tr><td>Equipe e nome longo</td><td>bom</td><td>bom</td><td>exige regra de corpo</td><td>bom</td></tr>
+        <tr><td>Mesma imagem no app e no e-mail</td><td><span class="y">sim</span></td><td><span class="n">não</span> (e-mail usa a 1B)</td><td><span class="y">sim</span></td><td><span class="y">sim</span>, com a conta do dia do envio</td></tr>
+        <tr><td>Esforço</td><td>médio</td><td>alto</td><td>baixo</td><td>médio</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note-ex">Recomendação dentro da linha do pôster: lançar a 1B como padrão (é a versão do e-mail e a de quem não quer foto) e somar a 1A como opção na hora de salvar. A contagem da 1C pode entrar depois como um selo sobre qualquer uma das duas.</p>
+</section>
+
+<section id="email">
+  <div class="read" style="display:grid;gap:10px">
+    <h2>Alinhamento do e-mail</h2>
+    <p class="sec-lead">O e-mail continua sendo o enviado pela WODArena ao atleta que compra a inscrição no evento do gestor. Muda o desenho e muda quem envia.</p>
+  </div>
+  <div class="flow">
+    <div class="card"><h3>Mesmo cabeçalho da frente</h3><p>A barra preta com WODArena fica. Abaixo dela, a imagem 1200×600 da frente escolhida. Fontes da web não carregam em boa parte dos clientes de e-mail; como imagem, o desenho chega igual.</p></div>
+    <div class="card"><h3>Corpo igual ao verso</h3><p>Mesmos campos e mesma ordem do verso no app, incluindo forma de pagamento e camisa. O corpo segue claro: o modo escuro do Gmail e do Outlook inverte cores de e-mails escuros de forma imprevisível.</p></div>
+    <div class="card"><h3>Um envio por inscrição</h3><p>Envio só no servidor, com cabeçalho <code>Idempotency-Key</code> do Resend igual a <code>inscricao-aprovada:{id}</code>. Reenvios de webhook e consultas simultâneas viram um e-mail só, sem mudar o banco.</p></div>
+    <div class="card"><h3>Texto digitado sempre escapado</h3><p>Nome, categoria, box, data e local passam pelo mesmo <code>escapeHtml</code> do cabeçalho. Assunto mantido: “Inscrição confirmada · {evento}”.</p></div>
+  </div>
+</section>
+
+<section id="plano">
+  <div class="read" style="display:grid;gap:10px">
+    <h2>Plano depois da aprovação</h2>
+    <p class="sec-lead">Proposta de stories, a criar pelo @sm e validar pelo @po. A primeira corrige o erro relatado e pode sair antes do desenho novo.</p>
+  </div>
+  <div class="plan">
+    <div class="card"><span class="sid">1.73</span><div><h3>Um comprovante e um e-mail por inscrição</h3><ul class="tight"><li>Sucesso do modal fecha o modal e abre só o comprovante; o ticket A sai do <code>RegisterModal</code>.</li><li>Navegador para de chamar <code>/api/checkout/email</code> no sucesso (modal e <code>PixPaymentModal</code>); segunda via do painel continua.</li><li>Envio do servidor com chave de idempotência; escape dos campos do e-mail.</li><li>Ajuste dos testes estáticos que leem esses trechos.</li></ul></div></div>
+    <div class="card"><span class="sid">1.74</span><div><h3>Comprovante novo, frente e verso</h3><ul class="tight"><li>Componente único no lugar do <code>RegistrationVoucher</code>, usado no sucesso, no painel do gestor e na área do atleta.</li><li>Dados lidos do servidor; retorno do cartão consulta o status em vez de confiar na URL.</li><li>Maquete aprovada copiada para <code>docs/design/comprovante/</code> e citada nos critérios de aceite.</li></ul></div></div>
+    <div class="card"><span class="sid">1.75</span><div><h3>Imagem para Stories</h3><ul class="tight"><li>Rota do servidor que gera a frente em PNG (1080×1920 e 1200×600), com acesso por sessão ou token da inscrição.</li><li>Botão “Salvar imagem para Stories” com o compartilhamento nativo do celular e download como alternativa.</li></ul></div></div>
+    <div class="card"><span class="sid">1.76</span><div><h3>E-mail no novo desenho</h3><ul class="tight"><li>Cabeçalho com a imagem 1200×600 e corpo igual ao verso, em pt-BR, pt-PT e en-GB.</li><li>Teste de envio real em Gmail, Outlook e Apple Mail antes de publicar.</li></ul></div></div>
+  </div>
+</section>
+
+<section id="decisoes">
+  <div class="read" style="display:grid;gap:10px">
+    <h2>Decisões que dependem de você</h2>
+  </div>
+  <div class="decisions">
+    <div class="decision"><h3>Qual frente seguir</h3><p>1 (pôster), 2 (número de peito) ou 3 (súmula), ou uma das variações do pôster: 1A (com foto), 1B (tipográfico) e 1C (contagem regressiva). Dá para combinar, por exemplo a frente de uma com o cabeçalho de e-mail de outra.</p><p class="reco">Recomendação: 2, pelo ritual de foto que já existe e por funcionar sem banner e sem foto do atleta.</p></div>
+    <div class="decision"><h3>Liberar a story 1.73 antes do desenho</h3><p>Ela resolve o comprovante duplicado e os e-mails repetidos sem depender da escolha visual.</p><p class="reco">Recomendação: sim.</p></div>
+    <div class="decision"><h3>Fonte condensada só na peça compartilhável</h3><p>As frentes usam Anton nos títulos. App e e-mail seguem em Inter e IBM Plex Sans. A fonte entra no gerador de imagem; não pesa nas páginas.</p></div>
+    <div class="decision"><h3>QR Code de check-in</h3><p>Os Termos de Inscrição citam “QR Code Oficial no check-in/credenciamento”, mas não existe check-in por QR no código. Um QR no comprovante só faz sentido junto com essa função.</p><p class="reco">Recomendação: tirar o código de barras decorativo agora e tratar o check-in por QR (ou o ajuste do texto dos Termos) como assunto separado.</p></div>
+    <div class="decision"><h3>Como a imagem vai no e-mail</h3><p>Anexo embutido na mensagem (não expõe link, aparece na maioria dos clientes) ou link para a rota da imagem com validade (mensagem menor, mas o link carrega o nome do atleta).</p><p class="reco">Recomendação: anexo embutido.</p></div>
+  </div>
+</section>
+
+</div>

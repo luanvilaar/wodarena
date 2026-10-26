@@ -16,7 +16,8 @@ const registerModal = read('../src/components/RegisterModal.tsx');
 const eventView = read('../src/app/[locale]/event/[id]/EventView.tsx');
 const voucher = read('../src/components/RegistrationVoucher.tsx');
 const resend = read('../src/lib/resend.ts');
-const emailRoute = read('../src/app/api/checkout/email/route.ts');
+// A rota da segunda via e o carregador compartilhado (Story 1.76) montam a inscrição enviada ao e-mail.
+const emailRoute = `${read('../src/app/api/checkout/email/route.ts')}\n${read('../src/lib/serverRegistrationConfirmation.ts')}`;
 const cardModal = read('../src/components/CardPaymentModal.tsx');
 const pixModal = read('../src/components/PixPaymentModal.tsx');
 
@@ -169,11 +170,11 @@ test('total do servidor diferente do exibido: avisa, não cobra e mantém o form
   assert.match(resetOnToggle, /setServerUpdatedCheckout\(null\);/);
   assert.match(resetOnToggle, /setAmountsUpdatedNotice\(null\);/);
 
-  // Depois da confirmação, o ticket mostra o valor gravado no servidor.
-  assert.match(registerModal, /const ticketTotalPaid = serverUpdatedCheckout \? Number\(serverUpdatedCheckout\.registrationData\.totalPaid\) : totalPaid;/);
-  assert.match(registerModal, /const ticketAmountCollected = serverUpdatedCheckout\s*\?\s*Number\(serverUpdatedCheckout\.registrationData\.amountCollected \?\? ticketTotalPaid\)\s*:\s*amountCollectedPreview;/);
-  assert.match(registerModal, /\{ticketTotalPaid === 0 \? t\('freeRegistration'\)/);
-  assert.match(registerModal, /formatMoney\(ticketAmountCollected, event\.currency \?\? 'BRL', locale\)/);
+  // Depois da confirmação, o comprovante único mostra o valor gravado no servidor
+  // (a inscrição que abre é a devolvida pelo start, nunca o cálculo local).
+  assert.match(registerModal, /const finalReg = createdReg \|\| \{\s*\.\.\.activeRegistrationData,/);
+  assert.doesNotMatch(registerModal, /ticketTotalPaid|ticketAmountCollected/);
+  assert.match(registerModal, /<RegistrationVoucher\s+registration=\{confirmedVoucher\.registration\}/);
 });
 
 test('depois do aviso: gratuita aprovada vai ao sucesso, novo envio limpa a resposta guardada e a recusa orienta (R2-L-1)', () => {
@@ -301,7 +302,7 @@ test('handleSubmit real: cenários depois do aviso de valores atualizados (R2-L-
   assert.equal(approvedFree.success, true);
   assert.equal(approvedFree.tickets, 1);
   assert.equal(approvedFree.onSuccess, 1);
-  assert.deepEqual(approvedFree.fetches, ['/api/checkout/email']);
+  assert.deepEqual(approvedFree.fetches, [], 'o e-mail da gratuita sai do servidor (Story 1.76)');
   assert.deepEqual(approvedFree.alerts, []);
   assert.equal(approvedFree.processing.at(-1), false);
 

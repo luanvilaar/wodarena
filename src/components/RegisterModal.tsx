@@ -5,6 +5,7 @@ import { Check, CreditCard, ShieldCheck, Ticket, X, Lock } from 'lucide-react';
 import Script from 'next/script';
 import { useLocale, useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
+import { RegistrationVoucher } from '@/components/RegistrationVoucher';
 import { Event, Division, Registration, Athlete, AppLocale } from '@/types';
 import { useApp } from '@/context/AppContext';
 import { normalizeInstagram } from '@/lib/fitnessRacing';
@@ -126,7 +127,7 @@ const getCheckoutErrorMessage = async (response: Response, fallback: string) => 
   }
 };
 
-export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterModalProps) {
+export function RegisterModal({ event, isOpen, onClose, onSuccess: onSuccessProp }: RegisterModalProps) {
   const t = useTranslations('Checkout');
   const locale = useLocale() as AppLocale;
   const { registerTicket } = useApp();
@@ -162,6 +163,14 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
   const [pixSupported, setPixSupported] = useState(true);
   const [serverUpdatedCheckout, setServerUpdatedCheckout] = useState<ServerUpdatedCheckout | null>(null);
   const [amountsUpdatedNotice, setAmountsUpdatedNotice] = useState<string | null>(null);
+  const [confirmedVoucher, setConfirmedVoucher] = useState<{ registration: Registration; athlete: Athlete } | null>(null);
+
+  // Sucesso da inscrição (Pix aprovado ou gratuita): o comprovante único abre aqui, em
+  // qualquer tela que use o modal (Story 1.73). O onSuccess de quem chamou só é avisado.
+  const onSuccess = useCallback((registration: Registration, athlete: Athlete, cpf: string) => {
+    setConfirmedVoucher({ registration, athlete });
+    onSuccessProp?.(registration, athlete, cpf);
+  }, [onSuccessProp]);
 
   const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
   if (isOpen !== prevIsOpen) {
@@ -170,6 +179,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
     setAmountsUpdatedNotice(null);
     setAcceptedTerms(false);
     setIsSuccess(false);
+    setConfirmedVoucher(null);
     setPixData(null);
     setTeamName('');
     setCardNumber('');
@@ -232,19 +242,13 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
           }
 
           if (createdReg && parsedAthlete) {
-            // Disparar envio de e-mail local em background
-            fetch('/api/checkout/email', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                registrationId: createdReg.id,
-                accessToken: createdReg.accessToken || registrationPayload?.accessToken,
-                cpf: parsedCpf
-              })
-            }).catch(err => console.error("[Local Email Trigger] Erro ao disparar e-mail:", err));
-
+            // O e-mail de confirmação sai do servidor quando o pagamento é aprovado (Story 1.76).
             if (onSuccess) {
-              onSuccess(createdReg, parsedAthlete, parsedCpf);
+              onSuccess(
+                { ...createdReg, accessToken: createdReg.accessToken || registrationPayload?.accessToken },
+                parsedAthlete,
+                parsedCpf
+              );
             }
             setIsSuccess(true);
           } else {
@@ -339,13 +343,6 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
   const isTeamCategory = participantCount > 1;
   const primaryParticipant = visibleParticipants[0] || createEmptyParticipant();
   const isFitnessRacing = event.eventType === 'fitness_racing';
-  // Se o atleta confirmou valores recalculados pelo servidor, o ticket mostra o
-  // que foi gravado: o cálculo local continua com a configuração antiga do evento.
-  const ticketTotalPaid = serverUpdatedCheckout ? Number(serverUpdatedCheckout.registrationData.totalPaid) : totalPaid;
-  const ticketAmountCollected = serverUpdatedCheckout
-    ? Number(serverUpdatedCheckout.registrationData.amountCollected ?? ticketTotalPaid)
-    : amountCollectedPreview;
-
   const clearAppliedCoupon = () => {
     setAppliedCoupon(null);
     setDiscountApplied(0);
@@ -578,19 +575,10 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
           createdAt: activeRegistrationData.createdAt || new Date().toISOString()
         };
 
-        // Enviar e-mail de confirmação via Resend em background
-        fetch('/api/checkout/email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            registrationId: finalReg.id,
-            accessToken: activeRegistrationData.accessToken,
-            cpf
-          })
-        }).catch(err => console.error("[Local Email Trigger] Erro ao disparar e-mail gratuito:", err));
+        // A confirmação por e-mail sai do servidor, em /api/registrations/start (Story 1.76).
 
         if (onSuccess) {
-          onSuccess(finalReg, activeAthleteProfile, cpf);
+          onSuccess({ ...finalReg, accessToken: finalReg.accessToken || activeRegistrationData.accessToken }, activeAthleteProfile, cpf);
         }
         setIsSuccess(true);
         setIsProcessing(false);
@@ -706,6 +694,17 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
 
   if (!isOpen) return null;
 
+  if (confirmedVoucher) {
+    return (
+      <RegistrationVoucher
+        registration={confirmedVoucher.registration}
+        athlete={confirmedVoucher.athlete}
+        event={event}
+        onClose={onClose}
+      />
+    );
+  }
+
   const registrationAvailability = getRegistrationAvailability(event);
 
   if (!registrationAvailability.isAvailable) {
@@ -766,7 +765,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 border border-primary/20">
                   <Check className="h-6 w-6 text-primary" aria-hidden="true" />
                 </div>
-                <h4 className="text-xl font-black tracking-tight text-white uppercase">{t('successTitle')}</h4>
+                <h4 className="text-xl font-black tracking-tight text-ink uppercase">{t('successTitle')}</h4>
                 <p className="mx-auto max-w-sm text-xs leading-relaxed text-muted-soft">
                   {t('successDescription')}
                 </p>
@@ -778,124 +777,6 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                 </p>
               )}
 
-              {/* TICKET DIGITAL PREMIUM */}
-              <div className="relative mx-auto w-full rounded-2xl overflow-hidden border border-neutral-800 bg-[#16181e] shadow-2xl text-left">
-                {/* Cabeçalho do Ticket com Banner de Fundo */}
-                <div className="relative h-28 p-5 flex flex-col justify-end overflow-hidden">
-                  {event.bannerUrl ? (
-                    <>
-                      <img 
-                        src={event.bannerUrl} 
-                        alt={t('eventBannerAlt')} 
-                        className="absolute inset-0 w-full h-full object-cover"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-[#16181e] via-[#16181e]/85 to-black/40" />
-                    </>
-                  ) : (
-                    <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-neutral-900 to-black" />
-                  )}
-                  
-                  <div className="relative z-10 flex items-end justify-between">
-                    <div className="flex items-center gap-2">
-                      {event.logoUrl && (
-                        <img 
-                          src={event.logoUrl} 
-                          alt={t('eventLogoAlt')} 
-                          className="h-10 w-10 rounded-full border border-neutral-700 bg-[#16181e] p-0.5 object-cover"
-                        />
-                      )}
-                      <div>
-                        <span className="text-[9px] font-black uppercase tracking-wider text-primary">{t('ticketBadge')}</span>
-                        <h5 className="text-sm font-black text-white truncate max-w-[220px] uppercase">{event.name}</h5>
-                      </div>
-                    </div>
-                    <div className="rounded bg-primary px-2 py-0.5 text-[9px] font-black tracking-widest text-ink uppercase shadow-sm">
-                      {t('confirmedBadge')}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Picote Divisor do Ticket (Ticket Cutout) */}
-                <div className="relative h-4 flex items-center bg-[#16181e]">
-                  <div className="absolute -left-3 w-6 h-6 rounded-full bg-black/90 z-20 border-r border-neutral-800" />
-                  <div className="absolute -right-3 w-6 h-6 rounded-full bg-black/90 z-20 border-l border-neutral-800" />
-                  <div className="w-full border-t border-dashed border-neutral-700/60 mx-3" />
-                </div>
-
-                {/* Corpo do Ticket com as Informações */}
-                <div className="p-5 space-y-5 bg-[#16181e]">
-                  <div className="grid grid-cols-2 gap-y-4 gap-x-6">
-                    <div>
-                      <span className="text-[9px] font-bold uppercase tracking-widest text-muted-soft">{t('athleteTeamLabel')}</span>
-                      <p className="text-sm font-extrabold text-white truncate uppercase">
-                        {isTeamCategory
-                          ? (teamName || primaryParticipant.name)
-                          : primaryParticipant.name}
-                      </p>
-                    </div>
-                    <div>
-                      <span className="text-[9px] font-bold uppercase tracking-widest text-muted-soft">{t('divisionLabel')}</span>
-                      <p className="text-sm font-extrabold text-white truncate uppercase">
-                        {selectedDivision?.name || t('generalRegistrationFallback')}
-                      </p>
-                    </div>
-                    <div>
-                      <span className="text-[9px] font-bold uppercase tracking-widest text-muted-soft">{t('arenaLabel')}</span>
-                      <p className="text-[11px] font-medium text-white truncate uppercase">
-                        {event.location}
-                      </p>
-                    </div>
-                    <div>
-                      <span className="text-[9px] font-bold uppercase tracking-widest text-muted-soft">{t('eventDateLabel')}</span>
-                      <p className="text-[11px] font-medium text-white uppercase">
-                        {event.date}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="border-t border-neutral-800/80 pt-4 flex justify-between items-end">
-                    <div>
-                      <span className="text-[9px] font-bold uppercase tracking-widest text-muted-soft">{t('paymentMethodLabel')}</span>
-                      <p className="text-xs font-bold text-white uppercase">
-                        {ticketTotalPaid === 0 ? t('freeRegistration') : paymentMethod === 'pix' ? t('pixConfirmed') : t('creditCard')}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-[9px] font-bold uppercase tracking-widest text-muted-soft">{t('amountPaidLabel')}</span>
-                      <p className="text-base font-black text-primary font-number">
-                        {formatMoney(ticketAmountCollected, event.currency ?? 'BRL', locale)}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Código de Barras Decorativo */}
-                  <div className="border-t border-neutral-800/80 pt-4 text-center space-y-2">
-                    <div className="flex items-center justify-center gap-[1.5px] h-9 opacity-60">
-                      {[1, 3, 1, 2, 4, 1, 3, 2, 1, 4, 1, 2, 3, 1, 2, 4, 1, 3, 1, 2, 4, 1, 2, 1, 3].map((w, i) => (
-                        <div 
-                          key={i} 
-                          className="bg-white rounded-sm" 
-                          style={{ 
-                            width: `${w}px`, 
-                            height: i % 4 === 0 ? '26px' : '36px' 
-                          }} 
-                        />
-                      ))}
-                    </div>
-                    <div className="flex items-center justify-between pt-1">
-                      <span className="block text-[8px] font-mono tracking-[0.25em] text-neutral-500 uppercase">
-                        {t('secureTicketId', {
-                          id: sessionStorage.getItem('pending_registration')
-                            ? JSON.parse(sessionStorage.getItem('pending_registration') || '{}')?.registrationData?.id || 'WODA-REG-OK'
-                            : 'WODA-REG-OK'
-                        })}
-                      </span>
-                      <img src="/mercadopago-logo.png" alt="Mercado Pago" className="h-3.5 w-auto object-contain opacity-40 grayscale invert" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
               {/* Botões de Ação */}
               <div className="space-y-3 pt-2">
                 <button
@@ -904,9 +785,6 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess }: RegisterMod
                 >
                   {t('backToEvents')}
                 </button>
-                <p className="text-[10px] text-muted-soft italic">
-                  {t('instagramReminder')}
-                </p>
               </div>
             </div>
           ) : pixData ? (

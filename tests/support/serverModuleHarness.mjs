@@ -2,7 +2,7 @@
 // - resolve o alias @/ e imports relativos sem extensão para arquivos de src/;
 // - transpila TypeScript com o pacote typescript (imports só de tipo somem);
 // - troca next/dynamic por um componente vazio, next/server por um NextResponse
-//   mínimo e @supabase/supabase-js por
+//   mínimo, next/og pelo ImageResponse real (CommonJS) e @supabase/supabase-js por
 //   um createClient que devolve o banco em memória ativo (ver fakeSupabase.mjs).
 // Nada de rede, banco real ou .env. Os hooks valem só para o processo do teste
 // que importar este arquivo (o node --test isola cada arquivo de teste).
@@ -31,6 +31,13 @@ export class NextResponse extends Response {
 export default function dynamic() {
   return function DynamicComponentStub() { return null; };
 }
+`,
+  // next/og: o pacote só se resolve como CommonJS; o gerador real do pôster do comprovante
+  // (Story 1.75) roda nos testes, sem rede.
+  'next/og': `
+import { createRequire } from 'node:module';
+const require = createRequire(${JSON.stringify(import.meta.url)});
+export const { ImageResponse } = require('next/dist/server/og/image-response.js');
 `,
   '@supabase/supabase-js': `
 import { getActiveSupabaseClient } from ${JSON.stringify(import.meta.url)};

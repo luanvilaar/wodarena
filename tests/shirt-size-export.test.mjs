@@ -12,7 +12,7 @@ const shirtSummary = read('../src/lib/shirtSummary.ts');
 const startRoute = read('../src/app/api/registrations/start/route.ts');
 const bootstrapRoute = read('../src/app/api/app/bootstrap/route.ts');
 const serverCheckout = read('../src/lib/serverCheckout.ts');
-const emailRoute = read('../src/app/api/checkout/email/route.ts');
+const emailRoute = `${read('../src/app/api/checkout/email/route.ts')}\n${read('../src/lib/serverRegistrationConfirmation.ts')}`;
 const migration = read('../supabase/migrations/20260607234500_athlete_shirt_size.sql');
 
 test('registration form collects shirt size instead of athlete photo', () => {

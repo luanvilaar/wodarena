@@ -1,52 +1,146 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
-import { AlertTriangle, Calendar, CheckCircle2, MapPin, Printer, ShieldCheck, Shirt, TicketCheck, User, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Copy, Check, Download, Share2, ShieldCheck, X } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Registration, Athlete, Event, AppLocale } from '@/types';
 import { formatMoney } from '@/lib/intl/format';
 import { isShirtNone } from '@/lib/shirtPricing';
 import { toBcp47 } from '@/i18n/locales';
+import {
+  getEventDateLabel,
+  getEventInitials,
+  getPaymentMethodKind,
+  isPosterEligible,
+  toInstagramHandle
+} from '@/lib/registrationPoster';
 
 interface RegistrationVoucherProps {
   registration: Registration;
   athlete: Athlete;
   event: Event;
-  cpf?: string;
   onClose: () => void;
 }
 
+type PosterState = 'loading' | 'ready' | 'error';
+type VoucherTab = 'front' | 'back';
+
+// Comprovante único (Story 1.74): a frente é a imagem para os Stories (pôster 1B,
+// gerada no servidor) e o verso tem o registro completo. É o mesmo componente no
+// sucesso da inscrição, no painel do gestor e na área do atleta.
 export function RegistrationVoucher({
   registration,
   athlete,
   event,
-  cpf = '',
   onClose
 }: RegistrationVoucherProps) {
   const t = useTranslations('Voucher');
   const locale = useLocale() as AppLocale;
 
-  const getMaskedCPF = (rawCpf: string) => {
-    const clean = rawCpf.replace(/\D/g, '');
-    if (clean.length !== 11) return rawCpf;
-    return `***.${clean.substring(3, 6)}.${clean.substring(6, 9)}-**`;
+  const hasFront = isPosterEligible(registration);
+  const [tab, setTab] = useState<VoucherTab>(hasFront ? 'front' : 'back');
+  const [posterState, setPosterState] = useState<PosterState>('loading');
+  const [posterBlob, setPosterBlob] = useState<Blob | null>(null);
+  const [posterUrl, setPosterUrl] = useState<string | null>(null);
+  const [actionError, setActionError] = useState(false);
+  const [idCopied, setIdCopied] = useState(false);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  const posterPath = `/api/registrations/${encodeURIComponent(registration.id)}/poster?format=story${
+    registration.accessToken ? `&access_token=${encodeURIComponent(registration.accessToken)}` : ''
+  }`;
+
+  useEffect(() => {
+    if (!hasFront) return;
+    let cancelled = false;
+    let objectUrl: string | null = null;
+
+    fetch(posterPath, { credentials: 'same-origin' })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(String(response.status));
+        return response.blob();
+      })
+      .then((blob) => {
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
+        setPosterBlob(blob);
+        setPosterUrl(objectUrl);
+        setPosterState('ready');
+      })
+      .catch(() => {
+        if (!cancelled) setPosterState('error');
+      });
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [hasFront, posterPath]);
+
+  useEffect(() => {
+    closeButtonRef.current?.focus();
+    const onKeyDown = (keyboardEvent: KeyboardEvent) => {
+      if (keyboardEvent.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
+
+  const fileName = `inscricao-wodarena-${registration.id.replace(/^reg-/, '').slice(0, 8)}.png`;
+
+  const handleSave = () => {
+    if (!posterUrl) return;
+    setActionError(false);
+    const link = document.createElement('a');
+    link.href = posterUrl;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
   };
 
-  const handlePrint = () => {
-    if (typeof window !== 'undefined') {
-      window.print();
+  const canShareFile = typeof navigator !== 'undefined'
+    && typeof navigator.canShare === 'function'
+    && typeof File !== 'undefined';
+
+  const handleShare = async () => {
+    if (!posterBlob) return;
+    setActionError(false);
+    try {
+      const file = new File([posterBlob], fileName, { type: 'image/png' });
+      if (!navigator.canShare({ files: [file] })) {
+        handleSave();
+        return;
+      }
+      await navigator.share({ files: [file], title: event.name });
+    } catch (err) {
+      // Fechar a folha de compartilhamento não é erro.
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      setActionError(true);
     }
   };
 
-  const createdAtDate = registration.createdAt ? new Date(registration.createdAt) : new Date('2026-06-04T12:00:00.000Z');
-  const formattedIssueDate = new Intl.DateTimeFormat(toBcp47(locale), {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  }).format(createdAtDate);
+  const handleCopyId = async () => {
+    try {
+      await navigator.clipboard.writeText(registration.id);
+      setIdCopied(true);
+      setTimeout(() => setIdCopied(false), 2000);
+    } catch {
+      setIdCopied(false);
+    }
+  };
+
+  const createdAtDate = registration.createdAt ? new Date(registration.createdAt) : null;
+  const formattedIssueDate = createdAtDate && !Number.isNaN(createdAtDate.getTime())
+    ? new Intl.DateTimeFormat(toBcp47(locale), {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      }).format(createdAtDate)
+    : '';
 
   const currency = registration.currency ?? 'BRL';
   const formattedPrice = formatMoney(registration.totalPaid, currency, locale);
@@ -70,7 +164,6 @@ export function RegistrationVoucher({
       ].filter(Boolean).join(' · ')
     : '';
 
-  const hasBanner = Boolean(event.bannerUrl);
   const hasLogo = Boolean(event.logoUrl);
   const paymentStatus = registration.paymentStatus || 'payment_approved';
   const isPaymentApproved = paymentStatus === 'payment_approved';
@@ -85,58 +178,44 @@ export function RegistrationVoucher({
           : t('statusApproved');
   const StatusIcon = isPaymentApproved ? CheckCircle2 : AlertTriangle;
 
+  const methodKind = getPaymentMethodKind(registration.paymentMethod);
+  const methodLabel = methodKind === 'free'
+    ? t('methodFree')
+    : methodKind === 'pix'
+      ? t('methodPix')
+      : methodKind === 'card'
+        ? t('methodCard')
+        : '';
+  const paymentSummary = [methodLabel, statusLabel].filter(Boolean).join(' · ');
+
+  const dateLabel = getEventDateLabel(event, locale);
+  const eventPlace = [event.location, [event.city, event.state].filter(Boolean).join('/')].filter(Boolean).join(' · ');
+  const eventSubtitle = [dateLabel, eventPlace].filter(Boolean).join(' · ');
+  const instagramHandle = toInstagramHandle(event.instagram);
+
+  const tabs: { id: VoucherTab; label: string }[] = [
+    { id: 'front', label: t('tabFront') },
+    { id: 'back', label: t('tabBack') }
+  ];
+
   return (
     <div
-      id="print-voucher-overlay"
+      id="registration-voucher-overlay"
       className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-[#0b0e11]/95 px-3 py-4 sm:p-6"
       role="dialog"
       aria-modal="true"
       aria-label={t('dialogAriaLabel')}
     >
-      <style dangerouslySetInnerHTML={{ __html: `
-        @media print {
-          body * {
-            visibility: hidden !important;
-          }
-          #print-voucher-overlay, #print-voucher-overlay * {
-            visibility: visible !important;
-          }
-          #print-voucher-overlay {
-            position: absolute !important;
-            inset: 0 !important;
-            width: 100% !important;
-            min-height: 100% !important;
-            background: #ffffff !important;
-            padding: 0 !important;
-            margin: 0 !important;
-            display: block !important;
-          }
-          .no-print {
-            display: none !important;
-          }
-          .voucher-shell {
-            width: 100% !important;
-            max-width: 430px !important;
-            margin: 0 auto !important;
-            border: 0 !important;
-            box-shadow: none !important;
-          }
-          * {
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-          }
-        }
-      `}} />
-
       <div className="w-full max-w-[430px] space-y-3">
-        <div className="no-print flex items-center justify-between rounded-lg border border-[#2b3139] bg-[#1e2329] px-3 py-2 text-white">
+        <div className="flex items-center justify-between rounded-lg border border-[#2b3139] bg-[#1e2329] px-3 py-2 text-white">
           <div className="flex min-w-0 items-center gap-2">
             <StatusIcon className={`h-4 w-4 shrink-0 ${isPaymentApproved ? 'text-[#0ecb81]' : 'text-[#FCD535]'}`} aria-hidden="true" />
             <span className="truncate text-xs font-bold uppercase">{statusLabel}</span>
           </div>
           <button
+            ref={closeButtonRef}
             onClick={onClose}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-[#929aa5] transition-colors hover:bg-[#2b3139] hover:text-white focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/50"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-[#929aa5] transition-colors hover:bg-[#2b3139] hover:text-white focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/50"
             aria-label={t('closeAria')}
             type="button"
           >
@@ -144,87 +223,137 @@ export function RegistrationVoucher({
           </button>
         </div>
 
-        <article className="voucher-shell relative w-full min-h-[690px] overflow-hidden rounded-xl border border-[#2b3139] bg-[#0b0e11] text-white shadow-2xl">
-          <div className="absolute inset-x-0 top-0 h-1.5 bg-[#FCD535]" aria-hidden="true" />
+        {hasFront && (
+          <div role="tablist" aria-label={t('dialogAriaLabel')} className="grid grid-cols-2 rounded-lg border border-[#2b3139] bg-[#1e2329] p-1 text-xs font-bold uppercase">
+            {tabs.map(({ id, label }) => (
+              <button
+                key={id}
+                id={`voucher-tab-${id}`}
+                role="tab"
+                type="button"
+                aria-selected={tab === id}
+                aria-controls={`voucher-panel-${id}`}
+                onClick={() => setTab(id)}
+                className={`min-h-11 rounded-md px-3 transition-colors focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/50 ${
+                  tab === id ? 'bg-[#2b3139] text-white' : 'text-[#929aa5] hover:text-white'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
 
-          <div className="flex h-full flex-col">
-            <header className="flex items-center justify-between gap-3 border-b border-[#2b3139] bg-[#0b0e11] px-5 pb-4 pt-6">
-              <div className="min-w-0">
-                <p className="text-[11px] font-bold uppercase text-[#FCD535]">WODArena</p>
-                <h2 className="mt-1 truncate text-base font-black uppercase text-white">{event.name}</h2>
-              </div>
-              {hasLogo ? (
-                <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-[#2b3139] bg-white p-1">
-                  <Image
-                    src={event.logoUrl}
-                    alt={`${event.name} logo`}
-                    width={48}
-                    height={48}
-                    unoptimized
-                    className="h-full w-full rounded object-cover"
-                  />
-                </div>
-              ) : (
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-[#2b3139] bg-[#1e2329] text-sm font-black text-[#FCD535]">
-                  WA
+        {hasFront && tab === 'front' && (
+          <div id="voucher-panel-front" role="tabpanel" aria-labelledby="voucher-tab-front" className="space-y-3">
+            <div className="relative mx-auto aspect-[9/16] w-full max-w-[300px] overflow-hidden rounded-2xl border border-[#2b3139] bg-[#1e2329]">
+              {posterState === 'ready' && posterUrl && (
+                // eslint-disable-next-line @next/next/no-img-element -- blob: gerado no navegador
+                <img src={posterUrl} alt={t('posterAlt', { name: registration.athleteName })} className="h-full w-full object-cover" />
+              )}
+              {posterState === 'loading' && (
+                <div className="flex h-full w-full animate-pulse items-center justify-center bg-[#FCD535]/20 px-6 text-center text-xs font-bold uppercase text-[#929aa5]" role="status">
+                  {t('posterLoading')}
                 </div>
               )}
-            </header>
-
-            <section className="relative h-40 shrink-0 overflow-hidden bg-[#1e2329]">
-              {hasBanner ? (
-                <Image
-                  src={event.bannerUrl}
-                  alt={`${event.name} banner`}
-                  width={430}
-                  height={180}
-                  unoptimized
-                  priority
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center px-6 text-center">
-                  <span className="text-lg font-black uppercase text-[#FCD535]">{event.name}</span>
+              {posterState === 'error' && (
+                <div className="flex h-full w-full flex-col items-center justify-center gap-3 px-6 text-center" role="alert">
+                  <AlertTriangle className="h-6 w-6 text-[#FCD535]" aria-hidden="true" />
+                  <p className="text-xs leading-relaxed text-[#929aa5]">{t('posterError')}</p>
+                  <button
+                    type="button"
+                    onClick={() => setTab('back')}
+                    className="min-h-11 rounded-md border border-[#2b3139] bg-[#0b0e11] px-4 text-xs font-bold uppercase text-white hover:border-[#FCD535]/50"
+                  >
+                    {t('tabBack')}
+                  </button>
                 </div>
               )}
-              <div className="absolute left-4 top-4 rounded-md border border-[#FCD535]/50 bg-[#0b0e11] px-3 py-1">
-                <span className="text-[10px] font-black uppercase text-[#FCD535]">{isPaymentApproved ? t('officialProof') : t('registrationRecord')}</span>
-              </div>
-            </section>
+            </div>
+            {actionError && (
+              <p className="text-center text-xs text-[#f6465d]" role="alert">{t('actionError')}</p>
+            )}
+            <div className={`grid gap-3 ${canShareFile ? 'grid-cols-2' : 'grid-cols-1'}`}>
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={posterState !== 'ready'}
+                className="flex min-h-11 items-center justify-center gap-2 rounded-md bg-[#FCD535] px-4 py-2 text-xs font-bold uppercase text-[#181a20] transition-colors hover:bg-[#f0b90b] focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Download className="h-4 w-4" aria-hidden="true" />
+                {t('saveImage')}
+              </button>
+              {canShareFile && (
+                <button
+                  type="button"
+                  onClick={handleShare}
+                  disabled={posterState !== 'ready'}
+                  className="flex min-h-11 items-center justify-center gap-2 rounded-md border border-[#2b3139] bg-[#1e2329] px-4 py-2 text-xs font-bold uppercase text-white transition-colors hover:border-[#FCD535]/50 hover:text-[#FCD535] focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Share2 className="h-4 w-4" aria-hidden="true" />
+                  {t('shareImage')}
+                </button>
+              )}
+            </div>
+            <p className="text-center text-[11px] leading-relaxed text-[#929aa5]">
+              {instagramHandle ? t('tagReminder', { handle: instagramHandle }) : t('tagReminderGeneric')}
+            </p>
+          </div>
+        )}
 
-            <section className="bg-[#FCD535] px-5 py-5 text-[#181a20]">
-              <div className="flex items-start justify-between gap-4">
+        {tab === 'back' && (
+          <div id="voucher-panel-back" role={hasFront ? 'tabpanel' : undefined} aria-labelledby={hasFront ? 'voucher-tab-back' : undefined} className="space-y-3">
+            <article className="relative overflow-hidden rounded-xl border border-[#2b3139] bg-[#0b0e11] text-white">
+              <div className="absolute inset-x-0 top-0 h-1.5 bg-[#FCD535]" aria-hidden="true" />
+              <header className="flex items-center gap-3 border-b border-[#2b3139] px-5 pb-4 pt-6">
+                {hasLogo ? (
+                  <div className="h-11 w-11 shrink-0 overflow-hidden rounded-lg border border-[#2b3139] bg-white p-1">
+                    <Image
+                      src={event.logoUrl}
+                      alt={`${event.name} logo`}
+                      width={44}
+                      height={44}
+                      unoptimized
+                      className="h-full w-full rounded object-cover"
+                    />
+                  </div>
+                ) : (
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[#FCD535] text-sm font-black text-[#181a20]">
+                    {getEventInitials(event.name)}
+                  </div>
+                )}
                 <div className="min-w-0">
-                  <p className="text-[11px] font-bold uppercase text-[#181a20]/70">{t('participantLabel')}</p>
-                  <h1 className="mt-1 break-words text-2xl font-black uppercase leading-tight">{registration.athleteName}</h1>
+                  <h2 className="break-words text-sm font-black uppercase leading-tight">{event.name}</h2>
+                  {eventSubtitle && <p className="mt-1 text-[11px] leading-snug text-[#929aa5]">{eventSubtitle}</p>}
                 </div>
-                <TicketCheck className="mt-1 h-8 w-8 shrink-0 text-[#181a20]" aria-hidden="true" />
-              </div>
-              {teamMembers && (
-                <p className="mt-3 text-xs font-semibold leading-relaxed text-[#181a20]/80">
-                  {t('membersLabel', { names: teamMembers })}
-                </p>
-              )}
-            </section>
+              </header>
 
-            <section className="grid grid-cols-2 gap-px bg-[#2b3139] text-[#eaecef]">
-              <VoucherInfo label={t('categoryLabel')} value={registration.ticketType} icon={<TicketCheck className="h-4 w-4" />} />
-              <VoucherInfo label={t('amountPaidLabel')} value={formattedPrice} strong />
-              {shirtSummary && (
-                <VoucherInfo label={t('shirtLabel')} value={shirtSummary} icon={<Shirt className="h-4 w-4" />} wide />
-              )}
-              <VoucherInfo label={t('dateLabel')} value={event.date} icon={<Calendar className="h-4 w-4" />} />
-              <VoucherInfo label={t('locationLabel')} value={event.location} icon={<MapPin className="h-4 w-4" />} />
-              <VoucherInfo label={t('boxLabel')} value={registration.box || t('boxFallback')} icon={<User className="h-4 w-4" />} />
-              <VoucherInfo label={t('issuedLabel')} value={formattedIssueDate} />
-              <VoucherInfo label={t('statusFieldLabel')} value={statusLabel} wide={!cpf} />
-              {cpf && <VoucherInfo label={t('cpfLabel')} value={getMaskedCPF(cpf)} />}
-              <VoucherInfo label={t('idLabel')} value={registration.id} mono wide={false} />
-            </section>
+              <section className="divide-y divide-[#1e2329]">
+                <VoucherInfo label={t('athleteLabel')} value={registration.athleteName} strong>
+                  {teamMembers && <p className="mt-1 text-xs font-medium leading-relaxed text-[#929aa5]">{t('membersLabel', { names: teamMembers })}</p>}
+                </VoucherInfo>
+                <VoucherInfo label={t('categoryLabel')} value={registration.ticketType} />
+                <VoucherInfo label={t('boxLabel')} value={registration.box || t('boxFallback')} />
+                {shirtSummary && (
+                  <VoucherInfo label={t('shirtLabel')} value={shirtSummary} />
+                )}
+                <VoucherInfo label={t('amountPaidLabel')} value={formattedPrice} highlight />
+                <VoucherInfo label={t('paymentLabel')} value={paymentSummary} />
+                {formattedIssueDate && <VoucherInfo label={t('issuedLabel')} value={formattedIssueDate} />}
+                <VoucherInfo label={t('idLabel')} value={registration.id} mono>
+                  <button
+                    type="button"
+                    onClick={handleCopyId}
+                    className="mt-2 inline-flex min-h-11 items-center gap-2 rounded-md border border-[#2b3139] bg-[#1e2329] px-3 text-[11px] font-bold uppercase text-white transition-colors hover:border-[#FCD535]/50 focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/50"
+                  >
+                    {idCopied ? <Check className="h-3.5 w-3.5 text-[#0ecb81]" aria-hidden="true" /> : <Copy className="h-3.5 w-3.5" aria-hidden="true" />}
+                    {idCopied ? t('idCopied') : t('copyId')}
+                  </button>
+                </VoucherInfo>
+              </section>
 
-            <footer className="mt-auto space-y-4 bg-[#0b0e11] px-5 py-5">
-              <div className="rounded-lg border border-[#2b3139] bg-[#1e2329] p-4">
-                <div className="flex items-start gap-3">
+              <footer className="space-y-3 border-t border-[#2b3139] bg-[#0b0e11] px-5 py-5">
+                <div className="flex items-start gap-3 rounded-lg border border-[#2b3139] bg-[#1e2329] p-4">
                   {isPaymentApproved ? (
                     <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[#0ecb81]" aria-hidden="true" />
                   ) : (
@@ -233,39 +362,26 @@ export function RegistrationVoucher({
                   <div>
                     <p className="text-xs font-bold uppercase text-white">{isPaymentApproved ? t('validatedTitle') : t('registeredTitle')}</p>
                     <p className="mt-1 text-[11px] leading-relaxed text-[#929aa5]">
-                      {isPaymentApproved
-                        ? t('validatedDescription')
-                        : t('registeredDescription')}
+                      {isPaymentApproved ? t('validatedDescription') : t('registeredDescription')}
                     </p>
                   </div>
                 </div>
-              </div>
-              <div className="flex items-center justify-between gap-3 text-[10px] font-bold uppercase text-[#707a8a]">
-                <span>wodarena.com</span>
-                <span>{registration.id}</span>
-              </div>
-            </footer>
+                {instagramHandle && (
+                  <p className="text-[11px] leading-relaxed text-[#929aa5]">{t('organizerContact', { handle: instagramHandle })}</p>
+                )}
+              </footer>
+            </article>
           </div>
-        </article>
+        )}
 
-        <div className="no-print grid grid-cols-2 gap-3">
-          <button
-            onClick={handlePrint}
-            className="flex min-h-11 items-center justify-center gap-2 rounded-md border border-[#2b3139] bg-[#1e2329] px-4 py-2 text-xs font-bold uppercase text-white transition-colors hover:border-[#FCD535]/50 hover:text-[#FCD535] focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/50"
-            type="button"
-          >
-            <Printer className="h-4 w-4" aria-hidden="true" />
-            {t('print')}
-          </button>
-          <button
-            onClick={onClose}
-            className="flex min-h-11 items-center justify-center gap-2 rounded-md bg-[#FCD535] px-4 py-2 text-xs font-bold uppercase text-[#181a20] transition-colors hover:bg-[#f0b90b] focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/50"
-            type="button"
-          >
-            <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-            {t('done')}
-          </button>
-        </div>
+        <button
+          onClick={onClose}
+          className="flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-[#2b3139] bg-[#1e2329] px-4 py-2 text-xs font-bold uppercase text-white transition-colors hover:border-[#FCD535]/50 hover:text-[#FCD535] focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/50"
+          type="button"
+        >
+          <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+          {t('done')}
+        </button>
       </div>
     </div>
   );
@@ -274,27 +390,29 @@ export function RegistrationVoucher({
 function VoucherInfo({
   label,
   value,
-  icon,
   strong = false,
+  highlight = false,
   mono = false,
-  wide = false
+  children
 }: {
   label: string;
   value: string;
-  icon?: React.ReactNode;
   strong?: boolean;
+  highlight?: boolean;
   mono?: boolean;
-  wide?: boolean;
+  children?: React.ReactNode;
 }) {
   return (
-    <div className={`min-h-[82px] bg-[#0b0e11] p-4 ${wide ? 'col-span-2' : ''}`}>
-      <p className="text-[10px] font-bold uppercase text-[#707a8a]">{label}</p>
-      <div className="mt-2 flex items-start gap-2">
-        {icon && <span className="mt-0.5 shrink-0 text-[#FCD535]">{icon}</span>}
-        <p className={`break-words text-sm uppercase leading-snug text-white ${strong ? 'text-lg font-black text-[#FCD535]' : 'font-bold'} ${mono ? 'font-mono text-xs normal-case' : ''}`}>
-          {value}
-        </p>
-      </div>
+    <div className="px-5 py-3">
+      <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[#929aa5]">{label}</p>
+      <p
+        className={`mt-1 break-words leading-snug ${
+          highlight ? 'font-number text-lg font-black text-[#FCD535]' : strong ? 'text-base font-black uppercase' : 'text-sm font-bold'
+        } ${mono ? 'font-mono text-xs' : ''}`}
+      >
+        {value}
+      </p>
+      {children}
     </div>
   );
 }

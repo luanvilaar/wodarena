@@ -612,7 +612,15 @@ export const triggerRegistrationApprovedEmail = async (
     };
 
     console.log(`[Email Trigger] Disparando e-mail de confirmação para a inscrição ${registrationId}...`);
-    const emailResult = await sendRegistrationEmail(registration, athlete, event, '', registration.locale || event.defaultLocale);
+    // Uma chave por inscrição: aprovação reportada por mais de um caminho (consulta de
+    // status, webhook, rota do cartão) vira um e-mail só (Story 1.76).
+    const emailResult = await sendRegistrationEmail(
+      registration,
+      athlete,
+      event,
+      registration.locale || event.defaultLocale,
+      { idempotencyKey: `registration-confirmed/${registrationId}` }
+    );
     
     if (!emailResult.success) {
       console.error(`[Email Trigger] Falha ao enviar e-mail via Resend:`, emailResult.error);

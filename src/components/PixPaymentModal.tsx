@@ -96,17 +96,8 @@ export default function PixPaymentModal({
           active = false;
           clearInterval(intervalId);
           setPaymentSuccess(true);
-          
-          // Dispara e-mail local em background para notificar confirmação
-          fetch('/api/checkout/email', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              registrationId: registration.id,
-              accessToken: registration.accessToken,
-              cpf: cpf.replace(/\D/g, '')
-            })
-          }).catch(err => console.error("[PixPaymentModal Email Trigger] Erro ao disparar e-mail:", err));
+
+          // O e-mail de confirmação sai do servidor quando o pagamento é aprovado (Story 1.76).
 
           setTimeout(() => {
             onSuccess(data.status);
@@ -121,7 +112,7 @@ export default function PixPaymentModal({
       active = false;
       clearInterval(intervalId);
     };
-  }, [pixData, event.id, registration.id, registration.accessToken, cpf, isOpen, onSuccess]);
+  }, [pixData, event.id, registration.id, registration.accessToken, isOpen, onSuccess]);
 
   const handleCopyPix = () => {
     if (!pixData?.qr_code) return;

@@ -98,6 +98,11 @@ const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_MAPBOX_TOKEN: process.env.NEXT_PUBLIC_MAPBOX_TOKEN || process.env.MAPBOX_TOKEN || "",
   },
+  // Fontes do pôster do comprovante (Story 1.75): lidas do disco em runtime pela rota da
+  // imagem e pelo e-mail de confirmação, que roda dentro das rotas de pagamento.
+  outputFileTracingIncludes: {
+    "/api/**/*": ["./src/assets/fonts/*.ttf"],
+  },
   // Development uses Turbopack; the production script explicitly uses Webpack.
   turbopack: {},
   webpack(config, { dev, buildId }) {

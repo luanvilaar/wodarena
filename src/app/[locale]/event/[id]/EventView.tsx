@@ -160,7 +160,7 @@ export function EventView({ eventId }: { eventId: string }) {
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
   const [shareFeedback, setShareFeedback] = useState(false);
   const [paymentNotice, setPaymentNotice] = useState<{ text: string; tone: 'success' | 'error' } | null>(null);
-  const [confirmedVoucher, setConfirmedVoucher] = useState<{ registration: Registration; athlete: Athlete; cpf?: string } | null>(null);
+  const [confirmedVoucher, setConfirmedVoucher] = useState<{ registration: Registration; athlete: Athlete } | null>(null);
   const [selectedDivisionForCourseId, setSelectedDivisionForCourseId] = useState<string>('');
   const [expandedHeatIds, setExpandedHeatIds] = useState<Set<string>>(new Set());
   const [scheduleNowTs, setScheduleNowTs] = useState(() => Date.now());
@@ -227,42 +227,46 @@ export function EventView({ eventId }: { eventId: string }) {
       if (paymentStatus === 'success') {
         const pendingRegStr = sessionStorage.getItem('pending_registration');
         if (pendingRegStr) {
-          try {
-            const { registrationData, athleteProfile, cpf } = JSON.parse(pendingRegStr);
-            console.log("[WODArena Checkout] Pagamento aprovado! Sincronizando inscrição localmente...");
-            const paymentId = searchParams.get('payment_id') || searchParams.get('collection_id') || undefined;
-            const approvedRegistrationData = {
-              ...registrationData,
-              paymentStatus: 'payment_approved' as const,
-              paymentMethod: searchParams.get('payment_type') || 'mercadopago_preference',
-              paymentId,
-              paymentStatusDetail: searchParams.get('status') || 'approved'
-            };
-
-            const createdReg = registerTicket(approvedRegistrationData, athleteProfile);
-            // O uso do cupom é contabilizado no servidor ao confirmar o pagamento.
-
-            setTimeout(() => {
-              setConfirmedVoucher({
-                registration: createdReg || {
-                  ...approvedRegistrationData,
-                  id: registrationData.id || `reg-${Date.now()}`,
-                  createdAt: new Date().toISOString()
-                },
-                athlete: athleteProfile,
-                cpf: cpf || ''
+          sessionStorage.removeItem('pending_registration');
+          const returnedPaymentId = searchParams.get('payment_id') || searchParams.get('collection_id');
+          // O parâmetro da URL não confirma nada: o comprovante só abre com o status que o
+          // servidor devolve para a inscrição (Story 1.74).
+          void (async () => {
+            try {
+              const { registrationData, athleteProfile } = JSON.parse(pendingRegStr);
+              const statusParams = new URLSearchParams({
+                event_id: String(registrationData.eventId),
+                registration_id: String(registrationData.id)
               });
-              setPaymentNotice({
-                text: t('paymentSuccessLocal'),
-                tone: 'success'
-              });
-            }, 0);
+              if (returnedPaymentId) statusParams.set('payment_id', returnedPaymentId);
+              if (registrationData.accessToken) statusParams.set('access_token', String(registrationData.accessToken));
 
-          } catch (e) {
-            console.error("[WODArena Checkout] Erro no processamento local de contingência:", e);
-          } finally {
-            sessionStorage.removeItem('pending_registration');
-          }
+              const response = await fetch(`/api/checkout/status?${statusParams.toString()}`);
+              const verified = response.ok ? await response.json() : null;
+
+              if (verified?.status === 'approved' && verified.registrationData && verified.athleteProfile) {
+                const approvedRegistrationData = {
+                  ...verified.registrationData,
+                  paymentStatus: 'payment_approved' as const,
+                  accessToken: registrationData.accessToken
+                };
+                const createdReg = registerTicket(approvedRegistrationData, verified.athleteProfile);
+                // O uso do cupom é contabilizado no servidor ao confirmar o pagamento.
+                setConfirmedVoucher({
+                  registration: createdReg ? { ...createdReg, accessToken: registrationData.accessToken } : approvedRegistrationData,
+                  athlete: verified.athleteProfile || athleteProfile
+                });
+                setPaymentNotice({ text: t('paymentSuccessLocal'), tone: 'success' });
+                return;
+              }
+
+              await refreshRegistrations();
+              setPaymentNotice({ text: t('paymentSuccessGeneric'), tone: 'success' });
+            } catch (e) {
+              console.error("[WODArena Checkout] Erro ao confirmar o pagamento no servidor:", e);
+              setPaymentNotice({ text: t('paymentSuccessGeneric'), tone: 'success' });
+            }
+          })();
         } else {
           refreshRegistrations().catch((err) => {
             console.error("[WODArena Checkout] Erro ao atualizar inscrições após retorno aprovado:", err);
@@ -1543,9 +1547,6 @@ export function EventView({ eventId }: { eventId: string }) {
         event={event}
         isOpen={isRegisterOpen}
         onClose={() => setIsRegisterOpen(false)}
-        onSuccess={(registration, athlete, cpf) => {
-          setConfirmedVoucher({ registration, athlete, cpf });
-        }}
       />
 
       {confirmedVoucher && (
@@ -1553,7 +1554,6 @@ export function EventView({ eventId }: { eventId: string }) {
           registration={confirmedVoucher.registration}
           athlete={confirmedVoucher.athlete}
           event={event}
-          cpf={confirmedVoucher.cpf}
           onClose={() => setConfirmedVoucher(null)}
         />
       )}

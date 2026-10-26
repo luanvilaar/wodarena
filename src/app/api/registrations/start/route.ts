@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { MercadoPagoConfigError, resolveMercadoPagoCheckoutConfig } from '@/lib/mercadopagoServer';
 import { createAthleteId } from '@/lib/registrationIds';
-import { applyCouponUsageForApprovedRegistration, calculateSecureRegistrationSnapshot, RegistrationAccessError } from '@/lib/serverCheckout';
+import { applyCouponUsageForApprovedRegistration, calculateSecureRegistrationSnapshot, RegistrationAccessError, triggerRegistrationApprovedEmail } from '@/lib/serverCheckout';
 import { ManagerAccessError, managerAccessErrorResponse } from '@/lib/serverManagerAccess';
 import { checkRateLimit, createRegistrationAccessToken, createSupabaseAdmin, getClientIp, hashPassword, verifyPassword } from '@/lib/serverSecurity';
 import { calculateServiceFee } from '@/lib/serviceFee';
@@ -293,6 +293,10 @@ export async function POST(request: Request) {
     // Pago — contabiliza o uso do cupom aqui para não perder a contagem.
     if (paymentStatus === 'payment_approved') {
       await applyCouponUsageForApprovedRegistration(supabaseAdmin, regId);
+      // A confirmação sai do servidor (Story 1.76): o navegador não dispara mais o e-mail.
+      await triggerRegistrationApprovedEmail(supabaseAdmin, regId).catch(err =>
+        console.error('[Registration Start] Erro ao disparar e-mail da inscrição gratuita:', err)
+      );
     }
 
     const registrationAccessToken = createRegistrationAccessToken({

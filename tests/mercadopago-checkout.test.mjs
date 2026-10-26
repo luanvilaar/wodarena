@@ -112,7 +112,9 @@ test('public checkout propagates the signed registration access token through po
   assert.match(registerModal, /accessToken: activeRegistrationData\.accessToken/);
   assert.match(registerModal, /registration_id: pixData\.registrationId/);
   assert.match(registerModal, /statusParams\.set\('access_token', pixData\.accessToken\)/);
-  assert.match(registerModal, /body: JSON\.stringify\(\{[\s\S]*accessToken: createdReg\.accessToken \|\| registrationPayload\?\.accessToken/);
+  // O token segue para o comprovante (Story 1.73); o e-mail sai do servidor, não do navegador.
+  assert.match(registerModal, /\{ \.\.\.createdReg, accessToken: createdReg\.accessToken \|\| registrationPayload\?\.accessToken \}/);
+  assert.doesNotMatch(registerModal, /\/api\/checkout\/email/);
   assert.match(pixRoute, /const \{ registrationData, cpf, accessToken \} = body/);
   assert.match(cardRoute, /const \{ registrationData, token, payment_method_id, installments, cpf, deviceId, accessToken \} = body/);
   assert.match(preferenceRoute, /const \{ registrationData, origin, accessToken, locale \} = body/);
@@ -131,9 +133,13 @@ test('local registration preserves checkout identifiers for webhook and voucher 
 });
 
 test('approved Mercado Pago redirect does not overwrite registration as pending', () => {
+  // Story 1.74: o parâmetro da URL não confirma nada; o comprovante só abre com o status do servidor.
+  assert.match(eventPage, /fetch\(`\/api\/checkout\/status\?\$\{statusParams\.toString\(\)\}`\)/);
+  assert.match(eventPage, /verified\?\.status === 'approved' && verified\.registrationData && verified\.athleteProfile/);
   assert.match(eventPage, /approvedRegistrationData/);
   assert.match(eventPage, /paymentStatus: 'payment_approved' as const/);
-  assert.match(eventPage, /const createdReg = registerTicket\(approvedRegistrationData, athleteProfile\)/);
+  assert.match(eventPage, /const createdReg = registerTicket\(approvedRegistrationData, verified\.athleteProfile\)/);
+  assert.doesNotMatch(eventPage, /searchParams\.get\('payment_type'\) \|\| 'mercadopago_preference'/);
 });
 
 test('Mercado Pago OAuth callback persists secrets with Supabase service role', () => {

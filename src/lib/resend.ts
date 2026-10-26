@@ -2,6 +2,7 @@ import { Registration, Athlete, Event, ContestationStatus, AppLocale } from '@/t
 import { getContestationStatusLabel } from '@/lib/contestations';
 import { isShirtNone } from '@/lib/shirtPricing';
 import { toBcp47 } from '@/i18n/locales';
+import { buildPosterModel, getEventDateLabel, getPaymentMethodKind, isPosterEligible } from '@/lib/registrationPoster';
 
 // Locale das inscrições/usuários é opcional em pontos legados do banco; todo
 // disparo de e-mail cai em pt-br quando ausente, mesmo default do resto do app.
@@ -215,13 +216,16 @@ type RegistrationEmailCopy = {
     membersPrefix: string;
     box: string;
     boxFallback: string;
-    taxId: string;
     eventDate: string;
     location: string;
     cityRegion: string;
     totalPaid: string;
+    paymentMethod: string;
     paymentStatus: string;
   };
+  paymentMethods: { free: string; pix: string; card: string };
+  openRegistration: string;
+  heroAlt: (eventName: string) => string;
   shirt: {
     label: string;
     none: string;
@@ -273,13 +277,16 @@ const REGISTRATION_EMAIL_COPY: Record<AppLocale, RegistrationEmailCopy> = {
       membersPrefix: 'Integrantes',
       box: 'Box / Afiliado',
       boxFallback: 'Independente',
-      taxId: 'CPF do Pagador',
       eventDate: 'Data do Evento',
       location: 'Local',
       cityRegion: 'Cidade / Estado',
       totalPaid: 'Total Pago',
+      paymentMethod: 'Forma de Pagamento',
       paymentStatus: 'Status do Pagamento'
     },
+    paymentMethods: { free: 'Inscrição gratuita', pix: 'Pix', card: 'Cartão' },
+    openRegistration: 'Abrir minha inscrição',
+    heroAlt: (eventName) => `Inscrição confirmada em ${eventName}`,
     shirt: {
       label: 'Camisa',
       none: 'Sem camisa',
@@ -329,13 +336,16 @@ const REGISTRATION_EMAIL_COPY: Record<AppLocale, RegistrationEmailCopy> = {
       membersPrefix: 'Elementos',
       box: 'Box / Afiliado',
       boxFallback: 'Independente',
-      taxId: 'NIF do Pagador',
       eventDate: 'Data do Evento',
       location: 'Local',
       cityRegion: 'Cidade / Região',
       totalPaid: 'Total Pago',
+      paymentMethod: 'Forma de Pagamento',
       paymentStatus: 'Estado do Pagamento'
     },
+    paymentMethods: { free: 'Inscrição gratuita', pix: 'Pix', card: 'Cartão' },
+    openRegistration: 'Abrir a minha inscrição',
+    heroAlt: (eventName) => `Inscrição confirmada em ${eventName}`,
     shirt: {
       label: 'T-shirt',
       none: 'Sem t-shirt',
@@ -385,13 +395,16 @@ const REGISTRATION_EMAIL_COPY: Record<AppLocale, RegistrationEmailCopy> = {
       membersPrefix: 'Members',
       box: 'Box / Affiliate',
       boxFallback: 'Independent',
-      taxId: 'Payer Tax ID',
       eventDate: 'Event Date',
       location: 'Venue',
       cityRegion: 'City / Region',
       totalPaid: 'Total Paid',
+      paymentMethod: 'Payment Method',
       paymentStatus: 'Payment Status'
     },
+    paymentMethods: { free: 'Free registration', pix: 'Pix', card: 'Card' },
+    openRegistration: 'Open my registration',
+    heroAlt: (eventName) => `Registration confirmed for ${eventName}`,
     shirt: {
       label: 'Shirt',
       none: 'No shirt',
@@ -416,6 +429,40 @@ const REGISTRATION_EMAIL_COPY: Record<AppLocale, RegistrationEmailCopy> = {
   }
 };
 
+export type SendRegistrationEmailOptions = {
+  // Resend descarta o segundo envio com a mesma chave em 24 h. Os pontos de aprovação do
+  // servidor usam uma chave por inscrição; a segunda via do painel não passa chave.
+  idempotencyKey?: string;
+};
+
+const POSTER_CONTENT_ID = 'registration-poster';
+
+const getPublicAppUrl = () => (
+  process.env.NEXT_PUBLIC_APP_URL
+  || process.env.APP_URL
+  || 'https://wodarena.com.br'
+).replace(/\/$/, '');
+
+// Cabeçalho do e-mail: a mesma frente do comprovante (pôster 1B). Falha ao gerar a
+// imagem nunca impede o envio: o e-mail sai com o cabeçalho de texto.
+const buildPosterAttachment = async (
+  registration: Registration,
+  athlete: Athlete,
+  event: Event,
+  locale: AppLocale
+) => {
+  if (!isPosterEligible(registration)) return null;
+  try {
+    const { renderRegistrationPoster } = await import('@/lib/registrationPosterImage');
+    const model = buildPosterModel({ registration, athlete, event, locale });
+    const image = await renderRegistrationPoster(model, 'email', event.logoUrl);
+    return Buffer.from(await image.arrayBuffer()).toString('base64');
+  } catch (err) {
+    console.error('[Resend Email Service] Não foi possível gerar a imagem do comprovante; enviando sem ela:', err);
+    return null;
+  }
+};
+
 /**
  * Envia um e-mail de confirmação de inscrição para o atleta utilizando a API do Resend.
  */
@@ -423,8 +470,8 @@ export async function sendRegistrationEmail(
   registration: Registration,
   athlete: Athlete,
   event: Event,
-  cpf: string = '',
-  locale?: AppLocale
+  locale?: AppLocale,
+  options: SendRegistrationEmailOptions = {}
 ) {
   const apiKey = getResendApiKey();
   if (!apiKey) {
@@ -434,12 +481,6 @@ export async function sendRegistrationEmail(
 
   const resolvedLocale = resolveLocale(locale ?? registration.locale ?? event.defaultLocale);
   const c = REGISTRATION_EMAIL_COPY[resolvedLocale];
-
-  // Mascarar CPF (formato brasileiro; NIF/Tax ID de outros países aparecem sem máscara)
-  const cleanCpf = cpf.replace(/\D/g, '');
-  const maskedCpf = resolvedLocale === 'pt-br' && cleanCpf.length === 11
-    ? `***.${cleanCpf.substring(3, 6)}.${cleanCpf.substring(6, 9)}-**`
-    : cpf;
 
   const moneyFormatter = new Intl.NumberFormat(toBcp47(resolvedLocale), {
     style: 'currency',
@@ -459,9 +500,12 @@ export async function sendRegistrationEmail(
           ? c.statusLabels.pending
           : c.statusLabels.approved;
 
+  const paymentMethodKind = getPaymentMethodKind(registration.paymentMethod);
+  const paymentMethodLabel = paymentMethodKind && paymentMethodKind !== 'other' ? c.paymentMethods[paymentMethodKind] : '';
+
   const isTeam = athlete.isTeam || false;
   const teamMembers = isTeam ? athlete.teamMembers ?? [] : [];
-  const teamMembersList = teamMembers.map(m => m.name).join(', ');
+  const teamMembersList = teamMembers.map(m => escapeHtml(m.name)).join(', ');
 
   // Camisa por participante, na ordem da inscrição, e o adicional cobrado
   // (Story 1.38). A linha só aparece quando a camisa foi opcional (adicional pago
@@ -479,12 +523,14 @@ export async function sendRegistrationEmail(
       ].filter(Boolean).join(' · ')
     : '';
 
-  // Recursos visuais do evento (banner no topo, logo em selo sobreposto)
+  // Todo texto digitado (evento, atleta, box, categoria, data, local) entra escapado.
   const safeEventName = escapeHtml(event.name || 'Evento WODArena');
-  const safeBannerUrl = event.bannerUrl ? escapeHtml(event.bannerUrl) : '';
-  const safeLogoUrl = event.logoUrl ? escapeHtml(event.logoUrl) : '';
-  const hasBanner = Boolean(safeBannerUrl);
-  const hasLogo = Boolean(safeLogoUrl);
+  const safeAthleteName = escapeHtml(registration.athleteName);
+  const safeCategory = escapeHtml(registration.ticketType);
+  const safeBox = escapeHtml(registration.box || c.fields.boxFallback);
+  const safeEventDate = escapeHtml(getEventDateLabel(event, resolvedLocale));
+  const safeLocation = escapeHtml(event.location);
+  const safeRegistrationId = escapeHtml(registration.id);
 
   // Categoria do evento (mesma lógica de rótulo usada no card de destaque da home)
   const eventTypeLabel = event.eventType === 'fitness_racing'
@@ -504,8 +550,13 @@ export async function sendRegistrationEmail(
   const safeWebsiteHref = event.website
     ? escapeHtml(event.website.startsWith('http') ? event.website : `https://${event.website}`)
     : '';
+  const safeOpenRegistrationHref = escapeHtml(`${getPublicAppUrl()}/admin`);
 
-  // Template HTML do E-mail (Estilo Binance Flat / Visual Profissional)
+  const posterBase64 = await buildPosterAttachment(registration, athlete, event, resolvedLocale);
+  const fontStack = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif";
+
+  // Template HTML do E-mail: tema claro (os clientes de e-mail invertem cores escuras de
+  // forma imprevisível), com a frente do comprovante no topo.
   const htmlContent = `
     <!DOCTYPE html>
     <html lang="${toBcp47(resolvedLocale)}">
@@ -517,7 +568,7 @@ export async function sendRegistrationEmail(
         body {
           margin: 0;
           padding: 0;
-          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+          font-family: ${fontStack};
           background-color: #fafafa;
           color: #181a20;
           -webkit-font-smoothing: antialiased;
@@ -602,6 +653,7 @@ export async function sendRegistrationEmail(
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
           color: #181a20;
           font-weight: bold;
+          word-break: break-all;
         }
         .validation-section {
           text-align: center;
@@ -643,43 +695,29 @@ export async function sendRegistrationEmail(
     <body>
       <div class="wrapper">
         <div class="container">
-          
-          <!-- Header: o evento é o protagonista visual; a WODArena vira selo discreto -->
+
+          <!-- Selo da plataforma + frente do comprovante (pôster com o nome do atleta) -->
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse: collapse;">
             <tr>
-              <td style="background-color: #181a20; padding: 10px 24px; text-align: center; border-bottom: 3px solid #FCD535;">
-                <span style="color: #FCD535; font-size: 11px; font-weight: 900; letter-spacing: 0.16em; text-transform: uppercase; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;">WODArena</span>
-                <span style="color: #707a8a; font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; margin-left: 8px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;">${c.eyebrowBrand}</span>
+              <td style="background-color: #181a20; padding: 10px 24px; text-align: center;">
+                <span style="color: #FCD535; font-size: 11px; font-weight: 900; letter-spacing: 0.16em; text-transform: uppercase; font-family: ${fontStack};">WODArena</span>
+                <span style="color: #929aa5; font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; margin-left: 8px; font-family: ${fontStack};">${c.eyebrowBrand}</span>
               </td>
             </tr>
-            ${hasBanner ? `
+            ${posterBase64 ? `
             <tr>
-              <td style="background-color: #0b0e11; padding: 0; font-size: 0; line-height: 0;">
-                <img src="${safeBannerUrl}" alt="${safeEventName}" width="580" style="display: block; width: 100%; max-width: 580px; height: auto; border: 0; outline: none; text-decoration: none;">
+              <td style="background-color: #FCD535; padding: 0; font-size: 0; line-height: 0;">
+                <img src="cid:${POSTER_CONTENT_ID}" alt="${escapeHtml(c.heroAlt(event.name || 'WODArena'))}" width="580" style="display: block; width: 100%; max-width: 580px; height: auto; border: 0; outline: none; text-decoration: none;">
               </td>
-            </tr>` : ''}
-            ${hasLogo ? `
+            </tr>` : `
             <tr>
-              <td style="background-color: #ffffff; text-align: center; padding: 0;">
-                <table role="presentation" align="center" cellpadding="0" cellspacing="0" border="0" style="margin: ${hasBanner ? '-40px' : '28px'} auto 0 auto;">
-                  <tr>
-                    <td style="background-color: #ffffff; border: 1px solid #eaecef; border-radius: 12px; padding: ${hasBanner ? '8px' : '12px'}; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">
-                      <img src="${safeLogoUrl}" alt="${safeEventName} logo" width="${hasBanner ? '72' : '96'}" height="${hasBanner ? '72' : '96'}" style="display: block; width: ${hasBanner ? '72px' : '96px'}; height: ${hasBanner ? '72px' : '96px'}; border-radius: 8px; border: 0;">
-                    </td>
-                  </tr>
-                </table>
-                ${!hasBanner ? `<div style="padding: 14px 24px 0; font-size: 20px; font-weight: 900; text-transform: uppercase; letter-spacing: -0.3px; color: #181a20; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;">${safeEventName}</div>` : ''}
+              <td style="background-color: #FCD535; padding: 34px 24px; text-align: center;">
+                <div style="color: #181a20; font-size: 10px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 10px; font-family: ${fontStack};">${eventTypeLabel}</div>
+                <div style="color: #181a20; font-size: 26px; font-weight: 900; text-transform: uppercase; letter-spacing: -0.4px; line-height: 1.15; font-family: ${fontStack};">${safeEventName}</div>
               </td>
-            </tr>` : ''}
-            ${!hasBanner && !hasLogo ? `
-            <tr>
-              <td style="background-color: #0b0e11; padding: 34px 24px; text-align: center;">
-                <div style="color: #FCD535; font-size: 10px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 10px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;">${eventTypeLabel}</div>
-                <div style="color: #ffffff; font-size: 26px; font-weight: 900; text-transform: uppercase; letter-spacing: -0.4px; line-height: 1.15; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;">${safeEventName}</div>
-              </td>
-            </tr>` : ''}
+            </tr>`}
           </table>
-          
+
           <!-- Body Content -->
           <div class="body">
             <div style="margin-bottom: 16px;">
@@ -688,49 +726,44 @@ export async function sendRegistrationEmail(
             </div>
             <h1 class="title">${isPaymentApproved ? c.titleConfirmed : c.titleRegistered}</h1>
             <p class="subtitle">
-              ${c.greeting(registration.athleteName, event.name, statusLabel)}
+              ${c.greeting(safeAthleteName, safeEventName, statusLabel)}
               ${isPaymentApproved ? c.suffixConfirmed(journeyWord) : c.suffixPending}
             </p>
 
             <div class="divider"></div>
 
-            <!-- Detalhes do Evento & Atleta -->
+            <!-- Detalhes do Evento & Atleta (mesma ordem do verso do comprovante no app) -->
             <table class="ticket-info">
               <tr>
                 <td class="label">${c.fields.registrationId}</td>
-                <td class="value-mono">${registration.id}</td>
+                <td class="value-mono">${safeRegistrationId}</td>
               </tr>
               <tr>
                 <td class="label">${c.fields.competition}</td>
-                <td class="value">${event.name}</td>
+                <td class="value">${safeEventName}</td>
               </tr>
               <tr>
                 <td class="label">${c.fields.category}</td>
-                <td class="value">${registration.ticketType}</td>
+                <td class="value">${safeCategory}</td>
               </tr>
               <tr>
                 <td class="label">${c.fields.athleteTeam}</td>
                 <td class="value">
-                  ${registration.athleteName}
+                  ${safeAthleteName}
                   ${isTeam ? `<br><span style="font-size: 11px; font-weight: normal; color: #707a8a;">${c.fields.membersPrefix}: ${teamMembersList}</span>` : ''}
                 </td>
               </tr>
               <tr>
                 <td class="label">${c.fields.box}</td>
-                <td class="value">${registration.box || c.fields.boxFallback}</td>
+                <td class="value">${safeBox}</td>
               </tr>
-              ${cpf ? `
-              <tr>
-                <td class="label">${c.fields.taxId}</td>
-                <td class="value-mono">${maskedCpf}</td>
-              </tr>` : ''}
               <tr>
                 <td class="label">${c.fields.eventDate}</td>
-                <td class="value">${event.date}</td>
+                <td class="value">${safeEventDate}</td>
               </tr>
               <tr>
                 <td class="label">${c.fields.location}</td>
-                <td class="value">${event.location}</td>
+                <td class="value">${safeLocation}</td>
               </tr>
               ${cityStateLabel ? `
               <tr>
@@ -744,8 +777,13 @@ export async function sendRegistrationEmail(
               </tr>` : ''}
               <tr>
                 <td class="label">${c.fields.totalPaid}</td>
-                <td class="value" style="color: #0ecb81; font-size: 15px;">${totalPaidFormatted}</td>
+                <td class="value" style="color: #0a7d52; font-size: 15px;">${totalPaidFormatted}</td>
               </tr>
+              ${paymentMethodLabel ? `
+              <tr>
+                <td class="label">${c.fields.paymentMethod}</td>
+                <td class="value">${paymentMethodLabel}</td>
+              </tr>` : ''}
               <tr>
                 <td class="label">${c.fields.paymentStatus}</td>
                 <td class="value">${statusLabel}</td>
@@ -761,6 +799,10 @@ export async function sendRegistrationEmail(
                 ${isPaymentApproved ? c.validation.validatedText : c.validation.registeredText}
                 ${c.validation.guardIdSuffix}
               </p>
+            </div>
+
+            <div style="text-align: center; margin-top: 24px;">
+              <a href="${safeOpenRegistrationHref}" target="_blank" style="display: inline-block; background-color: #181a20; color: #FCD535; font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; text-decoration: none; padding: 14px 28px; border-radius: 6px; font-family: ${fontStack};">${c.openRegistration}</a>
             </div>
 
           </div>
@@ -782,7 +824,7 @@ export async function sendRegistrationEmail(
               <a href="https://wodarena.com/termos#privacidade" target="_blank">${c.footer.privacyLabel}</a>
             </p>
           </div>
-          
+
         </div>
       </div>
     </body>
@@ -803,12 +845,23 @@ export async function sendRegistrationEmail(
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
+        ...(options.idempotencyKey ? { 'Idempotency-Key': options.idempotencyKey } : {}),
       },
       body: JSON.stringify({
         from: getResendFrom(),
         to: toEmail,
         subject: c.subject(isPaymentApproved, event.name),
         html: htmlContent,
+        ...(posterBase64
+          ? {
+              attachments: [{
+                filename: 'inscricao-wodarena.png',
+                content: posterBase64,
+                content_type: 'image/png',
+                content_id: POSTER_CONTENT_ID
+              }]
+            }
+          : {}),
       }),
     });
 

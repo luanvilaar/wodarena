@@ -758,8 +758,9 @@ test('Gratuita: registro local, e-mail e sucesso usam só a inscrição do servi
   });
 
   assert.deepEqual(calls.alerts, []);
-  assert.deepEqual(calls.fetches.map((call) => call.url), ['/api/checkout/email']);
-  assert.deepEqual(calls.fetches[0].body, { registrationId: SERVER_REGISTRATION_ID, accessToken: SERVER_TOKEN, cpf: '12345678909' });
+  // O e-mail da gratuita sai do servidor (Story 1.76): o navegador não chama mais /api/checkout/email.
+  assert.deepEqual(calls.fetches.map((call) => call.url), []);
+  assert.equal(calls.successes[0].accessToken, SERVER_TOKEN, 'o comprovante recebe o token da inscrição');
   assert.equal(calls.tickets[0].registration.id, SERVER_REGISTRATION_ID);
   assert.equal(calls.tickets[0].athlete.id, SERVER_ATHLETE_ID);
   assert.equal(calls.successes[0].id, SERVER_REGISTRATION_ID);
