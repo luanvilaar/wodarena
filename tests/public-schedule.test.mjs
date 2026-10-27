@@ -56,3 +56,37 @@ test('public event schedule shows a live/next/done status per heat, timezone-saf
   // nunca de uma bateria paralela de outra prova nem de uma empatada no mesmo horário.
   assert.match(eventPage, /candidate\.groupId === groupId && candidate\.start > start/);
 });
+
+// Story 1.86: na bateria aberta cada vaga mostra só o número, o nome do atleta ou da equipe e a box.
+test('o painel da bateria mostra só o número da vaga, o nome (sem integrantes) e a box', () => {
+  const panelStart = eventPage.indexOf('const renderExpandedPanel');
+  const panelEnd = eventPage.indexOf('return (\n                            <section key={block.id}');
+  const panel = eventPage.slice(panelStart, panelEnd);
+
+  assert.match(panel, /getTeamDisplayName\(athlete\)/);
+  assert.match(eventPage, /import \{ getTeamDisplayName \} from '@\/lib\/teamDisplay';/);
+  // Sai o que não é nome nem box: selo EQ, categoria, nome cru com integrantes entre parênteses.
+  assert.doesNotMatch(panel, />\s*EQ\s*</);
+  assert.doesNotMatch(panel, /getDivisionName|athlete\.isTeam|\{athlete\.name\}/);
+  assert.doesNotMatch(eventPage, /const getDivisionName/);
+  // Lista semântica: número com rótulo para leitor de tela, "Vaga"/"Raia" uma vez no topo.
+  assert.match(panel, /<ol className=/);
+  assert.match(panel, /aria-label=\{`\$\{row\.slotHeader\} \$\{displayIndex\}`\}/);
+  assert.match(eventPage, /tSchedule\(getHeatSlotLabel\(event\.eventType\) === 'Vaga' \? 'slotRacing' : 'slotLane'\)/);
+  // Leitura no celular: nome 14px em até duas linhas, box 12px, linha de 52px no mínimo.
+  assert.match(panel, /line-clamp-2[^"]*text-sm font-black uppercase/);
+  assert.match(panel, /min-h-\[52px\]/);
+  assert.match(panel, /text-xs/);
+  assert.match(panel, /tSchedule\('boxNotInformed'\)/);
+});
+
+test('os textos da lista de participantes existem nas três línguas', () => {
+  for (const locale of ['pt-br', 'pt-pt', 'en-gb']) {
+    const schedule = JSON.parse(read(`../src/messages/${locale}.json`)).Event?.schedule
+      ?? Object.values(JSON.parse(read(`../src/messages/${locale}.json`))).map((namespace) => namespace?.schedule).find(Boolean);
+    for (const key of ['slotRacing', 'slotLane', 'participantColumnHeader', 'boxNotInformed']) {
+      assert.equal(typeof schedule?.[key], 'string', `${locale}: ${key}`);
+      assert.ok(schedule[key].length > 0, `${locale}: ${key}`);
+    }
+  }
+});

@@ -1,0 +1,352 @@
+<title>Cronograma: Nome e Box</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@500;600;700&family=Inter:wght@400;500;600;700;800;900&display=swap">
+<style>
+/* Layout: leitura em uma coluna. As maquetes usam os tokens do app (src/app/globals.css), sempre no tema escuro
+   da página pública; o texto da proposta acompanha o tema de quem lê. */
+:root{
+  --font-body:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --font-num:"IBM Plex Sans",ui-monospace,Menlo,monospace;
+  --bg:#0b0e11; --surface:#14181d; --surface-2:#1e2329; --line:#2b3139;
+  --fg:#eaecef; --muted:#929aa5; --accent-text:#fcd535; --warn:#f0b90b; --down:#f6465d; --up:#0ecb81;
+  /* app (fixo): página pública escura */
+  --app-bg:#0b0e11; --app-card:#1e2329; --app-line:#2b3139; --app-gray:#181a20; --app-fg:#eaecef;
+  --app-muted:#929aa5; --app-soft:#707a8a; --app-primary:#fcd535; --app-up:#0ecb81;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --bg:#f4f5f7; --surface:#ffffff; --surface-2:#eceef2; --line:#d6dae1;
+    --fg:#181a20; --muted:#566070; --accent-text:#7a5c00; --warn:#8a5a00; --down:#b8243a; --up:#07694a;
+    color-scheme:light;
+  }
+}
+:root[data-theme="light"]{
+  --bg:#f4f5f7; --surface:#ffffff; --surface-2:#eceef2; --line:#d6dae1;
+  --fg:#181a20; --muted:#566070; --accent-text:#7a5c00; --warn:#8a5a00; --down:#b8243a; --up:#07694a;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:15px;line-height:1.55;-webkit-text-size-adjust:100%;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:32px 72px}
+h1,h2,h3,h4{text-wrap:balance;line-height:1.2;margin:0}
+p,ul,ol{margin:0}
+code{font-family:var(--font-num);font-size:.9em;background:var(--surface-2);border:1px solid var(--line);border-radius:4px;padding:0 5px;overflow-wrap:anywhere}
+.wrap{max-width:1040px;margin:0 auto;display:grid;gap:56px}
+.eyebrow{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--accent-text)}
+h1{font-size:clamp(28px,5vw,40px);font-weight:800;letter-spacing:-.02em}
+h2{font-size:22px;font-weight:800;letter-spacing:-.01em}
+h3{font-size:15px;font-weight:700}
+.lead{max-width:68ch;color:var(--muted);font-size:16px}
+.small{font-size:13px;color:var(--muted)}
+section{display:grid;gap:20px;min-width:0}
+.sec-head{display:grid;gap:8px}
+.head{display:grid;gap:14px}
+.status{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--warn)}
+.status::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--warn)}
+.pills{display:flex;flex-wrap:wrap;gap:8px}
+.pill{font-size:12px;font-weight:600;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:999px;padding:4px 12px;text-decoration:none}
+a.pill:hover,a.pill:focus-visible{border-color:var(--accent-text)}
+:focus-visible{outline:2px solid var(--accent-text);outline-offset:2px}
+
+/* contagem antes × depois */
+.tally{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
+.tally-item{padding:18px;border:1px solid var(--line);background:var(--surface);border-radius:10px;display:grid;gap:4px;min-width:0}
+.tally-item .k{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.tally-item .v{font-family:var(--font-num);font-variant-numeric:tabular-nums;font-size:28px;font-weight:700}
+.tally-item .v s{color:var(--muted);font-weight:500;font-size:20px;margin-right:8px}
+.tally-item p{font-size:13px;color:var(--muted)}
+
+/* inventário do card atual */
+.inv{display:grid;gap:8px}
+.inv-row{display:grid;grid-template-columns:minmax(0,190px) minmax(0,1fr) auto;gap:6px 16px;align-items:baseline;padding:12px 16px;border:1px solid var(--line);background:var(--surface);border-radius:8px}
+.inv-row b{font-size:14px}
+.inv-row span{font-size:13px;color:var(--muted)}
+.tag{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;justify-self:end;white-space:nowrap}
+.tag.keep{color:var(--up)} .tag.cut{color:var(--down)} .tag.change{color:var(--warn)}
+@media (max-width:560px){.inv-row{grid-template-columns:minmax(0,1fr) auto}.inv-row span{grid-column:1/-1;grid-row:2}}
+
+/* maquetes */
+.compare{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;align-items:start}
+@media (max-width:820px){.compare{grid-template-columns:1fr}}
+.frame-label{display:flex;justify-content:space-between;gap:8px;align-items:baseline;margin-bottom:10px}
+.frame-label b{font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase}
+.frame-label span{font-size:12px;color:var(--muted)}
+.frame-label .before{color:var(--down)} .frame-label .after{color:var(--up)}
+.phone{width:100%;max-width:375px;margin:0 auto;background:var(--app-bg);border:1px solid var(--line);border-radius:28px;padding:14px 10px 18px;color:var(--app-fg)}
+.phone-bar{height:6px;width:96px;border-radius:99px;background:var(--app-line);margin:0 auto 14px}
+
+/* heat card — cópia do markup do app */
+.heat{border:1px solid rgba(43,49,57,.6);border-radius:6px;background:rgba(24,26,32,.2)}
+.heat-btn{display:grid;gap:8px;padding:10px 12px;width:100%;text-align:left;background:none;border:0;color:inherit;font:inherit}
+.heat-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.heat-name{display:flex;align-items:center;gap:8px;min-width:0}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--app-primary);flex:none}
+.heat-title{font-size:12px;font-weight:800;text-transform:uppercase;white-space:nowrap}
+.heat-badge{font-size:9px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:var(--app-primary)}
+.heat-times{display:flex;flex-wrap:wrap;gap:4px 12px;font-family:var(--font-num);font-size:11px;color:var(--app-muted)}
+.heat-times b{color:var(--app-fg);font-weight:600}
+.heat-times .start,.heat-times .start b{color:var(--app-primary)}
+.heat-panel{border-top:1px solid rgba(43,49,57,.5);background:rgba(0,0,0,.2);padding:8px 12px 12px}
+
+/* ANTES: tiles com selos, 10px / 9px / 8px */
+.old-list{display:grid;gap:8px}
+.old-tile{display:flex;align-items:center;gap:8px;min-width:0;border:1px solid rgba(43,49,57,.6);background:rgba(0,0,0,.4);border-radius:4px;padding:8px 10px;font-size:10px}
+.old-slot{flex:none;border:1px solid rgba(252,213,53,.2);background:rgba(252,213,53,.1);color:var(--app-primary);border-radius:4px;padding:2px 6px;font-size:8px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}
+.old-eq{flex:none;background:rgba(252,213,53,.2);color:var(--app-primary);border-radius:3px;padding:0 4px;font-size:8px;font-weight:900}
+.old-text{min-width:0;flex:1}
+.old-name{font-weight:700;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.old-sub{font-size:9px;font-weight:500;color:var(--app-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* DEPOIS: lista com divisórias, número da vaga, nome e box */
+.new-list{display:grid;margin:0;padding:0;list-style:none}
+.new-list.cols-2{grid-template-columns:repeat(2,minmax(0,1fr));column-gap:24px}
+.new-row{display:grid;grid-template-columns:1.75rem minmax(0,1fr);column-gap:10px;align-items:start;min-height:52px;padding:9px 2px;border-bottom:1px solid rgba(43,49,57,.5)}
+.new-list:not(.cols-2) .new-row:last-child{border-bottom:0}
+.new-list.cols-2 .new-row:nth-last-child(-n+2){border-bottom:0}
+.new-slot{font-family:var(--font-num);font-variant-numeric:tabular-nums;font-size:13px;font-weight:700;color:var(--app-primary);text-align:right;padding-top:1px}
+.new-name{font-size:14px;line-height:1.25;font-weight:900;text-transform:uppercase;letter-spacing:.045em;color:#fff;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.new-box{margin-top:3px;font-size:12px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--app-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.new-box.none{text-transform:none;letter-spacing:0;font-style:italic}
+.legend-head{display:grid;grid-template-columns:1.75rem minmax(0,1fr);column-gap:10px;padding:0 2px 6px;font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--app-soft)}
+.legend-head span:first-child{text-align:right}
+
+/* desktop: linha da tabela + painel aberto */
+.desk{background:var(--app-card);border:1px solid var(--app-line);border-radius:10px;color:var(--app-fg);overflow:hidden}
+.desk-scroll{overflow-x:auto}
+.desk table{border-collapse:collapse;width:100%;min-width:720px;font-size:12px}
+.desk th{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--app-muted);text-align:left;padding:8px 12px;border-bottom:1px solid rgba(43,49,57,.5)}
+.desk td{padding:10px 12px;font-family:var(--font-num);color:var(--app-muted)}
+.desk td.h{font-family:var(--font-body);font-weight:800;text-transform:uppercase;color:#fff}
+.desk td.s{color:var(--app-primary);font-weight:800}
+.desk td.r{text-align:right;font-family:var(--font-body);font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:var(--app-primary)}
+.desk .panel-cell{padding:8px 16px 16px;background:rgba(0,0,0,.2);border-bottom:1px solid rgba(43,49,57,.4)}
+
+/* notas e decisões */
+.notes{display:grid;gap:10px;padding-left:20px;font-size:14px;color:var(--muted)}
+.notes b{color:var(--fg)}
+.decisions{display:grid;gap:14px}
+.dec{display:grid;gap:10px;padding:18px;border:1px solid var(--line);background:var(--surface);border-radius:10px;min-width:0}
+.dec-h{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.dec-h .id{font-family:var(--font-num);font-weight:700;color:var(--accent-text)}
+.choices{display:grid;gap:6px;padding:0;list-style:none}
+.choices li{font-size:14px;color:var(--muted);padding-left:22px;position:relative}
+.choices li::before{content:"○";position:absolute;left:2px}
+.choices li.rec{color:var(--fg)}
+.choices li.rec::before{content:"●";color:var(--accent-text)}
+.rec-tag{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--accent-text);margin-left:6px}
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.plan{border-collapse:collapse;width:100%;min-width:620px;font-size:13px}
+.plan th,.plan td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+.plan th{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700;background:var(--surface-2)}
+.plan tr:last-child td{border-bottom:0}
+.plan td:first-child{white-space:nowrap;font-weight:600}
+.cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+@media (max-width:700px){.cols{grid-template-columns:1fr}}
+.box{padding:18px;border:1px solid var(--line);border-radius:10px;background:var(--surface);display:grid;gap:10px;min-width:0}
+.box ul{display:grid;gap:8px;padding-left:18px;font-size:14px;color:var(--muted)}
+.box ul b{color:var(--fg)}
+.foot{font-size:13px;color:var(--muted);border-top:1px solid var(--line);padding-top:20px}
+.sample{font-size:12px;color:var(--muted);font-style:italic}
+</style>
+
+<div class="wrap">
+
+  <header class="head">
+    <span class="status">Proposta · aguardando aprovação</span>
+    <p class="eyebrow">Página do evento · aba Cronograma</p>
+    <h1>Na bateria, só o nome e a box</h1>
+    <p class="lead">Ao abrir uma bateria, cada vaga mostra hoje seis informações sobre o atleta ou a equipe. A proposta deixa duas: o nome do atleta ou da equipe e a box. O número da vaga continua, porque diz onde o atleta vai largar. No celular, o texto cresce e o nome deixa de ser cortado no meio.</p>
+    <nav class="pills" aria-label="Seções">
+      <a class="pill" href="#hoje">O que aparece hoje</a>
+      <a class="pill" href="#maquete">Antes e depois no celular</a>
+      <a class="pill" href="#desktop">Computador</a>
+      <a class="pill" href="#decisoes">Decisões</a>
+      <a class="pill" href="#plano">Plano</a>
+    </nav>
+  </header>
+
+  <section aria-labelledby="t-num">
+    <h2 id="t-num" class="eyebrow" style="font-size:11px">Resumo</h2>
+    <div class="tally">
+      <div class="tally-item"><span class="k">Informações por vaga</span><span class="v"><s>6</s>3</span><p>Número da vaga, nome e box.</p></div>
+      <div class="tally-item"><span class="k">Tamanho do nome no celular</span><span class="v"><s>10px</s>14px</span><p>A box vai de 9px para 12px.</p></div>
+      <div class="tally-item"><span class="k">Nome de equipe longo</span><span class="v"><s>1</s>2 linhas</span><p>Quebra em até duas linhas em vez de cortar com reticências.</p></div>
+    </div>
+  </section>
+
+  <section id="hoje" aria-labelledby="t-hoje">
+    <div class="sec-head">
+      <p class="eyebrow">Diagnóstico</p>
+      <h2 id="t-hoje">O que cada vaga mostra hoje</h2>
+      <p class="lead">O painel aberto da bateria fica em <code>EventView.tsx</code> (<code>renderExpandedPanel</code>) e é o mesmo no celular e no computador. Item por item:</p>
+    </div>
+    <div class="inv">
+      <div class="inv-row"><b>Selo "VAGA 1"</b><span>Indica a vaga de largada. Ocupa cerca de 70px com borda e fundo.</span><em class="tag change">Fica, só o número</em></div>
+      <div class="inv-row"><b>Selo "EQ"</b><span>Marca que é equipe. O nome da equipe já diz isso.</span><em class="tag cut">Sai</em></div>
+      <div class="inv-row"><b>Nome da equipe</b><span>"Camila e Leia".</span><em class="tag keep">Fica</em></div>
+      <div class="inv-row"><b>Integrantes entre parênteses</b><span>"(Camila Gualberto / Leia Alv…)". Vêm gravados no nome da inscrição e são o motivo do corte com reticências.</span><em class="tag cut">Sai</em></div>
+      <div class="inv-row"><b>Categoria</b><span>"Dupla Feminino Open".</span><em class="tag cut">Sai</em></div>
+      <div class="inv-row"><b>Box</b><span>"Pulse fit", depois da categoria e de um hífen, em 9px.</span><em class="tag keep">Fica, em linha própria</em></div>
+    </div>
+    <ul class="notes">
+      <li><b>Integrantes:</b> o app já tem a função que tira os nomes entre parênteses, <code>getTeamDisplayName</code> (<code>src/lib/teamDisplay.ts</code>), usada no ranking. O cronograma passa a usá-la. Os integrantes continuam visíveis no perfil da equipe, no ranking.</li>
+      <li><b>Tamanho:</b> nome em 10px, categoria e box em 9px e selos em 8px. No celular, durante o evento e muitas vezes ao sol, isso fica abaixo do legível.</li>
+      <li><b>Cartão dentro de cartão:</b> cada vaga é uma caixa com borda, dentro da bateria, dentro da prova. A proposta troca essas caixas por uma lista com divisórias, no mesmo desenho da linha do ranking: número à esquerda, nome e box à direita.</li>
+      <li><b>Só exibição:</b> nada muda nos dados nem no que a página recebe do servidor. O cronograma do painel do gestor não muda: lá a categoria é útil para montar as baterias.</li>
+    </ul>
+  </section>
+
+  <section id="maquete" aria-labelledby="t-maq">
+    <div class="sec-head">
+      <p class="eyebrow">Maquete · celular de 375px</p>
+      <h2 id="t-maq">Bateria 1 aberta, antes e depois</h2>
+      <p class="sample">Nomes de equipes e boxes inventados para a maquete.</p>
+    </div>
+    <div class="compare">
+      <div>
+        <div class="frame-label"><b class="before">Hoje</b><span>6 informações por vaga</span></div>
+        <div class="phone">
+          <div class="phone-bar" aria-hidden="true"></div>
+          <div class="heat">
+            <div class="heat-btn">
+              <div class="heat-top"><span class="heat-name"><span class="dot"></span><span class="heat-title">Bateria 1</span></span><span class="heat-badge">Próxima</span></div>
+              <div class="heat-times"><span>Aquec. <b>06:40</b></span><span>Fila <b>06:55</b></span><span class="start">Início <b>07:00</b></span><span>Final <b>07:40</b></span><span>4/4 atletas</span></div>
+            </div>
+            <div class="heat-panel">
+              <div class="old-list">
+                <div class="old-tile"><span class="old-slot">Vaga 1</span><span class="old-eq">EQ</span><div class="old-text"><p class="old-name">Força Bruta (Ana Lima / Beatriz Rocha Sampaio)</p><p class="old-sub">Dupla Feminino Open - Box Litoral</p></div></div>
+                <div class="old-tile"><span class="old-slot">Vaga 2</span><span class="old-eq">EQ</span><div class="old-text"><p class="old-name">Monstros do Wall Ball e Red Line (Paula Nunes / Carla Dias)</p><p class="old-sub">Dupla Feminino Open - Arena Norte</p></div></div>
+                <div class="old-tile"><span class="old-slot">Vaga 3</span><span class="old-eq">EQ</span><div class="old-text"><p class="old-name">Café com Burpee (Fernanda Maia / Júlia Prado)</p><p class="old-sub">Dupla Feminino Open - Box Litoral</p></div></div>
+                <div class="old-tile"><span class="old-slot">Vaga 4</span><span class="old-eq">EQ</span><div class="old-text"><p class="old-name">Dupla Dinâmica (Ingrid Melo / Pedro Pires)</p><p class="old-sub">Dupla Misto Open - Iron Lab</p></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="frame-label"><b class="after">Proposta</b><span>número da vaga, nome e box</span></div>
+        <div class="phone">
+          <div class="phone-bar" aria-hidden="true"></div>
+          <div class="heat">
+            <div class="heat-btn">
+              <div class="heat-top"><span class="heat-name"><span class="dot"></span><span class="heat-title">Bateria 1</span></span><span class="heat-badge">Próxima</span></div>
+              <div class="heat-times"><span>Aquec. <b>06:40</b></span><span>Fila <b>06:55</b></span><span class="start">Início <b>07:00</b></span><span>Final <b>07:40</b></span><span>4/4 atletas</span></div>
+            </div>
+            <div class="heat-panel">
+              <div class="legend-head" aria-hidden="true"><span>Vaga</span><span>Atleta ou equipe · box</span></div>
+              <ol class="new-list">
+                <li class="new-row"><span class="new-slot" aria-label="Vaga 1">1</span><div><p class="new-name">Força Bruta</p><p class="new-box">Box Litoral</p></div></li>
+                <li class="new-row"><span class="new-slot" aria-label="Vaga 2">2</span><div><p class="new-name">Monstros do Wall Ball e Red Line</p><p class="new-box">Arena Norte</p></div></li>
+                <li class="new-row"><span class="new-slot" aria-label="Vaga 3">3</span><div><p class="new-name">Café com Burpee</p><p class="new-box">Box Litoral</p></div></li>
+                <li class="new-row"><span class="new-slot" aria-label="Vaga 4">4</span><div><p class="new-name">Dupla Dinâmica</p><p class="new-box">Iron Lab</p></div></li>
+              </ol>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <ul class="notes">
+      <li><b>Uma coluna no celular</b> e duas a partir de 640px, como hoje.</li>
+      <li><b>Cada linha tem no mínimo 52px de altura</b>, com espaço entre um nome e outro. A linha não é clicável. Nenhuma ação nova.</li>
+      <li><b>Nome da equipe</b> em maiúsculas, como no ranking. Quebra em até duas linhas e só então corta. Atleta individual aparece com o nome completo, na mesma regra.</li>
+      <li><b>Box</b> em linha própria, cortada com reticências só se passar da largura.</li>
+      <li><b>O cabeçalho "Vaga"</b> aparece uma vez no topo da lista, em vez de repetido em cada linha. Em eventos de Functional Fitness fica "Raia", como já é hoje. Para leitor de tela, cada número é lido como "Vaga 1", "Vaga 2".</li>
+      <li><b>O resumo da bateria</b> (horários, atletas e status) não muda.</li>
+    </ul>
+  </section>
+
+  <section id="desktop" aria-labelledby="t-desk">
+    <div class="sec-head">
+      <p class="eyebrow">Maquete · computador</p>
+      <h2 id="t-desk">A mesma lista dentro da tabela</h2>
+      <p class="lead">No computador, a tabela das baterias continua igual. Ao abrir uma bateria, a lista ocupa duas colunas.</p>
+    </div>
+    <div class="desk">
+      <div class="desk-scroll">
+        <table>
+          <thead><tr><th>Bateria</th><th>Aquec.</th><th>Fila</th><th>Início</th><th>Final</th><th>Atletas</th><th style="text-align:right">Status</th></tr></thead>
+          <tbody>
+            <tr><td class="h">● Bateria 1 ⌃</td><td>06:40</td><td>06:55</td><td class="s">07:00</td><td>07:40</td><td style="color:#eaecef">4/4 atletas</td><td class="r">Próxima</td></tr>
+            <tr><td colspan="7" class="panel-cell">
+              <div class="legend-head" aria-hidden="true" style="max-width:50%"><span>Vaga</span><span>Atleta ou equipe · box</span></div>
+              <ol class="new-list cols-2">
+                <li class="new-row"><span class="new-slot">1</span><div><p class="new-name">Força Bruta</p><p class="new-box">Box Litoral</p></div></li>
+                <li class="new-row"><span class="new-slot">2</span><div><p class="new-name">Monstros do Wall Ball e Red Line</p><p class="new-box">Arena Norte</p></div></li>
+                <li class="new-row"><span class="new-slot">3</span><div><p class="new-name">Café com Burpee</p><p class="new-box">Box Litoral</p></div></li>
+                <li class="new-row"><span class="new-slot">4</span><div><p class="new-name">Dupla Dinâmica</p><p class="new-box none">Box não informada</p></div></li>
+              </ol>
+            </td></tr>
+            <tr><td class="h">● Bateria 2 ⌄</td><td>06:48</td><td>07:03</td><td class="s">07:08</td><td>07:48</td><td style="color:#eaecef">4/4 atletas</td><td class="r" style="color:#707a8a">Bateria agendada</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <p class="small">A vaga 4 mostra como fica uma inscrição sem box (decisão D2).</p>
+  </section>
+
+  <section id="decisoes" aria-labelledby="t-dec">
+    <div class="sec-head">
+      <p class="eyebrow">Para aprovar</p>
+      <h2 id="t-dec">Decisões</h2>
+      <p class="lead">O pedido já define o principal: sai o selo "EQ", saem os integrantes e sai a categoria. Ficam duas escolhas. A opção marcada é a recomendação.</p>
+    </div>
+    <div class="decisions">
+      <div class="dec">
+        <div class="dec-h"><span class="id">D1</span><h3>Número da vaga</h3></div>
+        <ul class="choices">
+          <li class="rec">A · Manter só o número, numa coluna estreita, com "Vaga" (ou "Raia") uma vez no topo da lista<span class="rec-tag">Recomendado</span></li>
+          <li>B · Tirar o número. A lista mostra só nome e box, na ordem das vagas</li>
+        </ul>
+        <p class="small">O número não é dado do atleta. É onde ele larga, e o atleta procura isso antes de entrar na quadra.</p>
+      </div>
+      <div class="dec">
+        <div class="dec-h"><span class="id">D2</span><h3>Inscrição sem box</h3></div>
+        <ul class="choices">
+          <li class="rec">A · Mostrar "Box não informada" em cinza, como o ranking faz, para todas as linhas terem a mesma altura<span class="rec-tag">Recomendado</span></li>
+          <li>B · Não mostrar a segunda linha</li>
+        </ul>
+        <p class="small">No Fitness Race a box é obrigatória na inscrição. O caso aparece em inscrições antigas e no Functional Fitness.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="plano" aria-labelledby="t-plano">
+    <div class="sec-head">
+      <p class="eyebrow">Plano</p>
+      <h2 id="t-plano">Uma story pequena, só de tela</h2>
+      <p class="lead">Story 1.86, tamanho P. Sem banco, sem rota, sem autenticação e sem mudança no que a página recebe do servidor.</p>
+    </div>
+    <div class="tbl-wrap">
+      <table class="plan">
+        <thead><tr><th>Onde</th><th>Mudança</th></tr></thead>
+        <tbody>
+          <tr><td><code>EventView.tsx</code></td><td><code>renderExpandedPanel</code>: lista <code>&lt;ol&gt;</code> com o número da vaga, <code>getTeamDisplayName(athlete)</code> e a box. Saem o selo "EQ", a categoria (<code>getDivisionName</code>) e os integrantes. Nome com 14px e até duas linhas; box com 12px.</td></tr>
+          <tr><td><code>src/messages/*.json</code></td><td>Textos novos do topo da lista ("Atleta ou equipe · box") e de "Box não informada", em pt-br, pt-pt e en-gb.</td></tr>
+          <tr><td><code>tests/public-schedule.test.mjs</code></td><td>O painel usa <code>getTeamDisplayName</code> e não mostra categoria nem selo "EQ". O número da vaga tem o rótulo para leitor de tela.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="cols">
+      <div class="box">
+        <h3>Conferência</h3>
+        <ul>
+          <li><b>No navegador:</b> a página do evento em 375px, 414px e no computador, com uma bateria de equipes de nome longo e outra de atletas individuais.</li>
+          <li><code>npm test</code>, <code>npm run lint</code>, <code>npm run typecheck</code>, <code>npm run build</code>.</li>
+        </ul>
+      </div>
+      <div class="box">
+        <h3>Fora do escopo</h3>
+        <ul>
+          <li>O cronograma do painel do gestor, onde a categoria ajuda a montar as baterias.</li>
+          <li>O resumo de horários da bateria e o telão.</li>
+          <li>O nome gravado na inscrição. A limpeza é só na exibição, como já é no ranking.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <p class="foot">Leitura feita em 27/10/2026 sobre <code>main</code> (e505e6f). Nenhum arquivo do projeto foi alterado. Depois da aprovação, esta página vai para <code>docs/design/cronograma-participantes/</code> e a story cita a pasta nos critérios de aceite.</p>
+</div>

@@ -16,6 +16,7 @@ import {
 import type { AppLocale, Registration, Athlete, EventScheduleItem, Workout } from '@/types';
 import { getEventStatus, getRegistrationAvailability } from '@/lib/eventStatus';
 import { getHeatSlotLabel, resolveHeatParticipantSlots } from '@/lib/scheduleParticipants';
+import { getTeamDisplayName } from '@/lib/teamDisplay';
 import { formatMoney } from '@/lib/intl/format';
 import { normalizeShirtMode } from '@/lib/shirtPricing';
 import { toBcp47 } from '@/i18n/locales';
@@ -579,11 +580,6 @@ export function EventView({ eventId }: { eventId: string }) {
     return tSchedule('modeGeneral');
   };
 
-  const getDivisionName = (divisionId?: string) => {
-    if (!divisionId) return tSchedule('generalCategory');
-    return event.divisions?.find(division => division.id === divisionId)?.name || tSchedule('generalCategory');
-  };
-
   const handleTabChange = (tabId: typeof activeTab) => {
     setActiveTab(tabId);
     window.history.replaceState(null, '', `${window.location.pathname}?tab=${tabId}`);
@@ -990,7 +986,7 @@ export function EventView({ eventId }: { eventId: string }) {
 
                           const heatRows = group.items.map((item) => {
                             const heatParticipants = resolveHeatParticipantSlots(item.athleteIds, athletes);
-                            const heatSlotLabel = getHeatSlotLabel(event.eventType);
+                            const slotHeader = tSchedule(getHeatSlotLabel(event.eventType) === 'Vaga' ? 'slotRacing' : 'slotLane');
                             const isPublicEventLoading = publicEventDataStatus[eventId] === 'loading'
                               || (publicEventDataStatus[eventId] === undefined && !hasPublicEventAthletes);
                             const isExpanded = expandedHeatIds.has(item.id);
@@ -1002,35 +998,48 @@ export function EventView({ eventId }: { eventId: string }) {
                             const heatLabel = item.heatNumber ? tSchedule('heatNumber', { number: item.heatNumber }) : item.title;
                             const athletesCountLabel = tSchedule('athletesCount', { count: heatParticipants.totalCount > 0 ? `${heatParticipants.resolvedCount}/${heatParticipants.totalCount}` : '0' });
 
-                            return { item, heatParticipants, heatSlotLabel, isPublicEventLoading, isExpanded, panelId, status, statusMeta, itemDateLabel, showItemDate, heatLabel, athletesCountLabel };
+                            return { item, heatParticipants, slotHeader, isPublicEventLoading, isExpanded, panelId, status, statusMeta, itemDateLabel, showItemDate, heatLabel, athletesCountLabel };
                           });
 
                           const renderExpandedPanel = (row: typeof heatRows[number]) => (
                             <>
                               {row.heatParticipants.resolvedParticipants.length > 0 ? (
-                                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                                  {row.heatParticipants.resolvedParticipants.map(({ athlete, athleteId, displayIndex }) => {
-                                    const safeBox = athlete.box && athlete.box !== 'undefined' ? athlete.box : '';
-                                    return (
+                                <div>
+                                  {/* Cabeçalho uma vez só no topo (e na 2ª coluna, quando há): o número da vaga não repete "Vaga" em cada linha. */}
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 sm:gap-x-6" aria-hidden="true">
+                                    {[0, 1].map(column => (
                                       <div
-                                        key={`${row.item.id}-${athleteId}-${displayIndex}`}
-                                        className="flex min-w-0 items-center gap-2 rounded border border-card-border/60 bg-black/40 px-2.5 py-2 text-[10px] text-white transition-colors hover:border-primary/30"
+                                        key={column}
+                                        className={`grid-cols-[2.25rem_minmax(0,1fr)] gap-x-2.5 px-0.5 pb-1.5 text-[10px] font-extrabold uppercase tracking-wider text-muted-soft ${column === 0 ? 'grid' : 'hidden sm:grid'}`}
                                       >
-                                        <span className="shrink-0 rounded border border-primary/20 bg-primary/10 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-primary">
-                                          {row.heatSlotLabel} {displayIndex}
-                                        </span>
-                                        {athlete.isTeam && (
-                                          <span className="shrink-0 rounded bg-primary/20 px-1 text-[8px] font-black text-primary">EQ</span>
-                                        )}
-                                        <div className="min-w-0 flex-1">
-                                          <p className="truncate font-bold uppercase tracking-wider">{athlete.name}</p>
-                                          <p className="truncate text-[9px] font-medium text-muted-soft">
-                                            {getDivisionName(athlete.divisionId)}{safeBox ? ` - ${safeBox}` : ''}
-                                          </p>
-                                        </div>
+                                        <span className="text-right">{row.slotHeader}</span>
+                                        <span>{tSchedule('participantColumnHeader')}</span>
                                       </div>
-                                    );
-                                  })}
+                                    ))}
+                                  </div>
+                                  <ol className="grid grid-cols-1 sm:grid-cols-2 sm:gap-x-6">
+                                    {row.heatParticipants.resolvedParticipants.map(({ athlete, athleteId, displayIndex }) => {
+                                      const safeBox = athlete.box && athlete.box !== 'undefined' ? athlete.box.trim() : '';
+                                      return (
+                                        <li
+                                          key={`${row.item.id}-${athleteId}-${displayIndex}`}
+                                          className="grid min-h-[52px] min-w-0 grid-cols-[2.25rem_minmax(0,1fr)] items-start gap-x-2.5 border-t border-card-border/50 px-0.5 py-2.5 first:border-t-0 sm:nth-2:border-t-0"
+                                        >
+                                          <span className="pt-px text-right font-number text-[13px] font-bold tabular-nums text-primary" aria-label={`${row.slotHeader} ${displayIndex}`}>
+                                            {displayIndex}
+                                          </span>
+                                          <div className="min-w-0">
+                                            <p className="line-clamp-2 break-words text-sm font-black uppercase leading-tight tracking-[0.045em] text-white">
+                                              {getTeamDisplayName(athlete)}
+                                            </p>
+                                            <p className={`mt-1 truncate text-xs ${safeBox ? 'font-semibold uppercase tracking-wide text-muted-soft' : 'italic text-muted-soft'}`}>
+                                              {safeBox || tSchedule('boxNotInformed')}
+                                            </p>
+                                          </div>
+                                        </li>
+                                      );
+                                    })}
+                                  </ol>
                                 </div>
                               ) : row.heatParticipants.totalCount > 0 ? (
                                 <p className="rounded border border-card-border/50 bg-black/20 px-3 py-2 text-[10px] font-semibold text-muted-soft">
