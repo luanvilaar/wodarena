@@ -212,6 +212,9 @@ export interface Registration {
   totalPaid: number;
   serviceFeePercent?: number;
   serviceFeeAmount?: number;
+  // Quem pagou a taxa nesta inscrição: 'athlete' | 'organizer'. Vazio = anterior à
+  // escolha do gestor; vale o padrão do gateway (ver resolveServiceFeePayer).
+  serviceFeePayer?: 'athlete' | 'organizer';
   amountCollected?: number;
   applicationFeeCharged?: number;
   shirtAddonCount?: number;

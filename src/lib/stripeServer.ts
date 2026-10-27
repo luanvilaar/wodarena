@@ -1,6 +1,7 @@
 import Stripe from 'stripe';
 import { createSupabaseAdmin } from '@/lib/serverSecurity';
-import { DEFAULT_SERVICE_FEE_PERCENT, normalizeServiceFeePercent } from '@/lib/serviceFee';
+import { DEFAULT_SERVICE_FEE_PERCENT, normalizeServiceFeePercent, resolveServiceFeePayer, type ServiceFeePayer } from '@/lib/serviceFee';
+import { loadManagerServiceFeePayer } from '@/lib/serverServiceFeePayer';
 import type { EventCurrency } from '@/types';
 
 type StripeEventRow = {
@@ -28,12 +29,14 @@ export type ServiceFeeConfig = {
 };
 
 export type StripeCheckoutConfig = ServiceFeeConfig & {
+  serviceFeePayer: ServiceFeePayer;
   stripeAccountId: string;
   currency: EventCurrency;
   organizerId: string;
 };
 
 export type StripePublicConfig = ServiceFeeConfig & {
+  serviceFeePayer: ServiceFeePayer;
   publishableKey: string;
   stripeAccountId: string;
   currency: EventCurrency;
@@ -139,13 +142,20 @@ const loadEventAndAccount = async (eventId: string) => {
     throw new StripeConfigError('Este evento está configurado em BRL e usa o Mercado Pago, não a Stripe.', 409);
   }
 
-  const [{ data: account, error: accountError }, serviceFee] = await Promise.all([
+  const [{ data: account, error: accountError }, serviceFee, serviceFeePayer] = await Promise.all([
     supabaseAdmin
       .from('stripe_accounts')
       .select('stripe_account_id, country, default_currency, charges_enabled, payouts_enabled, status')
       .eq('user_id', dbEvent.organizer_id)
       .maybeSingle<StripeAccountRow>(),
-    resolvePlatformServiceFeeConfig()
+    resolvePlatformServiceFeeConfig(),
+    // Escolha do gestor; sem ela a Stripe segue como sempre: a taxa sai do gestor.
+    loadManagerServiceFeePayer(supabaseAdmin, dbEvent.organizer_id)
+      .then(payer => resolveServiceFeePayer(payer, 'stripe'))
+      .catch((err: unknown) => {
+        console.error('[Stripe Config] Erro ao carregar quem paga a taxa de serviço:', err);
+        throw new StripeConfigError('Não foi possível carregar a configuração da taxa de serviço.', 500);
+      })
   ]);
 
   if (accountError) {
@@ -157,16 +167,17 @@ const loadEventAndAccount = async (eventId: string) => {
     throw new StripeConfigError('Este evento não possui uma conta Stripe conectada e habilitada para receber pagamentos.', 403);
   }
 
-  return { dbEvent, account, currency, serviceFee };
+  return { dbEvent, account, currency, serviceFee, serviceFeePayer };
 };
 
 export const resolveStripeCheckoutConfig = async (eventId: string): Promise<StripeCheckoutConfig> => {
-  const { dbEvent, account, currency, serviceFee } = await loadEventAndAccount(eventId);
+  const { dbEvent, account, currency, serviceFee, serviceFeePayer } = await loadEventAndAccount(eventId);
 
   return {
     stripeAccountId: account.stripe_account_id,
     currency,
     organizerId: dbEvent.organizer_id,
+    serviceFeePayer,
     ...serviceFee
   };
 };
@@ -177,13 +188,14 @@ export const resolveStripePublicConfig = async (eventId: string): Promise<Stripe
     throw new StripeConfigError('A chave publicável da Stripe não está configurada no servidor.', 500);
   }
 
-  const { dbEvent, account, currency, serviceFee } = await loadEventAndAccount(eventId);
+  const { dbEvent, account, currency, serviceFee, serviceFeePayer } = await loadEventAndAccount(eventId);
 
   return {
     publishableKey,
     stripeAccountId: account.stripe_account_id,
     currency,
     organizerId: dbEvent.organizer_id,
+    serviceFeePayer,
     ...serviceFee
   };
 };

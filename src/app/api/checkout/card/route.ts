@@ -37,6 +37,7 @@ const updateRegistrationPayment = async (
     totalPaid?: number;
     serviceFeePercent?: number;
     serviceFeeAmount?: number;
+    serviceFeePayer?: string;
     amountCollected?: number;
     applicationFeeCharged?: number;
   }
@@ -53,6 +54,7 @@ const updateRegistrationPayment = async (
     total_paid?: number;
     service_fee_percent?: number;
     service_fee_amount?: number;
+    service_fee_payer?: string;
     amount_collected?: number;
     application_fee_charged?: number;
   } = {
@@ -69,6 +71,7 @@ const updateRegistrationPayment = async (
   }
   if (payload.serviceFeePercent !== undefined) updateFields.service_fee_percent = payload.serviceFeePercent;
   if (payload.serviceFeeAmount !== undefined) updateFields.service_fee_amount = payload.serviceFeeAmount;
+  if (payload.serviceFeePayer !== undefined) updateFields.service_fee_payer = payload.serviceFeePayer;
   if (payload.amountCollected !== undefined) updateFields.amount_collected = payload.amountCollected;
   if (payload.applicationFeeCharged !== undefined) updateFields.application_fee_charged = payload.applicationFeeCharged;
 
@@ -129,7 +132,8 @@ export async function POST(request: Request) {
     const serviceFee = calculateServiceFee(
       transactionAmount,
       checkoutConfig.serviceFeePercent,
-      checkoutConfig.serviceFeeEnabled
+      checkoutConfig.serviceFeeEnabled,
+      checkoutConfig.serviceFeePayer
     );
     console.log(`[MercadoPago Card API] Usando credenciais ${checkoutConfig.source} do organizador ${checkoutConfig.organizerId} para o evento ${checkoutSnapshot.eventId}`);
 
@@ -193,6 +197,7 @@ export async function POST(request: Request) {
         totalPaid: transactionAmount,
         serviceFeePercent: serviceFee.serviceFeePercent,
         serviceFeeAmount: serviceFee.serviceFeeAmount,
+        serviceFeePayer: checkoutConfig.serviceFeePayer,
         amountCollected: serviceFee.amountCollected
       });
       return NextResponse.json({
@@ -211,6 +216,7 @@ export async function POST(request: Request) {
       totalPaid: transactionAmount,
       serviceFeePercent: serviceFee.serviceFeePercent,
       serviceFeeAmount: serviceFee.serviceFeeAmount,
+      serviceFeePayer: checkoutConfig.serviceFeePayer,
       amountCollected: serviceFee.amountCollected,
       applicationFeeCharged: extractApplicationFeeCharged(paymentData)
     });

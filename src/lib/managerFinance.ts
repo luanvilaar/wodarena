@@ -2,11 +2,16 @@ import type { Event, EventCurrency, Registration } from '@/types';
 
 // Consolida o faturamento que o gestor enxerga no painel administrativo.
 //
-// Modelo financeiro (ver `serviceFee.ts` e as rotas de checkout): a taxa da
-// plataforma é cobrada POR CIMA do ingresso — o atleta paga
-// `amount_collected = total_paid + service_fee_amount` e o `application_fee`
-// retido pelo gateway equivale à taxa. O gestor recebe `total_paid` integral.
-// Por isso "recebido" nunca aplica desconto percentual sobre o total pago.
+// Modelo financeiro (ver `serviceFee.ts` e as rotas de checkout): o `application_fee`
+// retido pelo gateway equivale à taxa da plataforma, e quem a paga é escolha do
+// gestor (`service_fee_payer`):
+//  - 'athlete': a taxa é cobrada POR CIMA do ingresso. O atleta paga
+//    `amount_collected = total_paid + service_fee_amount` e o gestor recebe
+//    `total_paid` integral.
+//  - 'organizer': a taxa está DENTRO do ingresso. O atleta paga `total_paid` e o
+//    gestor recebe `total_paid - service_fee_amount`.
+// Inscrição sem a escolha gravada vale o padrão do gateway (Mercado Pago: atleta;
+// Stripe: gestor).
 //
 // Inscrições canceladas viram `payment_cancelled` (ver
 // `/api/admin/persistence` → cancelRegistration), então já saem do faturamento
@@ -30,7 +35,7 @@ export type EventFinanceRow = {
   occupancyRate: number | null;
   /** Valor que fica com o gestor. */
   netRevenue: number;
-  /** Taxa WODArena paga pelo atleta por fora do ingresso. */
+  /** Taxa WODArena, paga pelo atleta por fora do ingresso ou absorvida pelo gestor. */
   serviceFee: number;
   /** Total desembolsado pelos atletas (ingresso + taxa). */
   collected: number;
@@ -83,13 +88,35 @@ export const resolveServiceFee = (registration: Registration): number => {
   return charged > 0 ? charged : toNumber(registration.serviceFeeAmount);
 };
 
+/** Quem pagou a taxa nesta inscrição, com o padrão do gateway quando não há escolha gravada. */
+// Sem importar serviceFee.ts: este módulo é carregado direto pelo node --test, que não resolve o alias @/.
+export const resolveRegistrationFeePayer = (registration: Registration): 'athlete' | 'organizer' => {
+  if (registration.serviceFeePayer === 'athlete' || registration.serviceFeePayer === 'organizer') {
+    return registration.serviceFeePayer;
+  }
+  return registration.paymentGateway === 'stripe' ? 'organizer' : 'athlete';
+};
+
 /**
- * Inscrições anteriores ao split guardam `amount_collected = total_paid`, então
- * o fallback reconstrói o total a partir do ingresso mais a taxa conhecida.
+ * Valor que fica com o gestor: o ingresso integral quando o atleta paga a taxa, ou
+ * o ingresso menos a taxa quando o gestor a absorve.
+ */
+export const resolveManagerReceived = (registration: Registration): number => {
+  const base = toNumber(registration.totalPaid);
+  if (resolveRegistrationFeePayer(registration) !== 'organizer') return base;
+  return Math.max(0, base - resolveServiceFee(registration));
+};
+
+/**
+ * Total desembolsado pelo atleta. Com a taxa por cima, inscrições anteriores ao
+ * split guardam `amount_collected = total_paid`, então o fallback reconstrói o
+ * total a partir do ingresso mais a taxa conhecida. Com a taxa absorvida, o
+ * atleta pagou só o ingresso.
  */
 export const resolveCollectedAmount = (registration: Registration): number => {
-  const collected = toNumber(registration.amountCollected);
   const base = toNumber(registration.totalPaid);
+  if (resolveRegistrationFeePayer(registration) === 'organizer') return base;
+  const collected = toNumber(registration.amountCollected);
   const fee = resolveServiceFee(registration);
   return collected >= base + fee ? collected : base + fee;
 };
@@ -105,7 +132,7 @@ export const buildEventFinanceRow = (event: Event, registrations: Registration[]
   const approved = eventRegistrations.filter(registration => registration.paymentStatus === APPROVED);
   const pending = eventRegistrations.filter(registration => PENDING_STATUSES.includes(registration.paymentStatus));
 
-  const netRevenue = approved.reduce((sum, registration) => sum + toNumber(registration.totalPaid), 0);
+  const netRevenue = approved.reduce((sum, registration) => sum + resolveManagerReceived(registration), 0);
   const serviceFee = approved.reduce((sum, registration) => sum + resolveServiceFee(registration), 0);
   const collected = approved.reduce((sum, registration) => sum + resolveCollectedAmount(registration), 0);
   const ticketsSold = approved.reduce((sum, registration) => sum + Math.max(0, toNumber(registration.quantity)), 0);

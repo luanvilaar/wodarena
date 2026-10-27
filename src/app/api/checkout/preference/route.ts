@@ -26,7 +26,8 @@ const createStripeCheckoutSession = async (
   const serviceFee = calculateServiceFee(
     transactionAmount,
     checkoutConfig.serviceFeePercent,
-    checkoutConfig.serviceFeeEnabled
+    checkoutConfig.serviceFeeEnabled,
+    checkoutConfig.serviceFeePayer
   );
   console.log(`[Stripe Preference API] Usando conta conectada ${checkoutConfig.stripeAccountId} do organizador ${checkoutConfig.organizerId} para o evento ${eventId}`);
 
@@ -41,7 +42,8 @@ const createStripeCheckoutSession = async (
     line_items: [{
       price_data: {
         currency,
-        unit_amount: toMinorUnits(serviceFee.baseAmount, paymentContext.currency),
+        // Atleta paga a taxa: o item já leva inscrição + taxa. Gestor paga: só a inscrição.
+        unit_amount: toMinorUnits(serviceFee.amountCollected, paymentContext.currency),
         product_data: { name: `Inscrição: ${ticketType} - WODArena` }
       },
       quantity: 1
@@ -59,7 +61,7 @@ const createStripeCheckoutSession = async (
     idempotencyKey: buildStripeIdempotencyKey('checkout_session', registrationId, amountCollectedMinorUnits, serviceFeeMinorUnits)
   });
 
-  return { redirectUrl: session.url, serviceFee };
+  return { redirectUrl: session.url, serviceFee, serviceFeePayer: checkoutConfig.serviceFeePayer };
 };
 
 export async function POST(request: Request) {
@@ -85,7 +87,7 @@ export async function POST(request: Request) {
     const paymentContext = await resolveEventPaymentContext(supabaseAdmin, checkoutSnapshot.eventId);
 
     if (paymentContext.gateway === 'stripe') {
-      const { redirectUrl, serviceFee } = await createStripeCheckoutSession(
+      const { redirectUrl, serviceFee, serviceFeePayer } = await createStripeCheckoutSession(
         checkoutSnapshot.eventId,
         checkoutSnapshot.registrationId,
         String(safeRegistrationData.ticketType || ''),
@@ -110,6 +112,7 @@ export async function POST(request: Request) {
           payment_gateway: 'stripe',
           service_fee_percent: serviceFee.serviceFeePercent,
           service_fee_amount: serviceFee.serviceFeeAmount,
+          service_fee_payer: serviceFeePayer,
           amount_collected: serviceFee.amountCollected,
           application_fee_charged: 0,
           updated_at: new Date().toISOString()
@@ -123,7 +126,8 @@ export async function POST(request: Request) {
     const serviceFee = calculateServiceFee(
       transactionAmount,
       checkoutConfig.serviceFeePercent,
-      checkoutConfig.serviceFeeEnabled
+      checkoutConfig.serviceFeeEnabled,
+      checkoutConfig.serviceFeePayer
     );
     console.log(`[MercadoPago Preference API] Usando credenciais ${checkoutConfig.source} do organizador ${checkoutConfig.organizerId} para o evento ${checkoutSnapshot.eventId}`);
 
@@ -146,7 +150,9 @@ export async function POST(request: Request) {
           currency_id: 'BRL',
           unit_price: transactionAmount
         },
-        ...(serviceFee.serviceFeeAmount > 0 ? [{
+        // A taxa só aparece como item quando o atleta paga por cima. Quando o gestor
+        // a absorve, ela sai do valor da inscrição pelo marketplace_fee abaixo.
+        ...(serviceFee.serviceFeeAmount > 0 && checkoutConfig.serviceFeePayer === 'athlete' ? [{
           id: 'wodarena-service-fee',
           title: `Taxa de serviço (${serviceFee.serviceFeePercent}%)`,
           description: 'Taxa de serviço da plataforma WODArena',
@@ -203,6 +209,7 @@ export async function POST(request: Request) {
         total_paid: transactionAmount,
         service_fee_percent: serviceFee.serviceFeePercent,
         service_fee_amount: serviceFee.serviceFeeAmount,
+        service_fee_payer: checkoutConfig.serviceFeePayer,
         amount_collected: serviceFee.amountCollected,
         application_fee_charged: 0,
         updated_at: new Date().toISOString()

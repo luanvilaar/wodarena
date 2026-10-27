@@ -87,12 +87,12 @@ test('owner controls the global switch and checkout shows the fee breakdown', ()
   assert.match(ownerPage, />Taxa de serviço<\/p>/);
   assert.match(ownerPage, /Receita Real de Taxas/);
   assert.match(registerModal, /t\('serviceFeeLabel', \{ percent: serviceFeeConfig\.percent \}\)/);
-  assert.match(registerModal, /calculateServiceFee\(totalPaid, serviceFeeConfig\.percent, serviceFeeConfig\.enabled\)/);
+  assert.match(registerModal, /calculateServiceFee\(totalPaid, serviceFeeConfig\.percent, serviceFeeConfig\.enabled, serviceFeeConfig\.payer\)/);
   assert.match(registerModal, /amountCollectedPreview/);
 });
 
 test('private registration payload exposes split fields without making them public', () => {
   assert.match(types, /serviceFeeAmount\?: number/);
   assert.match(types, /amountCollected\?: number/);
-  assert.match(bootstrap, /service_fee_amount, amount_collected, application_fee_charged/);
+  assert.match(bootstrap, /service_fee_amount, service_fee_payer, amount_collected, application_fee_charged/);
 });

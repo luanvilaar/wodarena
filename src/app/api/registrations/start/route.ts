@@ -41,7 +41,8 @@ export async function POST(request: Request) {
     const serviceFee = calculateServiceFee(
       secureSnapshot.transactionAmount,
       checkoutConfig?.serviceFeePercent,
-      checkoutConfig?.serviceFeeEnabled
+      checkoutConfig?.serviceFeeEnabled,
+      checkoutConfig?.serviceFeePayer
     );
 
     const email = normalizeEmail(String(safeRegistrationData.athleteEmail || safeAthleteProfile.email || ''));
@@ -261,6 +262,7 @@ export async function POST(request: Request) {
       shirt_addon_amount: Number(safeRegistrationData.shirtAddonAmount || 0),
       service_fee_percent: serviceFee.serviceFeePercent,
       service_fee_amount: serviceFee.serviceFeeAmount,
+      service_fee_payer: checkoutConfig?.serviceFeePayer ?? null,
       amount_collected: serviceFee.amountCollected,
       application_fee_charged: 0,
       created_at: now,
@@ -326,6 +328,7 @@ export async function POST(request: Request) {
         updatedAt: dbRegistration.updated_at,
         serviceFeePercent: serviceFee.serviceFeePercent,
         serviceFeeAmount: serviceFee.serviceFeeAmount,
+        serviceFeePayer: checkoutConfig?.serviceFeePayer,
         amountCollected: serviceFee.amountCollected,
         applicationFeeCharged: 0,
         accessToken: registrationAccessToken

@@ -12,6 +12,7 @@ export type PaymentIntegritySource = 'mp-status' | 'mp-webhook' | 'stripe-webhoo
 type RegistrationAmountsRow = {
   total_paid?: unknown;
   service_fee_amount?: unknown;
+  service_fee_payer?: unknown;
   currency?: unknown;
 };
 
@@ -74,6 +75,7 @@ export const reviewPaymentBeforeApproval = async (
         id: input.registrationId,
         totalPaid: input.registration?.total_paid,
         serviceFeeAmount: input.registration?.service_fee_amount,
+        serviceFeePayer: input.registration?.service_fee_payer,
         currency
       },
       payment: input.payment

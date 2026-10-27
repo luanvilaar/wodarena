@@ -72,6 +72,7 @@ type CheckoutConfigResponse = {
   publishableKey?: string;
   serviceFeeEnabled?: boolean;
   serviceFeePercent?: number;
+  serviceFeePayer?: 'athlete' | 'organizer';
   error?: string;
 };
 
@@ -159,7 +160,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess: onSuccessProp
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [athletePassword, setAthletePassword] = useState('');
   const [athletePasswordConfirmation, setAthletePasswordConfirmation] = useState('');
-  const [serviceFeeConfig, setServiceFeeConfig] = useState({ enabled: true, percent: 10 });
+  const [serviceFeeConfig, setServiceFeeConfig] = useState<{ enabled: boolean; percent: number; payer: 'athlete' | 'organizer' }>({ enabled: true, percent: 10, payer: 'athlete' });
   const [pixSupported, setPixSupported] = useState(true);
   const [serverUpdatedCheckout, setServerUpdatedCheckout] = useState<ServerUpdatedCheckout | null>(null);
   const [amountsUpdatedNotice, setAmountsUpdatedNotice] = useState<string | null>(null);
@@ -276,7 +277,8 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess: onSuccessProp
         if (response.ok && active) {
           setServiceFeeConfig({
             enabled: data.serviceFeeEnabled !== false,
-            percent: Number(data.serviceFeePercent || 10)
+            percent: Number(data.serviceFeePercent || 10),
+            payer: data.serviceFeePayer === 'organizer' ? 'organizer' : 'athlete'
           });
           const supportsPix = data.pixSupported !== false && data.gateway !== 'stripe';
           setPixSupported(supportsPix);
@@ -339,7 +341,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess: onSuccessProp
   const {
     serviceFeeAmount: serviceFeePreview,
     amountCollected: amountCollectedPreview
-  } = calculateServiceFee(totalPaid, serviceFeeConfig.percent, serviceFeeConfig.enabled);
+  } = calculateServiceFee(totalPaid, serviceFeeConfig.percent, serviceFeeConfig.enabled, serviceFeeConfig.payer);
   const isTeamCategory = participantCount > 1;
   const primaryParticipant = visibleParticipants[0] || createEmptyParticipant();
   const isFitnessRacing = event.eventType === 'fitness_racing';
@@ -1269,7 +1271,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess: onSuccessProp
                     <span className="font-number font-bold">- {formatMoney(registrationAmounts.discount, event.currency ?? 'BRL', locale)}</span>
                   </div>
                 )}
-                {serviceFeePreview > 0 && (
+                {serviceFeePreview > 0 && serviceFeeConfig.payer === 'athlete' && (
                   <div className="flex justify-between items-center text-sm text-muted-soft">
                     <span className="font-semibold">{t('serviceFeeLabel', { percent: serviceFeeConfig.percent })}</span>
                     <span className="font-number font-bold">{formatMoney(serviceFeePreview, event.currency ?? 'BRL', locale)}</span>

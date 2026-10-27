@@ -34,7 +34,8 @@ export async function GET(request: Request) {
         publishableKey: checkoutConfig.publishableKey,
         stripeAccountId: checkoutConfig.stripeAccountId,
         serviceFeeEnabled: checkoutConfig.serviceFeeEnabled,
-        serviceFeePercent: checkoutConfig.serviceFeePercent
+        serviceFeePercent: checkoutConfig.serviceFeePercent,
+        serviceFeePayer: checkoutConfig.serviceFeePayer
       });
     }
 
@@ -49,7 +50,8 @@ export async function GET(request: Request) {
       pixSupported: isPixSupported(paymentContext.currency),
       publicKey: checkoutConfig.publicKey,
       serviceFeeEnabled: checkoutConfig.serviceFeeEnabled,
-      serviceFeePercent: checkoutConfig.serviceFeePercent
+      serviceFeePercent: checkoutConfig.serviceFeePercent,
+      serviceFeePayer: checkoutConfig.serviceFeePayer
     });
   } catch (err) {
     if (err instanceof CheckoutGatewayError) {

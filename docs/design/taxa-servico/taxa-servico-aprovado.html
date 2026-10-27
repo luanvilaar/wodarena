@@ -1,0 +1,619 @@
+<title>Repasse da Taxa WODArena</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@500;600;700&family=Inter:wght@400;500;600;700;800&display=swap">
+<style>
+/* Layout: leitura em uma coluna, no visual do app WODArena (tokens de src/app/globals.css).
+   Duas maquetes: a aba Pagamentos no painel escuro do gestor e o resumo do pedido no checkout claro do atleta. */
+:root{
+  --font-body:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --font-num:"IBM Plex Sans",ui-monospace,Menlo,monospace;
+  /* página: escura primeiro, como o painel */
+  --bg:#0b0e11; --surface:#14181d; --surface-2:#1e2329; --line:#2b3139;
+  --fg:#eaecef; --muted:#929aa5; --accent:#fcd535; --accent-text:#fcd535; --ink:#181a20;
+  --up:#0ecb81; --down:#f6465d; --info:#7db4ff; --warn:#f0b90b;
+  /* barras do simulador */
+  --seg-net:#0ecb81; --seg-fee:#fcd535; --seg-gw:#5b8def;
+  /* maquete do painel: sempre o tema escuro do admin */
+  --a-bg:#0b0e11; --a-card:#1e2329; --a-line:#2b3139; --a-gray:#181a20; --a-fg:#eaecef; --a-muted:#929aa5;
+  --a-primary:#fcd535; --a-ink:#181a20; --a-up:#0ecb81;
+  /* maquete do checkout: sempre a superfície clara do modal de inscrição */
+  --c-bg:#ffffff; --c-soft:#f5f5f5; --c-fg:#181a20; --c-line:#e6e8ea; --c-muted:#5e6673; --c-gold:#9a7200; --c-green:#00875A;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --bg:#f4f5f7; --surface:#ffffff; --surface-2:#eceef2; --line:#d6dae1;
+    --fg:#181a20; --muted:#566070; --accent-text:#7a5c00; --up:#07694a; --down:#b8243a; --info:#1f5fd1; --warn:#8a5a00;
+    --seg-net:#0a8f5c; --seg-fee:#e0b100; --seg-gw:#3f6fd8;
+    color-scheme:light;
+  }
+}
+:root[data-theme="light"]{
+  --bg:#f4f5f7; --surface:#ffffff; --surface-2:#eceef2; --line:#d6dae1;
+  --fg:#181a20; --muted:#566070; --accent-text:#7a5c00; --up:#07694a; --down:#b8243a; --info:#1f5fd1; --warn:#8a5a00;
+  --seg-net:#0a8f5c; --seg-fee:#e0b100; --seg-gw:#3f6fd8;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:15px;line-height:1.55;-webkit-text-size-adjust:100%;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:32px 72px}
+h1,h2,h3,h4{text-wrap:balance;line-height:1.2;margin:0}
+p,ul,ol{margin:0}
+a{color:var(--accent-text)}
+code{font-family:var(--font-num);font-size:.9em;background:var(--surface-2);border:1px solid var(--line);border-radius:4px;padding:0 5px;overflow-wrap:anywhere}
+.wrap{max-width:1040px;margin:0 auto;display:grid;gap:56px}
+.num{font-family:var(--font-num);font-variant-numeric:tabular-nums}
+.eyebrow{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--accent-text)}
+h1{font-size:clamp(28px,5vw,40px);font-weight:800;letter-spacing:-.02em}
+h2{font-size:22px;font-weight:800;letter-spacing:-.01em}
+h3{font-size:15px;font-weight:700}
+.lead{max-width:68ch;color:var(--muted);font-size:16px}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+section{display:grid;gap:20px;min-width:0}
+.sec-head{display:grid;gap:8px}
+.head{display:grid;gap:14px}
+.pills{display:flex;flex-wrap:wrap;gap:8px}
+.pill{display:inline-block;font-size:12px;font-weight:600;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:999px;padding:4px 12px;text-decoration:none}
+a.pill:hover,a.pill:focus-visible{border-color:var(--accent-text)}
+.status{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--warn)}
+.status::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--warn)}
+:focus-visible{outline:2px solid var(--accent-text);outline-offset:2px}
+
+/* resumo executivo */
+.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
+.sum-item{display:grid;gap:6px;padding:18px;border:1px solid var(--line);background:var(--surface);border-radius:10px;min-width:0}
+.sum-item .k{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.sum-item p{font-size:14px}
+
+/* achados */
+.findings{display:grid;gap:12px}
+.finding{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;padding:16px 18px;border:1px solid var(--line);border-left-width:3px;background:var(--surface);border-radius:8px;min-width:0}
+.finding.crit{border-left-color:var(--down)}
+.finding.high{border-left-color:var(--warn)}
+.finding.info{border-left-color:var(--info)}
+.finding .tag{grid-row:span 2;font-family:var(--font-num);font-weight:700;font-size:13px;color:var(--muted);padding-top:1px}
+.finding h3{min-width:0}
+.finding p{font-size:14px;color:var(--muted);min-width:0}
+.sev{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;margin-left:8px;vertical-align:2px}
+.crit .sev{color:var(--down)} .high .sev{color:var(--warn)} .info .sev{color:var(--info)}
+
+/* fluxo hoje */
+.flow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.flow-step{padding:14px;border:1px solid var(--line);border-radius:8px;background:var(--surface);display:grid;gap:4px;align-content:start;min-width:0}
+.flow-step b{font-size:13px}
+.flow-step span{font-size:13px;color:var(--muted)}
+@media (max-width:760px){.flow{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:440px){.flow{grid-template-columns:1fr}}
+
+/* simulador */
+.sim{display:grid;gap:20px;padding:22px;border:1px solid var(--line);background:var(--surface);border-radius:12px}
+.controls{display:flex;flex-wrap:wrap;gap:18px 28px;align-items:end}
+.field{display:grid;gap:6px}
+.field label,.field .lbl{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.money-in{display:flex;align-items:center;border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:0 12px;min-height:44px}
+.money-in span{color:var(--muted);font-weight:600;margin-right:6px}
+.money-in input{background:transparent;border:0;color:var(--fg);font:600 18px var(--font-num);width:110px;min-height:42px;outline:none}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--bg)}
+.seg button{appearance:none;border:0;background:transparent;color:var(--muted);font:600 13px var(--font-body);padding:0 16px;min-height:44px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--ink)}
+.compare{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+@media (max-width:700px){.compare{grid-template-columns:1fr}}
+.mode{display:grid;gap:12px;padding:18px;border:1px solid var(--line);border-radius:10px;background:var(--bg);min-width:0}
+.mode-h{display:flex;justify-content:space-between;gap:10px;align-items:baseline;flex-wrap:wrap}
+.mode-h small{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.rows{display:grid;gap:6px;font-size:14px}
+.row{display:flex;justify-content:space-between;gap:12px}
+.row .num{font-weight:600}
+.row.total{border-top:1px solid var(--line);padding-top:8px;font-weight:700}
+.row.total .num{font-size:18px;color:var(--up)}
+.bar{display:flex;height:14px;border-radius:4px;overflow:hidden;background:var(--surface-2)}
+.bar i{display:block;height:100%}
+.bar .n{background:var(--seg-net)} .bar .f{background:var(--seg-fee)} .bar .g{background:var(--seg-gw)}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:10px;height:10px;border-radius:2px;display:inline-block}
+.hint{font-size:13px;color:var(--muted);border-top:1px dashed var(--line);padding-top:14px}
+.hint b{color:var(--fg)}
+
+/* maquetes */
+.mocks{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:860px){.mocks{grid-template-columns:1fr}}
+.mock-label{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.admin{background:var(--a-card);color:var(--a-fg);border:1px solid var(--a-line);border-radius:12px;padding:22px;display:grid;gap:18px}
+.admin .a-eyebrow{font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--a-primary)}
+.admin .a-title{font-size:20px;font-weight:800;text-transform:uppercase;letter-spacing:-.01em;color:#fff}
+.admin .a-desc{font-size:13px;line-height:1.6;color:var(--a-muted)}
+.admin .a-sep{border-top:1px solid var(--a-line)}
+.a-conn{display:flex;gap:12px;align-items:center;padding:12px 14px;border:1px solid rgba(252,213,53,.2);background:rgba(252,213,53,.05);border-radius:8px;font-size:12px;color:var(--a-muted)}
+.a-conn b{color:var(--a-primary);text-transform:uppercase;font-size:11px;letter-spacing:.06em}
+.options{display:grid;gap:10px;border:0;margin:0;padding:0;min-width:0}
+.options legend{padding:0;margin-bottom:10px}
+.opt{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;padding:14px;border:1px solid var(--a-line);border-radius:10px;background:var(--a-gray);cursor:pointer}
+.opt input{margin:3px 0 0;accent-color:var(--a-primary);width:18px;height:18px;grid-row:span 2}
+.opt b{font-size:14px;color:#fff}
+.opt span{font-size:12px;color:var(--a-muted);line-height:1.5}
+.opt:has(input:checked){border-color:var(--a-primary);background:rgba(252,213,53,.06)}
+.opt:has(input:focus-visible){outline:2px solid var(--a-primary);outline-offset:2px}
+.example{display:grid;gap:6px;padding:12px 14px;border-radius:8px;background:var(--a-bg);border:1px solid var(--a-line);font-size:12px;color:var(--a-muted)}
+.example .row .num{color:var(--a-fg)}
+.example .row.total{border-top-color:var(--a-line)}
+.example .row.total .num{color:var(--a-up);font-size:15px}
+.a-actions{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.a-btn{appearance:none;border:0;border-radius:6px;background:var(--a-primary);color:var(--a-ink);font:800 12px var(--font-body);letter-spacing:.08em;text-transform:uppercase;min-height:44px;padding:0 18px;cursor:pointer}
+.a-note{font-size:12px;color:var(--a-muted)}
+.a-saved{font-size:12px;color:var(--a-up);font-weight:600}
+
+.checkout{background:var(--c-bg);color:var(--c-fg);border:1px solid var(--c-line);border-radius:14px;padding:20px;display:grid;gap:12px}
+.checkout h4{font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase}
+.c-box{background:var(--c-soft);border:1px solid var(--c-line);border-radius:10px;padding:14px;display:grid;gap:8px}
+.c-row{display:flex;justify-content:space-between;gap:10px;font-size:14px;color:var(--c-muted)}
+.c-row .num{font-weight:700;color:var(--c-fg)}
+.c-row.fee{color:var(--c-muted)}
+.c-row.total{border-top:1px solid var(--c-line);padding-top:8px;color:var(--c-fg);font-weight:800;text-transform:uppercase;letter-spacing:.06em;font-size:15px}
+.c-row.total .num{font-weight:900;font-size:17px}
+.c-safe{display:flex;gap:8px;font-size:11px;color:var(--c-muted);border-top:1px solid var(--c-line);padding-top:10px;line-height:1.45}
+.c-safe b{color:var(--c-fg);display:block}
+.c-safe svg{flex:none;color:var(--c-gold)}
+.c-cta{background:#fcd535;color:#181a20;font-weight:800;font-size:13px;letter-spacing:.06em;text-transform:uppercase;border-radius:8px;min-height:46px;display:flex;align-items:center;justify-content:center}
+.mock-notes{display:grid;gap:8px;font-size:13px;color:var(--muted);padding-left:18px}
+
+/* decisões */
+.decisions{display:grid;gap:14px}
+.dec{display:grid;gap:10px;padding:18px;border:1px solid var(--line);background:var(--surface);border-radius:10px;min-width:0}
+.dec-h{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.dec-h .id{font-family:var(--font-num);font-weight:700;color:var(--accent-text)}
+.choices{display:grid;gap:6px;padding:0;list-style:none}
+.choices li{font-size:14px;color:var(--muted);padding-left:22px;position:relative}
+.choices li::before{content:"○";position:absolute;left:2px;color:var(--muted)}
+.choices li.rec{color:var(--fg)}
+.choices li.rec::before{content:"●";color:var(--accent-text)}
+.rec-tag{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--accent-text);margin-left:6px}
+
+/* tabela */
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:680px;font-size:13px}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700;background:var(--surface-2)}
+tr:last-child td{border-bottom:0}
+td:first-child{white-space:nowrap;font-weight:600}
+
+/* stories */
+.stories{display:grid;gap:12px}
+.story{display:grid;grid-template-columns:72px 1fr;gap:4px 16px;padding:16px 18px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.story .sid{grid-row:span 2;font-family:var(--font-num);font-weight:700;font-size:18px;color:var(--accent-text)}
+.story p{font-size:14px;color:var(--muted);min-width:0}
+@media (max-width:480px){.story{grid-template-columns:1fr}.story .sid{grid-row:auto}}
+
+.cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+@media (max-width:700px){.cols{grid-template-columns:1fr}}
+.box{padding:18px;border:1px solid var(--line);border-radius:10px;background:var(--surface);display:grid;gap:10px;min-width:0}
+.box ul{display:grid;gap:8px;padding-left:18px;font-size:14px;color:var(--muted)}
+.box ul b{color:var(--fg)}
+.foot{font-size:13px;color:var(--muted);border-top:1px solid var(--line);padding-top:20px}
+@media (prefers-reduced-motion:no-preference){.bar i{transition:width .25s ease}}
+</style>
+
+<div class="wrap">
+
+  <header class="head">
+    <span class="status">Proposta · aguardando aprovação</span>
+    <p class="eyebrow">Checkout · Aba Pagamentos do gestor</p>
+    <h1>Quem paga a taxa WODArena</h1>
+    <p class="lead">Hoje os 10% da plataforma entram por cima do valor da inscrição e aparecem como uma linha separada no resumo do pedido. A proposta dá ao gestor a escolha entre repassar a taxa ao atleta, como hoje, ou absorvê-la no valor da inscrição. Nenhum código, banco ou configuração foi alterado.</p>
+    <nav class="pills" aria-label="Seções">
+      <a class="pill" href="#hoje">Como funciona hoje</a>
+      <a class="pill" href="#achados">Achados</a>
+      <a class="pill" href="#simulador">Simulador</a>
+      <a class="pill" href="#maquete">Maquete</a>
+      <a class="pill" href="#decisoes">Decisões</a>
+      <a class="pill" href="#implementacao">Implementação</a>
+      <a class="pill" href="#stories">Stories</a>
+    </nav>
+  </header>
+
+  <section aria-labelledby="t-resumo">
+    <h2 id="t-resumo" class="eyebrow" style="font-size:11px">Resumo</h2>
+    <div class="summary">
+      <div class="sum-item">
+        <span class="k">O que muda para o gestor</span>
+        <p>Um cartão novo na aba Pagamentos, <b>Taxa de serviço WODArena</b>, com duas opções: <b>Repassar ao atleta</b> (padrão, igual a hoje) ou <b>Absorver no valor da inscrição</b>.</p>
+      </div>
+      <div class="sum-item">
+        <span class="k">O que muda para o atleta</span>
+        <p>Com a taxa absorvida, o resumo do pedido mostra só a inscrição e o total igual ao preço anunciado. Sem linha de taxa e sem surpresa no fim do checkout.</p>
+      </div>
+      <div class="sum-item">
+        <span class="k">O que não muda</span>
+        <p>A WODArena recebe os mesmos 10% nos dois modos, pelo mesmo <code>application_fee</code> do Mercado Pago. O percentual e o liga/desliga global continuam com o dono da plataforma.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="hoje" aria-labelledby="t-hoje">
+    <div class="sec-head">
+      <p class="eyebrow">Diagnóstico</p>
+      <h2 id="t-hoje">Como a taxa funciona hoje</h2>
+      <p class="lead">A regra está em um só lugar, <code>src/lib/serviceFee.ts</code>, e todas as rotas de pagamento a seguem: a taxa é somada ao valor da inscrição e retida pelo gateway no split.</p>
+    </div>
+    <div class="flow">
+      <div class="flow-step"><b>1 · Configuração</b><span><code>platform_settings</code> guarda 10% e o liga/desliga global, alterado só pelo dono em <code>/owner</code>.</span></div>
+      <div class="flow-step"><b>2 · Resumo do pedido</b><span><code>RegisterModal</code> mostra "Taxa de serviço (10%)" e o total com a taxa somada.</span></div>
+      <div class="flow-step"><b>3 · Cobrança</b><span>Cartão, PIX e preference enviam <code>transaction_amount = inscrição + taxa</code> e <code>application_fee = taxa</code>.</span></div>
+      <div class="flow-step"><b>4 · Conferência</b><span><code>paymentIntegrity</code> aprova se o pago bate com <code>total_paid + service_fee_amount</code>. O painel do gestor mostra <code>total_paid</code> como recebido.</span></div>
+    </div>
+    <p class="small muted">A aba Pagamentos (<code>src/app/admin/page.tsx</code>, <code>activeTab === 'payments'</code>) hoje só conecta e desconecta as contas Mercado Pago e Stripe. Não tem nenhuma configuração de cobrança.</p>
+  </section>
+
+  <section id="achados" aria-labelledby="t-achados">
+    <div class="sec-head">
+      <p class="eyebrow">Achados da leitura do código</p>
+      <h2 id="t-achados">O que a mudança precisa tratar</h2>
+      <p class="lead">Trocar o lado da taxa mexe em seis pontos que hoje assumem que o atleta paga. Dois deles bloqueariam vendas se fossem esquecidos.</p>
+    </div>
+    <div class="findings">
+      <div class="finding crit">
+        <span class="tag">A1</span>
+        <h3>A conferência de pagamento reprovaria toda venda com taxa absorvida <span class="sev">Crítico</span></h3>
+        <p><code>paymentIntegrity.ts</code> espera, no Mercado Pago, <code>total_paid + service_fee_amount</code>. Com a taxa absorvida o atleta paga só <code>total_paid</code>, e a diferença de 10% vira divergência. Em <code>PAYMENT_INTEGRITY_MODE=enforce</code> a inscrição ficaria em análise e sem e-mail de confirmação. A regra precisa saber quem pagou a taxa daquela inscrição.</p>
+      </div>
+      <div class="finding crit">
+        <span class="tag">A2</span>
+        <h3>O painel do gestor mostraria um faturamento maior que o real <span class="sev">Crítico</span></h3>
+        <p><code>managerFinance.ts</code> trata <code>total_paid</code> como o valor que fica com o gestor e reconstrói o total cobrado como <code>inscrição + taxa</code> quando o gravado é menor. Com a taxa absorvida, o recebido é <code>total_paid − taxa</code> e o cobrado é <code>total_paid</code>. O painel do dono (<code>/owner</code>) usa <code>amountCollected</code> e não é afetado.</p>
+      </div>
+      <div class="finding high">
+        <span class="tag">A3</span>
+        <h3>No Stripe a taxa já sai do gestor, mas o atleta vê a taxa somada <span class="sev">Anterior a esta proposta</span></h3>
+        <p>Em eventos EUR/GBP, a sessão do Stripe cobra só o valor da inscrição e retira a taxa dele (<code>application_fee_amount</code>). O resumo do pedido, porém, mostra a linha de taxa e um total 10% maior que o cobrado, e a inscrição grava <code>amount_collected</code> com a taxa somada. A proposta resolve isso fazendo o Stripe seguir a mesma escolha (decisão D3).</p>
+      </div>
+      <div class="finding high">
+        <span class="tag">A4</span>
+        <h3>A escolha precisa ficar gravada em cada inscrição</h3>
+        <p>Se o gestor trocar a opção com pagamentos em andamento, a conferência e o painel precisam saber qual regra valeu para cada inscrição. Hoje a inscrição guarda percentual e valor da taxa, mas não quem pagou. Proposta: coluna <code>registrations.service_fee_payer</code>, em que vazio significa atleta, o comportamento de todas as inscrições existentes.</p>
+      </div>
+      <div class="finding info">
+        <span class="tag">A5</span>
+        <h3>A tarifa do Mercado Pago incide sobre o total cobrado</h3>
+        <p>No split, a tarifa de processamento é descontada do vendedor sobre o <code>transaction_amount</code>. Com a taxa repassada, o gestor também paga a tarifa sobre os 10% da WODArena (R$ 0,49 a cada R$ 100 no crédito). Isso precisa ser confirmado em um pagamento real (<code>fee_details</code>, tipo <code>mercadopago_fee</code>) antes de entrar no texto da tela.</p>
+      </div>
+      <div class="finding info">
+        <span class="tag">A6</span>
+        <h3>Os Termos falam em taxa de serviço não reembolsável</h3>
+        <p><code>/termos</code> diz que, em reembolsos pela política do organizador, "taxas de serviço da WODArena [...] poderão não ser reembolsadas". Com a taxa absorvida o atleta não vê essa taxa, então descontá-la de um reembolso fica difícil de explicar. É decisão de negócio (D6), fora do código.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="simulador" aria-labelledby="t-sim">
+    <div class="sec-head">
+      <p class="eyebrow">Simulador</p>
+      <h2 id="t-sim">Quanto cada um paga e recebe</h2>
+      <p class="lead">Comissão WODArena de 10% e tarifas do Mercado Pago de 4,89% no crédito e 0,99% no PIX, aplicadas sobre o valor cobrado do atleta. Valores arredondados ao centavo.</p>
+    </div>
+    <div class="sim">
+      <div class="controls">
+        <div class="field">
+          <label for="price">Valor da inscrição</label>
+          <div class="money-in"><span>R$</span><input id="price" type="number" inputmode="decimal" min="0" step="1" value="100"></div>
+        </div>
+        <div class="field">
+          <span class="lbl" id="method-lbl">Meio de pagamento</span>
+          <div class="seg" role="group" aria-labelledby="method-lbl">
+            <button type="button" data-method="credit" aria-pressed="true">Crédito 4,89%</button>
+            <button type="button" data-method="pix" aria-pressed="false">PIX 0,99%</button>
+          </div>
+        </div>
+      </div>
+      <div class="compare">
+        <div class="mode">
+          <div class="mode-h"><h3>Repassar ao atleta</h3><small>Hoje</small></div>
+          <div class="bar" aria-hidden="true"><i class="n" id="a-bn"></i><i class="f" id="a-bf"></i><i class="g" id="a-bg"></i></div>
+          <div class="rows">
+            <div class="row"><span>Atleta paga</span><span class="num" id="a-paid"></span></div>
+            <div class="row"><span>Comissão WODArena</span><span class="num" id="a-fee"></span></div>
+            <div class="row"><span>Tarifa Mercado Pago</span><span class="num" id="a-gw"></span></div>
+            <div class="row total"><span>Gestor recebe</span><span class="num" id="a-net"></span></div>
+          </div>
+        </div>
+        <div class="mode">
+          <div class="mode-h"><h3>Absorver no valor</h3><small>Novo</small></div>
+          <div class="bar" aria-hidden="true"><i class="n" id="b-bn"></i><i class="f" id="b-bf"></i><i class="g" id="b-bg"></i></div>
+          <div class="rows">
+            <div class="row"><span>Atleta paga</span><span class="num" id="b-paid"></span></div>
+            <div class="row"><span>Comissão WODArena</span><span class="num" id="b-fee"></span></div>
+            <div class="row"><span>Tarifa Mercado Pago</span><span class="num" id="b-gw"></span></div>
+            <div class="row total"><span>Gestor recebe</span><span class="num" id="b-net"></span></div>
+          </div>
+        </div>
+      </div>
+      <div class="legend" aria-hidden="true">
+        <span><i style="background:var(--seg-net)"></i>Gestor</span>
+        <span><i style="background:var(--seg-fee)"></i>WODArena</span>
+        <span><i style="background:var(--seg-gw)"></i>Mercado Pago</span>
+      </div>
+      <p class="hint" id="hint"></p>
+    </div>
+  </section>
+
+  <section id="maquete" aria-labelledby="t-maq">
+    <div class="sec-head">
+      <p class="eyebrow">Maquete interativa</p>
+      <h2 id="t-maq">A aba Pagamentos e o que o atleta vê</h2>
+      <p class="lead">Troque a opção no cartão do gestor: o resumo do pedido ao lado muda junto. O valor da inscrição vem do simulador acima.</p>
+    </div>
+    <div class="mocks">
+      <div>
+        <p class="mock-label">Painel do gestor · /admin · aba Pagamentos</p>
+        <div class="admin">
+          <div>
+            <p class="a-eyebrow">Configuração Financeira</p>
+            <p class="a-title" style="margin-top:6px">Configurações de Pagamento</p>
+          </div>
+          <div class="a-conn">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="color:var(--a-primary)"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>
+            <div><b>Status: Conectado</b><br>Mercado Pago via OAuth · cartão existente, sem mudança</div>
+          </div>
+          <div class="a-sep"></div>
+          <div>
+            <p class="a-eyebrow">Cobrança</p>
+            <p class="a-title" style="margin-top:6px;font-size:18px">Taxa de serviço WODArena</p>
+            <p class="a-desc" style="margin-top:6px">A WODArena retém 10% de cada inscrição paga. Escolha se esse valor aparece para o atleta no checkout ou se já está dentro do preço da inscrição.</p>
+          </div>
+          <fieldset class="options">
+            <legend class="a-desc" style="font-weight:700;text-transform:uppercase;letter-spacing:.08em;font-size:11px">Quem paga a taxa</legend>
+            <label class="opt">
+              <input type="radio" name="payer" id="payer-athlete" value="athlete" checked>
+              <b>Repassar ao atleta</b>
+              <span>O checkout soma 10% ao valor da inscrição e mostra a taxa em uma linha separada. Você recebe o valor integral da inscrição.</span>
+            </label>
+            <label class="opt">
+              <input type="radio" name="payer" id="payer-organizer" value="organizer">
+              <b>Absorver no valor da inscrição</b>
+              <span>O atleta paga exatamente o preço anunciado, sem linha de taxa. Os 10% saem do valor que você recebe.</span>
+            </label>
+          </fieldset>
+          <div class="example" aria-live="polite">
+            <div class="row"><span id="ex-title">Exemplo com inscrição de R$ 100,00</span></div>
+            <div class="row"><span>Atleta paga</span><span class="num" id="ex-paid"></span></div>
+            <div class="row"><span>Taxa WODArena</span><span class="num" id="ex-fee"></span></div>
+            <div class="row total"><span>Você recebe, antes da tarifa do Mercado Pago</span><span class="num" id="ex-net"></span></div>
+          </div>
+          <div class="a-actions">
+            <button type="button" class="a-btn" id="save">Salvar escolha</button>
+            <span class="a-saved" id="saved" hidden>Salvo. Vale para os próximos pagamentos.</span>
+          </div>
+          <p class="a-note">Vale para todos os seus eventos, nos pagamentos iniciados depois de salvar. Inscrições já pagas não mudam.</p>
+        </div>
+      </div>
+      <div>
+        <p class="mock-label">Checkout do atleta · resumo do pedido</p>
+        <div class="checkout">
+          <h4>Resumo do pedido</h4>
+          <div class="c-box">
+            <div class="c-row"><span>Inscrição · RX Masculino</span><span class="num" id="c-base"></span></div>
+            <div class="c-row fee" id="c-fee-row"><span>Taxa de serviço (10%)</span><span class="num" id="c-fee"></span></div>
+            <div class="c-row total"><span>Total</span><span class="num" id="c-total"></span></div>
+            <div class="c-safe">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+              <div><b>Pagamento processado pelo Mercado Pago</b>Ambiente seguro e criptografado.</div>
+            </div>
+          </div>
+          <div class="c-cta">Pagar <span class="num" id="c-cta" style="margin-left:6px"></span></div>
+        </div>
+        <ul class="mock-notes" style="margin-top:14px">
+          <li>A estrutura e o visual são os do <code>RegisterModal</code> atual. Só a linha de taxa e o total mudam.</li>
+          <li>Na preference (redirect), o item "Taxa de serviço" também deixa de ser enviado ao Mercado Pago quando a taxa é absorvida.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="decisoes" aria-labelledby="t-dec">
+    <div class="sec-head">
+      <p class="eyebrow">Para aprovar</p>
+      <h2 id="t-dec">Decisões</h2>
+      <p class="lead">A opção marcada é a recomendação. Basta responder com o número da decisão e a opção quando quiser outra.</p>
+    </div>
+    <div class="decisions">
+      <div class="dec">
+        <div class="dec-h"><span class="id">D1</span><h3>Onde fica a escolha</h3></div>
+        <ul class="choices">
+          <li class="rec">A · Por gestor, na aba Pagamentos, valendo para todos os eventos dele<span class="rec-tag">Recomendado</span></li>
+          <li>B · Por evento, na edição do evento</li>
+          <li>C · Padrão do gestor na aba Pagamentos, com exceção por evento</li>
+        </ul>
+        <p class="small muted">A é o que foi pedido e é o menor escopo. O modelo de dados proposto permite chegar em C depois só com uma coluna no evento, sem refazer nada.</p>
+      </div>
+      <div class="dec">
+        <div class="dec-h"><span class="id">D2</span><h3>Quando a troca passa a valer</h3></div>
+        <ul class="choices">
+          <li class="rec">A · Nos pagamentos criados depois de salvar. A regra é lida no servidor na hora de gerar o cartão, o PIX ou o link, e gravada na inscrição. Inscrição paga nunca muda.<span class="rec-tag">Recomendado</span></li>
+          <li>B · Só em inscrições iniciadas depois de salvar (a regra fica presa ao início da inscrição)</li>
+        </ul>
+        <p class="small muted">Em A, um atleta com PIX pendente que gerar um novo PIX paga o valor da regra nova. O modal já trata valor atualizado pelo servidor (<code>amountCollected</code> na resposta).</p>
+      </div>
+      <div class="dec">
+        <div class="dec-h"><span class="id">D3</span><h3>Eventos em Stripe (EUR/GBP)</h3></div>
+        <ul class="choices">
+          <li class="rec">A · Seguem a mesma escolha. Repassar passa a somar a taxa na sessão do Stripe; absorver mantém a cobrança atual. O resumo do atleta passa a bater com o cobrado.<span class="rec-tag">Recomendado</span></li>
+          <li>B · Ficam fora da escolha e sempre absorvem, como já fazem. Só corrigir o resumo do pedido e o <code>amount_collected</code> (achado A3).</li>
+        </ul>
+        <p class="small muted">Em A, para os gestores europeus que hoje já recebem a inscrição menos 10%, o padrão "repassar" muda o preço final para o atleta. Para não mudar nada sem aviso, o padrão inicial no Stripe seria "absorver".</p>
+      </div>
+      <div class="dec">
+        <div class="dec-h"><span class="id">D4</span><h3>O que o atleta vê com a taxa absorvida</h3></div>
+        <ul class="choices">
+          <li class="rec">A · Nada sobre taxa: inscrição e total iguais<span class="rec-tag">Recomendado</span></li>
+          <li>B · Uma nota discreta "Sem taxa de serviço" abaixo do total</li>
+        </ul>
+      </div>
+      <div class="dec">
+        <div class="dec-h"><span class="id">D5</span><h3>Visibilidade para o dono da plataforma</h3></div>
+        <ul class="choices">
+          <li class="rec">A · Coluna "Taxa" (Repassa / Absorve) na lista de gestores do <code>/owner</code>, só leitura<span class="rec-tag">Recomendado</span></li>
+          <li>B · Sem mudança no painel do dono</li>
+        </ul>
+      </div>
+      <div class="dec">
+        <div class="dec-h"><span class="id">D6</span><h3>Reembolso com a taxa absorvida</h3></div>
+        <ul class="choices">
+          <li class="rec">A · Manter os Termos como estão e decidir a redação depois, com o jurídico. O código não muda o reembolso.<span class="rec-tag">Recomendado</span></li>
+          <li>B · Ajustar o texto dos Termos nesta entrega (redação a definir por você)</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="implementacao" aria-labelledby="t-impl">
+    <div class="sec-head">
+      <p class="eyebrow">Plano técnico</p>
+      <h2 id="t-impl">O que muda em cada camada</h2>
+      <p class="lead">Mudança aditiva. Com o padrão "repassar", nada muda para nenhum gestor até ele trocar a opção. O cálculo continua todo no servidor; o navegador só exibe.</p>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Camada</th><th>Onde</th><th>Mudança</th></tr></thead>
+        <tbody>
+          <tr><td>Banco</td><td><code>supabase/migrations/2026…_service_fee_payer.sql</code></td><td>Tabela <code>manager_payment_settings</code> (<code>user_id</code> → <code>users</code>, <code>service_fee_payer</code> com CHECK <code>'athlete' | 'organizer'</code>, padrão <code>'athlete'</code>, <code>updated_at</code>), RLS ligada e sem policies, como <code>mercadopago_accounts</code>. Coluna <code>registrations.service_fee_payer</code> nula = atleta. Migration nova; nenhuma aplicada é editada.</td></tr>
+          <tr><td>Regra</td><td><code>src/lib/serviceFee.ts</code></td><td><code>calculateServiceFee</code> recebe quem paga. Atleta: cobrado = inscrição + taxa. Gestor: cobrado = inscrição. A taxa é sempre 10% da inscrição e devolve também <code>serviceFeePayer</code>.</td></tr>
+          <tr><td>Config</td><td><code>mercadopagoServer.ts</code>, <code>stripeServer.ts</code></td><td>Os resolvedores de checkout, que já buscam o organizador do evento, passam a ler a escolha dele junto com a taxa da plataforma.</td></tr>
+          <tr><td>Cobrança</td><td><code>registrations/start</code>, <code>checkout/card</code>, <code>pix</code>, <code>preference</code>, <code>config</code></td><td>Gravam <code>service_fee_payer</code> com os valores. Mercado Pago: <code>application_fee</code> igual nos dois modos; o item "Taxa de serviço" da preference só existe no modo repassar. Stripe conforme D3. A chave de idempotência já inclui valor e taxa, então muda sozinha com o modo.</td></tr>
+          <tr><td>Conferência</td><td><code>paymentIntegrity.ts</code></td><td>Valor esperado = <code>total_paid</code> + taxa só quando quem paga é o atleta, por gateway (achado A1).</td></tr>
+          <tr><td>Finanças</td><td><code>managerFinance.ts</code>, <code>DashboardOverview.tsx</code></td><td>Recebido = <code>total_paid − taxa</code> quando o gestor absorve, e cobrado = <code>total_paid</code> (achado A2).</td></tr>
+          <tr><td>API</td><td><code>/api/admin/payment-settings</code> (nova)</td><td>GET e PUT da escolha, com <code>requireSession(['manager','owner'])</code> e <code>assertManagerOperationalAccess</code>, no mesmo padrão de <code>/api/admin/stripe</code>.</td></tr>
+          <tr><td>Telas</td><td><code>admin/page.tsx</code>, <code>RegisterModal.tsx</code>, <code>owner/page.tsx</code></td><td>Cartão da maquete na aba Pagamentos (some se o dono desligar a taxa global). Resumo do pedido sem linha de taxa no modo absorver. Coluna no painel do dono (D5).</td></tr>
+          <tr><td>Textos</td><td><code>src/messages/pt-br|pt-pt|en-gb.json</code></td><td>Rótulos do cartão e do resumo nas três línguas.</td></tr>
+          <tr><td>Testes</td><td><code>tests/*.test.mjs</code></td><td>Ajuste de <code>service-fee-split</code>, <code>payment-integrity</code>, <code>payment-integrity-routes</code>, <code>manager-dashboard-finance</code>, <code>mercadopago-checkout</code> e <code>stripe-checkout</code>, mais casos novos: os dois modos, cupom 100%, camisa opcional, troca de modo com pagamento pendente.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="stories" aria-labelledby="t-st">
+    <div class="sec-head">
+      <p class="eyebrow">Entrega</p>
+      <h2 id="t-st">Quatro stories, nesta ordem</h2>
+      <p class="lead">Cada story pode ir para produção sozinha sem mudar comportamento, porque o padrão é "repassar". Só depois da 1.84 o gestor consegue trocar a opção.</p>
+    </div>
+    <div class="stories">
+      <div class="story"><span class="sid">1.82</span><h3>Modelo e regra de quem paga a taxa</h3><p>Migration, <code>serviceFee.ts</code>, resolvedores de configuração, conferência de pagamento e finanças do gestor, com testes. Nenhuma tela muda.</p></div>
+      <div class="story"><span class="sid">1.83</span><h3>Checkout aplica a escolha</h3><p>Rotas de cartão, PIX, preference e Stripe gravam e cobram conforme a escolha. Resumo do pedido do atleta segue o modo, inclusive a correção do Stripe (A3).</p></div>
+      <div class="story"><span class="sid">1.84</span><h3>Opção na aba Pagamentos</h3><p>Rota <code>/api/admin/payment-settings</code> e o cartão da maquete, com exemplo de valores e confirmação de salvamento.</p></div>
+      <div class="story"><span class="sid">1.85</span><h3>Visibilidade no painel do dono</h3><p>Coluna na lista de gestores (D5). Pode sair se D5 for B.</p></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="t-risk">
+    <div class="sec-head">
+      <p class="eyebrow">Antes de liberar</p>
+      <h2 id="t-risk">Validação e volta atrás</h2>
+    </div>
+    <div class="cols">
+      <div class="box">
+        <h3>Validação</h3>
+        <ul>
+          <li><b>Tarifa do Mercado Pago:</b> conferir em um pagamento real se a tarifa sai do vendedor sobre o total cobrado (A5), antes de fechar os textos.</li>
+          <li><b>Sandbox nos dois modos:</b> cartão, PIX e preference, conferindo <code>application_fee</code> em <code>fee_details</code> e a aprovação pela conferência de pagamento.</li>
+          <li><b>Stripe:</b> uma sessão em EUR em cada modo, com o resumo batendo com o cobrado.</li>
+          <li><code>npm test</code>, <code>npm run lint</code>, <code>npm run typecheck</code> e gate do @qa em cada story.</li>
+        </ul>
+      </div>
+      <div class="box">
+        <h3>Riscos e como voltar</h3>
+        <ul>
+          <li><b>Esquecer a conferência (A1):</b> vendas absorvidas iriam para análise. A 1.82 entra antes de qualquer tela que permita absorver.</li>
+          <li><b>Troca no meio das vendas:</b> o atleta com pagamento pendente vê o valor novo ao gerar outro pagamento. Pagas ficam como estão.</li>
+          <li><b>Voltar atrás:</b> o gestor volta para "repassar" na própria aba. As colunas novas são aditivas e podem ficar no banco sem uso.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <p class="foot">Leitura feita em 27/10/2026 sobre <code>main</code> (f613115). Nenhum arquivo do projeto, banco, autenticação ou infraestrutura foi alterado. Depois da aprovação, esta página vai para <code>docs/design/taxa-servico/</code> e as stories citam a pasta nos critérios de aceite.</p>
+</div>
+
+<script>
+(function(){
+  var FEE = 0.10;
+  var RATES = { credit: 0.0489, pix: 0.0099 };
+  var state = { price: 100, method: 'credit', payer: 'athlete' };
+  var fmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+  var money = function(cents){ return fmt.format(cents / 100); };
+  var $ = function(id){ return document.getElementById(id); };
+
+  function calc(baseCents, payer, rate){
+    var fee = Math.round(baseCents * FEE);
+    var paid = payer === 'athlete' ? baseCents + fee : baseCents;
+    var gw = Math.round(paid * rate);
+    return { paid: paid, fee: fee, gw: gw, net: paid - fee - gw };
+  }
+
+  function fillMode(prefix, r, max){
+    $(prefix + '-paid').textContent = money(r.paid);
+    $(prefix + '-fee').textContent = '− ' + money(r.fee);
+    $(prefix + '-gw').textContent = '− ' + money(r.gw);
+    $(prefix + '-net').textContent = money(r.net);
+    var pct = function(v){ return max > 0 ? (v / max * 100) + '%' : '0%'; };
+    $(prefix + '-bn').style.width = pct(Math.max(0, r.net));
+    $(prefix + '-bf').style.width = pct(r.fee);
+    $(prefix + '-bg').style.width = pct(r.gw);
+  }
+
+  function render(){
+    var base = Math.max(0, Math.round(state.price * 100));
+    var rate = RATES[state.method];
+    var a = calc(base, 'athlete', rate);
+    var b = calc(base, 'organizer', rate);
+    fillMode('a', a, a.paid);
+    fillMode('b', b, a.paid);
+
+    var label = state.method === 'credit' ? 'no crédito' : 'no PIX';
+    if (base > 0) {
+      var diff = a.net - b.net;
+      var equiv = Math.ceil(a.net / (1 - FEE - rate));
+      $('hint').innerHTML = 'Absorvendo a taxa ' + label + ', o gestor recebe <b class="num">' + money(diff) + '</b> a menos por inscrição. '
+        + 'Para receber o mesmo valor de hoje, a inscrição precisaria custar cerca de <b class="num">' + money(equiv) + '</b>: '
+        + 'o atleta pagaria esse valor sem linha de taxa, contra <b class="num">' + money(a.paid) + '</b> com a taxa repassada.';
+    } else {
+      $('hint').textContent = 'Inscrição gratuita ou com cupom de 100%: não há taxa em nenhum dos modos.';
+    }
+
+    var cur = calc(base, state.payer, 0);
+    $('ex-title').textContent = 'Exemplo com inscrição de ' + money(base);
+    $('ex-paid').textContent = money(cur.paid);
+    $('ex-fee').textContent = state.payer === 'athlete' ? money(cur.fee) + ' (paga pelo atleta)' : '− ' + money(cur.fee);
+    $('ex-net').textContent = money(cur.net);
+
+    $('c-base').textContent = money(base);
+    $('c-fee').textContent = money(cur.fee);
+    $('c-fee-row').hidden = state.payer !== 'athlete' || cur.fee === 0;
+    $('c-total').textContent = money(cur.paid);
+    $('c-cta').textContent = money(cur.paid);
+  }
+
+  $('price').addEventListener('input', function(e){
+    var v = parseFloat(String(e.target.value).replace(',', '.'));
+    state.price = Number.isFinite(v) && v >= 0 ? v : 0;
+    render();
+  });
+  document.querySelectorAll('[data-method]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      state.method = btn.getAttribute('data-method');
+      document.querySelectorAll('[data-method]').forEach(function(b){ b.setAttribute('aria-pressed', String(b === btn)); });
+      render();
+    });
+  });
+  document.querySelectorAll('input[name="payer"]').forEach(function(input){
+    input.addEventListener('change', function(){
+      state.payer = input.value;
+      $('saved').hidden = true;
+      render();
+    });
+  });
+  $('save').addEventListener('click', function(){ $('saved').hidden = false; });
+  render();
+})();
+</script>

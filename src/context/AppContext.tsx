@@ -240,6 +240,7 @@ const mapRegistrationFromDb = (r: RegistrationDbRow): Registration => ({
   totalPaid: Number(r.total_paid),
   serviceFeePercent: r.service_fee_percent !== null && r.service_fee_percent !== undefined ? Number(r.service_fee_percent) : undefined,
   serviceFeeAmount: r.service_fee_amount !== null && r.service_fee_amount !== undefined ? Number(r.service_fee_amount) : undefined,
+  serviceFeePayer: r.service_fee_payer === 'athlete' || r.service_fee_payer === 'organizer' ? r.service_fee_payer : undefined,
   amountCollected: r.amount_collected !== null && r.amount_collected !== undefined ? Number(r.amount_collected) : undefined,
   applicationFeeCharged: r.application_fee_charged !== null && r.application_fee_charged !== undefined ? Number(r.application_fee_charged) : undefined,
   shirtAddonCount: Number(r.shirt_addon_count) || 0,

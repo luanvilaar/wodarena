@@ -59,7 +59,8 @@ export async function POST(request: Request) {
     const serviceFee = calculateServiceFee(
       transactionAmount,
       checkoutConfig.serviceFeePercent,
-      checkoutConfig.serviceFeeEnabled
+      checkoutConfig.serviceFeeEnabled,
+      checkoutConfig.serviceFeePayer
     );
     console.log(`[MercadoPago Pix API] Usando credenciais ${checkoutConfig.source} do organizador ${checkoutConfig.organizerId} para o evento ${checkoutSnapshot.eventId}`);
 
@@ -141,6 +142,7 @@ export async function POST(request: Request) {
         total_paid: transactionAmount,
         service_fee_percent: serviceFee.serviceFeePercent,
         service_fee_amount: serviceFee.serviceFeeAmount,
+        service_fee_payer: checkoutConfig.serviceFeePayer,
         amount_collected: serviceFee.amountCollected,
         application_fee_charged: extractApplicationFeeCharged(paymentData),
         updated_at: new Date().toISOString()

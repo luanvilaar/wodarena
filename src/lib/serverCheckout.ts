@@ -467,6 +467,7 @@ export const loadRegistrationCheckoutSnapshot = async (
     totalPaid: Number(registration.total_paid),
     serviceFeePercent: registration.service_fee_percent !== null && registration.service_fee_percent !== undefined ? Number(registration.service_fee_percent) : undefined,
     serviceFeeAmount: registration.service_fee_amount !== null && registration.service_fee_amount !== undefined ? Number(registration.service_fee_amount) : undefined,
+    serviceFeePayer: registration.service_fee_payer === 'athlete' || registration.service_fee_payer === 'organizer' ? registration.service_fee_payer : undefined,
     amountCollected: registration.amount_collected !== null && registration.amount_collected !== undefined ? Number(registration.amount_collected) : undefined,
     applicationFeeCharged: registration.application_fee_charged !== null && registration.application_fee_charged !== undefined ? Number(registration.application_fee_charged) : undefined,
     shirtAddonCount: Number(registration.shirt_addon_count) || 0,

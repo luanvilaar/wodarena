@@ -474,13 +474,14 @@ test('as rotas que aprovam a partir de um pagamento passam pela conferência ant
 });
 
 // A regra de valor por gateway acompanha como cada rota de criação cobra.
-test('a regra de valor segue a cobrança: Mercado Pago soma a taxa; Stripe cobra o total e retém a taxa', () => {
+test('a regra de valor segue a cobrança: a taxa é somada só quando o atleta paga; o gestor a absorve dentro do total', () => {
   assert.match(routes.card, /transaction_amount: serviceFee\.amountCollected,/);
   assert.match(routes.pix, /transaction_amount: serviceFee\.amountCollected,/);
   assert.match(routes.preference, /unit_price: transactionAmount\n[\s\S]*?id: 'wodarena-service-fee',[\s\S]*?unit_price: serviceFee\.serviceFeeAmount/);
-  assert.match(routes.preference, /unit_amount: toMinorUnits\(serviceFee\.baseAmount, paymentContext\.currency\),/);
+  assert.match(routes.preference, /serviceFee\.serviceFeeAmount > 0 && checkoutConfig\.serviceFeePayer === 'athlete'/);
+  assert.match(routes.preference, /unit_amount: toMinorUnits\(serviceFee\.amountCollected, paymentContext\.currency\),/);
   assert.match(routes.preference, /application_fee_amount: serviceFeeMinorUnits/);
-  assert.match(moduleSource, /if \(gateway === 'stripe'\) return totalCents;/);
+  assert.match(moduleSource, /if \(resolveFeePayer\(registration, gateway\) === 'organizer'\) return totalCents;/);
 });
 
 test('.env.example documenta PAYMENT_INTEGRITY_MODE com observe como padrão', () => {

@@ -1,5 +1,6 @@
 import { createSupabaseAdmin } from '@/lib/serverSecurity';
-import { DEFAULT_SERVICE_FEE_PERCENT, normalizeServiceFeePercent } from '@/lib/serviceFee';
+import { DEFAULT_SERVICE_FEE_PERCENT, normalizeServiceFeePercent, resolveServiceFeePayer, type ServiceFeePayer } from '@/lib/serviceFee';
+import { loadManagerServiceFeePayer } from '@/lib/serverServiceFeePayer';
 
 type MercadoPagoEventRow = {
   organizer_id: string;
@@ -30,12 +31,14 @@ export type ServiceFeeConfig = {
 };
 
 export type MercadoPagoCheckoutConfig = ServiceFeeConfig & {
+  serviceFeePayer: ServiceFeePayer;
   accessToken: string;
   organizerId: string;
   source: 'organizer_oauth' | 'organizer_manual_legacy';
 };
 
 export type MercadoPagoPublicConfig = ServiceFeeConfig & {
+  serviceFeePayer: ServiceFeePayer;
   publicKey: string;
   organizerId: string;
   source: 'organizer_oauth';
@@ -160,6 +163,17 @@ const assertOAuthSellerIdentity = (
   return { publicKey, mercadopagoUserId, refreshToken };
 };
 
+// Quem paga a taxa neste evento: a escolha do gestor, ou o padrão do Mercado Pago.
+const resolveOrganizerServiceFeePayer = async (organizerId: string): Promise<ServiceFeePayer> => {
+  try {
+    return resolveServiceFeePayer(await loadManagerServiceFeePayer(getSupabaseAdmin(), organizerId), 'mercadopago');
+  } catch (err) {
+    if (err instanceof MercadoPagoConfigError) throw err;
+    console.error('[MercadoPago Config] Erro ao carregar quem paga a taxa de serviço:', err);
+    throw new MercadoPagoConfigError('Não foi possível carregar a configuração da taxa de serviço.', 500);
+  }
+};
+
 export const resolvePlatformServiceFeeConfig = async (): Promise<ServiceFeeConfig> => {
   const supabaseAdmin = getSupabaseAdmin();
   const { data, error } = await supabaseAdmin
@@ -276,7 +290,7 @@ export const resolveMercadoPagoCheckoutConfig = async (
     throw new MercadoPagoConfigError('Evento não encontrado para processar pagamento.', 404);
   }
 
-  const [{ data: account, error: accountError }, { data: secret, error: secretError }, serviceFee] = await Promise.all([
+  const [{ data: account, error: accountError }, { data: secret, error: secretError }, serviceFee, serviceFeePayer] = await Promise.all([
     supabaseAdmin
       .from('mercadopago_accounts')
       .select('expires_at, mercadopago_user_id, oauth_client_id, oauth_verified_at, public_key, status')
@@ -287,7 +301,8 @@ export const resolveMercadoPagoCheckoutConfig = async (
       .select('access_token, refresh_token')
       .eq('user_id', dbEvent.organizer_id)
       .maybeSingle<MercadoPagoSecretRow>(),
-    resolvePlatformServiceFeeConfig()
+    resolvePlatformServiceFeeConfig(),
+    resolveOrganizerServiceFeePayer(dbEvent.organizer_id)
   ]);
 
   if (accountError || secretError) {
@@ -310,6 +325,7 @@ export const resolveMercadoPagoCheckoutConfig = async (
       accessToken: secret.access_token,
       organizerId: dbEvent.organizer_id,
       source: 'organizer_manual_legacy',
+      serviceFeePayer,
       ...serviceFee,
     };
   }
@@ -324,6 +340,7 @@ export const resolveMercadoPagoCheckoutConfig = async (
     accessToken,
     organizerId: dbEvent.organizer_id,
     source: 'organizer_oauth',
+    serviceFeePayer,
     ...serviceFee
   };
 };
@@ -345,7 +362,7 @@ export const resolveMercadoPagoPublicConfig = async (eventId: string): Promise<M
     throw new MercadoPagoConfigError('Evento não encontrado para carregar credenciais públicas de pagamento.', 404);
   }
 
-  const [{ data: account, error: accountError }, { data: secret, error: secretError }, serviceFee] = await Promise.all([
+  const [{ data: account, error: accountError }, { data: secret, error: secretError }, serviceFee, serviceFeePayer] = await Promise.all([
     supabaseAdmin
       .from('mercadopago_accounts')
       .select('expires_at, mercadopago_user_id, oauth_client_id, oauth_verified_at, public_key, status')
@@ -356,7 +373,8 @@ export const resolveMercadoPagoPublicConfig = async (eventId: string): Promise<M
       .select('access_token, refresh_token')
       .eq('user_id', dbEvent.organizer_id)
       .maybeSingle<MercadoPagoSecretRow>(),
-    resolvePlatformServiceFeeConfig()
+    resolvePlatformServiceFeeConfig(),
+    resolveOrganizerServiceFeePayer(dbEvent.organizer_id)
   ]);
 
   if (accountError || secretError) {
@@ -374,6 +392,7 @@ export const resolveMercadoPagoPublicConfig = async (eventId: string): Promise<M
     publicKey,
     organizerId: dbEvent.organizer_id,
     source: 'organizer_oauth',
+    serviceFeePayer,
     ...serviceFee
   };
 };

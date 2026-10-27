@@ -14,6 +14,9 @@ export type PaymentIntegrityRegistration = {
   id: unknown;
   totalPaid: unknown;
   serviceFeeAmount?: unknown;
+  // Quem paga a taxa: 'athlete' | 'organizer'. Vazio (inscrição anterior à
+  // escolha do gestor) vale o padrão do gateway.
+  serviceFeePayer?: unknown;
   currency?: unknown;
 };
 
@@ -87,13 +90,23 @@ const asText = (value: unknown): string | null => {
   return null;
 };
 
-// No Mercado Pago a taxa de serviço é somada ao valor cobrado do atleta
-// (transaction_amount = total_paid + service_fee_amount). No Stripe o Checkout
-// cobra só o total_paid e a taxa sai desse valor (application_fee_amount).
+// Valor cobrado do atleta conforme quem paga a taxa de serviço. Pagando o atleta,
+// a taxa é somada ao valor da inscrição (transaction_amount = total_paid +
+// service_fee_amount no Mercado Pago; a sessão do Stripe soma a taxa ao item).
+// Pagando o gestor, a taxa já está dentro de total_paid e o atleta paga só ele.
+// Sem escolha gravada, o padrão é o de sempre de cada gateway: o Mercado Pago somava
+// a taxa e o Stripe cobrava só total_paid. Mantido aqui, sem importar serviceFee.ts,
+// para este módulo continuar sem imports.
+const resolveFeePayer = (registration: PaymentIntegrityRegistration, gateway: unknown): 'athlete' | 'organizer' => {
+  const payer = registration.serviceFeePayer;
+  if (payer === 'athlete' || payer === 'organizer') return payer;
+  return gateway === 'stripe' ? 'organizer' : 'athlete';
+};
+
 const expectedChargeCents = (registration: PaymentIntegrityRegistration, gateway: unknown): number | null => {
   const totalCents = toCents(registration.totalPaid);
   if (totalCents === null) return null;
-  if (gateway === 'stripe') return totalCents;
+  if (resolveFeePayer(registration, gateway) === 'organizer') return totalCents;
   const fee = registration.serviceFeeAmount;
   const feeCents = fee === null || fee === undefined ? 0 : toCents(fee);
   return feeCents === null ? null : totalCents + feeCents;

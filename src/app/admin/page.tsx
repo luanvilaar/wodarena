@@ -90,6 +90,7 @@ import { FITNESS_RACING_AGE_GROUPS, FITNESS_RACING_STATION_LIBRARY, buildFitness
 import { buildDivisionOrderMap, getDivisionOrderPosition, moveDivisionId, shiftDivisionId } from '@/lib/divisionOrder';
 import { sortWorkouts } from '@/lib/workoutOrder';
 import { buildManagerFinanceSummary } from '@/lib/managerFinance';
+import { calculateServiceFee, resolveServiceFeePayer, type ServiceFeePayer } from '@/lib/serviceFee';
 import { getTeamDisplayName } from '@/lib/teamDisplay';
 import { buildEventDateLabel, resolveEventDateForm } from '@/lib/eventDates';
 import { fortalezaDateTimeLocalToUtc, normalizeQualifierSubmissionWindow, utcToFortalezaDateTimeLocal } from '@/lib/submissionWindow';
@@ -290,6 +291,13 @@ export default function AdminPage() {
   const [stripeAccount, setStripeAccount] = useState<{ stripe_account_id: string; country: string; default_currency: string; charges_enabled: boolean; payouts_enabled: boolean; details_submitted: boolean; status: string } | null>(null);
   const [loadingStripe, setLoadingStripe] = useState(false);
   const [connectingStripeCountry, setConnectingStripeCountry] = useState<'PT' | 'GB' | null>(null);
+
+  // Quem paga a taxa de serviço da plataforma (Story 1.84). A escolha salva é null
+  // até o gestor salvar a primeira vez; `feePayerDraft` é o que está marcado na tela.
+  const [feeSettings, setFeeSettings] = useState<{ payer: ServiceFeePayer | null; platformFee: { enabled: boolean; percent: number } } | null>(null);
+  const [loadingFeeSettings, setLoadingFeeSettings] = useState(false);
+  const [feePayerDraft, setFeePayerDraft] = useState<ServiceFeePayer | null>(null);
+  const [savingFeePayer, setSavingFeePayer] = useState(false);
 
   // Estados para re-tentativa de pagamento por Pix
   const [payingPixRegistration, setPayingPixRegistration] = useState<{ reg: Registration; event: Event; athlete: Athlete } | null>(null);
@@ -510,6 +518,64 @@ export default function AdminPage() {
       fetchStripeAccount();
     }
   }, [activeTab, currentUser]);
+
+  useEffect(() => {
+    const fetchFeeSettings = async () => {
+      if (!currentUser) return;
+      setLoadingFeeSettings(true);
+      try {
+        const response = await fetch('/api/admin/payment-settings');
+        if (!response.ok) {
+          throw new Error('Erro ao buscar as configurações de cobrança.');
+        }
+        const data = await response.json();
+        setFeeSettings({ payer: data.serviceFeePayer ?? null, platformFee: data.platformFee });
+        setFeePayerDraft(null);
+      } catch (err) {
+        console.error('Erro ao buscar quem paga a taxa de serviço:', err);
+      } finally {
+        setLoadingFeeSettings(false);
+      }
+    };
+
+    if (activeTab === 'payments' && currentUser) {
+      fetchFeeSettings();
+    }
+  }, [activeTab, currentUser]);
+
+  // Sem escolha salva, a tela mostra o que vale hoje: a Stripe sempre tirou a taxa do
+  // gestor; o Mercado Pago sempre somou ao atleta.
+  const stripeOnly = Boolean(stripeAccount && !mpAccount);
+  const savedFeePayer: ServiceFeePayer = feeSettings?.payer ?? resolveServiceFeePayer(null, stripeOnly ? 'stripe' : 'mercadopago');
+  const selectedFeePayer: ServiceFeePayer = feePayerDraft ?? savedFeePayer;
+
+  const handleSaveFeePayer = async () => {
+    setSavingFeePayer(true);
+    setAdminNotice(null);
+    try {
+      const response = await fetch('/api/admin/payment-settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ serviceFeePayer: selectedFeePayer })
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Não foi possível salvar a escolha.');
+      }
+      setFeeSettings(current => current ? { ...current, payer: selectedFeePayer } : current);
+      setFeePayerDraft(null);
+      setAdminNotice({
+        text: selectedFeePayer === 'organizer'
+          ? 'Pronto. Nos próximos pagamentos o atleta paga só o valor da inscrição e a taxa sai do que você recebe.'
+          : 'Pronto. Nos próximos pagamentos a taxa de serviço é somada ao valor da inscrição.',
+        tone: 'success'
+      });
+    } catch (err) {
+      setAdminNotice({ text: err instanceof Error ? err.message : 'Não foi possível salvar a escolha.', tone: 'error' });
+    } finally {
+      setSavingFeePayer(false);
+    }
+  };
 
   const handleConnectStripe = async (country: 'PT' | 'GB') => {
     setConnectingStripeCountry(country);
@@ -10602,6 +10668,84 @@ export default function AdminPage() {
                     )}
                   </div>
                 )}
+
+
+                {loadingFeeSettings && !feeSettings ? null : feeSettings?.platformFee.enabled && (() => {
+                  const feePercent = feeSettings.platformFee.percent;
+                  const exampleCurrency: EventCurrency = stripeOnly
+                    ? (stripeAccount?.default_currency?.toUpperCase() === 'GBP' ? 'GBP' : 'EUR')
+                    : 'BRL';
+                  const example = calculateServiceFee(100, feePercent, true, selectedFeePayer);
+                  const exampleReceives = example.baseAmount - (selectedFeePayer === 'organizer' ? example.serviceFeeAmount : 0);
+                  return (
+                    <div className="border-t border-card-border pt-6 space-y-5">
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary font-sans">Cobrança</p>
+                        <h3 className="mt-2 text-2xl font-bold tracking-tight text-white uppercase">
+                          Taxa de serviço WODArena
+                        </h3>
+                        <p className="mt-2 max-w-2xl text-sm leading-6 text-muted font-sans">
+                          A WODArena retém {feePercent}% de cada inscrição paga. Escolha se esse valor aparece para o atleta no checkout ou se já está dentro do preço da inscrição.
+                        </p>
+                      </div>
+
+                      <fieldset className="space-y-3" disabled={savingFeePayer}>
+                        <legend className="mb-3 text-[11px] font-bold uppercase tracking-wider text-muted font-sans">Quem paga a taxa</legend>
+                        {([
+                          {
+                            value: 'athlete' as const,
+                            title: 'Repassar ao atleta',
+                            text: `O checkout soma ${feePercent}% ao valor da inscrição e mostra a taxa em uma linha separada. Você recebe o valor integral da inscrição.`
+                          },
+                          {
+                            value: 'organizer' as const,
+                            title: 'Absorver no valor da inscrição',
+                            text: `O atleta paga exatamente o preço anunciado, sem linha de taxa. Os ${feePercent}% saem do valor que você recebe.`
+                          }
+                        ]).map(option => (
+                          <label
+                            key={option.value}
+                            className={`grid cursor-pointer grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-lg border p-4 transition-colors has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-primary ${
+                              selectedFeePayer === option.value ? 'border-primary bg-primary/5' : 'border-card-border bg-dark-gray hover:border-primary/40'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="service-fee-payer"
+                              value={option.value}
+                              checked={selectedFeePayer === option.value}
+                              onChange={() => setFeePayerDraft(option.value)}
+                              className="mt-1 row-span-2 h-[18px] w-[18px] accent-primary"
+                            />
+                            <span className="text-sm font-bold text-white">{option.title}</span>
+                            <span className="text-xs leading-5 text-muted">{option.text}</span>
+                          </label>
+                        ))}
+                      </fieldset>
+
+                      <div className="space-y-1.5 rounded-lg border border-card-border bg-background p-4 text-xs text-muted" aria-live="polite">
+                        <p>Exemplo com inscrição de {formatEventMoney(100, exampleCurrency)}</p>
+                        <p className="flex justify-between gap-3"><span>Atleta paga</span><span className="font-number text-white">{formatEventMoney(example.amountCollected, exampleCurrency)}</span></p>
+                        <p className="flex justify-between gap-3"><span>Taxa WODArena</span><span className="font-number text-white">{formatEventMoney(example.serviceFeeAmount, exampleCurrency)}{selectedFeePayer === 'athlete' ? ' (paga pelo atleta)' : ''}</span></p>
+                        <p className="flex justify-between gap-3 border-t border-card-border pt-1.5 font-bold text-white"><span>Você recebe, antes das tarifas do gateway</span><span className="font-number text-trading-up">{formatEventMoney(exampleReceives, exampleCurrency)}</span></p>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={handleSaveFeePayer}
+                          disabled={savingFeePayer || (feeSettings?.payer != null && selectedFeePayer === feeSettings.payer)}
+                          className="flex min-h-11 items-center justify-center rounded-md bg-primary px-5 py-2 text-xs font-extrabold uppercase tracking-wider text-ink transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50 font-sans"
+                        >
+                          {savingFeePayer ? 'Salvando...' : 'Salvar escolha'}
+                        </button>
+                        <p className="text-xs text-muted">
+                          Vale para todos os seus eventos, nos pagamentos iniciados depois de salvar. Inscrições já pagas não mudam.
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 <div className="border-t border-card-border pt-6">
                   <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary font-sans">Eventos internacionais</p>

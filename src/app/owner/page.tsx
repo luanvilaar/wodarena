@@ -7,6 +7,7 @@ import { Leaderboard } from '@/components/Leaderboard';
 import { BrandLogo } from '@/components/BrandLogo';
 import { compareEventsByDateAsc, compareEventsByDateDesc, getEventStatus } from '@/lib/eventStatus';
 import { getManagerAccessStatus, getManagerAccessStatusLabel } from '@/lib/managerAccess';
+import { resolveManagerReceived } from '@/lib/managerFinance';
 import { CommercialLead, Event } from '@/types';
 import { getCommercialLeadCountryLabel, getCommercialLeadEmailStatusLabel, getCommercialLeadStatusLabel } from '@/lib/commercialLeads';
 import {
@@ -61,6 +62,7 @@ export default function OwnerPage() {
   const [savingFeaturedHomeEvent, setSavingFeaturedHomeEvent] = useState(false);
   const featuredHomeNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [serviceFeeConfig, setServiceFeeConfig] = useState({ enabled: true, percent: 10 });
+  const [managerFeePayers, setManagerFeePayers] = useState<Record<string, 'athlete' | 'organizer'>>({});
   const [savingServiceFee, setSavingServiceFee] = useState(false);
   const [serviceFeeNotice, setServiceFeeNotice] = useState('');
 
@@ -110,7 +112,8 @@ export default function OwnerPage() {
         return sum + (confirmedFee > 0 ? confirmedFee : Number(r.serviceFeeAmount || 0));
       }, 0);
 
-      const netRevenue = grossRevenue;
+      // Saldo do gestor: o ingresso integral, menos a taxa quando ele a absorve.
+      const netRevenue = approvedRegs.reduce((sum, r) => sum + resolveManagerReceived(r), 0);
       const accessStatus = m.managerAccessStatus || getManagerAccessStatus(m.serviceValidUntil);
 
       return {
@@ -294,7 +297,10 @@ export default function OwnerPage() {
       .then(async response => {
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Erro ao carregar taxa de serviço.');
-        if (active) setServiceFeeConfig({ enabled: data.enabled !== false, percent: Number(data.percent || 10) });
+        if (active) {
+          setServiceFeeConfig({ enabled: data.enabled !== false, percent: Number(data.percent || 10) });
+          setManagerFeePayers(data.payers && typeof data.payers === 'object' ? data.payers : {});
+        }
       })
       .catch(error => {
         if (active) setServiceFeeNotice(error instanceof Error ? error.message : 'Erro ao carregar taxa de serviço.');
@@ -919,6 +925,7 @@ export default function OwnerPage() {
                           <th className="py-3 px-3 text-right">Volume Pago</th>
                           <th className="py-3 px-3 text-right text-primary">Taxa Devida</th>
                           <th className="py-3 px-3 text-right text-primary">Saldo Gestor</th>
+                          <th className="py-3 px-3">Quem paga a taxa</th>
                           <th className="py-3 px-3">Renovar / Ajustar</th>
                         </tr>
                       </thead>
@@ -957,6 +964,13 @@ export default function OwnerPage() {
                             <td className="py-3 px-3 text-right font-bold font-number text-white">R$ {item.grossRevenue.toFixed(2)}</td>
                             <td className="py-3 px-3 text-right font-bold font-number text-primary">R$ {item.platformFee.toFixed(2)}</td>
                             <td className="py-3 px-3 text-right font-bold font-number text-primary">R$ {item.netRevenue.toFixed(2)}</td>
+                            <td className="py-3 px-3 text-[11px] text-muted">
+                              {managerFeePayers[item.manager.id] === 'organizer'
+                                ? <span className="font-bold text-white">Gestor absorve</span>
+                                : managerFeePayers[item.manager.id] === 'athlete'
+                                  ? <span className="font-bold text-white">Atleta paga</span>
+                                  : 'Padrão do gateway'}
+                            </td>
                             <td className="py-3 px-3">
                               <div className="flex min-w-[220px] items-center gap-2">
                                 <input

@@ -101,7 +101,7 @@ const handleSubmit = block(registerModal, /const handleSubmit = useCallback\([\s
 
 test('gratuito ou pago é decidido pelo retorno do servidor, não pelo total do navegador (M-1)', () => {
   assert.ok(handleSubmit, 'handleSubmit deve existir');
-  assert.match(registerModal, /calculateServiceFee\(totalPaid, serviceFeeConfig\.percent, serviceFeeConfig\.enabled\)/);
+  assert.match(registerModal, /calculateServiceFee\(totalPaid, serviceFeeConfig\.percent, serviceFeeConfig\.enabled, serviceFeeConfig\.payer\)/);
 
   // O rótulo do meio de pagamento continua o de antes quando cliente e servidor
   // concordam; a rota grava o valor como veio e as rotas de pagamento o sobrescrevem.
