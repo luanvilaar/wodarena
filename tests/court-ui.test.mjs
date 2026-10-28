@@ -102,7 +102,7 @@ test('quadro: abre a súmula pela rota, mostra quem está com cada raia e atuali
   assert.match(board, /router\.push\(`\/judge\/quadra\/sumula\/\$\{encodeURIComponent\(data\.sheet\.id\)\}`\)/);
   assert.match(board, /const REFRESH_MS = 15_000;/);
   assert.match(board, /sheet\.judgeUserId !== board\?\.viewer\.id/);
-  assert.match(board, /\(!workout\?\.divisionId \|\| athlete\.divisionId === workout\.divisionId\)/);
+  assert.match(board, /return !workout\?\.divisionId \|\| athlete\.divisionId === workout\.divisionId;/);
 });
 
 test('súmula na quadra: envia só com tudo salvo, confirma antes, limpa o aparelho e ajusta pelo cronômetro oficial', () => {

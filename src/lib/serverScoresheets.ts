@@ -12,6 +12,7 @@ import {
 } from '@/lib/scoresheet';
 import { SCORE_TIE_BREAKER_SPLIT_KEY, parseScoreForWorkout, rankWorkoutScores, secondsToTime, timeToSeconds, type WorkoutScoreForRanking } from '@/lib/scoring';
 import { estimateClockStart, summarizeLiveProgress, type LiveProgress } from '@/lib/liveProgress';
+import { getLaneWorkoutId, isStageHeat } from '@/lib/heatStages';
 import type { SessionUser } from '@/lib/serverSecurity';
 import { checkTonnageEntry, parseMetersInput, parseTonnageKgInput, validateWorkoutStructure, type SheetEvent, type WorkoutStructure } from '@/lib/workoutStructure';
 import type { Score, WorkoutType } from '@/types';
@@ -214,6 +215,31 @@ type ScheduleItem = {
   time?: unknown;
   title?: unknown;
   athleteIds?: unknown;
+  // Bateria por prova do evento (Story 1.87)
+  stageNumber?: unknown;
+  stageTitle?: unknown;
+  stageWorkouts?: unknown;
+  laneWorkoutIds?: unknown;
+};
+
+/** O cronograma gravado, no formato que heatStages.ts entende. */
+const asHeatShape = (item: ScheduleItem) => ({
+  kind: 'heat' as const,
+  workoutId: typeof item.workoutId === 'string' ? item.workoutId : undefined,
+  stageNumber: typeof item.stageNumber === 'number' ? item.stageNumber : undefined,
+  laneWorkoutIds: Array.isArray(item.laneWorkoutIds) ? item.laneWorkoutIds.map((id) => (typeof id === 'string' ? id : '')) : undefined,
+  athleteIds: Array.isArray(item.athleteIds) ? item.athleteIds.map((id) => (typeof id === 'string' ? id : '')) : undefined
+});
+
+/** Raia (1 a n) do atleta na bateria, ou 0. */
+const laneOfAthlete = (item: ScheduleItem, athleteId: string) => (Array.isArray(item.athleteIds) ? item.athleteIds.indexOf(athleteId) + 1 : 0);
+
+/** A bateria é do atleta para esta prova? Antiga: a prova da bateria. Da prova do evento: a prova da raia dele. */
+const heatServesWorkout = (item: ScheduleItem, athleteId: string, workoutId: string) => {
+  const heat = asHeatShape(item);
+  if (!isStageHeat(heat)) return heat.workoutId === workoutId;
+  const lane = laneOfAthlete(item, athleteId);
+  return lane > 0 && getLaneWorkoutId(heat, lane - 1) === workoutId;
 };
 
 const readStructuredWorkouts = async (supabaseAdmin: SupabaseClient, eventId: string) => {
@@ -272,29 +298,54 @@ export const buildSheetBoard = async (supabaseAdmin: SupabaseClient, eventId: st
   const structuredIds = new Set(workouts.map((workout) => workout.id));
   const schedule = Array.isArray(eventRow.event_schedule) ? eventRow.event_schedule as ScheduleItem[] : [];
 
-  const heats = schedule
-    .filter((item) => item && item.kind === 'heat' && typeof item.workoutId === 'string' && structuredIds.has(item.workoutId))
-    .map((item) => ({
-      id: String(item.id ?? ''),
-      workoutId: String(item.workoutId),
-      heatNumber: typeof item.heatNumber === 'number' ? item.heatNumber : null,
-      date: typeof item.date === 'string' ? item.date : '',
-      time: typeof item.time === 'string' ? item.time : '',
-      title: typeof item.title === 'string' ? item.title : '',
-      lanes: (Array.isArray(item.athleteIds) ? item.athleteIds : []).flatMap((athleteId, index) => {
+  const heatItems = schedule.filter((item) => item && item.kind === 'heat');
+  const heats = heatItems
+    .flatMap((item) => {
+      const shape = asHeatShape(item);
+      const stage = isStageHeat(shape);
+      const lanes = (Array.isArray(item.athleteIds) ? item.athleteIds : []).flatMap((athleteId, index) => {
         const athlete = typeof athleteId === 'string' ? athleteById.get(athleteId) : undefined;
         if (!athlete) return [];
+        const laneWorkoutId = getLaneWorkoutId(shape, index);
+        // Na bateria da prova do evento, só entra a raia cuja prova tem súmula digital.
+        if (stage && !structuredIds.has(laneWorkoutId)) return [];
         return [{
           lane: index + 1,
           athleteId: athlete.id,
           athleteName: athlete.name,
           box: athlete.box,
           divisionId: athlete.division_id,
-          divisionName: divisionName.get(athlete.division_id) ?? ''
+          divisionName: divisionName.get(athlete.division_id) ?? '',
+          workoutId: laneWorkoutId
         }];
-      })
-    }))
+      });
+      const workoutId = typeof item.workoutId === 'string' ? item.workoutId : '';
+      if (stage ? lanes.length === 0 && !structuredIds.has(workoutId) : !structuredIds.has(workoutId)) return [];
+      return [{
+        id: String(item.id ?? ''),
+        workoutId: stage ? (lanes[0]?.workoutId ?? workoutId) : workoutId,
+        stageNumber: stage ? (shape.stageNumber as number) : null,
+        stageTitle: stage && typeof item.stageTitle === 'string' ? item.stageTitle : '',
+        heatNumber: typeof item.heatNumber === 'number' ? item.heatNumber : null,
+        date: typeof item.date === 'string' ? item.date : '',
+        time: typeof item.time === 'string' ? item.time : '',
+        title: typeof item.title === 'string' ? item.title : '',
+        lanes
+      }];
+    })
     .sort((a, b) => (a.heatNumber ?? 0) - (b.heatNumber ?? 0));
+
+  // Provas do evento: a quadra escolhe a prova e cada raia abre a súmula da prova da categoria do atleta.
+  const stages = [...new Set(heats.flatMap((heat) => (heat.stageNumber ? [heat.stageNumber] : [])))].sort((a, b) => a - b).map((number) => {
+    const items = heatItems.filter((item) => item.stageNumber === number);
+    const rawMap = items.map((item) => item.stageWorkouts).find((value) => value && typeof value === 'object') as Record<string, unknown> | undefined;
+    const workoutByDivision: Record<string, string> = {};
+    Object.entries(rawMap || {}).forEach(([divisionId, workoutId]) => {
+      if (typeof workoutId === 'string' && structuredIds.has(workoutId)) workoutByDivision[divisionId] = workoutId;
+    });
+    const title = items.map((item) => (typeof item.stageTitle === 'string' ? item.stageTitle.trim() : '')).find(Boolean) || `Prova ${number}`;
+    return { number, title, workoutByDivision };
+  });
 
   return {
     event: {
@@ -313,6 +364,7 @@ export const buildSheetBoard = async (supabaseAdmin: SupabaseClient, eventId: st
       divisionName: divisionName.get(athlete.division_id) ?? ''
     })),
     heats,
+    stages,
     sheets: sheets.filter((sheet) => sheet.status !== 'cancelled').map(summarizeSheet)
   };
 };
@@ -418,6 +470,10 @@ export const openSheet = async (supabaseAdmin: SupabaseClient, actor: SessionUse
     .eq('id', athlete.division_id)
     .maybeSingle()) as { id: string; event_id: string } | null;
   if (!division || division.event_id !== input.eventId) throw new SheetError('Este atleta não pertence ao evento.', 400);
+  // Bateria mista: cada atleta é arbitrado na prova da categoria dele (Story 1.89).
+  if (workout.divisionId && workout.divisionId !== athlete.division_id) {
+    throw new SheetError('Esta prova é de outra categoria: o atleta não compete nela.', 400);
+  }
 
   const existing = async () => (await findActiveSheet(supabaseAdmin, workout.id, athlete.id)).row;
   const resume = async (row: SheetRow) => {
@@ -438,6 +494,10 @@ export const openSheet = async (supabaseAdmin: SupabaseClient, actor: SessionUse
   if (heatId) {
     const eventRow = check(await supabaseAdmin.from('events').select('event_schedule').eq('id', input.eventId).maybeSingle()) as { event_schedule?: unknown } | null;
     const heat = (Array.isArray(eventRow?.event_schedule) ? eventRow.event_schedule as ScheduleItem[] : []).find((item) => item?.id === heatId);
+    // Na bateria da prova do evento a raia do atleta tem de ser desta prova.
+    if (heat && isStageHeat(asHeatShape(heat)) && !heatServesWorkout(heat, athlete.id, workout.id)) {
+      throw new SheetError('Esta raia da bateria é de outra prova.', 400);
+    }
     heatNumber = typeof heat?.heatNumber === 'number' && heat.heatNumber > 0 ? heat.heatNumber : null;
   }
 
@@ -885,9 +945,9 @@ export const markAthleteAbsent = async (supabaseAdmin: SupabaseClient, actor: Se
   let heat: ScheduleItem | undefined;
   if (informedHeat !== null) {
     heat = heats.find((item) => item.id === informedHeat);
-    if (!heat || heat.workoutId !== workout.id) throw new SheetError('Bateria não encontrada no cronograma desta prova.', 400);
+    if (!heat || !heatServesWorkout(heat, athlete.id, workout.id)) throw new SheetError('Bateria não encontrada no cronograma desta prova.', 400);
   } else {
-    heat = heats.find((item) => item.workoutId === workout.id && laneIn(item) > 0);
+    heat = heats.find((item) => laneIn(item) > 0 && heatServesWorkout(item, athlete.id, workout.id));
   }
   const informedLane = Number.isInteger(input.lane) && (input.lane as number) > 0 && (input.lane as number) < 100 ? input.lane as number : null;
   const scheduleLane = heat && laneIn(heat) > 0 ? laneIn(heat) : null;

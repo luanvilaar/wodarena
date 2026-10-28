@@ -17,6 +17,7 @@ import type { AppLocale, Registration, Athlete, EventScheduleItem, Workout } fro
 import { getEventStatus, getRegistrationAvailability } from '@/lib/eventStatus';
 import { getHeatSlotLabel, resolveHeatParticipantSlots } from '@/lib/scheduleParticipants';
 import { getTeamDisplayName } from '@/lib/teamDisplay';
+import { getHeatGroupKey, isStageHeat } from '@/lib/heatStages';
 import { formatMoney } from '@/lib/intl/format';
 import { normalizeShirtMode } from '@/lib/shirtPricing';
 import { toBcp47 } from '@/i18n/locales';
@@ -81,6 +82,8 @@ const getHeatGroupFallbackTitle = (item: EventScheduleItem, fallbackTitle: strin
 };
 
 const getWorkoutScheduleTitle = (workouts: Workout[], item: EventScheduleItem, fallbackTitle: string) => {
+  // Prova do evento (categorias misturadas): o nome dela, não o de uma prova de categoria.
+  if (isStageHeat(item)) return item.stageTitle?.trim() || getHeatGroupFallbackTitle(item, fallbackTitle);
   const workout = workouts.find(candidate => candidate.id === item.workoutId);
   if (!workout) return getHeatGroupFallbackTitle(item, fallbackTitle);
 
@@ -102,7 +105,7 @@ const buildScheduleHeatGroups = (
   items
     .filter(item => item.kind === 'heat')
     .forEach((item) => {
-      const id = item.workoutId || getHeatGroupFallbackTitle(item, heatFallbackTitle);
+      const id = getHeatGroupKey(item) || getHeatGroupFallbackTitle(item, heatFallbackTitle);
       const existing = groupMap.get(id);
       const participantCount = (item.athleteIds || []).filter(Boolean).length;
 
@@ -349,6 +352,7 @@ export function EventView({ eventId }: { eventId: string }) {
         // do evento (a prova foi excluida/recriada e o cronograma nao foi limpo). Sem
         // esse filtro elas continuam aparecendo como um grupo "fantasma" duplicado.
         if (item.kind !== 'heat' || !item.workoutId) return true;
+        if (isStageHeat(item)) return [item.workoutId, ...(item.laneWorkoutIds || [])].some(id => id && currentWorkoutIds.has(id));
         return currentWorkoutIds.has(item.workoutId);
       })
       .filter(item => {
@@ -396,7 +400,7 @@ export function EventView({ eventId }: { eventId: string }) {
         return;
       }
 
-      const groupId = item.workoutId || getHeatGroupFallbackTitle(item, scheduleHeatFallbackTitle);
+      const groupId = getHeatGroupKey(item) || getHeatGroupFallbackTitle(item, scheduleHeatFallbackTitle);
       if (renderedGroupIds.has(groupId)) return;
 
       renderedGroupIds.add(groupId);

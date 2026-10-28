@@ -1,4 +1,5 @@
 import { Contestation, ContestationStatus, EventScheduleItem } from '@/types';
+import { heatIncludesWorkout } from '@/lib/heatStages';
 
 export const CONTESTATION_CREDITS_LIMIT = 2;
 
@@ -72,10 +73,12 @@ export const parseScheduleItems = (value: unknown): EventScheduleItem[] => {
   return [];
 };
 
+// A bateria antiga é da prova; a bateria da prova do evento (categorias misturadas) serve à prova
+// que algum atleta dela faz.
 export const findWorkoutHeat = (scheduleItems: EventScheduleItem[], workoutId: string, heatId: string) => (
   scheduleItems.find(item => (
     item.kind === 'heat'
-    && item.workoutId === workoutId
+    && heatIncludesWorkout(item, workoutId)
     && item.id === heatId
   ))
 );

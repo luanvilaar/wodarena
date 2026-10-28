@@ -150,7 +150,11 @@ test('athletes get one e-mail each, sent in Resend batches, with the escaped rea
 });
 
 test('the admin opens a strong confirmation before deleting a qualifier workout with submissions', () => {
-  assert.match(adminPage, /onClick=\{\(\) => requestDeleteWorkout\(wod\)\}/);
+  // Story 1.91: a lista é o componente WorkoutStageList; o botão Excluir nunca fica desabilitado por trava.
+  assert.match(adminPage, /onDelete=\{requestDeleteWorkout\}/);
+  const stageListComponent = readFileSync(new URL('../src/components/admin/WorkoutStageList.tsx', import.meta.url), 'utf8');
+  assert.match(stageListComponent, /onClick=\{\(\) => onDelete\(workout\)\}/);
+  assert.doesNotMatch(stageListComponent, /disabled=/);
   assert.doesNotMatch(adminPage, /disabled=\{isQualifierWorkoutLocked\(qualifierWorkoutLocks\[wod\.id\]\)\}/);
   assert.doesNotMatch(adminPage, /Provas que já receberam submissões não podem ser excluídas/);
   assert.match(adminPage, /const requestDeleteWorkout = \(workout: Workout\) => \{\n\s+if \(hasQualifierWorkoutSubmissions\(qualifierWorkoutLocks\[workout\.id\]\)\)/);

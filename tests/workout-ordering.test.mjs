@@ -157,8 +157,14 @@ test('consultas de bootstrap leem provas em ordem determinística na fonte', () 
 
 test('telas usam um único comparador de provas', () => {
   assert.match(admin, /import \{ sortWorkouts \} from '@\/lib\/workoutOrder';/);
-  assert.match(admin, /\{sortWorkouts\(workouts\)\.map\(\(wod\) => \{/);
-  assert.match(admin, /const divisionWorkouts = sortWorkouts\(workouts\.filter\(w => w\.divisionId === currentWorkout\.divisionId\)\);/);
+  // Story 1.91: a lista da aba Provas agrupa pela prova do evento (heatStages.ts, mesmo comparador) e ordena as órfãs com ele.
+  const stageList = readFileSync(new URL('../src/lib/workoutStageList.ts', import.meta.url), 'utf8');
+  assert.match(stageList, /import \{ getDivisionWorkoutsInOrder \} from '@\/lib\/heatStages';/);
+  assert.match(stageList, /unplaced: sortWorkouts\(workouts\.filter/);
+  assert.match(admin, /<WorkoutStageList[\s\S]*?workouts=\{workouts\}/);
+  // A trava da prova anterior e o mapeamento da prova de cada categoria vêm de heatStages.ts, com o mesmo comparador.
+  assert.match(readFileSync(new URL('../src/lib/heatStages.ts', import.meta.url), 'utf8'), /sortWorkouts\(workouts\.filter\(\(workout\) => !workout\.divisionId \|\| workout\.divisionId === divisionId\)\)/);
+  assert.match(admin, /sortWorkouts\(workouts\.filter\(workout => !workout\.divisionId \|\| workout\.divisionId === division\.id\)\)/);
   assert.doesNotMatch(admin, /\[\.\.\.workouts\]\.sort\(/);
 
   assert.match(leaderboard, /const ordered = sortWorkouts\(workouts\);/);

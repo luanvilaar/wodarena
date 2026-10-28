@@ -1,0 +1,794 @@
+<title>Construtor de Baterias</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@500;600;700&family=Inter:wght@400;500;600;700;800;900&display=swap">
+<style>
+/* Layout: leitura em uma coluna larga. O simulador usa os tokens do painel do gestor (src/app/globals.css),
+   sempre no tema escuro do painel; o texto da proposta acompanha o tema de quem lê. */
+:root{
+  --font-body:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --font-num:"IBM Plex Sans",ui-monospace,Menlo,monospace;
+  --bg:#0b0e11; --surface:#14181d; --surface-2:#1e2329; --line:#2b3139;
+  --fg:#eaecef; --muted:#929aa5; --accent-text:#fcd535; --warn:#f0b90b; --down:#f6465d; --up:#0ecb81; --info:#7db4ff;
+  /* painel (fixo) */
+  --p-bg:#0b0e11; --p-card:#1e2329; --p-line:#2b3139; --p-gray:#181a20; --p-fg:#eaecef; --p-muted:#929aa5;
+  --p-soft:#707a8a; --p-primary:#fcd535; --p-ink:#181a20; --p-up:#0ecb81; --p-down:#f6465d;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --bg:#f4f5f7; --surface:#ffffff; --surface-2:#eceef2; --line:#d6dae1;
+    --fg:#181a20; --muted:#566070; --accent-text:#7a5c00; --warn:#8a5a00; --down:#b8243a; --up:#07694a; --info:#1f5fd1;
+    color-scheme:light;
+  }
+}
+:root[data-theme="light"]{
+  --bg:#f4f5f7; --surface:#ffffff; --surface-2:#eceef2; --line:#d6dae1;
+  --fg:#181a20; --muted:#566070; --accent-text:#7a5c00; --warn:#8a5a00; --down:#b8243a; --up:#07694a; --info:#1f5fd1;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:15px;line-height:1.55;-webkit-text-size-adjust:100%;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:32px 72px}
+h1,h2,h3,h4{text-wrap:balance;line-height:1.2;margin:0}
+p,ul,ol{margin:0}
+button,input,select{font:inherit}
+code{font-family:var(--font-num);font-size:.9em;background:var(--surface-2);border:1px solid var(--line);border-radius:4px;padding:0 5px;overflow-wrap:anywhere}
+.wrap{max-width:1180px;margin:0 auto;display:grid;gap:56px}
+.eyebrow{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--accent-text)}
+h1{font-size:clamp(28px,5vw,40px);font-weight:800;letter-spacing:-.02em}
+h2{font-size:22px;font-weight:800;letter-spacing:-.01em}
+h3{font-size:15px;font-weight:700}
+.lead{max-width:72ch;color:var(--muted);font-size:16px}
+.small{font-size:13px;color:var(--muted)}
+section{display:grid;gap:20px;min-width:0}
+.sec-head{display:grid;gap:8px}
+.head{display:grid;gap:14px}
+.status{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--warn)}
+.status::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--warn)}
+.pills{display:flex;flex-wrap:wrap;gap:8px}
+.pill{font-size:12px;font-weight:600;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:999px;padding:4px 12px;text-decoration:none}
+a.pill:hover,a.pill:focus-visible{border-color:var(--accent-text)}
+:focus-visible{outline:2px solid var(--accent-text);outline-offset:2px}
+
+/* fluxo hoje x proposta */
+.flows{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+@media (max-width:760px){.flows{grid-template-columns:1fr}}
+.flow{padding:18px;border:1px solid var(--line);border-radius:10px;background:var(--surface);display:grid;gap:12px;min-width:0}
+.flow-h{display:flex;justify-content:space-between;gap:10px;align-items:baseline;flex-wrap:wrap}
+.flow-h b{font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase}
+.flow-h .t-before{color:var(--down)} .flow-h .t-after{color:var(--up)}
+.steps{display:grid;gap:8px;list-style:none;padding:0;counter-reset:s}
+.steps li{counter-increment:s;display:grid;grid-template-columns:24px 1fr;gap:10px;font-size:14px;color:var(--muted)}
+.steps li::before{content:counter(s);font-family:var(--font-num);font-weight:700;color:var(--fg);text-align:right}
+.steps li b{color:var(--fg)}
+.steps li.pain{color:var(--fg)}
+.steps li.pain::before{color:var(--down)}
+
+/* achados */
+.findings{display:grid;gap:12px}
+.finding{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;padding:16px 18px;border:1px solid var(--line);border-left-width:3px;background:var(--surface);border-radius:8px;min-width:0}
+.finding.crit{border-left-color:var(--down)} .finding.high{border-left-color:var(--warn)} .finding.info{border-left-color:var(--info)}
+.finding .tag{grid-row:span 2;font-family:var(--font-num);font-weight:700;font-size:13px;color:var(--muted);padding-top:1px}
+.finding p{font-size:14px;color:var(--muted);min-width:0}
+
+/* ===== simulador (painel escuro fixo) ===== */
+.sim{background:var(--p-bg);color:var(--p-fg);border:1px solid var(--line);border-radius:14px;padding:16px;display:grid;gap:16px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}
+.tab{appearance:none;border:1px solid var(--p-line);background:var(--p-gray);color:var(--p-muted);border-radius:8px;min-height:44px;padding:0 16px;font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;cursor:pointer}
+.tab[aria-selected="true"]{background:var(--p-primary);border-color:var(--p-primary);color:var(--p-ink)}
+.compare-bar{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+@media (max-width:760px){.compare-bar{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.kpi{border:1px solid var(--p-line);background:var(--p-card);border-radius:10px;padding:12px 14px;display:grid;gap:4px;min-width:0}
+.kpi .k{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--p-soft)}
+.kpi .v{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;font-family:var(--font-num);font-variant-numeric:tabular-nums}
+.kpi .v .old{font-size:15px;color:var(--p-muted)}
+.kpi .v .old::after{content:" →";color:var(--p-soft)}
+.kpi .v .new{font-size:22px;font-weight:700;color:#fff}
+.kpi .v .new.good{color:var(--p-up)}
+.kpi .k2{font-size:11px;color:var(--p-soft)}
+
+.panel{background:var(--p-card);border:1px solid var(--p-line);border-radius:12px;padding:16px;display:grid;gap:16px;min-width:0}
+.p-head{display:flex;align-items:center;gap:8px;border-bottom:1px solid rgba(43,49,57,.5);padding-bottom:8px}
+.p-head::before{content:"";width:4px;height:16px;border-radius:2px;background:var(--p-primary)}
+.p-head h3{font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.field{display:grid;gap:5px;min-width:0}
+.field label,.field .lbl{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--p-soft)}
+.field select,.field input{width:100%;min-height:44px;border:1px solid var(--p-line);background:var(--p-gray);color:var(--p-fg);border-radius:6px;padding:0 12px;font-size:14px}
+.field input[type=number]{font-family:var(--font-num)}
+.stepper{display:flex;align-items:center;border:1px solid var(--p-line);background:var(--p-gray);border-radius:6px;min-height:44px;overflow:hidden}
+.stepper button{appearance:none;border:0;background:transparent;color:var(--p-fg);width:44px;min-height:44px;font-size:18px;font-weight:700;cursor:pointer}
+.stepper button:disabled{color:var(--p-soft);cursor:not-allowed}
+.stepper output{flex:1;text-align:center;font-family:var(--font-num);font-size:18px;font-weight:700}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip-btn{appearance:none;border:1px solid var(--p-line);background:var(--p-gray);color:var(--p-muted);border-radius:999px;min-height:40px;padding:0 16px;font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;cursor:pointer}
+.chip-btn[aria-pressed="true"]{border-color:var(--p-primary);color:var(--p-primary);background:rgba(252,213,53,.08)}
+.note{border:1px solid rgba(252,213,53,.25);background:rgba(252,213,53,.08);color:var(--p-primary);border-radius:8px;padding:10px 12px;font-size:12px;font-weight:600;line-height:1.5}
+.note.bad{border-color:rgba(246,70,93,.3);background:rgba(246,70,93,.08);color:#ff8b9b}
+.note.ok{border-color:rgba(14,203,129,.3);background:rgba(14,203,129,.08);color:var(--p-up)}
+
+/* mapeamento */
+.map-tbl{width:100%;border-collapse:collapse;font-size:13px}
+.map-wrap{overflow-x:auto}
+.map-tbl th{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--p-soft);text-align:left;padding:6px 8px;border-bottom:1px solid rgba(43,49,57,.5)}
+.map-tbl td{padding:6px 8px;border-bottom:1px solid rgba(43,49,57,.35);vertical-align:middle}
+.map-tbl td:first-child{font-weight:700;white-space:nowrap}
+.map-tbl td.n{font-family:var(--font-num);color:var(--p-muted);text-align:right;white-space:nowrap}
+.map-tbl select{min-height:40px;width:100%;min-width:180px;border:1px solid var(--p-line);background:var(--p-gray);color:var(--p-fg);border-radius:6px;padding:0 10px;font-size:13px}
+.map-tbl select.missing{border-color:rgba(246,70,93,.5);color:#ff8b9b}
+
+/* construtor */
+.builder{display:grid;grid-template-columns:minmax(0,290px) minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:900px){.builder{grid-template-columns:1fr}}
+.pool{border:1px solid var(--p-line);background:var(--p-gray);border-radius:10px;padding:12px;display:grid;gap:10px;min-width:0}
+.pool-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.pool-h b{font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase}
+.pool-h span{font-family:var(--font-num);font-size:12px;color:var(--p-muted)}
+.pool-list{display:grid;gap:6px;max-height:420px;overflow:auto;padding-right:2px;list-style:none;margin:0;padding-left:0}
+.pool-empty{font-size:12px;color:var(--p-soft);padding:12px;text-align:center;border:1px dashed var(--p-line);border-radius:6px}
+.ath{appearance:none;width:100%;text-align:left;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 8px;align-items:center;border:1px solid var(--p-line);background:var(--p-card);color:var(--p-fg);border-radius:6px;padding:8px 10px;min-height:44px;cursor:grab}
+.ath:hover{border-color:rgba(252,213,53,.4)}
+.ath .nm{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ath .bx{font-size:11px;color:var(--p-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;grid-column:1}
+.cat{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;border-radius:4px;padding:2px 6px;border:1px solid var(--p-line);color:var(--p-muted);white-space:nowrap;grid-row:span 2;align-self:center}
+.actions{display:flex;flex-wrap:wrap;gap:8px}
+.btn{appearance:none;min-height:44px;border-radius:6px;padding:0 16px;font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;border:1px solid var(--p-line);background:var(--p-gray);color:var(--p-fg)}
+.btn.primary{background:var(--p-primary);border-color:var(--p-primary);color:var(--p-ink)}
+.btn:hover{border-color:rgba(252,213,53,.5)}
+.heats{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;min-width:0}
+.heat{border:1px solid var(--p-line);border-radius:10px;background:rgba(24,26,32,.4);display:grid;min-width:0}
+.heat-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:10px 12px;border-bottom:1px solid rgba(43,49,57,.5)}
+.heat-h b{font-size:13px;font-weight:800;text-transform:uppercase}
+.heat-h span{font-family:var(--font-num);font-size:12px;color:var(--p-muted)}
+.heat-h span em{font-style:normal;color:var(--p-primary);font-weight:700}
+.heat-mix{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--p-soft);padding:6px 12px 0}
+.heat-mix.is-mixed{color:var(--p-up)}
+.lanes{list-style:none;margin:0;padding:8px;display:grid;gap:6px}
+.lane{display:grid;grid-template-columns:28px minmax(0,1fr);gap:8px;align-items:center;min-height:48px;border:1px dashed var(--p-line);border-radius:6px;padding:4px 8px}
+.lane.filled{border-style:solid;background:var(--p-card)}
+.lane.over{border-color:var(--p-primary);background:rgba(252,213,53,.08)}
+.lane-n{font-family:var(--font-num);font-size:12px;font-weight:700;color:var(--p-primary);text-align:right}
+.lane-btn{appearance:none;border:0;background:transparent;color:inherit;text-align:left;padding:2px 0;min-height:40px;display:grid;gap:1px;cursor:pointer;min-width:0}
+.lane-btn .nm{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lane-btn .wk{font-size:11px;color:var(--p-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lane-btn .wk b{color:var(--p-muted);font-weight:700}
+.lane-empty{font-size:11px;color:var(--p-soft);font-style:italic}
+.hint{font-size:12px;color:var(--p-soft)}
+.today-sum{display:grid;gap:8px}
+.today-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:baseline;font-size:13px;padding:8px 10px;border:1px solid var(--p-line);border-radius:6px;background:var(--p-gray)}
+.today-row .num{font-family:var(--font-num);font-variant-numeric:tabular-nums;color:var(--p-muted);white-space:nowrap}
+.today-row .num b{color:#fff}
+.today-row .num.bad b{color:#ff8b9b}
+
+/* decisões, plano */
+.decisions{display:grid;gap:14px}
+.dec{display:grid;gap:10px;padding:18px;border:1px solid var(--line);background:var(--surface);border-radius:10px;min-width:0}
+.dec-h{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.dec-h .id{font-family:var(--font-num);font-weight:700;color:var(--accent-text)}
+.choices{display:grid;gap:6px;padding:0;list-style:none}
+.choices li{font-size:14px;color:var(--muted);padding-left:22px;position:relative}
+.choices li::before{content:"○";position:absolute;left:2px}
+.choices li.rec{color:var(--fg)}
+.choices li.rec::before{content:"●";color:var(--accent-text)}
+.rec-tag{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--accent-text);margin-left:6px}
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.plan{border-collapse:collapse;width:100%;min-width:680px;font-size:13px}
+.plan th,.plan td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+.plan th{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700;background:var(--surface-2)}
+.plan tr:last-child td{border-bottom:0}
+.plan td:first-child{white-space:nowrap;font-weight:600}
+.stories{display:grid;gap:12px}
+.story{display:grid;grid-template-columns:72px 1fr;gap:4px 16px;padding:16px 18px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.story .sid{grid-row:span 2;font-family:var(--font-num);font-weight:700;font-size:18px;color:var(--accent-text)}
+.story p{font-size:14px;color:var(--muted);min-width:0}
+@media (max-width:480px){.story{grid-template-columns:1fr}.story .sid{grid-row:auto}}
+.foot{font-size:13px;color:var(--muted);border-top:1px solid var(--line);padding-top:20px}
+.sample{font-size:12px;color:var(--muted);font-style:italic}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+</style>
+
+<div class="wrap">
+
+  <header class="head">
+    <span class="status">Proposta · aguardando aprovação</span>
+    <p class="eyebrow">Painel do gestor · Evento · aba Cronograma</p>
+    <h1>Baterias por prova do evento, não por categoria</h1>
+    <p class="lead">Hoje cada bateria nasce de uma prova da aba Provas, e cada prova pertence a uma categoria. Por isso a bateria só aceita atletas daquela categoria, e sobram raias vazias. Na proposta, o gestor diz quantas provas o evento tem, o construtor traz todos os inscritos aprovados e a bateria aceita qualquer categoria. Cada atleta continua sendo avaliado na versão da prova da categoria dele.</p>
+    <nav class="pills" aria-label="Seções">
+      <a class="pill" href="#hoje">Hoje × proposta</a>
+      <a class="pill" href="#achados">O que muda por trás</a>
+      <a class="pill" href="#simulador">Simulador</a>
+      <a class="pill" href="#decisoes">Decisões</a>
+      <a class="pill" href="#plano">Plano</a>
+    </nav>
+  </header>
+
+  <section id="hoje" aria-labelledby="t-hoje">
+    <div class="sec-head">
+      <p class="eyebrow">Diagnóstico</p>
+      <h2 id="t-hoje">O caminho do gestor, hoje e na proposta</h2>
+    </div>
+    <div class="flows">
+      <div class="flow">
+        <div class="flow-h"><b class="t-before">Hoje</b><span class="small">Functional Fitness</span></div>
+        <ol class="steps">
+          <li>Cria as provas na aba Provas e vincula cada uma a uma categoria (WOD 1 RX, WOD 1 Scale…).</li>
+          <li>No Cronograma, escolhe <b>uma prova de uma categoria</b> em "Selecione a Prova".</li>
+          <li class="pain">A lista de atletas mostra só os aprovados daquela categoria.</li>
+          <li class="pain">Monta as baterias dessa categoria. Uma categoria de 3 atletas ocupa uma bateria de 6 raias.</li>
+          <li class="pain">Repete para cada categoria da mesma prova. Cada uma tem baterias e horários próprios.</li>
+          <li>Salva e publica, prova por prova.</li>
+        </ol>
+      </div>
+      <div class="flow">
+        <div class="flow-h"><b class="t-after">Proposta</b><span class="small">Functional Fitness</span></div>
+        <ol class="steps">
+          <li>Informa <b>quantas provas</b> o evento tem e o nome de cada uma (Prova 1 · DT Speed).</li>
+          <li>Confere qual prova de cada categoria corresponde a cada prova do evento. O construtor já preenche pela ordem.</li>
+          <li>Escolhe a prova do evento. A lista traz <b>todos os inscritos aprovados</b>, com filtro por categoria e busca.</li>
+          <li>Monta as baterias como hoje: horários, raias, arrastar, auto-preencher. A bateria aceita qualquer categoria.</li>
+          <li>Salva e publica, como hoje.</li>
+        </ol>
+      </div>
+    </div>
+    <p class="small">No Fitness Race o construtor já usa todos os inscritos em largadas únicas, sem separar por categoria. A proposta não muda esse fluxo (decisão D4).</p>
+  </section>
+
+  <section id="achados" aria-labelledby="t-achados">
+    <div class="sec-head">
+      <p class="eyebrow">Leitura do código</p>
+      <h2 id="t-achados">O que depende da bateria hoje</h2>
+      <p class="lead">A troca é maior do que a tela. Cada bateria guarda <b>uma</b> prova (<code>workoutId</code>), e três partes do sistema contam com isso.</p>
+    </div>
+    <div class="findings">
+      <div class="finding crit">
+        <span class="tag">A1</span>
+        <h3>A súmula do judge abre pela prova da bateria</h3>
+        <p>Na quadra, o judge escolhe a prova, vê as baterias dela e abre a súmula com o <code>workoutId</code> da bateria (<code>CourtBoard.tsx</code>). O servidor (<code>openSheet</code>) não confere se a categoria do atleta bate com a da prova. Numa bateria mista, um atleta Scale seria arbitrado na prova RX e o resultado entraria no ranking errado. Cada raia precisa levar a prova da categoria do atleta.</p>
+      </div>
+      <div class="finding high">
+        <span class="tag">A2</span>
+        <h3>Telão e cronograma público agrupam por prova</h3>
+        <p><code>serverBroadcast.ts</code> e <code>EventView.tsx</code> agrupam as baterias pelo <code>workoutId</code> e usam o nome dessa prova no título. Com baterias mistas, passam a agrupar pela prova do evento ("Prova 1 · DT Speed").</p>
+      </div>
+      <div class="finding high">
+        <span class="tag">A3</span>
+        <h3>Já existe um caminho para misturar, mas só para prova "Geral"</h3>
+        <p>Uma prova sem categoria vinculada ("Todas as categorias (Geral)") já lista todos os inscritos e vale no ranking de todas as categorias. O problema aparece quando as categorias têm versões diferentes da prova (carga, movimento). Esse é o caso que a proposta resolve.</p>
+      </div>
+      <div class="finding info">
+        <span class="tag">A4</span>
+        <h3>Ranking, notas e inscrições não mudam</h3>
+        <p>O resultado continua sendo gravado por atleta e prova da categoria dele (<code>scores</code>, <code>scoresheets</code>). O ranking por categoria não muda. Os atletas vêm das inscrições aprovadas, como já é hoje (<code>approvedAthleteIds</code>).</p>
+      </div>
+      <div class="finding info">
+        <span class="tag">A5</span>
+        <h3>A trava "prova anterior sem baterias" muda de escala</h3>
+        <p>Hoje o construtor bloqueia a prova 2 de uma categoria enquanto a prova 1 dessa categoria não tem baterias salvas. Na proposta, a trava passa a valer por prova do evento.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="simulador" aria-labelledby="t-sim">
+    <div class="sec-head">
+      <p class="eyebrow">Simulador</p>
+      <h2 id="t-sim">Teste os dois construtores com o mesmo evento</h2>
+      <p class="lead">Evento de exemplo com 19 atletas em quatro categorias e três provas. Os números de cima comparam hoje e a proposta para a prova escolhida e mudam conforme você mexe nas raias, nos horários ou na quantidade de provas.</p>
+      <p class="sample">Atletas, boxes e provas inventados. Clique num atleta para colocá-lo na próxima raia livre, clique numa raia para devolvê-lo à lista, ou arraste entre a lista e as raias.</p>
+    </div>
+
+    <div class="sim" id="sim">
+      <div class="compare-bar" aria-live="polite">
+        <div class="kpi"><span class="k">Baterias para a prova</span><span class="v"><span class="old" id="k-heats-old"></span><span class="new good" id="k-heats-new"></span></span><span class="k2">hoje → proposta</span></div>
+        <div class="kpi"><span class="k">Raias vazias</span><span class="v"><span class="old" id="k-empty-old"></span><span class="new good" id="k-empty-new"></span></span><span class="k2">com a mesma quantidade de raias</span></div>
+        <div class="kpi"><span class="k">Término previsto</span><span class="v"><span class="old" id="k-end-old"></span><span class="new good" id="k-end-new"></span></span><span class="k2">uma bateria por vez</span></div>
+        <div class="kpi"><span class="k">Seleções da prova no construtor</span><span class="v"><span class="old" id="k-steps-old"></span><span class="new good" id="k-steps-new"></span></span><span class="k2">uma por categoria → uma só</span></div>
+      </div>
+
+      <div class="tabs" role="tablist" aria-label="Construtor">
+        <button class="tab" role="tab" id="tab-new" aria-selected="true" aria-controls="view-new">Proposta</button>
+        <button class="tab" role="tab" id="tab-old" aria-selected="false" aria-controls="view-old">Hoje</button>
+      </div>
+
+      <!-- PROPOSTA -->
+      <div id="view-new" role="tabpanel" aria-labelledby="tab-new" class="panel">
+        <div class="p-head"><h3>Provas do evento</h3></div>
+        <div class="fields">
+          <div class="field">
+            <span class="lbl" id="lbl-count">Quantas provas</span>
+            <div class="stepper" role="group" aria-labelledby="lbl-count">
+              <button type="button" id="count-minus" aria-label="Uma prova a menos">−</button>
+              <output id="count-out" aria-live="polite">3</output>
+              <button type="button" id="count-plus" aria-label="Uma prova a mais">+</button>
+            </div>
+          </div>
+          <div class="field" style="grid-column:span 2;min-width:0">
+            <span class="lbl" id="lbl-stage">Montar baterias da</span>
+            <div class="chips" role="group" aria-labelledby="lbl-stage" id="stage-chips"></div>
+          </div>
+          <div class="field">
+            <label for="stage-title">Nome da prova</label>
+            <input id="stage-title" type="text" maxlength="40">
+          </div>
+        </div>
+
+        <div class="p-head"><h3>Prova de cada categoria</h3></div>
+        <p class="hint" style="margin-top:-8px">Preenchido pela ordem da aba Provas. Cada atleta é arbitrado e pontuado na prova da sua categoria.</p>
+        <div class="map-wrap"><table class="map-tbl"><thead><tr><th>Categoria</th><th style="text-align:right">Inscritos</th><th>Prova da categoria nesta etapa</th></tr></thead><tbody id="map-body"></tbody></table></div>
+        <div id="map-note"></div>
+
+        <div class="p-head"><h3>Configurações das baterias</h3></div>
+        <div class="fields">
+          <div class="field"><label for="n-start">Início 1ª bateria</label><input id="n-start" type="time" value="08:00"></div>
+          <div class="field"><label for="n-dur">Duração (min)</label><input id="n-dur" type="number" min="1" max="120" value="10"></div>
+          <div class="field"><label for="n-int">Intervalo (min)</label><input id="n-int" type="number" min="0" max="60" value="5"></div>
+          <div class="field"><label for="n-cap">Raias por bateria</label><input id="n-cap" type="number" min="1" max="20" value="6"></div>
+          <div class="field"><label for="n-count">Baterias</label><input id="n-count" type="number" min="1" max="30" value="4"></div>
+        </div>
+
+        <div class="builder">
+          <div class="pool" id="pool" aria-label="Atletas sem bateria">
+            <div class="pool-h"><b>Inscritos aprovados</b><span id="pool-count"></span></div>
+            <div class="field"><label for="f-cat">Categoria</label><select id="f-cat"></select></div>
+            <div class="field"><label for="f-q">Buscar</label><input id="f-q" type="search" placeholder="Nome do atleta ou equipe"></div>
+            <ul class="pool-list" id="pool-list"></ul>
+          </div>
+          <div style="display:grid;gap:12px;min-width:0">
+            <div class="actions">
+              <button type="button" class="btn primary" id="auto">Auto-preencher</button>
+              <button type="button" class="btn" id="clear">Limpar raias</button>
+            </div>
+            <p class="hint">Auto-preencher segue a decisão D3: categoria por categoria, do pior para o melhor no ranking, e completa a bateria com a próxima categoria.</p>
+            <div class="heats" id="heats"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- HOJE -->
+      <div id="view-old" role="tabpanel" aria-labelledby="tab-old" class="panel" hidden>
+        <div class="p-head"><h3>Configurações do Cronograma</h3></div>
+        <div class="fields">
+          <div class="field" style="grid-column:span 2"><label for="o-wod">Selecione a Prova *</label><select id="o-wod"></select></div>
+          <div class="field"><label for="o-cap">Raias por bateria</label><input id="o-cap" type="number" min="1" max="20" value="6"></div>
+        </div>
+        <p class="note">Hoje a lista de atletas traz só os aprovados da categoria da prova escolhida. Uma bateria não aceita atletas de outra categoria.</p>
+        <div class="builder">
+          <div class="pool">
+            <div class="pool-h"><b>Pendentes desta categoria</b><span id="o-pool-count"></span></div>
+            <ul class="pool-list" id="o-pool"></ul>
+          </div>
+          <div style="display:grid;gap:12px;min-width:0">
+            <div class="heats" id="o-heats"></div>
+            <div class="today-sum">
+              <p class="hint" id="o-sum-title"></p>
+              <div id="o-sum"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="decisoes" aria-labelledby="t-dec">
+    <div class="sec-head">
+      <p class="eyebrow">Para aprovar</p>
+      <h2 id="t-dec">Decisões</h2>
+      <p class="lead">A opção marcada é a recomendação. Basta responder com o número e a opção quando quiser outra.</p>
+    </div>
+    <div class="decisions">
+      <div class="dec">
+        <div class="dec-h"><span class="id">D1</span><h3>Em que prova o atleta de uma bateria mista é avaliado</h3></div>
+        <ul class="choices">
+          <li class="rec">A · Na prova da categoria dele. A raia guarda a prova certa e o judge abre a súmula dessa versão (carga e movimentos da categoria)<span class="rec-tag">Recomendado</span></li>
+          <li>B · Numa prova única para todos da bateria. Só funciona com provas "Geral", que já misturam hoje</li>
+        </ul>
+      </div>
+      <div class="dec">
+        <div class="dec-h"><span class="id">D2</span><h3>Como a prova do evento encontra a prova de cada categoria</h3></div>
+        <ul class="choices">
+          <li class="rec">A · Automático pela ordem da aba Provas (a 1ª prova de cada categoria é a Prova 1), com troca manual na tabela "Prova de cada categoria"<span class="rec-tag">Recomendado</span></li>
+          <li>B · O gestor escolhe uma a uma, sem preenchimento automático</li>
+        </ul>
+        <p class="small">Categoria sem prova correspondente não aparece na lista daquela etapa, com aviso na tabela (no simulador, Master 35+ na Prova 3).</p>
+      </div>
+      <div class="dec">
+        <div class="dec-h"><span class="id">D3</span><h3>Auto-preencher com várias categorias</h3></div>
+        <ul class="choices">
+          <li class="rec">A · Categoria por categoria, na ordem das categorias, do pior para o melhor no ranking de cada uma. Quando uma categoria acaba, a próxima completa a bateria<span class="rec-tag">Recomendado</span></li>
+          <li>B · Uma categoria por bateria, como hoje, deixando as raias vazias para o gestor completar à mão</li>
+          <li>C · Ordem de inscrição, misturando tudo</li>
+        </ul>
+        <p class="small">Em A, quem está em situação parecida no ranking da própria categoria larga junto. Rankings de categorias diferentes não são comparáveis.</p>
+      </div>
+      <div class="dec">
+        <div class="dec-h"><span class="id">D4</span><h3>Fitness Race</h3></div>
+        <ul class="choices">
+          <li class="rec">A · Continua como hoje: largadas únicas com todos os inscritos, que já misturam categorias<span class="rec-tag">Recomendado</span></li>
+          <li>B · Passa a usar o mesmo construtor por provas do evento</li>
+        </ul>
+      </div>
+      <div class="dec">
+        <div class="dec-h"><span class="id">D5</span><h3>Baterias já salvas no formato atual</h3></div>
+        <ul class="choices">
+          <li class="rec">A · Continuam valendo no cronograma, na quadra e no telão. Quando o gestor abre a prova no construtor novo e salva, elas passam para o formato novo<span class="rec-tag">Recomendado</span></li>
+          <li>B · Converter todas automaticamente na publicação</li>
+        </ul>
+        <p class="small">A protege eventos em andamento: nada que já está publicado muda sozinho.</p>
+      </div>
+      <div class="dec">
+        <div class="dec-h"><span class="id">D6</span><h3>Quem aparece na lista</h3></div>
+        <ul class="choices">
+          <li class="rec">A · Só inscrições aprovadas (pagas ou gratuitas), como hoje<span class="rec-tag">Recomendado</span></li>
+          <li>B · Também as pendentes de pagamento, marcadas como pendentes</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="plano" aria-labelledby="t-plano">
+    <div class="sec-head">
+      <p class="eyebrow">Plano técnico</p>
+      <h2 id="t-plano">O que muda em cada parte</h2>
+      <p class="lead">A aba Provas, o ranking, as notas e as inscrições não mudam. A bateria passa a guardar a prova do evento e, em cada raia, a prova da categoria do atleta.</p>
+    </div>
+    <div class="tbl-wrap">
+      <table class="plan">
+        <thead><tr><th>Parte</th><th>Onde</th><th>Mudança</th></tr></thead>
+        <tbody>
+          <tr><td>Banco</td><td>migration nova</td><td>Coluna <code>events.heat_stages</code> (jsonb, aditiva): quantas provas, o nome de cada uma e a prova de cada categoria (D2). As baterias continuam em <code>event_schedule</code>.</td></tr>
+          <tr><td>Bateria</td><td><code>EventScheduleItem</code></td><td>Campos novos <code>stageNumber</code> e <code>laneWorkoutIds</code> (a prova de cada raia, alinhada com <code>athleteIds</code>). Bateria antiga, só com <code>workoutId</code>, continua lida como antes (D5).</td></tr>
+          <tr><td>Regra</td><td><code>src/lib/heatStages.ts</code> (novo, puro)</td><td>Mapeamento automático pela ordem, prova de cada atleta, auto-preencher (D3), trava da prova anterior e leitura dos dois formatos. Tudo com teste.</td></tr>
+          <tr><td>Construtor</td><td><code>admin/page.tsx</code> (aba Cronograma)</td><td>Quantidade e nome das provas, tabela "Prova de cada categoria", lista com todos os aprovados. Horários, raias, arrastar, salvar e publicar seguem como hoje.</td></tr>
+          <tr><td>Quadra</td><td><code>serverScoresheets.ts</code>, <code>CourtBoard.tsx</code></td><td>O judge escolhe a prova do evento. Cada raia abre a súmula da prova da categoria do atleta (A1). O servidor passa a recusar súmula de prova de outra categoria.</td></tr>
+          <tr><td>Telão e público</td><td><code>serverBroadcast.ts</code>, <code>EventView.tsx</code></td><td>Agrupam pela prova do evento e mostram o nome dela (A2). O ranking da bateria no telão segue por categoria.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="stories">
+      <div class="story"><span class="sid">1.87</span><h3>Provas do evento: modelo e regra</h3><p>Migration aditiva, tipos, <code>heatStages.ts</code> com mapeamento, prova por raia, auto-preencher e compatibilidade. Nenhuma tela muda.</p></div>
+      <div class="story"><span class="sid">1.88</span><h3>Construtor de baterias por prova do evento</h3><p>Tela do Cronograma no painel, como no simulador. Salva no formato novo.</p></div>
+      <div class="story"><span class="sid">1.89</span><h3>Quadra: súmula pela prova da categoria</h3><p>Board do judge por prova do evento, raia com a prova certa e validação no servidor.</p></div>
+      <div class="story"><span class="sid">1.90</span><h3>Telão e cronograma público por prova do evento</h3><p>Agrupamento e títulos. Baterias antigas seguem aparecendo.</p></div>
+    </div>
+    <p class="small">Ordem de entrega: 1.87 → 1.89 → 1.90 → 1.88. A tela que cria baterias mistas só chega depois que quadra, telão e cronograma público já sabem lê-las.</p>
+  </section>
+
+  <p class="foot">Leitura feita em 27/10/2026 sobre <code>main</code> (905db0b). Nenhum arquivo do projeto, banco, autenticação ou infraestrutura foi alterado. Depois da aprovação, esta página vai para <code>docs/design/construtor-baterias/</code> e as stories citam a pasta nos critérios de aceite.</p>
+</div>
+
+<script>
+(function(){
+  'use strict';
+  /* ---------- dados de exemplo ---------- */
+  var CATS = [
+    { id:'rx',  name:'RX Masculino',    code:'RX M' },
+    { id:'sc',  name:'Scale Masculino', code:'SC M' },
+    { id:'fem', name:'RX Feminino',     code:'RX F' },
+    { id:'m35', name:'Master 35+',      code:'M35' }
+  ];
+  var BOXES = ['Box Litoral','Arena Norte','Iron Lab','CF Sertão','Pulso Fit'];
+  var NAMES = {
+    rx:['Rafael Costa','Bruno Alves','Diego Martins','Lucas Freitas','Thiago Ramos'],
+    sc:['André Souza','Caio Mendes','Felipe Rocha','Gustavo Lima','Henrique Dias','Igor Batista','João Pedro Nunes'],
+    fem:['Ana Paula Reis','Beatriz Moura','Carla Teixeira','Daniela Pires'],
+    m35:['Marcos Vieira','Paulo Henrique','Sérgio Lopes']
+  };
+  var ATH = [];
+  CATS.forEach(function(c){
+    NAMES[c.id].forEach(function(n,i){
+      ATH.push({ id:c.id+'-'+i, name:n, cat:c.id, box:BOXES[(i*2+c.id.length)%BOXES.length], rank:i+1 });
+    });
+  });
+  var STAGE_NAMES = ['DT Speed','Cardio Burn','Heavy Grace','Final Sprint','Chipper'];
+  // Provas da aba Provas, por categoria (ordem = orderIndex). Master tem só duas.
+  var WODS = [];
+  CATS.forEach(function(c){
+    var count = c.id === 'm35' ? 2 : 3;
+    for (var i=0;i<count;i++){
+      WODS.push({ id:c.id+'-w'+(i+1), cat:c.id, order:i+1, code:'WOD '+(i+1), name:STAGE_NAMES[i]+' ('+c.code+')' });
+    }
+  });
+  var catById = {}; CATS.forEach(function(c){ catById[c.id]=c; });
+  var athById = {}; ATH.forEach(function(a){ athById[a.id]=a; });
+  var wodById = {}; WODS.forEach(function(w){ wodById[w.id]=w; });
+  var wodsOfCat = function(cat){ return WODS.filter(function(w){ return w.cat===cat; }).sort(function(a,b){ return a.order-b.order; }); };
+
+  /* ---------- estado ---------- */
+  var S = {
+    count:3, stage:0, titles:[], mapping:[], heats:[],
+    cap:6, heatCount:4, start:'08:00', dur:10, gap:5, fcat:'', q:'',
+    oWod:WODS[0].id, oCap:6
+  };
+  var autoMap = function(stage){
+    var m = {};
+    CATS.forEach(function(c){ var w = wodsOfCat(c.id)[stage]; m[c.id] = w ? w.id : ''; });
+    return m;
+  };
+  var ensureStages = function(){
+    for (var i=0;i<S.count;i++){
+      if (S.titles[i] === undefined) S.titles[i] = 'Prova '+(i+1)+' · '+(STAGE_NAMES[i]||'Prova');
+      if (!S.mapping[i]) S.mapping[i] = autoMap(i);
+      if (!S.heats[i]) S.heats[i] = makeHeats(S.heatCount, S.cap);
+    }
+    if (S.stage > S.count-1) S.stage = S.count-1;
+  };
+  function makeHeats(n, cap){ var h=[]; for (var i=0;i<n;i++){ h.push(new Array(cap).fill('')); } return h; }
+  function resizeHeats(stage){
+    var flat = [].concat.apply([], S.heats[stage]).filter(Boolean);
+    var next = makeHeats(S.heatCount, S.cap);
+    var k = 0;
+    // mantém posição quando cabe; o que não cabe volta para a lista
+    S.heats[stage].forEach(function(h,hi){ h.forEach(function(id,li){ if (id && hi<S.heatCount && li<S.cap) next[hi][li]=id; }); });
+    S.heats[stage] = next;
+    return flat;
+  }
+
+  /* ---------- tempo ---------- */
+  var toMin = function(t){ var p=String(t||'08:00').split(':'); return (+p[0]||0)*60+(+p[1]||0); };
+  var toHHMM = function(m){ m=((m%1440)+1440)%1440; var h=Math.floor(m/60), mm=m%60; return (h<10?'0':'')+h+':'+(mm<10?'0':'')+mm; };
+  var heatStart = function(i){ return toMin(S.start)+i*(S.dur+S.gap); };
+  var endOf = function(n){ return n>0 ? toHHMM(toMin(S.start)+(n-1)*(S.dur+S.gap)+S.dur) : '—'; };
+
+  /* ---------- derivados ---------- */
+  var eligibleAthletes = function(stage){
+    var m = S.mapping[stage];
+    return ATH.filter(function(a){ return m[a.cat]; });
+  };
+  var allocatedIn = function(stage){ var s={}; S.heats[stage].forEach(function(h){ h.forEach(function(id){ if(id) s[id]=1; }); }); return s; };
+
+  /* ---------- KPIs ---------- */
+  function renderKpis(){
+    var elig = eligibleAthletes(S.stage);
+    var cap = S.cap;
+    var perCat = CATS.map(function(c){ return elig.filter(function(a){ return a.cat===c.id; }).length; }).filter(function(n){ return n>0; });
+    var oldHeats = perCat.reduce(function(s,n){ return s+Math.ceil(n/cap); },0);
+    var newHeats = Math.ceil(elig.length/cap);
+    set('k-heats-old', oldHeats); set('k-heats-new', newHeats);
+    set('k-empty-old', oldHeats*cap-elig.length); set('k-empty-new', newHeats*cap-elig.length);
+    set('k-end-old', endOf(oldHeats)); set('k-end-new', endOf(newHeats));
+    set('k-steps-old', perCat.length); set('k-steps-new', 1);
+  }
+  function set(id, v){ document.getElementById(id).textContent = v; }
+
+  /* ---------- PROPOSTA ---------- */
+  var stageChips = document.getElementById('stage-chips');
+  function renderStages(){
+    document.getElementById('count-out').textContent = S.count;
+    document.getElementById('count-minus').disabled = S.count<=1;
+    document.getElementById('count-plus').disabled = S.count>=5;
+    stageChips.innerHTML = '';
+    for (var i=0;i<S.count;i++){
+      var b = document.createElement('button');
+      b.type='button'; b.className='chip-btn'; b.textContent='Prova '+(i+1);
+      b.setAttribute('aria-pressed', String(i===S.stage));
+      (function(i){ b.addEventListener('click', function(){ S.stage=i; renderAll(); }); })(i);
+      stageChips.appendChild(b);
+    }
+    document.getElementById('stage-title').value = S.titles[S.stage];
+  }
+  function renderMapping(){
+    var body = document.getElementById('map-body'); body.innerHTML='';
+    var m = S.mapping[S.stage]; var missing=[];
+    CATS.forEach(function(c){
+      var tr = document.createElement('tr');
+      var n = ATH.filter(function(a){ return a.cat===c.id; }).length;
+      var td1 = document.createElement('td'); td1.textContent=c.name;
+      var td2 = document.createElement('td'); td2.className='n'; td2.textContent=n;
+      var td3 = document.createElement('td');
+      var sel = document.createElement('select'); sel.setAttribute('aria-label','Prova de '+c.name+' nesta etapa');
+      var o0 = document.createElement('option'); o0.value=''; o0.textContent='Sem prova nesta etapa'; sel.appendChild(o0);
+      wodsOfCat(c.id).forEach(function(w){ var o=document.createElement('option'); o.value=w.id; o.textContent=w.code+' · '+w.name; sel.appendChild(o); });
+      sel.value = m[c.id]||'';
+      if (!m[c.id]){ sel.classList.add('missing'); missing.push(c.name); }
+      sel.addEventListener('change', function(){
+        m[c.id]=sel.value;
+        if (!sel.value){ // atletas da categoria saem das raias desta etapa
+          S.heats[S.stage] = S.heats[S.stage].map(function(h){ return h.map(function(id){ return id && athById[id].cat===c.id ? '' : id; }); });
+        }
+        renderAll();
+      });
+      td3.appendChild(sel);
+      tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3); body.appendChild(tr);
+    });
+    var note = document.getElementById('map-note');
+    note.innerHTML='';
+    if (missing.length){
+      var p=document.createElement('p'); p.className='note bad';
+      p.textContent = missing.join(', ')+' não tem prova correspondente nesta etapa. Os atletas dessa categoria não entram nas baterias da '+('Prova '+(S.stage+1))+'.';
+      note.appendChild(p);
+    }
+  }
+  function renderPool(){
+    var fsel = document.getElementById('f-cat');
+    if (!fsel.options.length){
+      var o=document.createElement('option'); o.value=''; o.textContent='Todas as categorias'; fsel.appendChild(o);
+      CATS.forEach(function(c){ var op=document.createElement('option'); op.value=c.id; op.textContent=c.name; fsel.appendChild(op); });
+    }
+    var alloc = allocatedIn(S.stage);
+    var pending = eligibleAthletes(S.stage).filter(function(a){ return !alloc[a.id]; });
+    var visible = pending.filter(function(a){
+      return (!S.fcat || a.cat===S.fcat) && (!S.q || a.name.toLowerCase().indexOf(S.q.toLowerCase())>=0);
+    });
+    document.getElementById('pool-count').textContent = pending.length+' sem bateria';
+    var ul = document.getElementById('pool-list'); ul.innerHTML='';
+    if (!visible.length){
+      var li=document.createElement('li'); li.className='pool-empty';
+      li.textContent = pending.length ? 'Nenhum atleta neste filtro.' : 'Todos os inscritos desta prova estão em uma bateria.';
+      ul.appendChild(li); return;
+    }
+    visible.forEach(function(a){
+      var li=document.createElement('li');
+      var b=document.createElement('button'); b.type='button'; b.className='ath'; b.draggable=true;
+      b.setAttribute('aria-label', a.name+', '+catById[a.cat].name+'. Colocar na próxima raia livre');
+      b.innerHTML='<span class="nm"></span><span class="cat"></span><span class="bx"></span>';
+      b.querySelector('.nm').textContent=a.name; b.querySelector('.cat').textContent=catById[a.cat].code; b.querySelector('.bx').textContent=a.box;
+      b.addEventListener('click', function(){ placeNext(a.id); });
+      b.addEventListener('dragstart', function(e){ e.dataTransfer.setData('text/plain', JSON.stringify({ id:a.id })); });
+      li.appendChild(b); ul.appendChild(li);
+    });
+  }
+  function placeNext(id){
+    var hs = S.heats[S.stage];
+    for (var h=0;h<hs.length;h++){ for (var l=0;l<hs[h].length;l++){ if(!hs[h][l]){ hs[h][l]=id; renderAll(); return; } } }
+    flash('Não há raias livres. Aumente as baterias ou as raias.');
+  }
+  function flash(msg){
+    var n = document.getElementById('map-note');
+    var p=document.createElement('p'); p.className='note bad'; p.textContent=msg; n.appendChild(p);
+    setTimeout(function(){ if (p.parentNode) p.parentNode.removeChild(p); }, 3500);
+  }
+  function renderHeats(){
+    var wrap = document.getElementById('heats'); wrap.innerHTML='';
+    var m = S.mapping[S.stage];
+    S.heats[S.stage].forEach(function(lanes, hi){
+      var card=document.createElement('div'); card.className='heat';
+      var cats = {}; lanes.forEach(function(id){ if(id) cats[athById[id].cat]=1; });
+      var catList = Object.keys(cats);
+      var filled = lanes.filter(Boolean).length;
+      card.innerHTML='<div class="heat-h"><b>Bateria '+(hi+1)+'</b><span><em>'+toHHMM(heatStart(hi))+'</em> · '+filled+'/'+lanes.length+'</span></div>'+
+        '<p class="heat-mix'+(catList.length>1?' is-mixed':'')+'">'+(catList.length>1 ? 'Mista · '+catList.map(function(c){ return catById[c].code; }).join(' + ') : catList.length===1 ? catById[catList[0]].name : 'Vazia')+'</p>';
+      var ol=document.createElement('ol'); ol.className='lanes';
+      lanes.forEach(function(id, li){
+        var item=document.createElement('li'); item.className='lane'+(id?' filled':'');
+        var n=document.createElement('span'); n.className='lane-n'; n.textContent=li+1; n.setAttribute('aria-hidden','true');
+        item.appendChild(n);
+        if (id){
+          var a=athById[id]; var w=wodById[m[a.cat]];
+          var b=document.createElement('button'); b.type='button'; b.className='lane-btn'; b.draggable=true;
+          b.setAttribute('aria-label','Raia '+(li+1)+': '+a.name+', '+catById[a.cat].name+', faz '+(w?w.name:'sem prova')+'. Devolver para a lista');
+          b.innerHTML='<span class="nm"></span><span class="wk"><b></b> · <span></span></span>';
+          b.querySelector('.nm').textContent=a.name;
+          b.querySelector('.wk b').textContent=catById[a.cat].code;
+          b.querySelector('.wk span').textContent = w ? w.name : 'sem prova';
+          b.addEventListener('click', function(){ lanes[li]=''; renderAll(); });
+          b.addEventListener('dragstart', function(e){ e.dataTransfer.setData('text/plain', JSON.stringify({ id:id, from:[hi,li] })); });
+          item.appendChild(b);
+        } else {
+          var e=document.createElement('span'); e.className='lane-empty'; e.textContent='Raia livre'; item.appendChild(e);
+        }
+        item.addEventListener('dragover', function(ev){ ev.preventDefault(); item.classList.add('over'); });
+        item.addEventListener('dragleave', function(){ item.classList.remove('over'); });
+        item.addEventListener('drop', function(ev){
+          ev.preventDefault(); item.classList.remove('over');
+          var d; try { d = JSON.parse(ev.dataTransfer.getData('text/plain')); } catch(_){ return; }
+          if (!d || !d.id) return;
+          var hs = S.heats[S.stage];
+          var prev = hs[hi][li];
+          // remove de onde estava
+          hs.forEach(function(h){ h.forEach(function(x,k){ if (x===d.id) h[k]=''; }); });
+          hs[hi][li] = d.id;
+          if (prev && d.from) hs[d.from[0]][d.from[1]] = prev; // troca de raias
+          renderAll();
+        });
+        ol.appendChild(item);
+      });
+      card.appendChild(ol); wrap.appendChild(card);
+    });
+  }
+  function autoFill(){
+    var elig = eligibleAthletes(S.stage);
+    var order = [];
+    CATS.forEach(function(c){
+      elig.filter(function(a){ return a.cat===c.id; })
+        .sort(function(a,b){ return b.rank-a.rank; }) // pior primeiro
+        .forEach(function(a){ order.push(a.id); });
+    });
+    var hs = makeHeats(S.heatCount, S.cap); var k=0;
+    for (var h=0;h<hs.length;h++){ for (var l=0;l<hs[h].length;l++){ if (k<order.length) hs[h][l]=order[k++]; } }
+    S.heats[S.stage]=hs;
+    renderAll();
+    if (k<order.length) flash((order.length-k)+' atleta(s) ficaram sem raia. Aumente as baterias ou as raias.');
+  }
+
+  /* ---------- HOJE ---------- */
+  function renderOld(){
+    var sel = document.getElementById('o-wod');
+    if (!sel.options.length){
+      WODS.slice().sort(function(a,b){ return a.order-b.order || CATS.indexOf(catById[a.cat])-CATS.indexOf(catById[b.cat]); })
+        .forEach(function(w){ var o=document.createElement('option'); o.value=w.id; o.textContent=w.code+' - '+w.name+' ['+catById[w.cat].name+']'; sel.appendChild(o); });
+    }
+    sel.value = S.oWod;
+    var w = wodById[S.oWod]; var cap = S.oCap;
+    var list = ATH.filter(function(a){ return a.cat===w.cat; }).sort(function(a,b){ return b.rank-a.rank; });
+    var n = Math.ceil(list.length/cap);
+    var ul = document.getElementById('o-pool'); ul.innerHTML='';
+    var li=document.createElement('li'); li.className='pool-empty'; li.textContent='Todos os '+list.length+' atletas de '+catById[w.cat].name+' já estão nas baterias.'; ul.appendChild(li);
+    document.getElementById('o-pool-count').textContent = list.length+' de '+ATH.length+' inscritos';
+    var wrap = document.getElementById('o-heats'); wrap.innerHTML='';
+    for (var h=0;h<n;h++){
+      var card=document.createElement('div'); card.className='heat';
+      var slice = list.slice(h*cap,(h+1)*cap);
+      card.innerHTML='<div class="heat-h"><b>Bateria '+(h+1)+'</b><span><em>'+toHHMM(heatStart(h))+'</em> · '+slice.length+'/'+cap+'</span></div><p class="heat-mix">'+catById[w.cat].name+'</p>';
+      var ol=document.createElement('ol'); ol.className='lanes';
+      for (var l=0;l<cap;l++){
+        var it=document.createElement('li'); it.className='lane'+(slice[l]?' filled':'');
+        var num=document.createElement('span'); num.className='lane-n'; num.textContent=l+1; it.appendChild(num);
+        if (slice[l]){
+          var d=document.createElement('div'); d.className='lane-btn'; d.style.cursor='default';
+          d.innerHTML='<span class="nm"></span><span class="wk"></span>';
+          d.querySelector('.nm').textContent=slice[l].name; d.querySelector('.wk').textContent=slice[l].box;
+          it.appendChild(d);
+        } else {
+          var e=document.createElement('span'); e.className='lane-empty'; e.textContent='Raia livre · outra categoria não entra'; it.appendChild(e);
+        }
+        ol.appendChild(it);
+      }
+      card.appendChild(ol); wrap.appendChild(card);
+    }
+    // resumo da mesma prova em todas as categorias
+    var order = w.order;
+    document.getElementById('o-sum-title').textContent = 'Para rodar o '+w.code+' de todas as categorias hoje:';
+    var sum = document.getElementById('o-sum'); sum.innerHTML='';
+    var totH=0, totE=0;
+    CATS.forEach(function(c){
+      var has = wodsOfCat(c.id).some(function(x){ return x.order===order; });
+      if (!has) return;
+      var cnt = ATH.filter(function(a){ return a.cat===c.id; }).length;
+      var hh = Math.ceil(cnt/cap), ee = hh*cap-cnt; totH+=hh; totE+=ee;
+      var row=document.createElement('div'); row.className='today-row';
+      row.innerHTML='<span></span><span class="num"><b>'+hh+'</b> bateria(s)</span><span class="num'+(ee?' bad':'')+'"><b>'+ee+'</b> raia(s) vazia(s)</span>';
+      row.querySelector('span').textContent = c.name+' · '+cnt+' atletas';
+      sum.appendChild(row);
+    });
+    var tot=document.createElement('div'); tot.className='today-row'; tot.style.borderColor='rgba(246,70,93,.35)';
+    tot.innerHTML='<span><b>Total, uma seleção por categoria</b></span><span class="num"><b>'+totH+'</b> baterias</span><span class="num bad"><b>'+totE+'</b> vazias</span>';
+    sum.appendChild(tot);
+  }
+
+  /* ---------- eventos ---------- */
+  function renderAll(){ ensureStages(); renderStages(); renderMapping(); renderPool(); renderHeats(); renderKpis(); renderOld(); }
+  document.getElementById('count-minus').addEventListener('click', function(){ if (S.count>1){ S.count--; renderAll(); } });
+  document.getElementById('count-plus').addEventListener('click', function(){ if (S.count<5){ S.count++; renderAll(); } });
+  document.getElementById('stage-title').addEventListener('input', function(e){ S.titles[S.stage]=e.target.value; });
+  document.getElementById('f-cat').addEventListener('change', function(e){ S.fcat=e.target.value; renderPool(); });
+  document.getElementById('f-q').addEventListener('input', function(e){ S.q=e.target.value; renderPool(); });
+  document.getElementById('auto').addEventListener('click', autoFill);
+  document.getElementById('clear').addEventListener('click', function(){ S.heats[S.stage]=makeHeats(S.heatCount,S.cap); renderAll(); });
+  var clampNum = function(v,min,max,def){ v=parseInt(v,10); if (!isFinite(v)) return def; return Math.min(max,Math.max(min,v)); };
+  document.getElementById('n-cap').addEventListener('change', function(e){ S.cap=clampNum(e.target.value,1,20,6); e.target.value=S.cap; for (var i=0;i<S.count;i++) resizeHeats(i); renderAll(); });
+  document.getElementById('n-count').addEventListener('change', function(e){ S.heatCount=clampNum(e.target.value,1,30,4); e.target.value=S.heatCount; for (var i=0;i<S.count;i++) resizeHeats(i); renderAll(); });
+  document.getElementById('n-start').addEventListener('change', function(e){ S.start=e.target.value||'08:00'; renderAll(); });
+  document.getElementById('n-dur').addEventListener('change', function(e){ S.dur=clampNum(e.target.value,1,120,10); e.target.value=S.dur; renderAll(); });
+  document.getElementById('n-int').addEventListener('change', function(e){ S.gap=clampNum(e.target.value,0,60,5); e.target.value=S.gap; renderAll(); });
+  document.getElementById('o-wod').addEventListener('change', function(e){ S.oWod=e.target.value; renderOld(); });
+  document.getElementById('o-cap').addEventListener('change', function(e){ S.oCap=clampNum(e.target.value,1,20,6); e.target.value=S.oCap; renderOld(); });
+
+  var tabs = [document.getElementById('tab-new'), document.getElementById('tab-old')];
+  var views = { 'tab-new':document.getElementById('view-new'), 'tab-old':document.getElementById('view-old') };
+  tabs.forEach(function(t, i){
+    t.addEventListener('click', function(){ select(t); });
+    t.addEventListener('keydown', function(e){
+      if (e.key==='ArrowRight'||e.key==='ArrowLeft'){ e.preventDefault(); var n=tabs[(i+1)%2]; select(n); n.focus(); }
+    });
+  });
+  function select(t){
+    tabs.forEach(function(x){ x.setAttribute('aria-selected', String(x===t)); x.tabIndex = x===t ? 0 : -1; views[x.id].hidden = x!==t; });
+  }
+  select(tabs[0]);
+
+  // estado inicial: prova 1 já auto-preenchida para mostrar uma bateria mista
+  ensureStages(); autoFill();
+})();
+</script>

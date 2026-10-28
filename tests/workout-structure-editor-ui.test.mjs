@@ -198,7 +198,8 @@ test('painel: salvar valida a estrutura, bloqueia com aviso e foco, e só envia 
 test('painel: editar carrega a estrutura, cancelar e resetar a limpam, e a lista mostra a súmula digital', () => {
   assert.match(admin, /setWodStructure\(workout\.structure \?\? null\);/);
   assert.match(block(admin, /const resetWorkoutForm = \(\) => \{[\s\S]*?\n {2}\};/), /setWodStructure\(null\);/);
-  assert.match(admin, /\{wod\.structure && \(\s*<p [^>]*>\s*Súmula digital · \{summarizeStructure\(wod\.structure\)\}/);
+  // Story 1.91: a lista de provas é o componente WorkoutStageList.
+  assert.match(read('../src/components/admin/WorkoutStageList.tsx'), /\{workout\.structure && \(\s*<p [^>]*>\s*Súmula digital · \{summarizeStructure\(workout\.structure\)\}/);
 });
 
 test('painel: eventos Fitness Racing e Qualifier não recebem nem enviam estrutura', () => {

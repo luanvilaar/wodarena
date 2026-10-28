@@ -105,6 +105,14 @@ export interface EventScheduleItem {
   capacity?: number;
   isPublished?: boolean;
   isCallReleased?: boolean;
+  // Bateria por prova do evento (Story 1.87): aceita atletas de qualquer categoria.
+  // Bateria antiga (por categoria) só tem `workoutId` e continua valendo.
+  stageNumber?: number;
+  stageTitle?: string;
+  // Prova de cada categoria nesta prova do evento: { [divisionId]: workoutId } ('' = sem prova).
+  stageWorkouts?: Record<string, string>;
+  // Prova de cada raia, alinhada com `athleteIds` ('' = raia livre).
+  laneWorkoutIds?: string[];
 }
 
 export interface Athlete {

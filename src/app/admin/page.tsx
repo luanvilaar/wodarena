@@ -27,9 +27,9 @@ import {
 import { ShirtSummaryCard } from '@/components/admin/ShirtSummaryCard';
 import { EventLocationPicker, toCoordinatesInput } from '@/components/admin/EventLocationPicker';
 import { parseCoordinatesInput } from '@/lib/eventMap';
+import { WorkoutStageList } from '@/components/admin/WorkoutStageList';
 import { WorkoutStructureEditor } from '@/components/admin/WorkoutStructureEditor';
 import { deriveLegacyWorkoutFields, parseTonnageKgInput, validateWorkoutStructure, type WorkoutStructure } from '@/lib/workoutStructure';
-import { summarizeStructure } from '@/lib/workoutStructureEditor';
 import {
   LayoutDashboard, Calendar, Trophy,
   ClipboardCheck, LogIn, LogOut, Ticket, Settings,
@@ -91,6 +91,23 @@ import { buildDivisionOrderMap, getDivisionOrderPosition, moveDivisionId, shiftD
 import { sortWorkouts } from '@/lib/workoutOrder';
 import { buildManagerFinanceSummary } from '@/lib/managerFinance';
 import { calculateServiceFee, resolveServiceFeePayer, type ServiceFeePayer } from '@/lib/serviceFee';
+import {
+  buildStageHeatId,
+  buildStageHeatItems,
+  countDefaultStages,
+  eligibleStageAthletes,
+  getLegacyHeatsForStage,
+  getSavedStageNumbers,
+  getStageHeats,
+  getStageLockStatus,
+  getStageTitle,
+  heatIncludesWorkout,
+  isStageHeat,
+  pickRepresentativeWorkoutId,
+  resolveStageWorkouts,
+  type StageWorkouts
+} from '@/lib/heatStages';
+import { sortDivisions } from '@/lib/divisionOrder';
 import { getTeamDisplayName } from '@/lib/teamDisplay';
 import { buildEventDateLabel, resolveEventDateForm } from '@/lib/eventDates';
 import { fortalezaDateTimeLocalToUtc, normalizeQualifierSubmissionWindow, utcToFortalezaDateTimeLocal } from '@/lib/submissionWindow';
@@ -1033,7 +1050,13 @@ export default function AdminPage() {
 
   // Estados para Cronograma de Baterias de Provas (Excel Style)
   const [scheduleSubTab, setScheduleSubTab] = useState<'general' | 'heats'>('general');
-  const [heatWorkoutId, setHeatWorkoutId] = useState('');
+  // Prova do evento em edição no construtor de baterias (0 = nenhuma). Functional Fitness monta as
+  // baterias por prova do evento: a bateria aceita atletas de qualquer categoria e cada categoria
+  // faz a prova dela (heatStageWorkouts).
+  const [heatStageNumber, setHeatStageNumber] = useState(0);
+  const [heatStageCount, setHeatStageCount] = useState(1);
+  const [heatStageTitle, setHeatStageTitle] = useState('');
+  const [heatStageWorkouts, setHeatStageWorkouts] = useState<StageWorkouts>({});
   const [heatDate, setHeatDate] = useState('');
   const [heatStartTime, setHeatStartTime] = useState('08:00');
   const [heatWarmupDuration, setHeatWarmupDuration] = useState(20);
@@ -1901,6 +1924,50 @@ export default function AdminPage() {
     if (editEventDate.trim() === generated) setEditEventDate('');
   };
 
+  // Abre uma prova do evento no construtor: baterias salvas dela (ou em branco), prova de cada
+  // categoria, nome e horários. Sem bateria salva, vale o preenchimento automático pela ordem das provas.
+  const loadHeatStage = (evt: Event, stageNumber: number) => {
+    const items = evt.scheduleItems || [];
+    const eventWorkouts = evt.workouts || [];
+    const eventDivisions = evt.divisions || [];
+    const stageWorkouts = resolveStageWorkouts(items, eventWorkouts, eventDivisions, stageNumber);
+    setHeatStageNumber(stageNumber);
+    setHeatStageWorkouts(stageWorkouts);
+    setHeatStageTitle(getStageTitle(items, eventWorkouts, stageWorkouts, stageNumber));
+    setHeatDivisionFilterId('');
+
+    const saved = getStageHeats(items, stageNumber).sort((a, b) => (a.heatNumber || 0) - (b.heatNumber || 0));
+    if (saved.length > 0) {
+      const allocations: Record<string, string[]> = {};
+      let foundCapacity = 5;
+      saved.forEach(item => {
+        const cap = item.capacity || 6;
+        const aths = item.athleteIds || [];
+        allocations[item.id] = Array.from({ length: cap }, (_, idx) => aths[idx] || "");
+        if (item.capacity) foundCapacity = item.capacity;
+      });
+      const firstHeat = saved[0];
+      if (firstHeat.date) setHeatDate(firstHeat.date);
+      if (firstHeat.time) setHeatStartTime(firstHeat.time);
+      if (firstHeat.warmupTime && firstHeat.time) setHeatWarmupDuration(hhmmToMinutes(firstHeat.time) - hhmmToMinutes(firstHeat.warmupTime));
+      if (firstHeat.checkinTime && firstHeat.time) setHeatCheckinDuration(hhmmToMinutes(firstHeat.time) - hhmmToMinutes(firstHeat.checkinTime));
+      if (firstHeat.endTime && firstHeat.time) setHeatWorkoutDuration(hhmmToMinutes(firstHeat.endTime) - hhmmToMinutes(firstHeat.time));
+      setHeatCount(saved.length);
+      setHeatCapacity(foundCapacity);
+      setHeatAllocations(allocations);
+      return;
+    }
+
+    const firstWorkout = eventWorkouts.find(workout => workout.id === pickRepresentativeWorkoutId([], stageWorkouts));
+    const capMatch = firstWorkout?.timeCap?.match(/^(\d+)/);
+    if (capMatch) setHeatWorkoutDuration(Number(capMatch[1]));
+    const initialAllocations: Record<string, string[]> = {};
+    for (let i = 1; i <= heatCount; i++) {
+      initialAllocations[buildStageHeatId(stageNumber, i)] = Array(heatCapacity).fill("");
+    }
+    setHeatAllocations(initialAllocations);
+  };
+
   const initEventEditForm = (evt: Event) => {
     setEditEventName(evt.name);
     setEditEventDate(evt.date);
@@ -1932,7 +1999,7 @@ export default function AdminPage() {
     // Inicializar estados da calculadora de baterias
     setHeatDate(evt.date);
     if (evt.eventType === 'fitness_racing') {
-      setHeatWorkoutId('');
+      setHeatStageNumber(0);
 
       const existingFitnessRaceHeats = (evt.scheduleItems || [])
         .filter(item => item.kind === 'heat' && !item.workoutId)
@@ -1969,16 +2036,13 @@ export default function AdminPage() {
         setHeatAllocations({});
       }
     } else if (evt.workouts && evt.workouts.length > 0) {
-      setHeatWorkoutId(evt.workouts[0].id);
-      const w = evt.workouts[0];
-      if (w.timeCap) {
-        const match = w.timeCap.match(/^(\d+)/);
-        if (match) {
-          setHeatWorkoutDuration(Number(match[1]));
-        }
-      }
+      // Quantas provas o evento tem: a categoria com mais provas, ou mais se já há baterias salvas.
+      const savedStageNumbers = getSavedStageNumbers(evt.scheduleItems || []);
+      setHeatStageCount(Math.max(countDefaultStages(evt.workouts, evt.divisions || []), savedStageNumbers[savedStageNumbers.length - 1] || 0, 1));
+      loadHeatStage(evt, 1);
     } else {
-      setHeatWorkoutId('');
+      setHeatStageNumber(0);
+      setHeatAllocations({});
     }
   };
 
@@ -2350,6 +2414,20 @@ export default function AdminPage() {
     setWodSubmissionOpensAt(utcToFortalezaDateTimeLocal(workout.submissionOpensAt));
     setWodSubmissionClosesAt(utcToFortalezaDateTimeLocal(workout.submissionClosesAt));
     setEditingWorkoutId(workout.id);
+  };
+
+  // Atalho "cadastrar" da lista de provas (Story 1.91): só prepara o formulário com a
+  // categoria e o código da prova que falta; o gestor revisa e salva. A ordem é a
+  // próxima do evento (resetWorkoutForm), então a prova vira a seguinte da categoria.
+  const handleAddMissingWorkout = (divisionId: string, suggestedCode: string) => {
+    resetWorkoutForm();
+    setWodDivisionId(divisionId);
+    setWodCode(suggestedCode);
+    requestAnimationFrame(() => {
+      const nameInput = document.getElementById('wod-name-input');
+      nameInput?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      nameInput?.focus({ preventScroll: true });
+    });
   };
 
   // Cadastrar ou editar Prova (Workout) dentro de um evento
@@ -3644,7 +3722,7 @@ export default function AdminPage() {
     const selectedContestEvent = selectedContestRegistration ? getRegistrationEvent(selectedContestRegistration) : null;
     const contestWorkouts = selectedContestEvent?.workouts || [];
     const contestHeats = (selectedContestEvent?.scheduleItems || []).filter(
-      item => item.kind === 'heat' && item.workoutId === contestWorkoutId
+      item => heatIncludesWorkout(item, contestWorkoutId)
     );
 
     const handleSaveAthleteProfile = async (e: React.FormEvent) => {
@@ -6171,41 +6249,29 @@ export default function AdminPage() {
     }
     const hasHeatScheduler = isFitnessRacingEvent || hasWorkouts;
 
-    const selectedWorkout = workouts.find(w => w.id === heatWorkoutId);
-    const divisionId = selectedWorkout?.divisionId;
+    // Functional Fitness monta as baterias por PROVA DO EVENTO (Stories 1.87 a 1.90): a bateria aceita atletas
+    // de qualquer categoria e cada categoria faz a prova dela. Fitness Race segue com largadas únicas.
+    const stageNumber = isFitnessRacingEvent ? 0 : heatStageNumber;
+    const eventDivisions = selectedEventToManage?.divisions || [];
+    const savedScheduleItems = selectedEventToManage?.scheduleItems || [];
     const heatScopeId = isFitnessRacingEvent && selectedEventToManage
       ? `fitness-race-${selectedEventToManage.id}`
-      : heatWorkoutId;
-    const hasActiveHeatScope = isFitnessRacingEvent || Boolean(heatWorkoutId);
+      : stageNumber > 0 ? `stage-${stageNumber}` : '';
+    const hasActiveHeatScope = isFitnessRacingEvent || stageNumber > 0;
     const heatKeyPrefix = heatScopeId ? `heat-${heatScopeId}-` : '';
     const buildHeatKey = (heatNumber: number) => `${heatKeyPrefix}${heatNumber}`;
     const isHeatInActiveScope = (item: EventScheduleItem) => {
       if (item.kind !== 'heat') return false;
       if (isFitnessRacingEvent) return !item.workoutId;
-      return item.workoutId === heatWorkoutId;
+      return isStageHeat(item) && item.stageNumber === stageNumber;
     };
-
-    // Identificar as provas equivalentes de Fitness Racing TOTAL
-    const getEquivalentWorkoutIds = (workoutId: string) => {
-      const currentWorkout = workouts.find(w => w.id === workoutId);
-      if (!currentWorkout || currentWorkout.code !== 'TOTAL' || !selectedEventToManage || selectedEventToManage.eventType !== 'fitness_racing') {
-        return [workoutId];
-      }
-
-      const activeDiv = (selectedEventToManage.divisions || []).find(d => d.id === currentWorkout.divisionId);
-      const activeLayout = activeDiv?.courseLayout || [];
-      const equivalentDivisionIds = (selectedEventToManage.divisions || []).filter(d => {
-        if (d.id === currentWorkout.divisionId) return true;
-        if (!d.courseLayout || d.courseLayout.length !== activeLayout.length) return false;
-        return d.courseLayout.every((stg, idx) => stg.name === activeLayout[idx]?.name && stg.type === activeLayout[idx]?.type);
-      }).map(d => d.id);
-
-      return workouts
-        .filter(w => w.code === 'TOTAL' && w.divisionId && equivalentDivisionIds.includes(w.divisionId))
-        .map(w => w.id);
-    };
-
-    const targetWorkoutIds = heatWorkoutId ? getEquivalentWorkoutIds(heatWorkoutId) : [];
+    // Baterias antigas (por categoria) das provas que esta prova do evento agrupa: o construtor novo
+    // as substitui quando o gestor gera o cronograma aqui (D5).
+    const legacyHeatsReplaced = !isFitnessRacingEvent && stageNumber > 0
+      ? getLegacyHeatsForStage(savedScheduleItems, heatStageWorkouts)
+      : [];
+    const isHeatReplacedByStage = (item: EventScheduleItem) => isHeatInActiveScope(item) || legacyHeatsReplaced.some(old => old.id === item.id);
+    const maxSavedStageNumber = Math.max(0, ...getSavedStageNumbers(savedScheduleItems));
 
     // Filtra apenas itens do cronograma geral (que não são baterias de provas)
     const scheduleItems = [...(selectedEventToManage?.scheduleItems || [])]
@@ -6227,13 +6293,15 @@ export default function AdminPage() {
     const handleSaveWorkoutHeats = async () => {
       if (!selectedEventToManage || !hasActiveHeatScope) return;
 
-      if (!isFitnessRacingEvent && !selectedWorkout) return;
+      if (!isFitnessRacingEvent && stageNumber === 0) return;
+      if (!isFitnessRacingEvent && !pickRepresentativeWorkoutId([], heatStageWorkouts)) {
+        setAdminNotice({ text: 'Escolha a prova de pelo menos uma categoria nesta prova do evento.', tone: 'error' });
+        return;
+      }
 
       // Descobrir se as baterias já existiam e estavam publicadas
       const wasPublishedBefore = (selectedEventToManage.scheduleItems || []).some(
-        item => item.kind === 'heat'
-          && (isFitnessRacingEvent ? !item.workoutId : item.workoutId === heatWorkoutId)
-          && item.isPublished
+        item => item.isPublished && isHeatReplacedByStage(item)
       );
 
       // 1. Gerar as novas baterias em lote para todos os workouts do grupo equivalente
@@ -6272,46 +6340,32 @@ export default function AdminPage() {
           });
         }
       } else {
-        for (const wId of targetWorkoutIds) {
-          const currentWorkout = workouts.find(w => w.id === wId);
-          if (!currentWorkout) continue;
-
-          let currentStartTime = hhmmToMinutes(heatStartTime);
-          for (let i = 1; i <= heatCount; i++) {
-            const startMin = currentStartTime;
-            const endMin = startMin + heatWorkoutDuration;
-            const filaMin = startMin - heatCheckinDuration;
-            const warmupMin = startMin - heatWarmupDuration;
-
-            const timeStr = minutesToHhmm(startMin);
-            const warmupStr = minutesToHhmm(warmupMin);
-            const checkinStr = minutesToHhmm(filaMin);
-            const endStr = minutesToHhmm(endMin);
-
-            const currentAlloc = heatAllocations[`heat-${heatWorkoutId}-${i}`] || [];
-            const finalAlloc = Array.from({ length: heatCapacity }, (_, idx) => currentAlloc[idx] || "");
-
-            newHeatItems.push({
-              id: `heat-${wId}-${i}`,
-              kind: 'heat',
-              date: heatDate,
-              time: timeStr,
-              title: `BATERIA ${i} - ${currentWorkout.name}`,
-              description: `Aquecimento: ${warmupStr} | Fila: ${checkinStr} | Início: ${timeStr} | Final: ${endStr}`,
-              location: selectedEventToManage.location,
-              workoutId: wId,
-              heatNumber: i,
-              warmupTime: warmupStr,
-              checkinTime: checkinStr,
-              endTime: endStr,
-              athleteIds: finalAlloc,
-              capacity: heatCapacity,
-              isPublished: wasPublishedBefore
-            });
-
-            currentStartTime = endMin + heatIntervalDuration;
-          }
+        const stageTitle = heatStageTitle.trim() || getStageTitle(savedScheduleItems, workouts, heatStageWorkouts, stageNumber);
+        let currentStartTime = hhmmToMinutes(heatStartTime);
+        const slots: { time: string; warmupTime: string; checkinTime: string; endTime: string }[] = [];
+        for (let i = 1; i <= heatCount; i++) {
+          const startMin = currentStartTime;
+          const endMin = startMin + heatWorkoutDuration;
+          slots.push({
+            time: minutesToHhmm(startMin),
+            warmupTime: minutesToHhmm(startMin - heatWarmupDuration),
+            checkinTime: minutesToHhmm(startMin - heatCheckinDuration),
+            endTime: minutesToHhmm(endMin)
+          });
+          currentStartTime = endMin + heatIntervalDuration;
         }
+        newHeatItems.push(...buildStageHeatItems({
+          stageNumber,
+          stageTitle,
+          stageWorkouts: heatStageWorkouts,
+          slots,
+          capacity: heatCapacity,
+          allocations: heatAllocations,
+          athletes,
+          date: heatDate,
+          location: selectedEventToManage.location,
+          isPublished: wasPublishedBefore
+        }));
       }
 
       // 1.5 Proteção: nunca republicar automaticamente uma REDUÇÃO ESTRUTURAL (menos
@@ -6320,8 +6374,7 @@ export default function AdminPage() {
       // um atleta pontualmente) sem reduzir a estrutura continuam publicando direto,
       // como sempre — só a redução de contagem/capacidade exige "Publicar" de novo.
       const previousHeatItems = (selectedEventToManage.scheduleItems || [])
-        .filter(item => item.kind === 'heat'
-          && (isFitnessRacingEvent ? !item.workoutId : item.workoutId === heatWorkoutId));
+        .filter(item => isHeatReplacedByStage(item));
       const previousTotalSlots = previousHeatItems
         .reduce((total, item) => total + (item.athleteIds || []).length, 0);
       const newTotalSlots = newHeatItems
@@ -6350,9 +6403,7 @@ export default function AdminPage() {
       const existingItems = selectedEventToManage.scheduleItems || [];
       const filteredItems = isFitnessRacingEvent
         ? existingItems.filter(item => item.kind !== 'heat')
-        : existingItems.filter(
-            item => !(item.kind === 'heat' && item.workoutId && targetWorkoutIds.includes(item.workoutId))
-          );
+        : existingItems.filter(item => !isHeatReplacedByStage(item));
 
       const updatedSchedule = [...filteredItems, ...newHeatItems];
 
@@ -6368,7 +6419,7 @@ export default function AdminPage() {
           : {
               text: isFitnessRacingEvent
                 ? 'Cronograma de largadas do Fitness Race salvo com sucesso para todos os inscritos.'
-                : 'Baterias salvas com sucesso para o grupo de categorias equivalentes!',
+                : 'Baterias da prova salvas com sucesso!',
               tone: 'success'
             });
       } catch (err) {
@@ -6381,13 +6432,11 @@ export default function AdminPage() {
     const handleClearWorkoutHeats = async () => {
       if (!selectedEventToManage || !hasActiveHeatScope) return;
 
-      if (!isFitnessRacingEvent && !selectedWorkout) return;
+      if (!isFitnessRacingEvent && stageNumber === 0) return;
 
       const updatedSchedule = isFitnessRacingEvent
         ? (selectedEventToManage.scheduleItems || []).filter(item => item.kind !== 'heat')
-        : (selectedEventToManage.scheduleItems || []).filter(
-            item => !(item.kind === 'heat' && item.workoutId && targetWorkoutIds.includes(item.workoutId))
-          );
+        : (selectedEventToManage.scheduleItems || []).filter(item => !isHeatInActiveScope(item));
 
       try {
         await updateEvent(selectedEventToManage.id, { scheduleItems: updatedSchedule });
@@ -6396,7 +6445,7 @@ export default function AdminPage() {
         setAdminNotice({
           text: isFitnessRacingEvent
             ? 'Baterias do Fitness Race foram removidas.'
-            : 'Baterias para o grupo de percursos equivalentes foram removidas.',
+            : 'As baterias desta prova foram removidas.',
           tone: 'success'
         });
       } catch (err) {
@@ -6409,7 +6458,7 @@ export default function AdminPage() {
     const handleAutoFillHeats = () => {
       if (!selectedEventToManage || !hasActiveHeatScope) return;
 
-      if (!isFitnessRacingEvent && !selectedWorkout) return;
+      if (!isFitnessRacingEvent && stageNumber === 0) return;
 
       let athletesToAllocate: { id: string }[] = [];
 
@@ -6421,23 +6470,25 @@ export default function AdminPage() {
           return;
         }
         athletesToAllocate = eventAthletes.map(a => ({ id: a.id }));
-      } else if (divisionId) {
-        const leaderboardList = getLeaderboard(selectedEventToManage.id, divisionId);
-        if (leaderboardList.length === 0) {
-          setAdminNotice({ text: 'Não há competidores cadastrados nesta categoria para alocar.', tone: 'error' });
-          return;
-        }
-        // Inverte a classificação geral do leaderboard para que os piores venham primeiro
-        athletesToAllocate = [...leaderboardList].reverse().map(entry => ({ id: entry.athlete.id }));
       } else {
-        // WOD sem categoria vinculada: usar todos os atletas das divisões do evento
-        const eventDivisionIds = (selectedEventToManage.divisions || []).map(d => d.id);
-        const eventAthletes = athletes.filter(a => eventDivisionIds.includes(a.divisionId) && approvedAthleteIds.has(a.id));
-        if (eventAthletes.length === 0) {
-          setAdminNotice({ text: 'Não há competidores inscritos no evento para alocar.', tone: 'error' });
+        // Prova do evento (D3): categoria por categoria, na ordem das categorias, do pior para o melhor no
+        // ranking de cada uma; quando uma categoria acaba, a próxima completa a bateria.
+        const stageAthletes = eligibleStageAthletes(
+          athletes.filter(a => eventDivisions.some(d => d.id === a.divisionId) && approvedAthleteIds.has(a.id)),
+          heatStageWorkouts
+        );
+        if (stageAthletes.length === 0) {
+          setAdminNotice({ text: 'Não há competidores inscritos nas categorias desta prova para alocar.', tone: 'error' });
           return;
         }
-        athletesToAllocate = eventAthletes.map(a => ({ id: a.id }));
+        sortDivisions(eventDivisions).forEach(division => {
+          if (!heatStageWorkouts[division.id]) return;
+          const inDivision = new Set(stageAthletes.filter(a => a.divisionId === division.id).map(a => a.id));
+          const ranked = getLeaderboard(selectedEventToManage.id, division.id).map(entry => entry.athlete.id).filter(id => inDivision.has(id)).reverse();
+          const rankedSet = new Set(ranked);
+          const unranked = stageAthletes.filter(a => a.divisionId === division.id && !rankedSet.has(a.id)).map(a => a.id);
+          [...ranked, ...unranked].forEach(id => athletesToAllocate.push({ id }));
+        });
       }
 
       // Distribui atletas pelas baterias de forma sequencial por raias
@@ -6472,9 +6523,8 @@ export default function AdminPage() {
         });
       } else {
         setAdminNotice({
-          text: divisionId
-            && !isFitnessRacingEvent
-            ? 'Auto-preenchimento concluído! Os piores resultados foram alocados nas primeiras baterias e os melhores por último.'
+          text: !isFitnessRacingEvent
+            ? 'Auto-preenchimento concluído! Categoria por categoria, os piores resultados foram alocados nas primeiras baterias e os melhores por último.'
             : `Auto-preenchimento concluído! ${allocatedCount} competidor(es) distribuídos em ${heatCount} bateria(s).`,
           tone: 'success'
         });
@@ -6505,51 +6555,23 @@ export default function AdminPage() {
       }
     }
 
-    // Verifica se a criação de baterias está bloqueada por falta de baterias na prova anterior
-    const getPreviousWorkoutLockStatus = () => {
-      if (isFitnessRacingEvent) return { isLocked: false, previousWorkout: null };
-      if (!heatWorkoutId || !selectedEventToManage) return { isLocked: false, previousWorkout: null };
-
-      const currentWorkout = workouts.find(w => w.id === heatWorkoutId);
-      if (!currentWorkout || !currentWorkout.divisionId) return { isLocked: false, previousWorkout: null };
-
-      // Filtrar e ordenar WODs da mesma divisão
-      const divisionWorkouts = sortWorkouts(workouts.filter(w => w.divisionId === currentWorkout.divisionId));
-
-      const currentIndex = divisionWorkouts.findIndex(w => w.id === currentWorkout.id);
-
-      if (currentIndex > 0) {
-        const previousWorkout = divisionWorkouts[currentIndex - 1];
-        // Verificar se existem baterias salvas no cronograma oficial para o previousWorkout
-        const hasSavedHeatsForPrevious = (selectedEventToManage.scheduleItems || []).some(
-          item => item.kind === 'heat' && item.workoutId === previousWorkout.id
-        );
-
-        if (!hasSavedHeatsForPrevious) {
-          return { isLocked: true, previousWorkout };
-        }
-      }
-
-      return { isLocked: false, previousWorkout: null };
-    };
-
-    const { isLocked: isWorkoutLocked, previousWorkout } = getPreviousWorkoutLockStatus();
+    // A prova n do evento só abre baterias depois que a prova anterior tem baterias salvas.
+    const stageLock = isFitnessRacingEvent || stageNumber === 0
+      ? { isLocked: false, previousStage: null as number | null }
+      : getStageLockStatus(savedScheduleItems, workouts, eventDivisions, stageNumber);
+    const isWorkoutLocked = stageLock.isLocked;
+    const previousStageLabel = stageLock.previousStage
+      ? getStageTitle(savedScheduleItems, workouts, resolveStageWorkouts(savedScheduleItems, workouts, eventDivisions, stageLock.previousStage), stageLock.previousStage)
+      : '';
 
     const getDivisionName = (divId: string) => {
       return (selectedEventToManage?.divisions || []).find(d => d.id === divId)?.name || 'Geral';
     };
+    // Fitness Race: todos os inscritos aprovados. Prova do evento: os aprovados das categorias que têm prova nela.
+    const approvedEventAthletes = athletes.filter(a => eventDivisions.some(d => d.id === a.divisionId) && approvedAthleteIds.has(a.id));
     const categoryAthletes = isFitnessRacingEvent
-      ? (() => {
-          const eventDivisionIds = (selectedEventToManage?.divisions || []).map(d => d.id);
-          return athletes.filter(a => eventDivisionIds.includes(a.divisionId) && approvedAthleteIds.has(a.id));
-        })()
-      : (divisionId
-          ? athletes.filter(a => a.divisionId === divisionId && approvedAthleteIds.has(a.id))
-          : (() => {
-              const eventDivisionIds = (selectedEventToManage?.divisions || []).map(d => d.id);
-              return athletes.filter(a => eventDivisionIds.includes(a.divisionId) && approvedAthleteIds.has(a.id));
-            })()
-        );
+      ? approvedEventAthletes
+      : eligibleStageAthletes(approvedEventAthletes, heatStageWorkouts);
     const allAllocatedIds = Object.values(heatAllocations).flat();
     const pendingAthletes = categoryAthletes.filter(ath => !allAllocatedIds.includes(ath.id));
     const heatDivisionFilterOptions = (selectedEventToManage?.divisions || [])
@@ -6576,7 +6598,7 @@ export default function AdminPage() {
       if (!isSavedScheduleComplete) return;
 
       const updatedSchedule = (selectedEventToManage.scheduleItems || []).map(item => {
-        if (item.kind === 'heat' && (isFitnessRacingEvent ? !item.workoutId : item.workoutId && targetWorkoutIds.includes(item.workoutId))) {
+        if (isHeatInActiveScope(item)) {
           return { ...item, isPublished: true };
         }
         return item;
@@ -6588,7 +6610,7 @@ export default function AdminPage() {
         setAdminNotice({
           text: isFitnessRacingEvent
             ? 'Baterias do Fitness Race publicadas com sucesso!'
-            : 'Baterias publicadas com sucesso para as categorias vinculadas!',
+            : 'Baterias da prova publicadas com sucesso!',
           tone: 'success'
         });
       } catch (err) {
@@ -6997,82 +7019,142 @@ export default function AdminPage() {
                   </p>
                 </div>
               ) : (
-                <div className="max-w-md">
-                  <label htmlFor="heat-wod-select" className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-soft">Selecione a Prova *</label>
-                  <select
-                    id="heat-wod-select"
-                    value={heatWorkoutId}
-                    onChange={(e) => {
-                      const wId = e.target.value;
-                      setHeatWorkoutId(wId);
-                      setHeatDivisionFilterId('');
-                      if (!wId) {
-                        setHeatAllocations({});
-                        return;
-                      }
+                <div className="space-y-4">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+                    <div>
+                      <span id="stage-count-label" className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-soft">Quantas provas tem o evento *</span>
+                      <div role="group" aria-labelledby="stage-count-label" className="flex min-h-11 items-center overflow-hidden rounded-md border border-card-border bg-dark-gray">
+                        <button
+                          type="button"
+                          aria-label="Uma prova a menos"
+                          disabled={heatStageCount <= Math.max(1, maxSavedStageNumber)}
+                          onClick={() => {
+                            const next = Math.max(1, maxSavedStageNumber, heatStageCount - 1);
+                            setHeatStageCount(next);
+                            if (selectedEventToManage && heatStageNumber > next) loadHeatStage(selectedEventToManage, next);
+                          }}
+                          className="min-h-11 w-11 text-lg font-bold text-foreground transition-colors hover:bg-elevated disabled:cursor-not-allowed disabled:text-muted-soft/40"
+                        >
+                          −
+                        </button>
+                        <output className="w-12 text-center font-number text-lg font-bold text-white" aria-live="polite">{heatStageCount}</output>
+                        <button
+                          type="button"
+                          aria-label="Uma prova a mais"
+                          disabled={heatStageCount >= 20}
+                          onClick={() => setHeatStageCount(count => Math.min(20, count + 1))}
+                          className="min-h-11 w-11 text-lg font-bold text-foreground transition-colors hover:bg-elevated disabled:cursor-not-allowed disabled:text-muted-soft/40"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
 
-                      const w = workouts.find(work => work.id === wId);
-                      if (w && w.timeCap) {
-                        const match = w.timeCap.match(/^(\d+)/);
-                        if (match) {
-                          setHeatWorkoutDuration(Number(match[1]));
-                        }
-                      }
+                    <div className="min-w-0 flex-1">
+                      <span id="stage-chips-label" className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-soft">Montar as baterias da</span>
+                      <div role="group" aria-labelledby="stage-chips-label" className="flex flex-wrap gap-2">
+                        {Array.from({ length: heatStageCount }, (_, index) => index + 1).map(number => {
+                          const hasSavedHeats = getStageHeats(savedScheduleItems, number).length > 0;
+                          return (
+                            <button
+                              key={number}
+                              type="button"
+                              aria-pressed={number === stageNumber}
+                              onClick={() => selectedEventToManage && loadHeatStage(selectedEventToManage, number)}
+                              className={`inline-flex min-h-10 items-center gap-1.5 rounded-full border px-4 text-xs font-bold uppercase tracking-wider transition-colors ${
+                                number === stageNumber
+                                  ? 'border-primary bg-primary text-ink'
+                                  : 'border-card-border bg-dark-gray text-muted hover:border-primary/50 hover:text-foreground'
+                              }`}
+                            >
+                              Prova {number}
+                              {hasSavedHeats && <span className={`h-1.5 w-1.5 rounded-full ${number === stageNumber ? 'bg-ink' : 'bg-trading-up'}`} aria-label="com baterias salvas" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
 
-                      const allocations: Record<string, string[]> = {};
-                      let foundCapacity = 5;
-                      let foundCount = 3;
+                  {stageNumber > 0 && (
+                    <>
+                      <div className="max-w-md">
+                        <label htmlFor="heat-stage-title" className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-soft">Nome da prova</label>
+                        <input
+                          id="heat-stage-title"
+                          type="text"
+                          maxLength={60}
+                          value={heatStageTitle}
+                          onChange={(e) => setHeatStageTitle(e.target.value)}
+                          className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-foreground focus:ring-1 focus:ring-primary/50 focus:border-primary/50 focus:outline-none transition-all duration-200"
+                        />
+                      </div>
 
-                      const existingHeats = (selectedEventToManage?.scheduleItems || []).filter(
-                        item => item.kind === 'heat' && item.workoutId === wId
-                      );
-
-                      if (existingHeats.length > 0) {
-                        existingHeats.forEach(item => {
-                          const cap = item.capacity || 6;
-                          const aths = item.athleteIds || [];
-                          allocations[item.id] = Array.from({ length: cap }, (_, idx) => aths[idx] || "");
-                          if (item.capacity) {
-                            foundCapacity = item.capacity;
-                          }
-                        });
-                        foundCount = existingHeats.length;
-
-                        const firstHeat = existingHeats[0];
-                        if (firstHeat.date) setHeatDate(firstHeat.date);
-                        if (firstHeat.time) setHeatStartTime(firstHeat.time);
-                        if (firstHeat.warmupTime && firstHeat.time) {
-                          setHeatWarmupDuration(hhmmToMinutes(firstHeat.time) - hhmmToMinutes(firstHeat.warmupTime));
-                        }
-                        if (firstHeat.checkinTime && firstHeat.time) {
-                          setHeatCheckinDuration(hhmmToMinutes(firstHeat.time) - hhmmToMinutes(firstHeat.checkinTime));
-                        }
-                        if (firstHeat.endTime && firstHeat.time) {
-                          setHeatWorkoutDuration(hhmmToMinutes(firstHeat.endTime) - hhmmToMinutes(firstHeat.time));
-                        }
-                        setHeatCount(foundCount);
-                        setHeatCapacity(foundCapacity);
-                        setHeatAllocations(allocations);
-                      } else {
-                        const initialAllocations: Record<string, string[]> = {};
-                        for (let i = 1; i <= heatCount; i++) {
-                          initialAllocations[`heat-${wId}-${i}`] = Array(heatCapacity).fill("");
-                        }
-                        setHeatAllocations(initialAllocations);
-                      }
-                    }}
-                    className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-foreground focus:ring-1 focus:ring-primary/50 focus:border-primary/50 focus:outline-none transition-all duration-200"
-                  >
-                    <option value="">Selecione...</option>
-                    {workouts.map((w) => {
-                      const divName = (selectedEventToManage?.divisions || []).find(d => d.id === w.divisionId)?.name;
-                      return (
-                        <option key={w.id} value={w.id}>
-                          {w.code} - {w.name}{divName ? ` [${divName}]` : ' [Geral]'}
-                        </option>
-                      );
-                    })}
-                  </select>
+                      <div className="space-y-2">
+                        <div>
+                          <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-soft">Prova de cada categoria</h4>
+                          <p className="mt-0.5 text-[11px] text-muted-soft">Preenchido pela ordem da aba Provas. Cada atleta é arbitrado e pontuado na prova da categoria dele.</p>
+                        </div>
+                        <div className="overflow-x-auto rounded-lg border border-card-border/70">
+                          <table className="w-full min-w-[480px] border-collapse text-left text-xs">
+                            <thead>
+                              <tr className="border-b border-card-border/60 text-[10px] font-bold uppercase tracking-wider text-muted-soft">
+                                <th scope="col" className="px-3 py-2">Categoria</th>
+                                <th scope="col" className="px-3 py-2 text-right">Inscritos</th>
+                                <th scope="col" className="px-3 py-2">Prova nesta etapa</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-card-border/40">
+                              {sortDivisions(eventDivisions).map(division => {
+                                const divisionWorkouts = sortWorkouts(workouts.filter(workout => !workout.divisionId || workout.divisionId === division.id));
+                                const approvedCount = approvedEventAthletes.filter(athlete => athlete.divisionId === division.id).length;
+                                const chosen = heatStageWorkouts[division.id] || '';
+                                return (
+                                  <tr key={division.id}>
+                                    <td className="px-3 py-2 font-semibold text-foreground">{division.name}</td>
+                                    <td className="px-3 py-2 text-right font-number text-muted">{approvedCount}</td>
+                                    <td className="px-3 py-2">
+                                      <select
+                                        aria-label={`Prova de ${division.name} nesta etapa`}
+                                        value={chosen}
+                                        onChange={(e) => {
+                                          const workoutId = e.target.value;
+                                          setHeatStageWorkouts(previous => ({ ...previous, [division.id]: workoutId }));
+                                          if (!workoutId) {
+                                            // Categoria sem prova nesta etapa: os atletas dela saem das raias.
+                                            const divisionAthleteIds = new Set(athletes.filter(athlete => athlete.divisionId === division.id).map(athlete => athlete.id));
+                                            setHeatAllocations(previous => Object.fromEntries(
+                                              Object.entries(previous).map(([key, lanes]) => [key, lanes.map(id => (id && divisionAthleteIds.has(id) ? '' : id))])
+                                            ));
+                                          }
+                                        }}
+                                        className={`min-h-10 w-full min-w-[200px] rounded-md border bg-dark-gray px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary/50 ${chosen ? 'border-card-border text-foreground' : 'border-trading-down/50 text-trading-down'}`}
+                                      >
+                                        <option value="">Sem prova nesta etapa</option>
+                                        {divisionWorkouts.map(workout => (
+                                          <option key={workout.id} value={workout.id}>{workout.code ? `${workout.code} · ` : ''}{workout.name}{workout.divisionId ? '' : ' [Geral]'}</option>
+                                        ))}
+                                      </select>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                        {sortDivisions(eventDivisions).some(division => !heatStageWorkouts[division.id]) && (
+                          <p className="rounded-md border border-trading-down/30 bg-trading-down/10 px-3 py-2 text-[11px] font-semibold text-trading-down">
+                            {sortDivisions(eventDivisions).filter(division => !heatStageWorkouts[division.id]).map(division => division.name).join(', ')}: sem prova nesta etapa. Os atletas dessa categoria não entram nas baterias da Prova {stageNumber}.
+                          </p>
+                        )}
+                        {legacyHeatsReplaced.length > 0 && savedHeatsForWorkout.length === 0 && (
+                          <p role="note" className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] font-semibold text-amber-200">
+                            Estas provas têm baterias no formato antigo (uma categoria por bateria). Elas continuam valendo até você gerar o cronograma aqui, que as substitui por baterias com todas as categorias.
+                          </p>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -7298,7 +7380,7 @@ export default function AdminPage() {
             {/* Distribuição de Competidores */}
             {hasActiveHeatScope && (
               <div className="border-t border-card-border/60 pt-4 space-y-4">
-                {isWorkoutLocked && previousWorkout && (
+                {isWorkoutLocked && previousStageLabel && (
                   <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 flex items-start gap-3 text-amber-200">
                     <svg className="h-5 w-5 shrink-0 text-amber-400 mt-0.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -7306,7 +7388,7 @@ export default function AdminPage() {
                     <div className="space-y-1">
                       <h4 className="text-xs font-bold uppercase tracking-wider font-sans">Criação Bloqueada</h4>
                       <p className="text-xs leading-relaxed text-amber-200/80 font-sans">
-                        Para cadastrar as baterias da prova atual, você deve primeiro criar e salvar o cronograma de baterias da prova anterior: <strong className="text-amber-100 uppercase">&quot;{previousWorkout.code || previousWorkout.name}&quot;</strong>.
+                        Para cadastrar as baterias da prova atual, você deve primeiro criar e salvar o cronograma de baterias da prova anterior: <strong className="text-amber-100 uppercase">&quot;{previousStageLabel}&quot;</strong>.
                       </p>
                     </div>
                   </div>
@@ -7505,9 +7587,14 @@ export default function AdminPage() {
                                         <svg className="h-3.5 w-3.5 text-muted-soft shrink-0" fill="currentColor" viewBox="0 0 24 24">
                                           <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z" />
                                         </svg>
-                                        <span className="font-semibold text-foreground truncate uppercase tracking-wider text-[11px]">
-                                          {athlete.name}
-                                        </span>
+                                        <div className="min-w-0">
+                                          <span className="block truncate font-semibold text-foreground uppercase tracking-wider text-[11px]">
+                                            {athlete.name}
+                                          </span>
+                                          {!isFitnessRacingEvent && (
+                                            <span className="block truncate text-[10px] font-medium text-muted-soft">{getDivisionName(athlete.divisionId)}</span>
+                                          )}
+                                        </div>
                                       </div>
                                       {!isWorkoutLocked && (
                                         <button
@@ -7781,73 +7868,15 @@ export default function AdminPage() {
           {workouts.length === 0 ? (
             <p className="text-xs text-muted text-center py-8">Nenhuma prova cadastrada neste evento.</p>
           ) : (
-            <div className="space-y-4">
-              {sortWorkouts(workouts).map((wod) => {
-                const divLinked = divisions.find(d => d.id === wod.divisionId);
-                return (
-                  <div key={wod.id} className="border border-card-border/60 bg-dark-gray/20 rounded-xl p-4 flex flex-col sm:flex-row justify-between gap-4">
-                    <div className="space-y-1.5">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-[10px] font-bold px-2 py-0.5 bg-primary/20 text-primary border border-primary/30 rounded uppercase tracking-wider font-sans">
-                          {wod.code}
-                        </span>
-                        <h4 className="text-sm font-bold text-white uppercase">{wod.name}</h4>
-                        {divLinked ? (
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 bg-dark-gray text-muted border border-card-border rounded uppercase">
-                            {divLinked.name}
-                          </span>
-                        ) : (
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 bg-dark-gray text-muted border border-card-border rounded uppercase">
-                            Geral
-                          </span>
-                        )}
-                      </div>
-                      <pre className="text-xs font-mono text-muted-soft whitespace-pre-wrap font-sans">
-                        {wod.description}
-                      </pre>
-                      {wod.structure && (
-                        <p className="inline-flex items-center gap-1.5 rounded border border-primary/40 bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary">
-                          Súmula digital · {summarizeStructure(wod.structure)}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="sm:text-right space-y-2 flex flex-col justify-center items-start sm:items-end">
-                      <p className="text-xs font-semibold text-muted uppercase text-[10px]">Pontuação</p>
-                      <span className="text-xs font-bold text-white uppercase">
-                        {getWorkoutScoreTypeLabel(wod.type)}{wod.type === 'fortime' ? ' (Cap: ' + (wod.timeCap || 'Sem limite') + ')' : ''}
-                      </span>
-                      {wod.tieBreaker && (
-                        <p className="text-[9px] text-muted-soft">Desempate: {wod.tieBreaker}</p>
-                      )}
-                      {selectedEventToManage?.eventType === 'functional_fitness_qualifier' && (
-                        <p className="text-[9px] text-primary">Prazo de submissão: {wod.submissionClosesAt ? new Date(wod.submissionClosesAt).toLocaleString('pt-BR', { timeZone: 'America/Fortaleza' }) : 'não configurado'}</p>
-                      )}
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleEditWorkout(wod)}
-                          className="inline-flex min-h-8 items-center gap-1.5 rounded-md border border-card-border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted transition-colors hover:border-primary/60 hover:text-primary"
-                          aria-label={`Editar prova ${wod.name}`}
-                        >
-                          <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
-                          Editar
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => requestDeleteWorkout(wod)}
-                          className="inline-flex min-h-8 items-center gap-1.5 rounded-md border border-card-border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-red-500 transition-colors hover:border-red-500 hover:text-red-400"
-                          aria-label={`Excluir prova ${wod.name}`}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                          Excluir
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            <WorkoutStageList
+              workouts={workouts}
+              divisions={divisions}
+              showSubmissionDeadline={selectedEventToManage?.eventType === 'functional_fitness_qualifier'}
+              getScoreLabel={getWorkoutScoreTypeLabel}
+              onEdit={handleEditWorkout}
+              onDelete={requestDeleteWorkout}
+              onAddMissing={handleAddMissingWorkout}
+            />
           )}
         </div>
       </div>

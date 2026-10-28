@@ -9,6 +9,7 @@ import { buildFitnessRacingCourse, buildFitnessRacingDefaults, normalizeInstagra
 import { mapContestationFromDb } from '@/lib/contestations';
 import { getNextDivisionOrderIndex, sortDivisions } from '@/lib/divisionOrder';
 import { sortWorkouts } from '@/lib/workoutOrder';
+import { stripWorkoutsFromHeats } from '@/lib/heatStages';
 import { computeDivisionStandings, qualifierReviewKey } from '@/lib/leaderboardStandings';
 import { getManagerAccessStatus, normalizeServiceValidUntil } from '@/lib/managerAccess';
 import { rankWorkoutScores } from '@/lib/scoring';
@@ -1412,10 +1413,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     const athleteIds = athletes.filter(a => a.divisionId === divisionId).map(a => a.id);
     const linkedWorkoutIds = event.workouts.filter(w => w.divisionId === divisionId).map(w => w.id);
-    const cleanedSchedule = (event.scheduleItems || []).filter(
-      item => !(item.kind === 'heat' && item.workoutId && linkedWorkoutIds.includes(item.workoutId))
-    );
-    const scheduleChanged = cleanedSchedule.length !== (event.scheduleItems || []).length;
+    // Bateria antiga das provas da categoria sai; bateria da prova do evento perde só as raias dessas provas.
+    const cleanedSchedule = stripWorkoutsFromHeats(event.scheduleItems || [], linkedWorkoutIds);
+    const scheduleChanged = JSON.stringify(cleanedSchedule) !== JSON.stringify(event.scheduleItems || []);
 
     const previousEvents = events;
     const previousAthletes = athletes;
@@ -1505,10 +1505,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     const previousEvents = events;
     const previousScores = scores;
-    const cleanedSchedule = (event.scheduleItems || []).filter(
-      item => !(item.kind === 'heat' && item.workoutId === workoutId)
-    );
-    const scheduleChanged = cleanedSchedule.length !== (event.scheduleItems || []).length;
+    const cleanedSchedule = stripWorkoutsFromHeats(event.scheduleItems || [], [workoutId]);
+    const scheduleChanged = JSON.stringify(cleanedSchedule) !== JSON.stringify(event.scheduleItems || []);
 
     setEvents(prev => prev.map(e => {
       if (e.id !== eventId) return e;

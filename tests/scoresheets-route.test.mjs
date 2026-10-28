@@ -191,9 +191,10 @@ test('quadro do evento: só provas estruturadas, baterias com raias e nomes, sem
   assert.deepEqual(board.body.workouts.map((workout) => workout.id), ['wod-fran', 'wod-total']);
   assert.equal(board.body.heats.length, 1, 'a bateria da prova só com texto fica de fora');
   assert.deepEqual(board.body.heats[0].lanes, [
-    { lane: 1, athleteId: 'ath-caio', athleteName: 'Caio Reis', box: 'Tropa Fit', divisionId: 'div-rx', divisionName: 'RX Masculino' },
-    { lane: 3, athleteId: 'ath-ana', athleteName: 'Ana Souza', box: 'CrossFit Litoral', divisionId: 'div-rx', divisionName: 'RX Masculino' }
+    { lane: 1, athleteId: 'ath-caio', athleteName: 'Caio Reis', box: 'Tropa Fit', divisionId: 'div-rx', divisionName: 'RX Masculino', workoutId: 'wod-fran' },
+    { lane: 3, athleteId: 'ath-ana', athleteName: 'Ana Souza', box: 'CrossFit Litoral', divisionId: 'div-rx', divisionName: 'RX Masculino', workoutId: 'wod-fran' }
   ]);
+  assert.deepEqual(board.body.stages, [], 'sem bateria da prova do evento, não há provas do evento');
   assert.equal(board.body.athletes.length, 3);
   assert.doesNotMatch(JSON.stringify(board.body), /@example\.com/);
 

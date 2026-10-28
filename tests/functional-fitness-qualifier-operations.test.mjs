@@ -7,6 +7,7 @@ const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
 const adminPage = read('../src/app/admin/page.tsx');
 const appContext = read('../src/context/AppContext.tsx');
+const workoutStageList = read('../src/components/admin/WorkoutStageList.tsx');
 const persistenceRoute = read('../src/app/api/admin/persistence/route.ts');
 const judgeAccess = read('../src/lib/serverJudgeAccess.ts');
 const ownerJudgeMigration = read('../supabase/migrations/20260816130000_qualifier_owner_judge_access.sql');
@@ -56,7 +57,9 @@ test('workouts can be edited without recreating them and nullable fields can be 
   assert.match(adminPage, /await updateWorkout\(selectedEventToManage\.id, editingWorkoutId, workoutChanges\)/);
   assert.match(adminPage, /Salvar Alterações/);
   assert.match(adminPage, /onClick=\{resetWorkoutForm\}/);
-  assert.match(adminPage, /aria-label=\{`Editar prova \$\{wod\.name\}`\}/);
+  // Story 1.91: a lista é um componente; o botão diz a prova e a categoria.
+  assert.match(adminPage, /onEdit=\{handleEditWorkout\}/);
+  assert.match(workoutStageList, /aria-label=\{`Editar prova \$\{describedAs\}`\}/);
   assert.match(appContext, /Object\.hasOwn\(updatedData, 'timeCap'\)/);
   assert.match(appContext, /Object\.hasOwn\(updatedData, 'divisionId'\)/);
   assert.match(appContext, /Object\.hasOwn\(updatedData, 'submissionClosesAt'\)/);

@@ -1,0 +1,745 @@
+<title>Provas Cadastradas por Categoria</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@500;600;700&display=swap">
+<style>
+/* Layout: página de decisão de leitura linear; simulador com as 4 versões da lista no tamanho real da coluna do painel. Tokens = src/app/globals.css (painel do gestor, tema escuro único). */
+:root {
+  --background: #0b0e11;
+  --foreground: #eaecef;
+  --card: #1e2329;
+  --card-border: #2b3139;
+  --primary: #fcd535;
+  --primary-hover: #f0b90b;
+  --muted: #929aa5;
+  --muted-soft: #707a8a;
+  --dark-gray: #181a20;
+  --elevated: #2b3139;
+  --ink: #181a20;
+  --up: #0ecb81;
+  --down: #f6465d;
+  --info: #3b82f6;
+  --primary-10: rgba(252, 213, 53, .10);
+  --primary-20: rgba(252, 213, 53, .20);
+  --primary-30: rgba(252, 213, 53, .30);
+  --primary-40: rgba(252, 213, 53, .40);
+  --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-number: "IBM Plex Sans", ui-monospace, SFMono-Regular, Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.55;
+}
+.wrap {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 40px 72px;
+  display: flex;
+  flex-direction: column;
+  gap: 56px;
+}
+h1, h2, h3, h4 { margin: 0; text-wrap: balance; }
+p { margin: 0; }
+.eyebrow {
+  font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--primary);
+}
+.lede { max-width: 66ch; color: var(--muted); font-size: 15px; }
+header.top { display: flex; flex-direction: column; gap: 14px; }
+header.top h1 { font-size: clamp(26px, 4vw, 38px); font-weight: 800; letter-spacing: -.02em; line-height: 1.1; }
+.stamp { display: flex; flex-wrap: wrap; gap: 8px; }
+.tag {
+  font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  border: 1px solid var(--card-border); color: var(--muted); border-radius: 4px; padding: 3px 8px;
+}
+.tag.warn { color: var(--primary); border-color: var(--primary-30); background: var(--primary-10); }
+
+section.block { display: flex; flex-direction: column; gap: 20px; }
+section.block > h2 { font-size: 20px; font-weight: 800; letter-spacing: -.01em; }
+section.block > .lede { margin-top: -10px; }
+
+/* Diagnóstico */
+.findings { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 1px; background: var(--card-border); border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden; }
+.finding { background: var(--card); padding: 18px 20px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.finding h3 { font-size: 14px; font-weight: 700; }
+.finding p { color: var(--muted); font-size: 13px; }
+.finding code { font-family: var(--font-number); font-size: 12px; color: var(--foreground); background: var(--dark-gray); border: 1px solid var(--card-border); border-radius: 4px; padding: 0 4px; }
+.sev { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted-soft); }
+.sev.hi { color: var(--primary); }
+
+/* Simulador */
+.sim-controls { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: flex-end; justify-content: space-between; }
+.seg { display: inline-flex; flex-wrap: wrap; gap: 4px; padding: 4px; background: var(--dark-gray); border: 1px solid var(--card-border); border-radius: 8px; }
+.seg button {
+  font: inherit; font-size: 12px; font-weight: 700; color: var(--muted); background: transparent; border: 0; border-radius: 6px;
+  padding: 8px 12px; min-height: 36px; cursor: pointer; text-align: left;
+}
+.seg button:hover { color: var(--foreground); }
+.seg button[aria-pressed="true"] { background: var(--primary); color: var(--ink); }
+.seg button:focus-visible, button:focus-visible, .chip:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.ctl-label { font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted-soft); margin-bottom: 6px; }
+.view-note { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: baseline; justify-content: space-between; }
+.view-note p { color: var(--muted); font-size: 13px; max-width: 70ch; }
+.meter { font-family: var(--font-number); font-size: 12px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.meter b { color: var(--foreground); font-weight: 600; }
+
+/* Moldura do painel */
+.panel {
+  background: var(--card); border: 1px solid var(--card-border); border-radius: 12px; padding: 24px;
+  display: flex; flex-direction: column; gap: 16px; max-width: 760px; width: 100%;
+}
+.panel-head { border-bottom: 1px solid var(--card-border); padding-bottom: 12px; display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; align-items: flex-end; }
+.panel-head h3 { font-size: 16px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+.panel-head p { font-size: 12px; color: var(--muted); font-weight: 500; }
+.panel-scroll { max-height: 680px; overflow-y: auto; overscroll-behavior: contain; margin-right: -8px; padding-right: 8px; }
+.panel-scroll::-webkit-scrollbar { width: 8px; }
+.panel-scroll::-webkit-scrollbar-thumb { background: var(--elevated); border-radius: 8px; }
+.sim-stage { display: flex; gap: 24px; align-items: flex-start; }
+.ghost-form {
+  flex: 0 0 240px; border: 1px dashed var(--card-border); border-radius: 12px; padding: 20px; color: var(--muted-soft);
+  font-size: 12px; display: flex; flex-direction: column; gap: 10px;
+}
+.ghost-form .gl { height: 34px; border-radius: 6px; background: var(--dark-gray); border: 1px solid var(--card-border); }
+.ghost-form .gl.hl { border-color: var(--primary-40); }
+.ghost-form small { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+@media (max-width: 900px) { .ghost-form { display: none; } }
+@media (max-width: 520px) { .panel { padding: 16px; } }
+
+/* Peças comuns das maquetes */
+.code {
+  font-size: 10px; font-weight: 700; padding: 2px 8px; background: var(--primary-20); color: var(--primary);
+  border: 1px solid var(--primary-30); border-radius: 4px; text-transform: uppercase; letter-spacing: .08em; white-space: nowrap;
+}
+.divtag { font-size: 9px; font-weight: 700; padding: 2px 6px; background: var(--dark-gray); color: var(--muted); border: 1px solid var(--card-border); border-radius: 4px; text-transform: uppercase; }
+.sumula { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--primary-40); background: var(--primary-10); color: var(--primary); border-radius: 4px; padding: 2px 8px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+.sumula-dot { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
+.sumula-dot::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--primary); }
+.btn {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 32px; border: 1px solid var(--card-border); border-radius: 6px;
+  padding: 6px 12px; font: inherit; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted);
+  background: transparent; cursor: pointer; white-space: nowrap;
+}
+.btn:hover { border-color: var(--primary-40); color: var(--primary); }
+.btn.del { color: var(--down); }
+.btn.del:hover { border-color: var(--down); }
+.btn svg { width: 14px; height: 14px; flex: none; }
+.ibtn { width: 32px; height: 32px; padding: 0; justify-content: center; }
+.lnk { background: none; border: 0; padding: 4px 0; font: inherit; font-size: 11px; font-weight: 600; color: var(--muted); cursor: pointer; text-decoration: underline; text-decoration-color: var(--card-border); text-underline-offset: 3px; white-space: nowrap; }
+.lnk:hover { color: var(--foreground); }
+.lnk.add { color: var(--primary); text-decoration-color: var(--primary-40); }
+pre.desc { margin: 0; font-family: var(--font-body); font-size: 12px; color: var(--muted-soft); white-space: pre-wrap; }
+.fmt { font-size: 12px; font-weight: 700; color: var(--foreground); text-transform: uppercase; white-space: nowrap; }
+.fmt span { color: var(--muted); font-weight: 600; }
+
+/* HOJE */
+.today { display: flex; flex-direction: column; gap: 16px; }
+.tcard { border: 1px solid rgba(43, 49, 57, .6); background: rgba(24, 26, 32, .2); border-radius: 12px; padding: 16px; display: flex; gap: 16px; justify-content: space-between; }
+.tcard .l { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.tcard .hd { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.tcard h4 { font-size: 14px; font-weight: 700; text-transform: uppercase; }
+.tcard .r { display: flex; flex-direction: column; gap: 8px; align-items: flex-end; justify-content: center; text-align: right; flex: none; }
+.tcard .r small { font-size: 10px; font-weight: 600; color: var(--muted); text-transform: uppercase; }
+.tcard .r .acts { display: flex; gap: 8px; }
+@media (max-width: 560px) { .tcard { flex-direction: column; } .tcard .r { align-items: flex-start; text-align: left; } }
+
+/* A: por categoria */
+.chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
+.chip {
+  flex: none; font: inherit; font-size: 11px; font-weight: 700; color: var(--muted); background: var(--dark-gray); border: 1px solid var(--card-border);
+  border-radius: 999px; padding: 6px 12px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; min-height: 32px;
+}
+.chip b { font-family: var(--font-number); font-weight: 600; color: var(--muted-soft); font-variant-numeric: tabular-nums; }
+.chip[aria-pressed="true"] { color: var(--ink); background: var(--primary); border-color: var(--primary); }
+.chip[aria-pressed="true"] b { color: var(--ink); }
+.toolbar { display: flex; flex-direction: column; gap: 10px; }
+.toolbar .tline { display: flex; justify-content: space-between; gap: 12px; align-items: center; flex-wrap: wrap; }
+.groups { display: flex; flex-direction: column; gap: 12px; }
+.grp { border: 1px solid var(--card-border); border-radius: 10px; overflow: hidden; }
+.grp-head {
+  width: 100%; display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: var(--dark-gray); border: 0; color: var(--foreground);
+  font: inherit; cursor: pointer; text-align: left; min-height: 48px;
+}
+.grp-head .chev { width: 16px; height: 16px; color: var(--muted); transition: transform .18s ease; flex: none; }
+.grp-head[aria-expanded="false"] .chev { transform: rotate(-90deg); }
+.grp-head .gname { font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; flex: 1; min-width: 0; }
+.grp-head .gcount { font-family: var(--font-number); font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.grp-head .gnote { font-size: 10px; color: var(--muted-soft); font-weight: 600; }
+.rows { list-style: none; margin: 0; padding: 0; }
+.row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px 16px; align-items: center; padding: 10px 14px; border-top: 1px solid var(--card-border); }
+.row:first-child { border-top: 0; }
+.rows-under-head .row:first-child { border-top: 1px solid var(--card-border); }
+.row .id { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+.row .id .nm { font-size: 13px; font-weight: 700; text-transform: uppercase; }
+.row .meta { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
+.row .acts { display: flex; gap: 6px; align-items: center; }
+.row pre.desc { grid-column: 1 / -1; background: var(--dark-gray); border: 1px solid var(--card-border); border-radius: 6px; padding: 10px 12px; }
+.row .tb { font-size: 10px; color: var(--muted-soft); }
+@media (max-width: 620px) {
+  .row { grid-template-columns: minmax(0, 1fr) auto; }
+  .row .meta { grid-column: 1 / -1; grid-row: 2; justify-content: flex-start; }
+}
+
+/* B: por prova do evento */
+.stage { border: 1px solid var(--card-border); border-radius: 10px; overflow: hidden; }
+.stage-head { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; padding: 12px 14px; background: var(--dark-gray); border-bottom: 1px solid var(--card-border); }
+.stage-head .sname { font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
+.stage-head .sub { font-size: 12px; color: var(--muted); }
+.stage-head .cov { margin-left: auto; font-family: var(--font-number); font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.stage-head .cov.full { color: var(--up); }
+.srow { display: grid; grid-template-columns: minmax(150px, 1.2fr) minmax(0, 1fr) auto; gap: 6px 16px; align-items: center; padding: 10px 14px; border-top: 1px solid var(--card-border); }
+.stage .srow:first-of-type { border-top: 0; }
+.srow .cat { font-size: 13px; font-weight: 700; color: var(--foreground); }
+.srow .cat small { display: block; font-size: 11px; font-weight: 500; color: var(--muted-soft); text-transform: uppercase; letter-spacing: .02em; }
+.srow .meta { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.srow .acts { display: flex; gap: 6px; align-items: center; justify-content: flex-end; }
+.srow pre.desc { grid-column: 1 / -1; background: var(--dark-gray); border: 1px solid var(--card-border); border-radius: 6px; padding: 10px 12px; }
+.gap-line { padding: 10px 14px; border-top: 1px dashed var(--card-border); font-size: 12px; color: var(--muted-soft); display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.gap-line strong { color: var(--muted); font-weight: 700; }
+.stage-rule { font-size: 11px; color: var(--muted-soft); }
+@media (max-width: 620px) {
+  .srow { grid-template-columns: minmax(0, 1fr) auto; }
+  .srow .meta { grid-column: 1 / -1; grid-row: 2; }
+}
+
+/* C: matriz */
+.mx-wrap { overflow-x: auto; border: 1px solid var(--card-border); border-radius: 10px; }
+table.mx { border-collapse: separate; border-spacing: 0; width: 100%; min-width: 560px; }
+table.mx th, table.mx td { border-bottom: 1px solid var(--card-border); border-right: 1px solid var(--card-border); padding: 0; text-align: left; vertical-align: top; }
+table.mx tr > *:last-child { border-right: 0; }
+table.mx tbody tr:last-child > * { border-bottom: 0; }
+table.mx thead th { background: var(--dark-gray); padding: 10px 12px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
+table.mx thead th small { display: block; font-size: 10px; font-weight: 600; color: var(--muted-soft); letter-spacing: .02em; }
+table.mx tbody th { position: sticky; left: 0; z-index: 1; background: var(--card); padding: 10px 12px; font-size: 12px; font-weight: 700; min-width: 150px; }
+table.mx thead th:first-child { position: sticky; left: 0; z-index: 2; }
+.cell {
+  width: 100%; min-height: 58px; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; justify-content: center; padding: 8px 12px;
+  background: transparent; border: 0; color: var(--foreground); font: inherit; cursor: pointer; text-align: left;
+}
+.cell:hover { background: rgba(43, 49, 57, .5); }
+.cell[aria-pressed="true"] { background: var(--primary-10); box-shadow: inset 0 0 0 1px var(--primary-40); }
+.cell .f { font-size: 11px; font-weight: 700; text-transform: uppercase; white-space: nowrap; }
+.cell .f span { color: var(--muted); }
+.cell.empty { color: var(--muted-soft); font-size: 11px; font-weight: 600; align-items: center; }
+.cell.empty span { border: 1px dashed var(--card-border); border-radius: 6px; padding: 4px 10px; }
+.cell.empty:hover span { border-color: var(--primary-40); color: var(--primary); }
+.detail { border: 1px solid var(--card-border); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 10px; background: rgba(24, 26, 32, .4); }
+.detail .dh { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.detail .dh h4 { font-size: 14px; font-weight: 700; text-transform: uppercase; }
+.detail .dm { display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: 12px; color: var(--muted); }
+.detail .dm b { color: var(--foreground); }
+.detail .acts { display: flex; gap: 8px; }
+.mx-mobile-note { font-size: 11px; color: var(--muted-soft); }
+
+/* Comparação */
+.cmp-wrap { overflow-x: auto; border: 1px solid var(--card-border); border-radius: 12px; }
+table.cmp { border-collapse: collapse; width: 100%; min-width: 640px; font-size: 13px; }
+table.cmp th, table.cmp td { padding: 12px 14px; border-bottom: 1px solid var(--card-border); text-align: left; vertical-align: top; }
+table.cmp thead th { background: var(--dark-gray); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+table.cmp thead th.rec { color: var(--primary); }
+table.cmp tbody th { font-weight: 600; color: var(--muted); width: 26%; }
+table.cmp tbody tr:last-child > * { border-bottom: 0; }
+.good { color: var(--up); font-weight: 700; }
+.mid { color: var(--foreground); font-weight: 700; }
+.weak { color: var(--down); font-weight: 700; }
+td small { display: block; color: var(--muted-soft); font-size: 12px; margin-top: 2px; }
+
+/* Recomendação e decisões */
+.rec-box { border: 1px solid var(--primary-40); background: var(--primary-10); border-radius: 12px; padding: 20px 22px; display: flex; flex-direction: column; gap: 8px; }
+.rec-box h3 { font-size: 16px; font-weight: 800; color: var(--primary); }
+.rec-box p { color: var(--foreground); max-width: 72ch; }
+.decisions { list-style: none; margin: 0; padding: 0; border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden; }
+.decisions li { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 4px 12px; padding: 16px 18px; border-top: 1px solid var(--card-border); background: var(--card); }
+.decisions li:first-child { border-top: 0; }
+.decisions .did { font-family: var(--font-number); font-weight: 700; color: var(--primary); font-size: 13px; }
+.decisions h4 { font-size: 14px; font-weight: 700; }
+.decisions p { grid-column: 2; color: var(--muted); font-size: 13px; max-width: 72ch; }
+.decisions .pick { grid-column: 2; font-size: 12px; color: var(--foreground); }
+.decisions .pick b { color: var(--primary); }
+.scope { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.scope > div { border: 1px solid var(--card-border); border-radius: 12px; padding: 18px 20px; background: var(--card); display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.scope h3 { font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+.scope ul { margin: 0; padding-left: 18px; color: var(--muted); font-size: 13px; display: flex; flex-direction: column; gap: 6px; }
+.scope code { font-family: var(--font-number); font-size: 12px; color: var(--foreground); overflow-wrap: anywhere; }
+footer.end { color: var(--muted-soft); font-size: 12px; border-top: 1px solid var(--card-border); padding-top: 16px; }
+@media (prefers-reduced-motion: reduce) { .grp-head .chev { transition: none; } }
+</style>
+
+<div class="wrap">
+
+<header class="top">
+  <span class="eyebrow">Painel do gestor · aba Provas</span>
+  <h1>Provas cadastradas: três jeitos de organizar a lista</h1>
+  <p class="lede">Quando o gestor cadastra a mesma prova para várias categorias, a lista "Provas WODs Cadastradas" vira uma pilha de cartões quase iguais. Esta página mostra o diagnóstico, três opções lado a lado com dados de exemplo e o que precisa ser decidido antes de qualquer código.</p>
+  <div class="stamp">
+    <span class="tag warn">Aguardando aprovação</span>
+    <span class="tag">Só frontend</span>
+    <span class="tag">Sem banco, API, autenticação ou infra</span>
+    <span class="tag">27/10/2026</span>
+  </div>
+</header>
+
+<section class="block" aria-labelledby="h-diag">
+  <h2 id="h-diag">Diagnóstico</h2>
+  <p class="lede">Lido em <code style="font-family:var(--font-number);font-size:12px">src/app/admin/page.tsx</code> (linhas 7847–7925), no HTML que você colou e nas regras de ordem das provas.</p>
+  <div class="findings">
+    <article class="finding">
+      <span class="sev hi">Principal</span>
+      <h3>A categoria é o menor texto do cartão</h3>
+      <p>O único dado que diferencia "PROVA 1" de "PROVA 1" é a categoria, e ela aparece em 9px, cinza, depois do nome. O olho pega o código amarelo, que é igual em todos.</p>
+    </article>
+    <article class="finding">
+      <span class="sev hi">Principal</span>
+      <h3>Lista corrida, sem agrupamento</h3>
+      <p>As provas saem em uma fila única pela ordem (<code>sortWorkouts</code>). Com ordem igual, as categorias ficam intercaladas: Prova 1 Rx, Prova 1 Scaled, Prova 2 Rx… Não dá para ver uma categoria inteira de uma vez.</p>
+    </article>
+    <article class="finding">
+      <span class="sev">Volume</span>
+      <h3>Cada cartão mostra tudo, sempre</h3>
+      <p>Descrição completa, pontuação, desempate e dois botões em todo cartão. Com 6 categorias e 3–4 provas são ~19 cartões altos; o formulário de cadastro, ao lado, fica para trás na rolagem.</p>
+    </article>
+    <article class="finding">
+      <span class="sev">Ruído</span>
+      <h3>O mesmo texto repetido três vezes</h3>
+      <p>No seu evento, código, nome e descrição são "PROVA 1". O cartão escreve "PROVA 1 · PROVA 1 · PROVA 1" e não informa nada novo.</p>
+    </article>
+    <article class="finding">
+      <span class="sev">Lacuna</span>
+      <h3>Não dá para ver o que falta cadastrar</h3>
+      <p>O construtor de baterias trata a 1ª prova de cada categoria como "Prova 1 do evento", a 2ª como "Prova 2", e assim por diante (<code>getDivisionWorkoutsInOrder</code>). A lista não mostra essa numeração, então uma categoria sem a Prova 3 passa despercebida.</p>
+    </article>
+    <article class="finding">
+      <span class="sev">Acessibilidade</span>
+      <h3>Botões com o mesmo nome</h3>
+      <p>O leitor de tela anuncia "Editar prova PROVA 1" para as duas categorias; não há como saber qual será editada. O teste <code>functional-fitness-qualifier-operations</code> fixa esse texto e muda junto.</p>
+    </article>
+  </div>
+</section>
+
+<section class="block" aria-labelledby="h-sim">
+  <h2 id="h-sim">Simulador</h2>
+  <p class="lede">Troque a versão e o volume de dados. A maquete usa as cores e fontes do painel e tem a largura real da coluna da lista. Os botões Editar e Excluir não fazem nada aqui.</p>
+
+  <div class="sim-controls">
+    <div>
+      <div class="ctl-label" id="lbl-view">Versão</div>
+      <div class="seg" role="group" aria-labelledby="lbl-view" id="view-seg">
+        <button type="button" data-view="today" aria-pressed="false">Hoje</button>
+        <button type="button" data-view="a" aria-pressed="false">A · Por categoria</button>
+        <button type="button" data-view="b" aria-pressed="true">B · Por prova do evento</button>
+        <button type="button" data-view="c" aria-pressed="false">C · Grade</button>
+      </div>
+    </div>
+    <div>
+      <div class="ctl-label" id="lbl-data">Dados de exemplo</div>
+      <div class="seg" role="group" aria-labelledby="lbl-data" id="data-seg">
+        <button type="button" data-set="small" aria-pressed="false">Como o seu (2 categorias)</button>
+        <button type="button" data-set="full" aria-pressed="true">Evento cheio (6 categorias)</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="view-note">
+    <p id="view-desc"></p>
+    <span class="meter" id="meter" aria-live="polite"></span>
+  </div>
+
+  <div class="sim-stage">
+    <div class="ghost-form" aria-hidden="true">
+      <small>Formulário de cadastro (sem mudança)</small>
+      <div class="gl"></div><div class="gl"></div><div class="gl" id="ghost-cat"></div><div class="gl"></div>
+      <div class="gl" style="height:84px"></div>
+      <div class="gl" style="background:var(--primary);border-color:var(--primary);opacity:.85"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <h3>Provas WODs Cadastradas</h3>
+          <p id="panel-sub">Todas as provas cadastradas para este evento.</p>
+        </div>
+      </div>
+      <div class="panel-scroll" id="panel-scroll">
+        <div id="mock"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="block" aria-labelledby="h-cmp">
+  <h2 id="h-cmp">Comparação</h2>
+  <div class="cmp-wrap">
+    <table class="cmp">
+      <thead>
+        <tr><th scope="col">Critério</th><th scope="col">A · Por categoria</th><th scope="col" class="rec">B · Por prova do evento</th><th scope="col">C · Grade</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <th scope="row">Achar a prova de uma categoria</th>
+          <td><span class="good">Rápido</span><small>Filtro por categoria e seção recolhível.</small></td>
+          <td><span class="mid">Bom</span><small>A categoria vira o título de cada linha.</small></td>
+          <td><span class="good">Rápido</span><small>Cruzamento linha × coluna.</small></td>
+        </tr>
+        <tr>
+          <th scope="row">Ver o que falta cadastrar</th>
+          <td><span class="weak">Não mostra</span><small>Só a contagem por categoria.</small></td>
+          <td><span class="good">Mostra</span><small>"Sem prova 3: …" com atalho para cadastrar.</small></td>
+          <td><span class="good">Mostra</span><small>Célula vazia na grade.</small></td>
+        </tr>
+        <tr>
+          <th scope="row">Fala a mesma língua do construtor de baterias</th>
+          <td><span class="weak">Não</span><small>Agrupa por categoria; a numeração do evento continua escondida.</small></td>
+          <td><span class="good">Sim</span><small>Mesma regra: a 1ª prova de cada categoria é a Prova 1.</small></td>
+          <td><span class="good">Sim</span><small>As colunas são as provas do evento.</small></td>
+        </tr>
+        <tr>
+          <th scope="row">Celular</th>
+          <td><span class="good">Bom</span><small>Lista empilhada.</small></td>
+          <td><span class="good">Bom</span><small>Lista empilhada.</small></td>
+          <td><span class="weak">Fraco</span><small>Rolagem lateral a partir de 3 provas.</small></td>
+        </tr>
+        <tr>
+          <th scope="row">Categorias com provas totalmente diferentes</th>
+          <td><span class="good">Bom</span></td>
+          <td><span class="mid">Funciona</span><small>Cada linha mostra o nome da sua prova.</small></td>
+          <td><span class="mid">Funciona</span><small>Cabeçalho da coluna perde o nome comum.</small></td>
+        </tr>
+        <tr>
+          <th scope="row">Tamanho da mudança</th>
+          <td><span class="good">Pequeno</span></td>
+          <td><span class="mid">Médio</span><small>Reaproveita a regra pura do construtor.</small></td>
+          <td><span class="weak">Maior</span><small>Grade + painel de detalhe + versão de celular.</small></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="block" aria-labelledby="h-rec">
+  <h2 id="h-rec">Recomendação e decisões</h2>
+  <div class="rec-box">
+    <h3>Recomendo a opção B, por prova do evento</h3>
+    <p>A bagunça vem de a mesma prova aparecer uma vez por categoria. A opção B junta essas repetições sob um único título ("PROVA 1 · 6 de 6 categorias") e transforma a categoria no nome de cada linha. Também mostra o que falta, com a mesma numeração que o construtor de baterias já usa, então o gestor vê na aba Provas exatamente como as baterias vão se montar. A opção A é a alternativa segura se os seus eventos costumam ter provas diferentes por categoria.</p>
+  </div>
+  <ol class="decisions">
+    <li>
+      <span class="did">D1</span>
+      <h4>Qual organização</h4>
+      <p>A (por categoria), B (por prova do evento) ou C (grade).</p>
+      <span class="pick">Sugestão: <b>B</b></span>
+    </li>
+    <li>
+      <span class="did">D2</span>
+      <h4>Descrição dos movimentos recolhida</h4>
+      <p>A descrição deixa de aparecer em todo cartão e abre por linha em "Movimentos". Desempate, prazo de submissão (Qualifier) e súmula digital continuam visíveis.</p>
+      <span class="pick">Sugestão: <b>recolher</b></span>
+    </li>
+    <li>
+      <span class="did">D3</span>
+      <h4>Nome igual ao código aparece uma vez</h4>
+      <p>Quando nome e código são iguais ("PROVA 1" e "PROVA 1"), só o código aparece. Nada é apagado do cadastro; é só exibição.</p>
+      <span class="pick">Sugestão: <b>sim</b></span>
+    </li>
+    <li>
+      <span class="did">D4</span>
+      <h4>Botões dizem a categoria</h4>
+      <p>O texto para leitor de tela passa a ser "Editar prova PROVA 1 · Dupla Rx Masculino". O teste estático que fixa o texto antigo é ajustado junto.</p>
+      <span class="pick">Sugestão: <b>sim</b></span>
+    </li>
+    <li>
+      <span class="did">D5</span>
+      <h4>Atalho "Cadastrar" nas lacunas (B e C)</h4>
+      <p>Clicar em "cadastrar" numa lacuna só preenche o formulário ao lado com a categoria e a ordem; o gestor ainda revisa e salva. Sem essa opção, a lacuna aparece apenas como aviso.</p>
+      <span class="pick">Sugestão: <b>preencher o formulário</b></span>
+    </li>
+    <li>
+      <span class="did">D6</span>
+      <h4>Prova "Geral" (todas as categorias)</h4>
+      <p>Na A, ganha uma seção própria no topo, "Geral · vale para todas". Na B e na C, entra na posição dela em todas as categorias, como o construtor faz, e aparece como uma linha só: "Todas as categorias".</p>
+      <span class="pick">Sugestão: <b>seguir a regra do construtor</b></span>
+    </li>
+  </ol>
+</section>
+
+<section class="block" aria-labelledby="h-scope">
+  <h2 id="h-scope">Escopo depois da aprovação</h2>
+  <div class="scope">
+    <div>
+      <h3>Muda</h3>
+      <ul>
+        <li>O bloco da lista em <code>src/app/admin/page.tsx</code> (7847–7925), provavelmente extraído para um componente próprio.</li>
+        <li>Agrupamento em função pura, com teste <code>node --test</code>, reaproveitando <code>getDivisionWorkoutsInOrder</code>.</li>
+        <li>Texto de acessibilidade dos botões e o teste que o fixa.</li>
+        <li>Uma story nova (1.91) citando esta maquete, copiada para <code>docs/design/provas-cadastradas/</code>.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Não muda</h3>
+      <ul>
+        <li>Banco, migrations, API, autenticação, infraestrutura.</li>
+        <li>O formulário de cadastro e edição, e o modal de exclusão.</li>
+        <li>A ordem das provas (<code>orderIndex</code>), o ranking, a súmula e o construtor de baterias.</li>
+        <li>As telas públicas do evento.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<footer class="end">Nenhum arquivo do projeto foi alterado. A implementação começa só depois da sua escolha em D1–D6.</footer>
+</div>
+
+<script>
+(function () {
+  var ICON_EDIT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg>';
+  var ICON_DEL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+  var ICON_CHEV = '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+
+  var LABELS = { fortime: 'Tempo', amrap: 'AMRAP', reps: 'Repetições', maxweight: 'Peso', distance: 'Distância', tonnage: 'Tonelagem', points: 'Pontos' };
+
+  // Dados de exemplo
+  var SMALL = {
+    divisions: [
+      { id: 'rxm', name: 'Dupla Rx Masculino' },
+      { id: 'scm', name: 'Dupla Scaled Masculino' }
+    ],
+    workouts: [
+      { id: 'a1', code: 'PROVA 1', name: 'PROVA 1', desc: 'PROVA 1', type: 'fortime', cap: '12:00', div: 'rxm', order: 1 },
+      { id: 'a2', code: 'PROVA 1', name: 'PROVA 1', desc: 'PROVA 1', type: 'fortime', cap: '12:00', div: 'scm', order: 1 },
+      { id: 'a3', code: 'PROVA 2', name: 'PROVA 2', desc: 'PROVA 2', type: 'amrap', cap: '10:00', div: 'rxm', order: 2 },
+      { id: 'a4', code: 'PROVA 2', name: 'PROVA 2', desc: 'PROVA 2', type: 'amrap', cap: '10:00', div: 'scm', order: 2 }
+    ]
+  };
+
+  var FULL_DIVS = [
+    { id: 'rxm', name: 'Dupla Rx Masculino', tier: 'rx' },
+    { id: 'rxf', name: 'Dupla Rx Feminino', tier: 'rx' },
+    { id: 'scm', name: 'Dupla Scaled Masculino', tier: 'sc' },
+    { id: 'scf', name: 'Dupla Scaled Feminino', tier: 'sc' },
+    { id: 'ini', name: 'Dupla Iniciante Mista', tier: 'ini' },
+    { id: 'ma', name: 'Dupla Master 35+ Mista', tier: 'ma' }
+  ];
+  var DESC = {
+    1: { rx: '21-15-9 sincronizado\nThruster 43/30 kg\nChest-to-bar pull-up', sc: '21-15-9 sincronizado\nThruster 30/20 kg\nJumping pull-up', ini: '15-12-9\nThruster com halteres 15/10 kg\nRing row', ma: '21-15-9\nThruster 35/25 kg\nPull-up' },
+    2: { rx: 'AMRAP 10 min\n10 toes-to-bar\n15 cal remo\n20 wall ball 9/6 kg', sc: 'AMRAP 10 min\n10 hanging knee raise\n15 cal remo\n20 wall ball 6/4 kg', ini: 'AMRAP 10 min\n10 sit-up\n12 cal remo\n15 wall ball 4/3 kg', ma: 'AMRAP 10 min\n10 toes-to-bar\n15 cal remo\n20 wall ball 6/4 kg' },
+    3: { rx: '1RM clean & jerk (cada atleta)\n6 min', sc: '1RM power clean (cada atleta)\n6 min', ma: '1RM power clean (cada atleta)\n6 min' },
+    4: { rx: 'Final: 3 rounds\n400 m corrida\n12 bar muscle-up sincronizado\n9 deadlift 120/80 kg' }
+  };
+  var STAGES = [
+    { n: 1, name: 'Sincronia', type: 'fortime', cap: '12:00', tb: 'Tempo', sumula: 'For Time · cap 12:00' },
+    { n: 2, name: 'Barra e Remo', type: 'amrap', cap: '10:00', tb: '', sumula: 'AMRAP · 10 min' },
+    { n: 3, name: 'LPO', type: 'maxweight', cap: '', tb: '', sumula: '' },
+    { n: 4, name: 'Final', type: 'fortime', cap: '08:00', tb: 'Tempo', sumula: 'For Time · cap 08:00' }
+  ];
+  var FULL = { divisions: FULL_DIVS, workouts: [] };
+  STAGES.forEach(function (s) {
+    FULL_DIVS.forEach(function (d) {
+      var text = DESC[s.n][d.tier];
+      if (!text) return;
+      FULL.workouts.push({ id: 'p' + s.n + '-' + d.id, code: 'PROVA ' + s.n, name: s.name, desc: text, type: s.type, cap: s.cap, div: d.id, order: s.n, tb: s.tb, sumula: s.sumula });
+    });
+  });
+
+  // Mesma regra do app: orderIndex, código, nome, id
+  var collator = new Intl.Collator('pt-BR', { numeric: true, sensitivity: 'base' });
+  function sortWorkouts(list) {
+    return list.slice().sort(function (a, b) {
+      return (a.order - b.order) || collator.compare(a.code, b.code) || collator.compare(a.name, b.name) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+    });
+  }
+  function divisionWorkouts(data, divId) {
+    return sortWorkouts(data.workouts.filter(function (w) { return !w.div || w.div === divId; }));
+  }
+
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function divName(data, id) { var d = data.divisions.find(function (x) { return x.id === id; }); return d ? d.name : 'Geral'; }
+  function fmt(w) { return '<span class="fmt">' + LABELS[w.type] + (w.type === 'fortime' ? ' <span>· cap ' + (w.cap || 'sem limite') + '</span>' : '') + '</span>'; }
+  function showName(w) { return w.name && w.name.toLowerCase() !== w.code.toLowerCase(); }
+  function actions(w, data, withDescToggle) {
+    var label = esc(w.code + (showName(w) ? ' ' + w.name : '') + ' · ' + divName(data, w.div));
+    return (withDescToggle ? '<button type="button" class="lnk" data-desc="' + w.id + '" aria-expanded="false" aria-controls="d-' + w.id + '">Movimentos</button>' : '') +
+      '<button type="button" class="btn ibtn" aria-label="Editar prova ' + label + '" title="Editar">' + ICON_EDIT + '</button>' +
+      '<button type="button" class="btn ibtn del" aria-label="Excluir prova ' + label + '" title="Excluir">' + ICON_DEL + '</button>';
+  }
+  function descBlock(w) { return '<pre class="desc" id="d-' + w.id + '" hidden>' + esc(w.desc) + '</pre>'; }
+
+  // HOJE: reprodução fiel do cartão atual
+  function renderToday(data) {
+    return '<div class="today">' + sortWorkouts(data.workouts).map(function (w) {
+      return '<div class="tcard"><div class="l"><div class="hd"><span class="code">' + esc(w.code) + '</span><h4>' + esc(w.name) + '</h4><span class="divtag">' + esc(divName(data, w.div)) + '</span></div>' +
+        '<pre class="desc">' + esc(w.desc) + '</pre>' +
+        (w.sumula ? '<p><span class="sumula">Súmula digital · ' + esc(w.sumula) + '</span></p>' : '') +
+        '</div><div class="r"><small>Pontuação</small><span class="fmt">' + LABELS[w.type] + (w.type === 'fortime' ? ' (Cap: ' + w.cap + ')' : '') + '</span>' +
+        (w.tb ? '<small style="text-transform:none;font-size:9px;color:var(--muted-soft)">Desempate: ' + esc(w.tb) + '</small>' : '') +
+        '<div class="acts"><button type="button" class="btn">' + ICON_EDIT + 'Editar</button><button type="button" class="btn del">' + ICON_DEL + 'Excluir</button></div></div></div>';
+    }).join('') + '</div>';
+  }
+
+  // A: por categoria
+  var aFilter = 'all';
+  var aCollapsed = {};
+  function renderA(data) {
+    var counts = {};
+    data.workouts.forEach(function (w) { var k = w.div || 'geral'; counts[k] = (counts[k] || 0) + 1; });
+    var groups = data.divisions.map(function (d) { return { id: d.id, name: d.name, list: sortWorkouts(data.workouts.filter(function (w) { return w.div === d.id; })) }; });
+    var geral = data.workouts.filter(function (w) { return !w.div; });
+    if (geral.length) groups.unshift({ id: 'geral', name: 'Geral', note: 'vale para todas as categorias', list: sortWorkouts(geral) });
+    var chips = '<button type="button" class="chip" data-filter="all" aria-pressed="' + (aFilter === 'all') + '">Todas <b>' + data.workouts.length + '</b></button>' +
+      groups.map(function (g) { return '<button type="button" class="chip" data-filter="' + g.id + '" aria-pressed="' + (aFilter === g.id) + '">' + esc(g.name) + ' <b>' + g.list.length + '</b></button>'; }).join('');
+    var allCollapsed = groups.every(function (g) { return aCollapsed[g.id]; });
+    var html = '<div class="toolbar"><div class="chips" role="group" aria-label="Filtrar por categoria">' + chips + '</div>' +
+      '<div class="tline"><span class="meter">' + groups.length + ' categorias · ' + data.workouts.length + ' provas</span>' +
+      '<button type="button" class="lnk" data-collapse-all>' + (allCollapsed ? 'Abrir todas' : 'Recolher todas') + '</button></div></div>';
+    html += '<div class="groups" style="margin-top:14px">' + groups.filter(function (g) { return aFilter === 'all' || aFilter === g.id; }).map(function (g) {
+      var open = !aCollapsed[g.id];
+      return '<section class="grp"><button type="button" class="grp-head" data-group="' + g.id + '" aria-expanded="' + open + '" aria-controls="g-' + g.id + '">' + ICON_CHEV +
+        '<span class="gname">' + esc(g.name) + (g.note ? ' <span class="gnote">· ' + g.note + '</span>' : '') + '</span><span class="gcount">' + g.list.length + (g.list.length === 1 ? ' prova' : ' provas') + '</span></button>' +
+        '<ul class="rows rows-under-head" id="g-' + g.id + '"' + (open ? '' : ' hidden') + '>' + g.list.map(function (w) {
+          return '<li class="row"><div class="id"><span class="code">' + esc(w.code) + '</span>' + (showName(w) ? '<span class="nm">' + esc(w.name) + '</span>' : '') + '</div>' +
+            '<div class="meta">' + fmt(w) + (w.sumula ? '<span class="sumula-dot">Súmula</span>' : '') + (w.tb ? '<span class="tb">Desempate: ' + esc(w.tb) + '</span>' : '') + '</div>' +
+            '<div class="acts">' + actions(w, data, true) + '</div>' + descBlock(w) + '</li>';
+        }).join('') + '</ul></section>';
+    }).join('') + '</div>';
+    return html;
+  }
+
+  // B: por prova do evento (mesma regra do construtor de baterias)
+  function stagesOf(data) {
+    var per = data.divisions.map(function (d) { return { div: d, list: divisionWorkouts(data, d.id) }; });
+    var n = Math.max.apply(null, per.map(function (p) { return p.list.length; }).concat([0]));
+    var stages = [];
+    for (var i = 0; i < n; i++) {
+      stages.push({ n: i + 1, entries: per.map(function (p) { return { div: p.div, w: p.list[i] || null }; }) });
+    }
+    return stages;
+  }
+  function renderB(data) {
+    var stages = stagesOf(data);
+    var total = data.divisions.length;
+    var html = '<p class="stage-rule" style="margin-bottom:12px">A Prova N é a N-ésima prova de cada categoria, na ordem da aba Provas. É a mesma numeração do construtor de baterias.</p><div class="groups">';
+    stages.forEach(function (s) {
+      var present = s.entries.filter(function (e) { return e.w; });
+      var missing = s.entries.filter(function (e) { return !e.w; });
+      var codes = present.map(function (e) { return e.w.code; });
+      var sameCode = codes.every(function (c) { return c === codes[0]; });
+      var names = present.map(function (e) { return e.w.name; });
+      var sameName = names.every(function (x) { return x === names[0]; });
+      var title = sameCode ? codes[0] : 'Prova ' + s.n + ' do evento';
+      var sub = sameName && present[0] && showName(present[0].w) ? present[0].w.name : '';
+      html += '<section class="stage"><div class="stage-head"><span class="code">' + esc(title) + '</span>' + (sub ? '<span class="sname">' + esc(sub) + '</span>' : '') +
+        '<span class="cov' + (missing.length ? '' : ' full') + '">' + present.length + ' de ' + total + ' categorias</span></div>';
+      present.forEach(function (e) {
+        var w = e.w;
+        var ownName = (!sameName || !sameCode) && showName(w) ? '<small>' + esc(w.code + ' · ' + w.name) + '</small>' : '';
+        html += '<div class="srow"><div class="cat">' + esc(e.div.name) + ownName + '</div>' +
+          '<div class="meta">' + fmt(w) + (w.sumula ? '<span class="sumula-dot">Súmula</span>' : '') + '</div>' +
+          '<div class="acts">' + actions(w, data, true) + '</div>' + descBlock(w) + '</div>';
+      });
+      if (missing.length) {
+        html += '<div class="gap-line"><strong>Sem ' + esc(title.toLowerCase()) + ':</strong>' + missing.map(function (e) {
+          return '<span>' + esc(e.div.name) + ' <button type="button" class="lnk add" data-add="' + e.div.id + '">cadastrar</button></span>';
+        }).join('<span aria-hidden="true">·</span>') + '</div>';
+      }
+      html += '</section>';
+    });
+    return html + '</div>';
+  }
+
+  // C: grade categoria × prova
+  var cSel = null;
+  function renderC(data) {
+    var stages = stagesOf(data);
+    if (!cSel || !data.workouts.some(function (w) { return w.id === cSel; })) cSel = sortWorkouts(data.workouts)[0].id;
+    var head = '<tr><th scope="col">Categoria</th>' + stages.map(function (s) {
+      var present = s.entries.filter(function (e) { return e.w; });
+      var nm = present[0] && showName(present[0].w) && present.every(function (e) { return e.w.name === present[0].w.name; }) ? '<small>' + esc(present[0].w.name) + '</small>' : '';
+      return '<th scope="col">' + esc(present[0] ? present[0].w.code : 'Prova ' + s.n) + nm + '</th>';
+    }).join('') + '</tr>';
+    var body = data.divisions.map(function (d, di) {
+      return '<tr><th scope="row">' + esc(d.name) + '</th>' + stages.map(function (s) {
+        var w = s.entries[di].w;
+        if (!w) return '<td><button type="button" class="cell empty" data-add="' + d.id + '" aria-label="Cadastrar prova ' + s.n + ' para ' + esc(d.name) + '"><span>+ cadastrar</span></button></td>';
+        return '<td><button type="button" class="cell" data-cell="' + w.id + '" aria-pressed="' + (w.id === cSel) + '" aria-label="' + esc(w.code + ' · ' + d.name) + '">' +
+          '<span class="f">' + LABELS[w.type] + (w.type === 'fortime' ? ' <span>· ' + w.cap + '</span>' : '') + '</span>' + (w.sumula ? '<span class="sumula-dot">Súmula</span>' : '') + '</button></td>';
+      }).join('') + '</tr>';
+    }).join('');
+    var w = data.workouts.find(function (x) { return x.id === cSel; });
+    var detail = '<div class="detail" aria-live="polite"><div class="dh"><span class="code">' + esc(w.code) + '</span>' + (showName(w) ? '<h4>' + esc(w.name) + '</h4>' : '') + '<span class="divtag">' + esc(divName(data, w.div)) + '</span></div>' +
+      '<div class="dm"><span>Pontuação <b>' + LABELS[w.type] + (w.type === 'fortime' ? ' · cap ' + w.cap : '') + '</b></span>' + (w.tb ? '<span>Desempate <b>' + esc(w.tb) + '</b></span>' : '') + (w.sumula ? '<span class="sumula-dot">Súmula digital · ' + esc(w.sumula) + '</span>' : '') + '</div>' +
+      '<pre class="desc">' + esc(w.desc) + '</pre>' +
+      '<div class="acts"><button type="button" class="btn" aria-label="Editar prova ' + esc(w.code + ' · ' + divName(data, w.div)) + '">' + ICON_EDIT + 'Editar</button><button type="button" class="btn del" aria-label="Excluir prova ' + esc(w.code + ' · ' + divName(data, w.div)) + '">' + ICON_DEL + 'Excluir</button></div></div>';
+    return '<div class="mx-wrap"><table class="mx"><thead>' + head + '</thead><tbody>' + body + '</tbody></table></div>' +
+      '<p class="mx-mobile-note" style="margin:8px 0 14px">Clique numa célula para ver a prova. No celular a grade rola para o lado.</p>' + detail;
+  }
+
+  var DESCS = {
+    today: 'Como está hoje: um cartão por prova, em fila única, com a descrição inteira aberta. A categoria é a etiqueta cinza pequena depois do nome.',
+    a: 'Uma seção por categoria, recolhível, com filtro no topo. Cada prova vira uma linha: código, formato, súmula e ações. A descrição abre em "Movimentos".',
+    b: 'Uma seção por prova do evento. A prova repetida aparece uma vez no título, e cada linha é uma categoria. O que falta cadastrar aparece no fim da seção.',
+    c: 'Uma grade com categorias nas linhas e provas nas colunas. Clicar numa célula abre a prova embaixo, com descrição e ações.'
+  };
+
+  var state = { view: 'b', set: 'full' };
+  var mock = document.getElementById('mock');
+  var meter = document.getElementById('meter');
+  var scrollBox = document.getElementById('panel-scroll');
+
+  function render() {
+    var data = state.set === 'full' ? FULL : SMALL;
+    var html = state.view === 'today' ? renderToday(data) : state.view === 'a' ? renderA(data) : state.view === 'b' ? renderB(data) : renderC(data);
+    mock.innerHTML = html;
+    document.getElementById('view-desc').textContent = DESCS[state.view];
+    document.getElementById('ghost-cat').classList.remove('hl');
+    requestAnimationFrame(function () {
+      meter.innerHTML = 'Altura da lista nesta largura: <b>' + Math.round(mock.scrollHeight).toLocaleString('pt-BR') + ' px</b>';
+    });
+  }
+
+  function bindSeg(id, key, attr) {
+    document.getElementById(id).addEventListener('click', function (ev) {
+      var b = ev.target.closest('button[' + attr + ']');
+      if (!b) return;
+      state[key] = b.getAttribute(attr);
+      this.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+      scrollBox.scrollTop = 0;
+      render();
+    });
+  }
+  bindSeg('view-seg', 'view', 'data-view');
+  bindSeg('data-seg', 'set', 'data-set');
+
+  mock.addEventListener('click', function (ev) {
+    var t = ev.target.closest('button');
+    if (!t) return;
+    var data = state.set === 'full' ? FULL : SMALL;
+    if (t.hasAttribute('data-desc')) {
+      var pre = document.getElementById('d-' + t.getAttribute('data-desc'));
+      var open = pre.hidden;
+      pre.hidden = !open;
+      t.setAttribute('aria-expanded', String(open));
+      t.textContent = open ? 'Fechar' : 'Movimentos';
+      return;
+    }
+    if (t.hasAttribute('data-filter')) { aFilter = t.getAttribute('data-filter'); render(); return; }
+    if (t.hasAttribute('data-group')) { var g = t.getAttribute('data-group'); aCollapsed[g] = !aCollapsed[g]; render(); return; }
+    if (t.hasAttribute('data-collapse-all')) {
+      var ids = data.divisions.map(function (d) { return d.id; }).concat(['geral']);
+      var all = ids.every(function (id) { return aCollapsed[id]; });
+      ids.forEach(function (id) { aCollapsed[id] = !all; });
+      render(); return;
+    }
+    if (t.hasAttribute('data-cell')) { cSel = t.getAttribute('data-cell'); var top = scrollBox.scrollTop; render(); scrollBox.scrollTop = top; return; }
+    if (t.hasAttribute('data-add')) {
+      var ghost = document.getElementById('ghost-cat');
+      ghost.classList.add('hl');
+      meter.innerHTML = 'Atalho: o formulário ao lado recebe <b>' + esc(divName(data, t.getAttribute('data-add'))) + '</b> e a próxima ordem';
+    }
+  });
+
+  render();
+})();
+</script>

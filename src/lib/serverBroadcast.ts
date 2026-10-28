@@ -217,7 +217,7 @@ export const markBroadcastHeat = async (
 // Leitura do evento
 // ---------------------------------------------------------------------------
 
-type ScheduleItem = { id?: unknown; kind?: unknown; workoutId?: unknown; heatNumber?: unknown; date?: unknown; time?: unknown; title?: unknown; athleteIds?: unknown; isCallReleased?: unknown };
+type ScheduleItem = { id?: unknown; kind?: unknown; workoutId?: unknown; heatNumber?: unknown; date?: unknown; time?: unknown; title?: unknown; athleteIds?: unknown; isCallReleased?: unknown; stageNumber?: unknown; stageTitle?: unknown; laneWorkoutIds?: unknown };
 
 type EventRow = { id: string; name: string | null; logo_url: string | null; date: string | null; event_type: string | null; event_schedule: unknown };
 type DivisionRow = { id: string; name: string; order_index: number | null };
@@ -241,7 +241,7 @@ type HeatRow = { heat_id: string; started_at: string | null; finished_at: string
 
 const SHEET_SELECT = 'id, workout_id, athlete_id, division_id, heat_id, lane, status, official_result, submitted_at, updated_at, seq:live_progress->seq';
 
-type ScheduleHeat = ModeHeat & { workoutId: string; heatNumber: number | null; date: string; time: string; title: string; athleteIds: string[] };
+type ScheduleHeat = ModeHeat & { workoutId: string; heatNumber: number | null; date: string; time: string; title: string; athleteIds: string[]; stageNumber: number | null; stageTitle: string; laneWorkoutIds: string[] };
 
 export const readScheduleHeats = (schedule: unknown): ScheduleHeat[] => {
   const items = Array.isArray(schedule) ? schedule as ScheduleItem[] : [];
@@ -255,6 +255,9 @@ export const readScheduleHeats = (schedule: unknown): ScheduleHeat[] => {
       time: typeof item.time === 'string' ? item.time : '',
       title: typeof item.title === 'string' ? item.title.trim() : '',
       athleteIds: Array.isArray(item.athleteIds) ? item.athleteIds.map((id) => (typeof id === 'string' ? id.trim() : '')) : [],
+      stageNumber: typeof item.stageNumber === 'number' && item.stageNumber > 0 ? item.stageNumber : null,
+      stageTitle: typeof item.stageTitle === 'string' ? item.stageTitle.trim() : '',
+      laneWorkoutIds: Array.isArray(item.laneWorkoutIds) ? item.laneWorkoutIds.map((id) => (typeof id === 'string' ? id : '')) : [],
       isCallReleased: item.isCallReleased === true,
       order: 0
     }))
@@ -497,7 +500,8 @@ const buildStandingsBoards = async (
   divisions: DivisionRow[],
   workoutRows: WorkoutRow[],
   divisionIds: string[],
-  fresh: { workoutId: string; athleteIds: Set<string> } | null
+  // Uma entrada por prova com resultado recém-publicado: numa bateria mista, cada categoria tem a sua.
+  freshGroups: { workoutId: string; athleteIds: Set<string> }[]
 ): Promise<BroadcastStandingsBoard[]> => {
   if (divisionIds.length === 0) return [];
   const workouts = sortWorkouts(workoutRows.map(toWorkout));
@@ -522,6 +526,7 @@ const buildStandingsBoards = async (
       .map((athlete) => ({ id: athlete.id, name: displayName(athlete), box: athlete.box ?? '', country: '', divisionId: athlete.division_id }));
     const after = computeDivisionStandings({ event: eventInput, divisionId: division.id, divisionAthletes, scores });
 
+    const fresh = freshGroups.find((group) => divisionAthletes.some((athlete) => group.athleteIds.has(athlete.id))) ?? null;
     // "Antes" desta bateria: sem os resultados recém-publicados, com a prova reclassificada.
     let before = after;
     const freshInDivision = fresh ? divisionAthletes.filter((athlete) => fresh.athleteIds.has(athlete.id)).map((athlete) => athlete.id) : [];
@@ -659,19 +664,30 @@ export const buildBroadcastState = async (
   const describeHeat = (key: string): BroadcastHeat => {
     const heat = heatById.get(key);
     const sheetsOfGroup = groupSheets(key);
-    const workoutId = heat?.workoutId ?? sheetsOfGroup[0]?.workout_id ?? '';
+    const workoutId = (heat?.stageNumber ? sheetsOfGroup[0]?.workout_id : undefined) ?? heat?.workoutId ?? sheetsOfGroup[0]?.workout_id ?? '';
     const workoutRow = workoutById.get(workoutId);
     const structure = readStructure(workoutRow?.structure);
     const names = heatDivisionNames(heat, sheetsOfGroup);
-    const sameWorkout = heat ? heats.filter((item) => item.workoutId === heat.workoutId) : [];
+    // Prova do evento: as baterias irmãs são as da mesma prova; antes, as da mesma prova da categoria.
+    const siblings = heat ? heats.filter((item) => (heat.stageNumber ? item.stageNumber === heat.stageNumber : item.workoutId === heat.workoutId)) : [];
+    let workout = workoutRow && structure ? describeWorkoutForBoard(workoutRow, structure) : null;
+    // Bateria mista com versões diferentes da prova: o telão mostra o nome da prova do evento, sem
+    // as linhas de uma só categoria (o progresso de cada atleta segue a prova dele).
+    const distinctWorkouts = new Set([
+      ...(heat?.laneWorkoutIds || []).filter((id, index) => id && heat?.athleteIds[index]),
+      ...sheetsOfGroup.map((sheet) => sheet.workout_id)
+    ]);
+    if (workout && heat?.stageNumber && distinctWorkouts.size > 1) {
+      workout = { ...workout, name: heat.stageTitle || `Prova ${heat.stageNumber}`, code: '', scheme: null, lines: [] };
+    }
     return {
       key,
       title: heat ? (heat.heatNumber ? `Bateria ${heat.heatNumber}` : heat.title || 'Bateria') : names.join(' · ') || 'Bateria',
       heatNumber: heat?.heatNumber ?? null,
-      heatCount: sameWorkout.length > 0 ? sameWorkout.length : null,
+      heatCount: siblings.length > 0 ? siblings.length : null,
       divisionNames: names,
       time: heat?.time ?? '',
-      workout: workoutRow && structure ? describeWorkoutForBoard(workoutRow, structure) : null
+      workout
     };
   };
 
@@ -679,7 +695,7 @@ export const buildBroadcastState = async (
     title: heat.heatNumber ? `Bateria ${heat.heatNumber}` : heat.title || 'Bateria',
     divisionNames: heatDivisionNames(heat, []),
     time: heat.time,
-    workoutName: workoutById.get(heat.workoutId)?.name ?? ''
+    workoutName: heat.stageNumber ? (heat.stageTitle || `Prova ${heat.stageNumber}`) : workoutById.get(heat.workoutId)?.name ?? ''
   });
 
   const payload: Omit<BroadcastPayload, 'version' | 'serverTime'> = {
@@ -698,7 +714,14 @@ export const buildBroadcastState = async (
     const heat = describeHeat(resolution.groupKey);
     const sheetsOfGroup = groupSheets(resolution.groupKey);
     const structure = readStructure(workoutById.get(sheetsOfGroup[0]?.workout_id ?? '')?.structure);
-    const progress = structure ? await readGroupProgress(supabaseAdmin, sheetsOfGroup, structure) : new Map<string, LiveProgress | null>();
+    // Numa bateria mista cada atleta é medido pela estrutura da prova dele.
+    const progress = new Map<string, LiveProgress | null>();
+    for (const workoutId of new Set(sheetsOfGroup.map((sheet) => sheet.workout_id))) {
+      const ownStructure = readStructure(workoutById.get(workoutId)?.structure);
+      if (!ownStructure) continue;
+      const part = await readGroupProgress(supabaseAdmin, sheetsOfGroup.filter((sheet) => sheet.workout_id === workoutId), ownStructure);
+      part.forEach((value, sheetId) => progress.set(sheetId, value));
+    }
     const scheduleLane = (athleteId: string) => {
       const index = heatById.get(resolution.groupKey)?.athleteIds.indexOf(athleteId) ?? -1;
       return index >= 0 ? index + 1 : null;
@@ -762,12 +785,16 @@ export const buildBroadcastState = async (
   if (resolution.screen === 'interval') {
     const sheetsOfGroup = resolution.groupKey ? groupSheets(resolution.groupKey) : [];
     const submitted = sheetsOfGroup.filter((sheet) => sheet.status === 'submitted');
-    const fresh = submitted.length > 0
-      ? { workoutId: submitted[0].workout_id, athleteIds: new Set(submitted.map((sheet) => sheet.athlete_id)) }
-      : null;
-    const boards = await buildStandingsBoards(supabaseAdmin, eventRow, divisions, workoutRows, resolution.divisionIds, fresh);
-    const freshWorkout = fresh ? workoutById.get(fresh.workoutId) : undefined;
-    payload.interval = { boards, afterTitle: freshWorkout ? `Depois da ${freshWorkout.code || freshWorkout.name}` : '' };
+    const freshGroups = [...new Set(submitted.map((sheet) => sheet.workout_id))].map((workoutId) => ({
+      workoutId,
+      athleteIds: new Set(submitted.filter((sheet) => sheet.workout_id === workoutId).map((sheet) => sheet.athlete_id))
+    }));
+    const boards = await buildStandingsBoards(supabaseAdmin, eventRow, divisions, workoutRows, resolution.divisionIds, freshGroups);
+    const intervalHeat = resolution.groupKey ? heatById.get(resolution.groupKey) : undefined;
+    const freshWorkout = freshGroups[0] ? workoutById.get(freshGroups[0].workoutId) : undefined;
+    // Bateria da prova do evento: "Depois da Prova 1 · DT Speed"; antes, "Depois da WOD 1".
+    const afterName = intervalHeat?.stageNumber ? (intervalHeat.stageTitle || `Prova ${intervalHeat.stageNumber}`) : (freshWorkout ? freshWorkout.code || freshWorkout.name : '');
+    payload.interval = { boards, afterTitle: afterName ? `Depois da ${afterName}` : '' };
   }
 
   if (resolution.screen === 'standby') {
@@ -804,7 +831,8 @@ export const readBroadcastControl = async (supabaseAdmin: SupabaseClient, eventI
     heats: readScheduleHeats(schedule).map((heat) => {
       const workout = workouts.get(heat.workoutId);
       const label = heat.heatNumber ? `Bateria ${heat.heatNumber}` : heat.title || 'Bateria';
-      return { id: heat.id, label: [label, workout?.code || workout?.name, heat.time].filter(Boolean).join(' · ') };
+      const workoutLabel = heat.stageNumber ? (heat.stageTitle || `Prova ${heat.stageNumber}`) : workout?.code || workout?.name;
+      return { id: heat.id, label: [label, workoutLabel, heat.time].filter(Boolean).join(' · ') };
     }),
     divisions: sortDivisions(((check(divisionRows) || []) as DivisionRow[]).map((row) => ({ id: row.id, name: row.name, orderIndex: row.order_index })))
       .map((row) => ({ id: row.id, name: row.name })),
