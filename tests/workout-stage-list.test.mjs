@@ -191,10 +191,17 @@ test('componente: um título por prova do evento, uma linha por categoria e bot�
   assert.match(html, /1 de 2 categorias/);
   assert.match(html, /aria-label="Editar prova PROVA 1 · Dupla Rx Masculino"/);
   assert.match(html, /aria-label="Excluir prova PROVA 1 · Dupla Scaled Masculino"/);
-  assert.match(html, /aria-expanded="false"[^>]*aria-controls="wod-list-desc-a1"|aria-controls="wod-list-desc-a1"[^>]*aria-expanded="false"/);
-  assert.match(html, /<pre id="wod-list-desc-a1" hidden=""/);
+  assert.match(html, /aria-expanded="false"[^>]*aria-controls="wod-list-desc-1-a1"|aria-controls="wod-list-desc-1-a1"[^>]*aria-expanded="false"/);
+  assert.match(html, /<pre id="wod-list-desc-1-a1" hidden=""/);
   assert.match(html, /Sem prova 2:/);
   assert.match(html, /aria-label="Cadastrar PROVA 2 para Dupla Scaled Masculino"/);
+});
+
+test('componente: a mesma prova Geral em dois grupos não repete o id da descrição', () => {
+  const html = renderList([wod('r1', 'rxm', 1, 'PROVA 1'), wod('g', null, 2, 'FINAL')], divisions.slice(0, 2));
+  const ids = [...html.matchAll(/<pre id="([^"]+)"/g)].map((match) => match[1]);
+  assert.equal(ids.length, 3, 'a Geral aparece nos dois grupos');
+  assert.equal(new Set(ids).size, ids.length, 'cada linha tem id próprio');
 });
 
 test('componente: súmula digital, desempate e prazo do Qualifier continuam visíveis', () => {

@@ -33,6 +33,8 @@ const workoutDisplayName = (workout: Workout) =>
   [workout.code, shouldShowWorkoutName(workout) ? workout.name : ''].filter(Boolean).join(' ') || workout.name;
 
 type RowProps = {
+  /** Único na lista inteira: a mesma prova Geral pode aparecer em mais de um grupo. */
+  rowId: string;
   workout: Workout;
   label: string;
   ownLabel: string;
@@ -40,12 +42,13 @@ type RowProps = {
   isOpen: boolean;
   showSubmissionDeadline: boolean;
   getScoreLabel: (type: WorkoutType) => string;
-  onToggle: (workoutId: string) => void;
+  onToggle: (rowId: string) => void;
   onEdit: (workout: Workout) => void;
   onDelete: (workout: Workout) => void;
 };
 
 function WorkoutRow({
+  rowId,
   workout,
   label,
   ownLabel,
@@ -58,7 +61,7 @@ function WorkoutRow({
   onDelete
 }: RowProps) {
   const describedAs = `${workoutDisplayName(workout)} · ${label}`;
-  const descriptionId = `wod-list-desc-${workout.id}`;
+  const descriptionId = `wod-list-desc-${rowId}`;
 
   return (
     <li className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1.5 border-t border-card-border px-3.5 py-2.5 first:border-t-0 sm:grid-cols-[minmax(150px,1.2fr)_minmax(0,1fr)_auto]">
@@ -89,7 +92,7 @@ function WorkoutRow({
       <div className="flex items-center justify-end gap-1.5">
         <button
           type="button"
-          onClick={() => onToggle(workout.id)}
+          onClick={() => onToggle(rowId)}
           aria-expanded={isOpen}
           aria-controls={descriptionId}
           className={`${textButtonClassName} mr-1 text-muted hover:text-white`}
@@ -139,11 +142,11 @@ export function WorkoutStageList({
   const [openIds, setOpenIds] = useState<ReadonlySet<string>>(() => new Set());
   const { groups, unplaced } = useMemo(() => buildWorkoutStageList(workouts, divisions), [workouts, divisions]);
 
-  const toggle = (workoutId: string) =>
+  const toggle = (rowId: string) =>
     setOpenIds((current) => {
       const next = new Set(current);
-      if (next.has(workoutId)) next.delete(workoutId);
-      else next.add(workoutId);
+      if (next.has(rowId)) next.delete(rowId);
+      else next.add(rowId);
       return next;
     });
 
@@ -178,11 +181,12 @@ export function WorkoutStageList({
               {group.rows.map((row) => (
                 <WorkoutRow
                   key={row.key}
+                  rowId={`${group.stageNumber}-${row.key}`}
                   workout={row.workout}
                   label={row.label}
                   ownLabel={row.ownLabel}
                   coverageNote={row.coverageNote}
-                  isOpen={openIds.has(row.workout.id)}
+                  isOpen={openIds.has(`${group.stageNumber}-${row.key}`)}
                   {...rowProps}
                 />
               ))}
@@ -224,11 +228,12 @@ export function WorkoutStageList({
             {unplaced.map((workout) => (
               <WorkoutRow
                 key={workout.id}
+                rowId={`unplaced-${workout.id}`}
                 workout={workout}
                 label={workout.divisionId ? 'Categoria removida' : 'Geral'}
                 ownLabel={workoutDisplayName(workout)}
                 coverageNote=""
-                isOpen={openIds.has(workout.id)}
+                isOpen={openIds.has(`unplaced-${workout.id}`)}
                 {...rowProps}
               />
             ))}
