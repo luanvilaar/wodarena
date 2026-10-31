@@ -495,6 +495,16 @@ test('renderização do modal: justificativa obrigatória, tempo oficial antes e
   assert.match(html, /min-h-11/);
 });
 
+test('modal: o foco vai ao primeiro campo só ao abrir; o recarregamento do painel (onClose novo) e o "salvando" não puxam o cursor', () => {
+  const dialog = read('../src/components/admin/RaceDecisionDialog.tsx');
+  // O efeito do foco e do Esc roda uma vez (dependências vazias) e lê onClose/busy por referência.
+  assert.match(dialog, /first\?\.focus\(\);[\s\S]*?if \(event\.key === 'Escape' && !busyRef\.current\) closeRef\.current\(\);[\s\S]*?return \(\) => window\.removeEventListener\('keydown', onKey\);\s*\}, \[\]\);/);
+  assert.match(dialog, /closeRef\.current = onClose;\s*busyRef\.current = busy;\s*\}, \[onClose, busy\]\);/);
+  assert.doesNotMatch(dialog, /\}, \[busy, onClose\]\);/);
+  // O painel recarrega sozinho e passa um onClose novo a cada render: era isso que puxava o foco.
+  assert.match(read('../src/components/admin/RacePenaltiesPanel.tsx'), /onClose=\{\(\) => setModal\(null\)\}/);
+});
+
 test('estático: painel sem <table>, admin/page.tsx sem lógica de Race nova, FF intacto e ações com limite próprio', () => {
   const panel = read('../src/components/admin/RacePenaltiesPanel.tsx');
   assert.doesNotMatch(panel, /<table/);

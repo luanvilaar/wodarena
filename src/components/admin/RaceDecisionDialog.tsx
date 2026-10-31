@@ -51,16 +51,26 @@ export function RaceDecisionDialog(props: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const dialogRef = useRef<HTMLDivElement>(null);
+  // O painel em volta recarrega sozinho (a cada 20 s) e passa um onClose novo a
+  // cada vez: o foco vai ao primeiro campo só ao abrir, senão puxaria o cursor
+  // de quem está escrevendo a justificativa. O Esc lê o onClose e o "salvando"
+  // atuais por estas referências.
+  const closeRef = useRef(onClose);
+  const busyRef = useRef(busy);
+  useEffect(() => {
+    closeRef.current = onClose;
+    busyRef.current = busy;
+  }, [onClose, busy]);
 
   useEffect(() => {
     const first = dialogRef.current?.querySelector<HTMLElement>('input, select, textarea');
     first?.focus();
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !busy) onClose();
+      if (event.key === 'Escape' && !busyRef.current) closeRef.current();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [busy, onClose]);
+  }, []);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
