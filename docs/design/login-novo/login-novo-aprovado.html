@@ -1,0 +1,707 @@
+<title>Nova tela de login WODArena</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: página de comparação; cada opção é um protótipo clicável dentro de um palco que alterna entre largura de computador e de celular. Visual escuro único, como o app. */
+:root {
+  --bg: #0c0d0c;
+  --panel: #141514;
+  --card: #1a1b1a;
+  --line: #2b2d2a;
+  --line-strong: #41443e;
+  --fg: #f2f3ef;
+  --muted: #a6a9a2;
+  --soft: #8d9188;
+  --accent: #bfe31a;
+  --on-accent: #0c0d0c;
+  --danger: #f6465d;
+  --font-display: "Anton", "Oswald", Impact, "Arial Narrow", sans-serif;
+  --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+::selection { background: var(--accent); color: var(--on-accent); }
+input { caret-color: var(--accent); }
+.table-wrap { scrollbar-color: var(--line-strong) transparent; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.55;
+}
+.page {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 40px 72px;
+  display: grid;
+  gap: 64px;
+}
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+a { color: var(--accent); }
+
+/* ---------- cabeçalho da página ---------- */
+.intro { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 32px; align-items: start; }
+.eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); margin: 0 0 10px; }
+h1 { font-family: var(--font-display); font-weight: 400; text-transform: uppercase; font-size: clamp(36px, 6vw, 60px); line-height: 1; letter-spacing: .01em; margin: 0 0 16px; text-wrap: balance; }
+.lead { color: var(--muted); max-width: 60ch; margin: 0 0 20px; }
+.ref { margin: 0; border: 1px solid var(--line); background: var(--panel); }
+.ref img { display: block; width: 100%; height: auto; }
+.ref figcaption { font-size: 12px; color: var(--soft); padding: 8px 12px; border-top: 1px solid var(--line); }
+.accent-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.seg { display: inline-flex; border: 1px solid var(--line); }
+.seg button { background: transparent; border: 0; padding: 8px 12px; font-size: 13px; font-weight: 600; color: var(--muted); display: inline-flex; align-items: center; gap: 8px; min-height: 36px; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--card); color: var(--fg); }
+.swatch { width: 10px; height: 10px; display: inline-block; }
+
+/* ---------- seção de cada opção ---------- */
+.opt { display: grid; gap: 20px; }
+.opt-head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 16px; border-top: 1px solid var(--line); padding-top: 24px; }
+.opt-head > div { min-width: 0; }
+.opt-tag { font-family: var(--font-display); font-size: 15px; letter-spacing: .08em; color: var(--accent); text-transform: uppercase; margin: 0 0 4px; }
+h2 .letter { color: var(--accent); margin-right: .3em; }
+h2 { font-family: var(--font-display); font-weight: 400; text-transform: uppercase; font-size: clamp(26px, 4vw, 36px); line-height: 1.05; margin: 0 0 6px; letter-spacing: .01em; }
+.opt-head p.sum { margin: 0; color: var(--muted); max-width: 62ch; }
+.notes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
+.notes h3 { font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--soft); margin: 0 0 8px; }
+.notes ul, .notes ol { margin: 0; padding-left: 18px; color: var(--muted); font-size: 14px; display: grid; gap: 6px; }
+.notes li::marker { color: var(--soft); }
+
+/* palco: simula a tela do app */
+.stage-wrap { background: #080908; border: 1px solid var(--line); padding: clamp(16px, 4vw, 48px) clamp(12px, 3vw, 40px); display: flex; justify-content: center; overflow: hidden; }
+.stage { width: 100%; max-width: 980px; container-type: inline-size; }
+.stage.narrow { max-width: 390px; }
+
+/* ---------- peças do protótipo ---------- */
+.m-panel { background: var(--panel); border: 1px solid var(--line); padding: clamp(20px, 5cqi, 44px); }
+.m-title { font-family: var(--font-display); font-weight: 400; text-transform: uppercase; font-size: clamp(30px, 6cqi, 40px); line-height: 1; letter-spacing: .005em; margin: 0; }
+.m-sub { color: var(--muted); font-size: clamp(15px, 2.4cqi, 18px); margin: 10px 0 0; }
+.m-tile { width: 52px; height: 52px; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; flex: none; }
+.m-tile svg { width: 26px; height: 26px; }
+.m-tile.sm { width: 36px; height: 36px; }
+.m-tile.sm svg { width: 18px; height: 18px; }
+.m-name { font-family: var(--font-display); font-weight: 400; text-transform: uppercase; letter-spacing: .05em; font-size: 19px; line-height: 1.3; margin: 0; }
+.m-desc { color: var(--muted); font-size: 15px; line-height: 1.45; margin: 0; }
+
+.m-card { background: var(--card); border: 1px solid var(--line); text-align: left; padding: 24px; display: grid; align-content: start; gap: 14px; transition: border-color .15s ease, transform .15s ease; }
+.m-card:hover { border-color: var(--accent); }
+.m-card:hover .m-tile { transform: translateY(-2px); }
+.m-card .m-tile { transition: transform .15s ease; }
+
+.m-field { display: grid; gap: 6px; }
+.m-field label { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.m-input-wrap { position: relative; }
+.m-input { width: 100%; height: 48px; background: var(--bg); border: 1px solid var(--line-strong); padding: 0 14px; font-size: 16px; color: var(--fg); border-radius: 0; }
+.m-input::placeholder { color: var(--soft); }
+.m-input:focus { outline: none; border-color: var(--accent); }
+.m-input[aria-invalid="true"] { border-color: var(--danger); }
+.m-error { font-size: 13px; color: var(--danger); margin: 0; }
+.m-btn[aria-busy="true"] { opacity: .7; cursor: progress; }
+.m-input-wrap .m-input { padding-right: 48px; }
+.eye { position: absolute; right: 0; top: 0; width: 48px; height: 48px; display: grid; place-items: center; background: transparent; border: 0; color: var(--soft); }
+.eye:hover { color: var(--fg); }
+.eye svg { width: 18px; height: 18px; }
+.m-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 16px; font-size: 14px; }
+.m-check { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); min-height: 44px; }
+.m-check input { width: 16px; height: 16px; accent-color: var(--accent); margin: 0; }
+.m-link { background: none; border: 0; padding: 0; color: var(--accent); font-weight: 600; font-size: 14px; min-height: 44px; }
+.m-btn { height: 52px; width: 100%; background: var(--accent); color: var(--on-accent); border: 0; font-family: var(--font-display); font-size: 18px; letter-spacing: .08em; text-transform: uppercase; display: inline-flex; align-items: center; justify-content: center; gap: 10px; }
+.m-btn svg { width: 18px; height: 18px; }
+.m-btn:hover { filter: brightness(1.06); }
+.m-foot { font-size: 14px; color: var(--soft); margin: 0; }
+.demo-note { font-size: 13px; color: var(--fg); background: var(--card); border: 1px dashed var(--line-strong); padding: 10px 12px; margin: 0; }
+.m-form { display: grid; gap: 16px; }
+
+/* ---------- Opção A ---------- */
+.a-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; margin-top: 36px; }
+.a-form { max-width: 440px; }
+.a-back { background: none; border: 0; padding: 0; display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; font-weight: 600; min-height: 44px; justify-self: start; }
+.a-back:hover { color: var(--fg); }
+.a-back svg { width: 16px; height: 16px; }
+.a-head { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 4px 16px; }
+.a-head .m-tile { grid-row: span 2; }
+.a-head .m-title { font-size: clamp(26px, 4.4cqi, 32px); }
+.a-head .m-sub { margin: 0; font-size: 15px; }
+@container (max-width: 620px) {
+  .a-cards { grid-template-columns: 1fr; gap: 10px; margin-top: 24px; }
+  .a-cards .m-card { grid-template-columns: auto minmax(0, 1fr); align-items: center; padding: 14px; gap: 2px 14px; }
+  .a-cards .m-card .m-tile { grid-row: span 2; width: 44px; height: 44px; }
+  .a-cards .m-name { font-size: 17px; }
+  .a-cards .m-desc { font-size: 14px; }
+}
+
+/* ---------- Opção B ---------- */
+.b-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); padding: 0; }
+.b-left { padding: clamp(20px, 5cqi, 44px); border-right: 1px solid var(--line); display: grid; align-content: start; gap: 28px; }
+.b-right { padding: clamp(20px, 5cqi, 44px); }
+.b-roles { display: grid; gap: 10px; }
+.b-role { background: var(--card); border: 1px solid var(--line); display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 2px 14px; padding: 14px; text-align: left; }
+.b-role .m-tile { grid-row: span 2; width: 44px; height: 44px; background: transparent; color: var(--muted); border: 1px solid var(--line-strong); transition: background .15s ease, color .15s ease; }
+.b-role .m-name { font-size: 17px; }
+.b-role .m-desc { font-size: 14px; }
+.b-role .dot { grid-row: span 2; width: 18px; height: 18px; border: 1px solid var(--line-strong); border-radius: 50%; display: grid; place-items: center; }
+.b-role .dot::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: transparent; }
+.b-role:hover { border-color: var(--line-strong); }
+.b-role[aria-checked="true"] { border-color: var(--accent); }
+.b-role[aria-checked="true"] .m-tile { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.b-role[aria-checked="true"] .dot { border-color: var(--accent); }
+.b-role[aria-checked="true"] .dot::after { background: var(--accent); }
+.b-right .m-title { font-size: clamp(26px, 4.4cqi, 32px); }
+.b-right .m-sub { margin: 6px 0 0; font-size: 15px; }
+@container (max-width: 680px) {
+  .b-grid { grid-template-columns: 1fr; }
+  .b-left { border-right: 0; border-bottom: 1px solid var(--line); gap: 20px; }
+  .b-roles { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .b-role { grid-template-columns: 1fr; justify-items: center; text-align: center; padding: 12px 6px; gap: 8px; }
+  .b-role .m-tile { grid-row: auto; width: 40px; height: 40px; }
+  .b-role .m-desc, .b-role .dot { display: none; }
+  .b-role .m-name { font-size: 14px; letter-spacing: .06em; line-height: 1.15; }
+  .b-role .long { display: none; }
+}
+@container (min-width: 681px) { .b-role .short { display: none; } }
+
+/* ---------- Opção C ---------- */
+.c-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); padding: 0; }
+.c-main { padding: clamp(20px, 5cqi, 44px); display: grid; gap: 28px; align-content: start; }
+.c-side { padding: clamp(20px, 5cqi, 44px); border-left: 1px solid var(--line); background: #111211; display: grid; align-content: start; gap: 18px; }
+.c-label { font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--soft); margin: 0; }
+.c-area { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 14px; align-items: center; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+.c-area:last-child { border-bottom: 0; padding-bottom: 0; }
+.c-area .m-tile { grid-row: span 2; }
+.c-area .m-name { font-size: 16px; }
+.c-area .m-desc { font-size: 14px; }
+.c-mark { font-family: var(--font-display); font-size: 18px; letter-spacing: .06em; margin: 0; }
+.c-mark span { color: var(--accent); }
+@container (max-width: 680px) {
+  .c-grid { grid-template-columns: 1fr; }
+  .c-side { border-left: 0; border-top: 1px solid var(--line); }
+}
+
+/* ---------- comparação e decisão ---------- */
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); }
+table { width: 100%; border-collapse: collapse; min-width: 620px; font-size: 14px; }
+th, td { text-align: left; padding: 14px 16px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+thead th { font-family: var(--font-display); font-weight: 400; font-size: 17px; letter-spacing: .06em; text-transform: uppercase; background: var(--panel); }
+tbody th { font-weight: 600; color: var(--muted); width: 26%; }
+td { color: var(--fg); }
+.pill { display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: .04em; padding: 2px 8px; border: 1px solid var(--line-strong); margin-right: 6px; }
+.pill.good { border-color: color-mix(in srgb, var(--accent) 60%, transparent); color: var(--accent); }
+.pill.warn { border-color: color-mix(in srgb, var(--danger) 55%, transparent); color: var(--danger); }
+.decide { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; border-top: 1px solid var(--line); padding-top: 24px; }
+.decide p, .decide li { color: var(--muted); }
+.decide ul { padding-left: 18px; margin: 0; display: grid; gap: 6px; }
+.decide strong { color: var(--fg); }
+
+@media (max-width: 760px) {
+  .intro, .decide { grid-template-columns: 1fr; }
+  .opt-head .seg { display: none; }
+  .notes { grid-template-columns: 1fr; gap: 18px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-admin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></symbol>
+    <symbol id="i-judge" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/></symbol>
+    <symbol id="i-athlete" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.4 14.4 9.6 9.6"/><path d="M18.657 21.485a2 2 0 1 1-2.829-2.828l-1.767 1.768a2 2 0 1 1-2.829-2.829l6.364-6.364a2 2 0 1 1 2.829 2.829l-1.768 1.767a2 2 0 1 1 2.828 2.829z"/><path d="m21.5 21.5-1.4-1.4"/><path d="M3.9 3.9 2.5 2.5"/><path d="M6.404 12.768a2 2 0 1 1-2.829-2.829l1.768-1.767a2 2 0 1 1-2.828-2.829l2.828-2.828a2 2 0 1 1 2.829 2.828l1.767-1.768a2 2 0 1 1 2.829 2.829z"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></symbol>
+  </defs>
+</svg>
+
+<div class="page">
+
+  <header class="intro">
+    <div>
+      <h1>Nova tela de login</h1>
+      <p class="lead"><strong style="color:var(--fg)">Proposta para aprovação. Nada foi alterado no código.</strong> Três caminhos a partir da referência "Bem-vindo · Como você deseja acessar?". Os protótipos são clicáveis: escolha uma área, preencha o formulário e alterne entre computador e celular. Os textos são sugestões e podem ser revisados junto com a escolha.</p>
+      <div class="accent-pick">
+        <span>Cor de destaque:</span>
+        <div class="seg" role="group" aria-label="Cor de destaque">
+          <button type="button" aria-pressed="true" data-accent="#bfe31a"><span class="swatch" style="background:#bfe31a"></span>Verde-limão (referência)</button>
+          <button type="button" aria-pressed="false" data-accent="#fcd535"><span class="swatch" style="background:#fcd535"></span>Amarelo (app hoje)</button>
+        </div>
+      </div>
+    </div>
+    <figure class="ref">
+      <img src="data:image/jpeg;base64,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KKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooA/9H8N6KKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKAL+l/8AISg/3xQAMUaX/wAhKD/fFKOlABgUYFFFABgUYFFFABgUYFFFABgUYFFFABgUYFFFABgUYFFFABgUYFFFABgUYFFFABgUYFFFABgUYFFFABgUYFFFABgUYFFFABgUYFFFABgUYFFFABgUYFFFABgUYFFFABgUYFFFABgUYFFFABgUYFFFABgUYFFFAAAM0mqf8hK4/wCujfzpw603VP8AkJXH/XRv50AUKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKAP/S/DeiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigC/pf/ACEoP98Uo6Uml/8AISg/3xSjpQAVvReFvE0+m/2zBp1y9ntLeesTmPaOCdwGMCsGv6fP2O5tesf2Q/hnqJWOfw1BpWsPrVoYxLLcIJJfJWOPBZ/m3ZAHPegD+bEeAPHTKGXRr0huh8iTn/x2o18C+NnkkiTSLwtFjeBA+VyMjPHGRzX9S2ueN/jjpn7ZXgnwnZRND8N9Y0pgSYl2tfJbXM3lh/vAqsaHHoK9y8K6l5usXOrbBv8AECWzPx1K2G/+YoA/jc07StT1e4NppVvJcyhSxSJS7BR1OACcDua2YPBHjO6hS5ttJvJI5FDIywuQyt0IIHIPav1S/wCCfnwL+Nnwp/aYt9b8feGb7SdO1XTdRs0uLmIpGzvF5yqCe5ERI9hX7TfAYJp/gjw/4V4/4l/hrw/lfQusoP57P0oA/kGh8E+MrlnS30m7kMbmNwsLna4GSp44IBziq0HhbxNdao2h22nXMl6oyYFiYyADuVxnFf2RfDvQrfRPEHiu5tADFqHiCS9QjoS+nW6N/wCPowr5xt/Et5afsyRftNW8Fsnja98PWHn6ksKB3DTDIIx0+c/p6CgD+VGaGa3ma3uEMciEqysMEEdQQehqOvvT/gpjo2laH+2V4nt9It0to5orKd1jAUGSW2jLtgd2PJ9TzXwXQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAo603VP+Qlcf9dG/nTh1puqf8hK4/66N/OgChRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQB//9P8N6KKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKAL+l/8AISg/3xSjpSaX/wAhKD/fFKOlABX9Lf7GkNp/wof4MeNJ9TtLWw8N2GtnUBLOqMouXdYztJGQCpJz0HNfzSU8SyhdgZtvpk4/KgD+qrxD4R8aa7+2l4T+M1r4hs38DaXpTxNam9XAu5ILmPzVhzjJEqgt1xXa+C/iB4em0T4e7763V7qzvGlPmpkGG22Lu5464FfyRfaLj/no3/fR/wAaTzphjDtx05NAH6N/sMfHL4iat+114R07x54mvr3TDPeIY7y6d4VLWk6KcO20EZwD71+7Pwz8TeG9M+KPiTw7LqFsF0rSvDtoG81NrFFuSdpzzjNfyEBmU7lJBHcVJ584OQ7ZPuaAP7Gfg58QvDGteEDLNqFsssOt6zbNulQEiC9uokPXpsVcHuK+fbRfD1/8BI/2R7TXdNfxnZ+HrIS24uEMY8uYbjvzjjbnHXBB71/LQJ5x0dh+J/xoinnhm+0QyMkg/jViG9Oo5oA+4v8AgpF4p8P+L/2wfE+p+GrqO8too7O2aWIhk8yG3RZFBHB2tkH3Br4YoooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAUdabqn/ISuP+ujfzpw603VP+Qlcf9dG/nQBQooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooA//U/DeiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigC/pf/ACEoP98Uo6Uml/8AISg/3xSjpQAV23hL4ceOPHaTS+EtMnvktyBI0a/KpPQZ6ZPYda4mvpvStB1/4h/BXQvDvw+mVrrSNQvH1C0EyxOWnMZguTkruUIpTd/DjtmgD5vv7C90u9l03UonguIGKSRyAqysvBBB5BFVK+8PD9jrU63z6DcaX4q8SJrkMGr3dyscitYpBGAUMmB5YcSJJKvJKg55zXR6Pf8Aw20vXtC8N+HLTTbnQ9S1PxEsrXESSO9vAS1qDI3zKoIGwggkd8UAfnZRX3H4euNK8V6Vpfiq3s9Nk8W3fhy8a0hMUSQyXkV/5YJh4jMott2wEfMQDgmvHPjNPYeHfH2iapaW1omq29hZXGq20CqbcX6ks6FFyg3KE8xRwGJHtQB8/wBFfoMumfCXRPFWnadpSWF0PFU93r1os+0xwZtW/s+zlP8ACv2ln3KSAdqg8VWt9Ks2+wy+ILHTE+IJ0XUHitNkSwtOs8YtmkiX915/kGYopHzYUkUAfE/hTwh4i8bar/Yvhi2a6uQjSFQQMKvUknAHJAHqSBXPSxSwStBOpR0JVlPBBBwQfoa/QLwDZxRan4jm8QWFkni5YNN222nR28v7o7zO3kyOIhLkR+aByvUAcmvH7C1+H9z+1TJbXNtBb6Q15KUt5pFe3Fx5LGNHdWZTGbjAPzEYOCaAPmybRtUt9Ig16aBls7qSSGKUj5XkiCl1B9VDrn6isyv0m0eG3ubbwdp3xdtrCDVY316SO1hSBUa6MMH2XzIgVi3Ng7AxAbC561npZ+Hj8QDHBoSDVH0NROdlkZ45jc4WdbTeYTJ5fyunBC/OBzQB+dNat/omqaZZWWoX0Jjh1CNpbdj/ABojlGI+jAiv0b8I6B4C0261eCwtrLWbtPEMqaiLaG38n7EY4yigTyDyYSTIGZCdrg84Ark/DPhrw7LaaPqegQQKY9FvpLeEwQ3NxMDq00amISssTOkYALtuAToO9AH590V9TeO/DnhaX9qaHQdLazs9NubyxZjIA1qjSQxPIGCMFKlywIVgMnAIFfQev6B4ROo6FfXVlar4ga11tLSG7it4FluoliazWaGJjGB8z+WGOWOAc0AfmtRX314H01G1/V5PHGnWCeK00m1a1t7KK3dzmZhM7QOwhFx5e3K9k5AzXVeGNJ8I6j418R6fo2lWlikt9ZrNcOtrdR22bceessJk+S3aQlmaJsocrnigD826K+5Y/D2iah8CHgWOw0+O2s5S14yQyw3UouyAyzBvPin28CMgrsHTnNexal4U8E2t/oSa1b2Tiz8UadBDJ5FvBDNZukglMao7u8DFVO6U5z+NAH52+G/hz458X6dcat4Z0ue9trUkSSRqSAQu4qPU7ecDnFcVX1F4P+J2txavrnxBuIUlk8OKLnTLWDZBZ29zLItus5iUjeVjHQZLEDdxmvl93eWRpZDlmJJPueTQA2iiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKAFHWm6p/yErj/ro386cOtN1T/kJXH/XRv50AUKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKAP/1fw3ooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAv6X/wAhKD/fFKOlJpf/ACEoP98Uo6UAFHfNFFAAOOnHakwKWigA6HIooooATApckncevXNFFAB0OR19aTAxilooADycnqaMnO7v60UUAJgYwOh4rpPEPizXfFAsU1mYOmm2y2lsiqqLHEhJ2gKBySSWPUkkmucooATAxilPJyetFFABk53d+ue9GMdKKKADtij6/SiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAUdabqn/ISuP8Aro386cOtN1T/AJCVx/10b+dAFCiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigD/1vw3ooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAv6X/wAhKD/fFKOlJpf/ACEoP98Uo6UAFX49MvpY1lSMlWGQfUVQrflA8m3/AOuQ/maAKX9k6h/zzNH9k6h/zzNTYFGBQBD/AGTqH/PM0f2TqH/PM1NgUYFAEP8AZOof88zR/ZOof88zU2BRgUAQ/wBk6h/zzNH9k6h/zzNTYFGBQBD/AGTq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AUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQB//S/DeiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigC/pf/ACEoP98Uo6VUgme3mWeP7yHI/Crf9pSf884/++BQAUUv9pSf884/++BR/aUn/POP/vgUAJRS/wBpSf8APOP/AL4FH9pSf884/wDvgUAJRS/2lJ/zzj/74FH9pSf884/++BQAlFL/AGlJ/wA84/8AvgUf2lJ/zzj/AO+BQAlFL/aUn/POP/vgUf2lJ/zzj/74FACUUv8AaUn/ADzj/wC+BR/aUn/POP8A74FACUUv9pSf884/++BR/aUn/POP/vgUAJRS/wBpSf8APOP/AL4FH9pSf884/wDvgUAJRS/2lJ/zzj/74FH9pSf884/++BQAlFL/AGlJ/wA84/8AvgUf2lJ/zzj/AO+BQAlFL/aUn/POP/vgUf2lJ/zzj/74FACUUv8AaUn/ADzj/wC+BR/aUn/POP8A74FACUUv9pSf884/++BR/aUn/POP/vgUAJRS/wBpSf8APOP/AL4FH9pSf884/wDvgUAJRS/2lJ/zzj/74FH9pSf884/++BQAlFL/AGlJ/wA84/8AvgUf2lJ/zzj/AO+BQAlFL/aUn/POP/vgUf2lJ/zzj/74FACUUv8AaUn/ADzj/wC+BR/aUn/POP8A74FACUUv9pSf884/++BR/aUn/POP/vgUAJRS/wBpSf8APOP/AL4FH9pSf884/wDvgUAA603VP+Qlcf8AXRv507+0pP8AnnH/AN8CqU0rzytPJyzksfqaAI6KKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKAP/9P8N6KKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooA//U/DeiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKAP/1fw3ooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigD/9b8N6KKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooA//Z" alt="Referência enviada: painel escuro com o título Bem-vindo, a pergunta Como você deseja acessar e três cards com ícone verde-limão: Área administrativa, Área do judge e Área do atleta.">
+      <figcaption>Referência enviada</figcaption>
+    </figure>
+  </header>
+
+  <!-- ================= OPÇÃO A ================= -->
+  <section class="opt" data-opt="a">
+    <div class="opt-head">
+      <div>
+        <h2><span class="letter">A</span>Escolher a área, depois entrar</h2>
+        <p class="sum">A referência vira a primeira tela, do jeito que está. Ao tocar num card, o mesmo painel troca para o formulário daquela área, com um botão para voltar.</p>
+      </div>
+      <div class="seg" role="group" aria-label="Largura da prévia da opção A">
+        <button type="button" aria-pressed="true" data-width="wide">Computador</button>
+        <button type="button" aria-pressed="false" data-width="narrow">Celular</button>
+      </div>
+    </div>
+
+    <div class="stage-wrap"><div class="stage">
+      <div class="m-panel">
+        <div class="a-choose">
+          <h3 class="m-title">Bem-vindo</h3>
+          <p class="m-sub">Como você deseja acessar?</p>
+          <div class="a-cards">
+            <button type="button" class="m-card" data-role="admin">
+              <span class="m-tile"><svg><use href="#i-admin"/></svg></span>
+              <span class="m-name">Área administrativa</span>
+              <span class="m-desc">Organização de eventos</span>
+            </button>
+            <button type="button" class="m-card" data-role="judge">
+              <span class="m-tile"><svg><use href="#i-judge"/></svg></span>
+              <span class="m-name">Área do judge</span>
+              <span class="m-desc">Arbitragem e resultados</span>
+            </button>
+            <button type="button" class="m-card" data-role="athlete">
+              <span class="m-tile"><svg><use href="#i-athlete"/></svg></span>
+              <span class="m-name">Área do atleta</span>
+              <span class="m-desc">Meus eventos e resultados</span>
+            </button>
+          </div>
+        </div>
+
+        <form class="a-form m-form" hidden novalidate>
+          <button type="button" class="a-back"><svg><use href="#i-back"/></svg>Trocar área</button>
+          <div class="a-head">
+            <span class="m-tile"><svg><use data-icon href="#i-judge"/></svg></span>
+            <h3 class="m-title" data-name>Área do judge</h3>
+            <p class="m-sub" data-hint></p>
+          </div>
+          <div class="m-field">
+            <label for="a-email">E-mail</label>
+            <input id="a-email" class="m-input" type="email" placeholder="voce@email.com" autocomplete="off">
+          </div>
+          <div class="m-field">
+            <label for="a-pass">Senha</label>
+            <div class="m-input-wrap">
+              <input id="a-pass" class="m-input" type="password" placeholder="Digite sua senha" autocomplete="off">
+              <button type="button" class="eye" aria-label="Mostrar senha"><svg><use href="#i-eye"/></svg></button>
+            </div>
+          </div>
+          <div class="m-row">
+            <label class="m-check"><input id="a-keep" type="checkbox">Manter conectado</label>
+            <button type="button" class="m-link">Esqueci minha senha</button>
+          </div>
+          <p class="m-error" role="alert" hidden></p>
+          <button type="submit" class="m-btn"><span data-cta>Entrar</span><svg><use href="#i-arrow"/></svg></button>
+          <p class="m-foot" data-foot></p>
+          <p class="demo-note" hidden></p>
+        </form>
+      </div>
+    </div></div>
+
+    <div class="notes">
+      <div>
+        <h3>Como funciona</h3>
+        <ol>
+          <li>Tela 1: os três cards da referência.</li>
+          <li>Tela 2: formulário com a área escolhida no topo, título e textos próprios de cada área.</li>
+          <li>No celular, os cards ficam empilhados em linhas para caber sem rolar.</li>
+        </ol>
+      </div>
+      <div>
+        <h3>A favor</h3>
+        <ul>
+          <li>É a referência aplicada sem adaptação.</li>
+          <li>Cada área ganha seu próprio texto de apoio. O judge, por exemplo, lê que a conta dele vem do organizador.</li>
+          <li>Abre espaço para, no futuro, cada área ter um jeito diferente de entrar.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Atenção</h3>
+        <ul>
+          <li>Um toque a mais antes de digitar a senha.</li>
+          <li>Hoje o login é um só e a área vem da conta. Se alguém escolher "judge" com conta de atleta, o app precisa abrir a área certa com um aviso.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= OPÇÃO B ================= -->
+  <section class="opt" data-opt="b">
+    <div class="opt-head">
+      <div>
+        <h2><span class="letter">B</span>Área e formulário na mesma tela</h2>
+        <p class="sum">Os três cards ficam à esquerda como uma escolha marcada, e o formulário à direita muda de texto conforme a área. Atleta já vem marcado, que é o caso mais comum.</p>
+      </div>
+      <div class="seg" role="group" aria-label="Largura da prévia da opção B">
+        <button type="button" aria-pressed="true" data-width="wide">Computador</button>
+        <button type="button" aria-pressed="false" data-width="narrow">Celular</button>
+      </div>
+    </div>
+
+    <div class="stage-wrap"><div class="stage">
+      <div class="m-panel b-grid">
+        <div class="b-left">
+          <div>
+            <h3 class="m-title">Bem-vindo</h3>
+            <p class="m-sub">Como você deseja acessar?</p>
+          </div>
+          <div class="b-roles" role="radiogroup" aria-label="Área de acesso">
+            <button type="button" class="b-role" role="radio" aria-checked="false" data-role="admin">
+              <span class="m-tile"><svg><use href="#i-admin"/></svg></span>
+              <span class="m-name"><span class="long">Área administrativa</span><span class="short">Admin</span></span>
+              <span class="dot" aria-hidden="true"></span>
+              <span class="m-desc">Organização de eventos</span>
+            </button>
+            <button type="button" class="b-role" role="radio" aria-checked="false" data-role="judge">
+              <span class="m-tile"><svg><use href="#i-judge"/></svg></span>
+              <span class="m-name"><span class="long">Área do judge</span><span class="short">Judge</span></span>
+              <span class="dot" aria-hidden="true"></span>
+              <span class="m-desc">Arbitragem e resultados</span>
+            </button>
+            <button type="button" class="b-role" role="radio" aria-checked="true" data-role="athlete">
+              <span class="m-tile"><svg><use href="#i-athlete"/></svg></span>
+              <span class="m-name"><span class="long">Área do atleta</span><span class="short">Atleta</span></span>
+              <span class="dot" aria-hidden="true"></span>
+              <span class="m-desc">Meus eventos e resultados</span>
+            </button>
+          </div>
+        </div>
+
+        <form class="b-right m-form" novalidate>
+          <div>
+            <h3 class="m-title" data-name>Área do atleta</h3>
+            <p class="m-sub" data-hint></p>
+          </div>
+          <div class="m-field">
+            <label for="b-email">E-mail</label>
+            <input id="b-email" class="m-input" type="email" placeholder="voce@email.com" autocomplete="off">
+          </div>
+          <div class="m-field">
+            <label for="b-pass">Senha</label>
+            <div class="m-input-wrap">
+              <input id="b-pass" class="m-input" type="password" placeholder="Digite sua senha" autocomplete="off">
+              <button type="button" class="eye" aria-label="Mostrar senha"><svg><use href="#i-eye"/></svg></button>
+            </div>
+          </div>
+          <div class="m-row">
+            <label class="m-check"><input id="b-keep" type="checkbox">Manter conectado</label>
+            <button type="button" class="m-link">Esqueci minha senha</button>
+          </div>
+          <p class="m-error" role="alert" hidden></p>
+          <button type="submit" class="m-btn"><span data-cta>Entrar</span><svg><use href="#i-arrow"/></svg></button>
+          <p class="m-foot" data-foot></p>
+          <p class="demo-note" hidden></p>
+        </form>
+      </div>
+    </div></div>
+
+    <div class="notes">
+      <div>
+        <h3>Como funciona</h3>
+        <ol>
+          <li>Uma tela só: escolher a área é opcional, porque atleta já vem marcado.</li>
+          <li>Trocar a área muda o título, o texto de apoio e o rodapé do formulário.</li>
+          <li>No celular, as áreas viram três botões curtos acima do formulário.</li>
+        </ol>
+      </div>
+      <div>
+        <h3>A favor</h3>
+        <ul>
+          <li>O atleta entra sem passo extra.</li>
+          <li>Mantém os três cards da referência à vista.</li>
+          <li>Parecido com a tela de hoje, que já tem a escolha "Atleta / Organizador" acima do formulário.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Atenção</h3>
+        <ul>
+          <li>Os cards ficam menores que na referência.</li>
+          <li>Mesmo cuidado da opção A com quem escolhe a área errada.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= OPÇÃO C ================= -->
+  <section class="opt" data-opt="c">
+    <div class="opt-head">
+      <div>
+        <h2><span class="letter">C</span>Um login só, a área vem da conta</h2>
+        <p class="sum">Ninguém escolhe nada: e-mail e senha, e o app abre a área da conta. As três áreas da referência aparecem ao lado para mostrar o que existe do outro lado.</p>
+      </div>
+      <div class="seg" role="group" aria-label="Largura da prévia da opção C">
+        <button type="button" aria-pressed="true" data-width="wide">Computador</button>
+        <button type="button" aria-pressed="false" data-width="narrow">Celular</button>
+      </div>
+    </div>
+
+    <div class="stage-wrap"><div class="stage">
+      <div class="m-panel c-grid">
+        <form class="c-main m-form" novalidate>
+          <p class="c-mark">WOD<span>ARENA</span></p>
+          <div>
+            <h3 class="m-title">Bem-vindo</h3>
+            <p class="m-sub">Entre com seu e-mail e senha. A WODArena abre a área certa para a sua conta.</p>
+          </div>
+          <div class="m-form">
+            <div class="m-field">
+              <label for="c-email">E-mail</label>
+              <input id="c-email" class="m-input" type="email" placeholder="voce@email.com" autocomplete="off">
+            </div>
+            <div class="m-field">
+              <label for="c-pass">Senha</label>
+              <div class="m-input-wrap">
+                <input id="c-pass" class="m-input" type="password" placeholder="Digite sua senha" autocomplete="off">
+                <button type="button" class="eye" aria-label="Mostrar senha"><svg><use href="#i-eye"/></svg></button>
+              </div>
+            </div>
+            <div class="m-row">
+              <label class="m-check"><input id="c-keep" type="checkbox">Manter conectado</label>
+              <button type="button" class="m-link">Esqueci minha senha</button>
+            </div>
+            <p class="m-error" role="alert" hidden></p>
+            <button type="submit" class="m-btn"><span data-cta>Entrar</span><svg><use href="#i-arrow"/></svg></button>
+            <p class="m-foot">Ainda não tem conta? Ela é criada na sua primeira inscrição. <a href="#" onclick="return false">Ver eventos</a></p>
+            <p class="demo-note" hidden></p>
+          </div>
+        </form>
+        <aside class="c-side">
+          <p class="c-label">Depois de entrar, você vai para</p>
+          <div class="c-area">
+            <span class="m-tile sm"><svg><use href="#i-admin"/></svg></span>
+            <span class="m-name">Área administrativa</span>
+            <span class="m-desc">Se você organiza eventos</span>
+          </div>
+          <div class="c-area">
+            <span class="m-tile sm"><svg><use href="#i-judge"/></svg></span>
+            <span class="m-name">Área do judge</span>
+            <span class="m-desc">Se você arbitra um evento</span>
+          </div>
+          <div class="c-area">
+            <span class="m-tile sm"><svg><use href="#i-athlete"/></svg></span>
+            <span class="m-name">Área do atleta</span>
+            <span class="m-desc">Se você compete</span>
+          </div>
+        </aside>
+      </div>
+    </div></div>
+
+    <div class="notes">
+      <div>
+        <h3>Como funciona</h3>
+        <ol>
+          <li>Um formulário único para todos.</li>
+          <li>As áreas são só informativas, sem clique.</li>
+          <li>No celular, as áreas descem para baixo do formulário.</li>
+        </ol>
+      </div>
+      <div>
+        <h3>A favor</h3>
+        <ul>
+          <li>Segue como o login funciona hoje por trás: um login, a área vem da conta.</li>
+          <li>Não existe "escolhi a área errada".</li>
+          <li>Menor mudança para implementar.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Atenção</h3>
+        <ul>
+          <li>Se afasta da referência: os cards deixam de ser a escolha principal.</li>
+          <li>Não há lugar para um texto específico de cada área antes de entrar.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= COMPARAÇÃO ================= -->
+  <section class="opt">
+    <div class="opt-head">
+      <div>
+        <h2>Comparação</h2>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th scope="col"></th><th scope="col">A · Escolher, depois entrar</th><th scope="col">B · Mesma tela</th><th scope="col">C · Login único</th></tr>
+        </thead>
+        <tbody>
+          <tr><th scope="row">Fiel à referência</th><td><span class="pill good">Alta</span>a referência é a primeira tela</td><td><span class="pill">Média</span>cards menores, ao lado do formulário</td><td><span class="pill warn">Baixa</span>cards viram informação</td></tr>
+          <tr><th scope="row">Passos até a senha</th><td><span class="pill">2</span>tocar no card, depois digitar</td><td><span class="pill good">1</span>atleta já vem marcado</td><td><span class="pill good">1</span>só o formulário</td></tr>
+          <tr><th scope="row">Escolher a área errada</th><td><span class="pill warn">Pode acontecer</span>o app corrige depois do login</td><td><span class="pill warn">Pode acontecer</span>o app corrige depois do login</td><td><span class="pill good">Não acontece</span></td></tr>
+          <tr><th scope="row">Texto próprio por área</th><td><span class="pill good">Sim</span></td><td><span class="pill good">Sim</span></td><td><span class="pill">Não</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="decide">
+      <div>
+        <h3 class="opt-tag" style="font-size:18px">Minha recomendação: opção A</h3>
+        <p>É a referência aplicada direto, e o passo a mais é pequeno: um toque num card grande. Ela também deixa cada área falar com o seu público, o que ajuda o judge, que hoje cai numa tela de login pensada para atleta e organizador.</p>
+        <p>Se preferir que o atleta entre mais rápido, a opção B tem o mesmo visual com um passo a menos.</p>
+      </div>
+      <div>
+        <h3 class="opt-tag" style="font-size:18px">Para decidir junto</h3>
+        <ul>
+          <li><strong>Cor de destaque:</strong> a referência usa verde-limão; o app hoje usa amarelo. Trocar só no login deixa a tela diferente do resto do app.</li>
+          <li><strong>Área errada (A e B):</strong> abrir a área certa da conta com um aviso, ou recusar o login com uma mensagem.</li>
+          <li><strong>Textos:</strong> os rodapés de cada área são sugestões e precisam da sua revisão.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+(function () {
+  var ROLES = {
+    admin: {
+      name: 'Área administrativa', icon: '#i-admin', cta: 'Entrar no painel',
+      hint: 'Para organizadores e gestores de eventos.',
+      foot: 'Quer organizar um evento na WODArena? <a href="#" onclick="return false">Fale com a gente</a>'
+    },
+    judge: {
+      name: 'Área do judge', icon: '#i-judge', cta: 'Entrar na arbitragem',
+      hint: 'Para judges atribuídos a um evento ou qualifier.',
+      foot: 'A conta de judge é criada pelo organizador do evento.'
+    },
+    athlete: {
+      name: 'Área do atleta', icon: '#i-athlete', cta: 'Entrar',
+      hint: 'Inscrições, baterias e resultados dos seus eventos.',
+      foot: 'Ainda não tem conta? Ela é criada na sua primeira inscrição. <a href="#" onclick="return false">Ver eventos</a>'
+    }
+  };
+
+  function fillForm(form, key) {
+    var r = ROLES[key];
+    form.dataset.role = key;
+    form.querySelectorAll('[data-name]').forEach(function (el) { el.textContent = r.name; });
+    form.querySelectorAll('[data-hint]').forEach(function (el) { el.textContent = r.hint; });
+    form.querySelectorAll('[data-cta]').forEach(function (el) { el.textContent = r.cta; });
+    form.querySelectorAll('[data-foot]').forEach(function (el) { el.innerHTML = r.foot; });
+    form.querySelectorAll('[data-icon]').forEach(function (el) { el.setAttribute('href', r.icon); });
+    resetForm(form);
+  }
+
+  function resetForm(form) {
+    form.querySelector('.demo-note').hidden = true;
+    form.querySelector('.m-error').hidden = true;
+    form.querySelectorAll('.m-input').forEach(function (i) { i.removeAttribute('aria-invalid'); });
+  }
+
+  // Cor de destaque
+  document.querySelectorAll('[data-accent]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      document.documentElement.style.setProperty('--accent', btn.dataset.accent);
+      btn.parentElement.querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', String(b === btn)); });
+    });
+  });
+
+  // Largura da prévia
+  document.querySelectorAll('[data-width]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var section = btn.closest('.opt');
+      section.querySelector('.stage').classList.toggle('narrow', btn.dataset.width === 'narrow');
+      btn.parentElement.querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', String(b === btn)); });
+    });
+  });
+
+  // Mostrar senha
+  document.querySelectorAll('.eye').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var input = btn.parentElement.querySelector('input');
+      var show = input.type === 'password';
+      input.type = show ? 'text' : 'password';
+      btn.setAttribute('aria-label', show ? 'Esconder senha' : 'Mostrar senha');
+    });
+  });
+
+  // Envio de exemplo: erro com campo vazio, carregando, depois o aviso do protótipo
+  document.querySelectorAll('form').forEach(function (form) {
+    var btn = form.querySelector('.m-btn');
+    var label = btn.querySelector('[data-cta]');
+    var note = form.querySelector('.demo-note');
+    var error = form.querySelector('.m-error');
+    form.querySelectorAll('.m-input').forEach(function (input) {
+      input.addEventListener('input', function () { input.removeAttribute('aria-invalid'); error.hidden = true; });
+    });
+    form.querySelector('.m-link').addEventListener('click', function () {
+      resetForm(form);
+      note.textContent = 'Protótipo: aqui abre o envio do link de recuperação de senha, que já existe hoje.';
+      note.hidden = false;
+    });
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      if (btn.getAttribute('aria-busy') === 'true') return;
+      resetForm(form);
+      var email = form.querySelector('input[type="email"]');
+      var pass = form.querySelector('.m-input-wrap input');
+      var missing = [];
+      if (!email.value.trim()) missing.push(email);
+      if (!pass.value) missing.push(pass);
+      if (missing.length) {
+        missing.forEach(function (i) { i.setAttribute('aria-invalid', 'true'); });
+        error.textContent = missing.length === 2 ? 'Preencha o e-mail e a senha para entrar.' : (missing[0] === email ? 'Preencha o e-mail para entrar.' : 'Preencha a senha para entrar.');
+        error.hidden = false;
+        missing[0].focus();
+        return;
+      }
+      var original = label.textContent;
+      btn.setAttribute('aria-busy', 'true');
+      label.textContent = 'Entrando…';
+      setTimeout(function () {
+        btn.removeAttribute('aria-busy');
+        label.textContent = original;
+        var key = form.dataset.role;
+        note.textContent = key
+          ? 'Protótipo: no app, aqui a senha é conferida e você entra na ' + ROLES[key].name.toLowerCase() + '.'
+          : 'Protótipo: no app, aqui a senha é conferida e você entra na área da sua conta.';
+        note.hidden = false;
+      }, 700);
+    });
+  });
+
+  // Opção A
+  var a = document.querySelector('[data-opt="a"]');
+  var aChoose = a.querySelector('.a-choose');
+  var aForm = a.querySelector('.a-form');
+  a.querySelectorAll('.m-card').forEach(function (card) {
+    card.addEventListener('click', function () {
+      fillForm(aForm, card.dataset.role);
+      aChoose.hidden = true;
+      aForm.hidden = false;
+      aForm.querySelector('input[type="email"]').focus({ preventScroll: true });
+    });
+  });
+  aForm.querySelector('.a-back').addEventListener('click', function () {
+    aForm.hidden = true;
+    aChoose.hidden = false;
+    var last = a.querySelector('.m-card[data-role="' + aForm.dataset.role + '"]');
+    if (last) last.focus({ preventScroll: true });
+  });
+
+  // Opção B
+  var b = document.querySelector('[data-opt="b"]');
+  var bForm = b.querySelector('form');
+  var bRoles = b.querySelectorAll('.b-role');
+  bRoles.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      bRoles.forEach(function (x) { x.setAttribute('aria-checked', String(x === btn)); });
+      fillForm(bForm, btn.dataset.role);
+    });
+  });
+  fillForm(bForm, 'athlete');
+})();
+</script>
