@@ -317,6 +317,23 @@ test('fila local: guarda o horário do toque, uma por onda, e sobrevive a recarr
   assert.equal(queue.describeHeatStartSync('saving', 1), 'Salvando 1 registro…');
   assert.equal(queue.describeHeatStartSync('saved', 0), 'Salvo');
   assert.equal(queue.describeHeatStartSync('offline', 0), 'Sem conexão');
+  assert.equal(queue.describeHeatStartSync('session', 1), 'Sessão expirada · largada guardada no aparelho');
+});
+
+test('resposta da largada: só sai da fila confirmada ou recusada de vez; sessão expirada, limite e serviço fora guardam o horário do toque', () => {
+  assert.equal(queue.classifyHeatStartResponse(200, true), 'started');
+  assert.equal(queue.classifyHeatStartResponse(409, true), 'started', 'outro aparelho largou antes: vale o horário do servidor');
+  assert.equal(queue.classifyHeatStartResponse(409, false), 'rejected');
+  assert.equal(queue.classifyHeatStartResponse(401, false), 'session');
+  for (const status of [429, 500, 502, 503, 599]) assert.equal(queue.classifyHeatStartResponse(status, false), 'retry', String(status));
+  for (const status of [400, 403, 404]) assert.equal(queue.classifyHeatStartResponse(status, false), 'rejected', String(status));
+
+  const screen = read('../src/components/race/HeatStartScreen.tsx');
+  assert.match(screen, /classifyHeatStartResponse\(response\.status, Boolean\(data\.startedAt\)\)/);
+  // 401: guarda, avisa e não agenda nova tentativa (sobe quando a tela volta com o login).
+  assert.match(screen, /if \(outcome === 'session'\) \{\s*setSyncStatus\('session'\);\s*setNotice\(\{ kind: 'session', heatId: item\.heatId, text: RACE_SESSION_EXPIRED_MESSAGE \}\);\s*return;\s*\}/);
+  assert.match(screen, /href="\/admin"[^>]*>Entrar de novo<\/Link>/);
+  assert.doesNotMatch(screen, /response\.status !== 503/);
 });
 
 // ---------------------------------------------------------------------------

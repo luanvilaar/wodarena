@@ -8,7 +8,9 @@ import { CourtShell } from '@/components/judge/CourtShell';
 import { RaceWaveList } from '@/components/race/RaceWaveList';
 import { useTapHold } from '@/components/sheet/useTapHold';
 import { useApp } from '@/context/AppContext';
+import { RACE_SESSION_EXPIRED_MESSAGE } from '@/lib/raceWallBall';
 import {
+  classifyHeatStartResponse,
   dequeueHeatStart,
   describeHeatStartSync,
   enqueueHeatStart,
@@ -29,7 +31,7 @@ import { retryDelayMs } from '@/lib/sheetSync';
 // Não existe tela de chegada (D1): o fim do tempo vem do Wall Ball (1.97).
 
 type WavesPayload = { event: { id: string; name: string; timeZone: string }; waves: RaceWave[] };
-type Notice = { kind: 'conflict' | 'error'; heatId: string; text: string };
+type Notice = { kind: 'conflict' | 'error' | 'session'; heatId: string; text: string };
 
 const HINT_MS = 2500;
 
@@ -74,9 +76,10 @@ export function HeatStartScreen({ eventId, heatId }: { eventId: string; heatId: 
       : previous));
   }, []);
 
-  // Envia a fila, uma largada por vez. Sem conexão (ou erro do servidor), tenta
-  // de novo com espera crescente; a largada recusada (acesso, onda vazia, sem
-  // percurso) sai da fila com o motivo na tela.
+  // Envia a fila, uma largada por vez. Sem conexão, limite de envios ou erro do
+  // servidor, tenta de novo com espera crescente; sessão expirada guarda e pede
+  // o login; a largada recusada (acesso, onda vazia, sem percurso) sai da fila
+  // com o motivo na tela (classifyHeatStartResponse).
   useEffect(() => {
     flushRef.current = async () => {
       if (flushing.current) return;
@@ -99,15 +102,24 @@ export function HeatStartScreen({ eventId, heatId }: { eventId: string; heatId: 
             response = new Response(null, { status: 599 });
           }
           const data = await response.json().catch(() => ({})) as { error?: string; startedAt?: string };
-          if (response.ok || (response.status === 409 && data.startedAt)) {
+          const outcome = classifyHeatStartResponse(response.status, Boolean(data.startedAt));
+          if (outcome === 'started') {
             updateQueue(dequeueHeatStart(queueRef.current, item.heatId));
             if (data.startedAt) markStarted(item.heatId, data.startedAt);
             if (response.status === 409) setNotice({ kind: 'conflict', heatId: item.heatId, text: data.error || 'Largada já registrada.' });
+            else setNotice((previous) => (previous?.kind === 'session' ? null : previous));
             retryAttempt.current = 0;
             started = true;
             continue;
           }
-          if (response.status >= 500 && response.status !== 503) {
+          // Sessão expirada: a largada fica no aparelho com o horário do toque e
+          // sobe quando a tela voltar com o login (load ou a aba em primeiro plano).
+          if (outcome === 'session') {
+            setSyncStatus('session');
+            setNotice({ kind: 'session', heatId: item.heatId, text: RACE_SESSION_EXPIRED_MESSAGE });
+            return;
+          }
+          if (outcome === 'retry') {
             setSyncStatus('offline');
             retryTimer.current = setTimeout(() => void flushRef.current(), retryDelayMs(retryAttempt.current));
             retryAttempt.current += 1;
@@ -173,13 +185,14 @@ export function HeatStartScreen({ eventId, heatId }: { eventId: string; heatId: 
 
   const syncText = describeHeatStartSync(syncStatus, queue.length);
   const synced = queue.length === 0 && syncStatus === 'saved';
-  const SyncIcon = syncStatus === 'offline' ? CloudOff : queue.length > 0 ? Loader2 : CheckCircle2;
+  const stalled = syncStatus === 'offline' || syncStatus === 'session';
+  const SyncIcon = stalled ? CloudOff : queue.length > 0 ? Loader2 : CheckCircle2;
   const syncBar = (
     <div
       role="status"
       aria-live="polite"
       className={`flex items-center gap-2 rounded-md border bg-background px-3 py-2.5 text-xs font-bold ${
-        synced ? 'border-trading-up/60 text-trading-up' : syncStatus === 'offline' ? 'border-trading-down text-trading-down' : 'border-primary text-foreground'
+        synced ? 'border-trading-up/60 text-trading-up' : stalled ? 'border-trading-down text-trading-down' : 'border-primary text-foreground'
       }`}
     >
       <SyncIcon className={`h-4 w-4 shrink-0 ${syncStatus === 'saving' ? 'motion-safe:animate-spin' : ''}`} aria-hidden="true" />
@@ -255,6 +268,12 @@ export function HeatStartScreen({ eventId, heatId }: { eventId: string; heatId: 
             <p className="text-sm text-muted">Outro aparelho largou esta onda antes. Nada foi alterado: vale o horário registrado.</p>
           </div>
         )}
+        {waveNotice?.kind === 'session' && (
+          <div role="alert" className="space-y-2 rounded-md border border-trading-down bg-trading-down/10 px-4 py-3 text-sm font-semibold">
+            <p>{waveNotice.text}</p>
+            <Link href="/admin" className="flex min-h-14 items-center justify-center rounded-xl border-2 border-card-border bg-card font-extrabold">Entrar de novo</Link>
+          </div>
+        )}
         {waveNotice?.kind === 'error' && (
           <p role="alert" className="rounded-md border border-trading-down bg-trading-down/10 px-4 py-3 text-sm font-semibold">{waveNotice.text}</p>
         )}
@@ -270,7 +289,7 @@ export function HeatStartScreen({ eventId, heatId }: { eventId: string; heatId: 
             <p className="text-[11px] font-bold uppercase tracking-widest text-trading-down">Guardada no aparelho</p>
             <p className="text-4xl font-extrabold tabular-nums">{formatRaceClock(new Date(queued.deviceAt).toISOString(), timeZone)}</p>
             <p className="text-sm font-semibold text-muted">
-              Horário do toque. {syncStatus === 'offline' ? 'Será enviada quando a conexão voltar. Não feche esta tela.' : 'Enviando ao servidor…'}
+              Horário do toque. {syncStatus === 'session' ? 'Será enviada depois que você entrar de novo.' : syncStatus === 'offline' ? 'Será enviada quando a conexão voltar. Não feche esta tela.' : 'Enviando ao servidor…'}
             </p>
           </div>
         ) : (
@@ -322,7 +341,7 @@ export function HeatStartScreen({ eventId, heatId }: { eventId: string; heatId: 
         ) : queued ? (
           <div className="flex min-h-14 items-center justify-center gap-2 rounded-xl border-2 border-trading-down text-base font-extrabold text-trading-down">
             <CloudOff className="h-5 w-5" aria-hidden="true" />
-            {syncStatus === 'offline' ? 'Largada guardada no aparelho' : 'Enviando a largada…'}
+            {stalled ? 'Largada guardada no aparelho' : 'Enviando a largada…'}
           </div>
         ) : (
           <>
