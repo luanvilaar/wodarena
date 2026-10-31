@@ -38,6 +38,8 @@ export type RaceWave = {
   startedAt: string | null;
   startedByName: string | null;
   runsCount: number;
+  /** Corridas da onda com resultado no leaderboard (fechadas ou DNF); só na leitura `waves` (Story 1.107). */
+  resultsCount?: number;
 };
 
 /** Cronograma do evento como lista: aceita o JSON gravado como texto. */

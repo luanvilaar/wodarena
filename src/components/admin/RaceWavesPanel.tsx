@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Clock, ExternalLink } from 'lucide-react';
+import { Clock, ExternalLink, RotateCcw } from 'lucide-react';
 
-import { RaceDecisionDialog, postRaceDecision, raceButton, raceInput } from '@/components/admin/RaceDecisionDialog';
+import { RaceDecisionDialog, postRaceDecision, raceButton, raceDangerButton, raceInput } from '@/components/admin/RaceDecisionDialog';
 import { describeWaveStart, formatRaceClock, type RaceWave } from '@/lib/raceWaves';
 import type { Event } from '@/types';
 
@@ -13,6 +13,8 @@ import type { Event } from '@/types';
 // largada, o link para a tela de largada e o botão "Corrigir largada" (AC7,
 // D14a, na leva da Story 1.98): muda a largada da onda inteira, com motivo, e
 // recalcula o bruto das corridas já fechadas pelo ponto único de republicação.
+// "Zerar largada" (Story 1.107): cancela as corridas da onda, tira os resultados
+// do leaderboard e deixa a onda largar de novo (teste real do organizador).
 
 type WavesPayload = { event: { timeZone: string }; waves: RaceWave[] };
 
@@ -21,6 +23,7 @@ export function RaceWavesPanel({ event }: { event: Event }) {
   const [error, setError] = useState('');
 
   const [fixing, setFixing] = useState<RaceWave | null>(null);
+  const [resetting, setResetting] = useState<RaceWave | null>(null);
   const [clock, setClock] = useState('');
   const [notice, setNotice] = useState('');
 
@@ -102,6 +105,11 @@ export function RaceWavesPanel({ event }: { event: Event }) {
                     <Clock className="h-4 w-4" aria-hidden="true" /> Corrigir largada
                   </button>
                 )}
+                {wave.startedAt && (
+                  <button type="button" className={raceDangerButton} onClick={() => setResetting(wave)} aria-label={`Zerar a largada da ${wave.title}`}>
+                    <RotateCcw className="h-4 w-4" aria-hidden="true" /> Zerar largada
+                  </button>
+                )}
               </div>
             </li>
           ))}
@@ -133,6 +141,32 @@ export function RaceWavesPanel({ event }: { event: Event }) {
             {' → '}<span className="font-bold tabular-nums">{clock.trim() || '—'}</span>
           </p>
         </RaceDecisionDialog>
+      )}
+      {resetting && payload && (
+        <RaceDecisionDialog
+          title={`Zerar largada da ${resetting.title}`}
+          subtitle={`Largada registrada: ${resetting.startedAt ? formatRaceClock(resetting.startedAt, payload.event.timeZone) : '—'} · ${resetting.athletes.length} ${resetting.athletes.length === 1 ? 'atleta' : 'atletas'}`}
+          reasonLabel="Motivo para zerar"
+          consequence={(
+            <div className="space-y-1">
+              <p>
+                {`${resetting.runsCount} ${resetting.runsCount === 1 ? 'corrida será cancelada' : 'corridas serão canceladas'}`}
+                {` e ${resetting.resultsCount ?? 0} ${(resetting.resultsCount ?? 0) === 1 ? 'resultado sai' : 'resultados saem'} do leaderboard.`}
+              </p>
+              <p>Os cartões abertos dos judges nesta onda param de aceitar registros. A onda volta a &quot;Não largou&quot; e pode largar de novo pela tela de largada.</p>
+            </div>
+          )}
+          confirmText="Zerar largada"
+          danger
+          explicitConfirm="Entendi: as corridas desta onda são canceladas e os resultados saem do leaderboard."
+          onClose={() => setResetting(null)}
+          onSubmit={async (reason) => {
+            const result = await postRaceDecision({ action: 'reset_heat', eventId: event.id, heatId: resetting.id, reason });
+            setResetting(null);
+            setNotice(`Largada da ${resetting.title} zerada: ${Number(result.runsCancelled ?? 0)} ${Number(result.runsCancelled ?? 0) === 1 ? 'corrida cancelada' : 'corridas canceladas'}. A onda pode largar de novo.${result.rulesetRenewed ? ' Nenhuma onda está correndo: a próxima largada usa o percurso como estiver na construção da prova.' : ''}`);
+            await load();
+          }}
+        />
       )}
     </section>
   );

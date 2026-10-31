@@ -23,6 +23,7 @@ import {
   markRaceRunDnf,
   readRaceManageBoard,
   republishAfterRaceClose,
+  resetRaceHeat,
   retryRaceRunRepublish,
   revokeRaceInfraction,
   unmarkRaceRunDnf
@@ -66,6 +67,8 @@ const LIMITS: Record<string, number> = {
   mark_dnf: 30,
   unmark_dnf: 30,
   adjust_heat_start: 10,
+  // Zerar a largada da onda (Story 1.107): cancela as corridas e retira os resultados.
+  reset_heat: 10,
   republish_run: 30,
   // Escala de judges por estação (Story 1.104, AC3): só orienta (D3), não entra no open_attempt.
   save_assignments: 60,
@@ -81,6 +84,7 @@ const DECISIONS: Record<string, DecisionHandler> = {
   mark_dnf: (db, actor, eventId, body) => markRaceRunDnf(db, actor, eventId, { runId: body.runId, reason: body.reason }),
   unmark_dnf: (db, actor, eventId, body) => unmarkRaceRunDnf(db, actor, eventId, { runId: body.runId, reason: body.reason }),
   adjust_heat_start: (db, actor, eventId, body) => adjustRaceHeatStart(db, actor, eventId, { heatId: body.heatId, clock: body.clock, reason: body.reason }),
+  reset_heat: (db, actor, eventId, body) => resetRaceHeat(db, actor, eventId, { heatId: body.heatId, reason: body.reason }),
   republish_run: (db, actor, eventId, body) => retryRaceRunRepublish(db, actor, eventId, { runId: body.runId, runIds: body.runIds })
 };
 

@@ -218,5 +218,6 @@ export const RACE_DECISION_LABELS: Record<string, string> = {
   adjust_time: 'Ajustou o tempo',
   mark_dnf: 'Marcou DNF',
   unmark_dnf: 'Desfez DNF',
-  adjust_heat_start: 'Corrigiu a largada'
+  adjust_heat_start: 'Corrigiu a largada',
+  reset_heat: 'Zerou a largada'
 };

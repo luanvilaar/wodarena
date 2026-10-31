@@ -17,6 +17,7 @@ import {
   closeRaceRunOnRelease,
   isMissingRaceSchema,
   readRaceClosingStationId,
+  renewRaceRulesetIfIdle,
   resolveEventTime,
   type RaceAttemptRow,
   type RaceInfractionRow,
@@ -27,8 +28,8 @@ import {
 import type { SessionUser } from '@/lib/serverSecurity';
 
 // Decisões do organizador na súmula Fitness Race (Story 1.98): revogar e
-// alterar penalidade, ajustar o tempo, marcar e desfazer DNF, e a correção da
-// largada da onda (Story 1.96, AC7, D14a). Não há DQ: o caso grave é DNF. Toda decisão
+// alterar penalidade, ajustar o tempo, marcar e desfazer DNF, a correção da
+// largada da onda (Story 1.96, AC7, D14a) e zerar a largada (Story 1.107). Não há DQ: o caso grave é DNF. Toda decisão
 // exige motivo (conferido aqui, não só na tela), grava race_decisions com o
 // antes e o depois e, quando muda tempo ou penalidade, chama o ponto único de
 // republicação (republishRaceRun), que recalcula penalty_seconds e
@@ -573,6 +574,90 @@ const heatStartPatch = (run: RaceRunRow, startedAt: string, newStart: number): P
   if (!Object.keys(patch).length) return null;
   patch.started_at = startedAt;
   return patch;
+};
+
+/**
+ * Zerar a largada da onda (Story 1.107): cancela as corridas e as tentativas
+ * da onda (nada é apagado além da marca da largada), retira os resultados do
+ * leaderboard pelo publicador (corrida cancelada não publica; o manual
+ * substituído volta, D25), renova o regulamento se não sobrou corrida ativa
+ * no evento, grava a decisão e apaga a marca por último. Passos que convergem
+ * ao repetir: falhou no meio, a onda segue "largada" e zerar de novo termina.
+ * A decisão vem antes da marca: a largada guardada no aparelho antes do
+ * zerar é recusada desde o primeiro instante sem largada (startRaceHeat).
+ */
+export const resetRaceHeat = async (supabaseAdmin: SupabaseClient, actor: SessionUser, eventId: string, input: { heatId?: unknown; reason?: unknown }) => {
+  assertDecider(actor);
+  const reason = readDecisionReason(input.reason);
+  const heatId = typeof input.heatId === 'string' ? input.heatId.trim() : '';
+  if (!heatId) throw new RaceSheetError('Informe a onda.', 400);
+  const event = check(await supabaseAdmin.from('events').select('id, event_schedule').eq('id', eventId).maybeSingle()) as { id: string; event_schedule?: unknown } | null;
+  if (!event) throw new RaceSheetError('Evento não encontrado.', 404);
+  if (!findRaceHeatItem(event.event_schedule, heatId)) throw new RaceSheetError('Onda não encontrada no cronograma do evento.', 404);
+  const mark = check(await supabaseAdmin.from('race_heat_marks').select('*').eq('event_id', eventId).eq('heat_id', heatId).maybeSingle()) as HeatMark | null;
+  if (!mark) throw new RaceSheetError('Esta onda ainda não largou.', 409);
+
+  const readHeatRuns = async () => (check(await supabaseAdmin.from('race_runs').select('*').eq('event_id', eventId).eq('heat_id', heatId)) || []) as RaceRunRow[];
+  const active = (await readHeatRuns()).filter((row) => row.status !== 'cancelled');
+  const results = active.filter((row) => row.status === 'finished' || row.status === 'dnf').length;
+
+  // 1. Corridas: a que mudou no meio (o árbitro liberou e ela fechou) é relida e cancelada do estado novo.
+  for (const original of active) {
+    let run: RaceRunRow | null = original;
+    for (let attempt = 0; run && run.status !== 'cancelled'; attempt += 1) {
+      try {
+        await updateRunIf(supabaseAdmin, run, { status: 'cancelled', updated_at: decisionTime() });
+        break;
+      } catch (error) {
+        if (!(error instanceof RaceSheetError) || error.status !== 409 || attempt >= 2) throw error;
+        run = check(await supabaseAdmin.from('race_runs').select('*').eq('id', run.id).maybeSingle()) as RaceRunRow | null;
+      }
+    }
+  }
+
+  // 2. Tentativas das corridas da onda (o judge com o cartão aberto recebe "corrida cancelada").
+  const runs = await readHeatRuns();
+  const runIds = runs.map((row) => row.id);
+  const openAttempts = runIds.length
+    ? ((check(await supabaseAdmin.from('race_attempts').select('id, status').in('run_id', runIds)) || []) as Pick<RaceAttemptRow, 'id' | 'status'>[]).filter((row) => row.status !== 'cancelled')
+    : [];
+  if (openAttempts.length) {
+    check(await supabaseAdmin.from('race_attempts').update({ status: 'cancelled', updated_at: decisionTime() }).in('id', openAttempts.map((row) => row.id)).neq('status', 'cancelled'));
+  }
+
+  // 3. Resultados: todas as corridas da onda, inclusive as canceladas num zerar anterior que parou no meio.
+  const failed: string[] = [];
+  for (const run of runs) {
+    try {
+      if (raceRunPublisher) await raceRunPublisher(supabaseAdmin, run);
+    } catch (error) {
+      console.error('Erro ao retirar o resultado da corrida Fitness Race:', error);
+      failed.push(run.id);
+    }
+  }
+  if (failed.length) {
+    throw new RaceSheetError(`As corridas da onda foram canceladas, mas ${failed.length === 1 ? '1 resultado não saiu' : `${failed.length} resultados não saíram`} do leaderboard. Zere a largada de novo para terminar.`, 500);
+  }
+
+  // 4. Regulamento: sem corrida ativa no evento, a próxima largada lê o percurso de novo (D6).
+  const rulesetRenewed = await renewRaceRulesetIfIdle(supabaseAdmin, eventId, actor);
+
+  const decision = await insertDecision(supabaseAdmin, actor, {
+    eventId, action: 'reset_heat', reason, heatId,
+    before: { started_at: mark.started_at, runs: active.length, results },
+    after: { runs_cancelled: active.length, attempts_cancelled: openAttempts.length, ruleset_renewed: rulesetRenewed }
+  });
+
+  // 5. A marca por último: a onda pode largar de novo.
+  check(await supabaseAdmin.from('race_heat_marks').delete().eq('event_id', eventId).eq('heat_id', heatId));
+  return {
+    decisionId: decision.id,
+    heatId,
+    runsCancelled: active.length,
+    attemptsCancelled: openAttempts.length,
+    resultsRemoved: results,
+    rulesetRenewed
+  };
 };
 
 // ---------------------------------------------------------------------------

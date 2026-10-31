@@ -430,6 +430,39 @@ export const ensureRaceRuleset = async (supabaseAdmin: SupabaseClient, eventId: 
   return row;
 };
 
+/**
+ * Zerar a largada (Story 1.107, AC7): sem nenhuma corrida ativa no evento e
+ * com o regulamento vigente travado, cria a versão seguinte destravada, com o
+ * preset e as regras da atual. A próxima largada tira o snapshot do percurso
+ * como estiver na construção da prova (D6). O gatilho do banco não deixa
+ * destravar; as corridas canceladas seguem com a versão delas. Devolve se
+ * renovou (duplicado = outro pedido já renovou).
+ */
+export const renewRaceRulesetIfIdle = async (supabaseAdmin: SupabaseClient, eventId: string, actor: SessionUser | null) => {
+  const active = (check(await supabaseAdmin.from('race_runs').select('id').eq('event_id', eventId).neq('status', 'cancelled')) || []) as { id: string }[];
+  if (active.length > 0) return false;
+  const current = await readCurrentRaceRuleset(supabaseAdmin, eventId);
+  if (!current?.locked_at) return false;
+  const row: RaceRulesetRow = {
+    id: newId('ruleset'),
+    event_id: eventId,
+    version: current.version + 1,
+    preset: current.preset,
+    name: current.name,
+    rules: structuredClone(current.rules),
+    course: current.course,
+    locked_at: null,
+    created_by: actor?.id ?? null,
+    created_at: nowIso()
+  };
+  const inserted = await supabaseAdmin.from('race_rulesets').insert(row);
+  if (inserted.error) {
+    if (isDuplicate(inserted.error)) return false;
+    check(inserted);
+  }
+  return true;
+};
+
 // ---------------------------------------------------------------------------
 // Corrida, tentativa e log
 // ---------------------------------------------------------------------------
@@ -1230,6 +1263,13 @@ const readHeatMark = async (supabaseAdmin: SupabaseClient, eventId: string, heat
   check(await supabaseAdmin.from('race_heat_marks').select('*').eq('event_id', eventId).eq('heat_id', heatId).maybeSingle()) as HeatMarkRow | null
 );
 
+/** Horário do último "Zerar largada" da onda (Story 1.107), ou nulo. */
+const readLastHeatReset = async (supabaseAdmin: SupabaseClient, eventId: string, heatId: string) => {
+  const rows = (check(await supabaseAdmin.from('race_decisions').select('created_at').eq('event_id', eventId).eq('heat_id', heatId).eq('action', 'reset_heat')) || []) as { created_at: string }[];
+  const times = rows.map((row) => Date.parse(row.created_at)).filter(Number.isFinite);
+  return times.length ? new Date(Math.max(...times)).toISOString() : null;
+};
+
 const alreadyStarted = (startedAt: string, timeZone?: string | null) => new RaceSheetError(
   `Largada já registrada às ${formatRaceClock(startedAt, timeZone || undefined)}.`,
   409,
@@ -1251,14 +1291,17 @@ export const readRaceWaves = async (supabaseAdmin: SupabaseClient, eventId: stri
   ]);
   const markRows = (check(marks) || []) as HeatMarkRow[];
   const runsByHeat = new Map<string, number>();
+  // Corridas com resultado no leaderboard (fechadas ou DNF): o "Zerar largada" (Story 1.107) avisa quantas saem.
+  const resultsByHeat = new Map<string, number>();
   for (const run of (check(runs) || []) as { heat_id: string | null; status: RaceRunStatus }[]) {
     if (!run.heat_id || run.status === 'cancelled') continue;
     runsByHeat.set(run.heat_id, (runsByHeat.get(run.heat_id) ?? 0) + 1);
+    if (run.status === 'finished' || run.status === 'dnf') resultsByHeat.set(run.heat_id, (resultsByHeat.get(run.heat_id) ?? 0) + 1);
   }
   const markMap = new Map<string, RaceWaveMark>(markRows.map((row) => [row.heat_id, { startedAt: row.started_at, startedByName: row.started_by_name }]));
   return {
     event: { id: event.id, name: event.name ?? '', timeZone: event.time_zone || RACE_DEFAULT_TIME_ZONE },
-    waves: buildRaceWaves(event.event_schedule, athletes, markMap, runsByHeat)
+    waves: buildRaceWaves(event.event_schedule, athletes, markMap, runsByHeat).map((wave) => ({ ...wave, resultsCount: resultsByHeat.get(wave.id) ?? 0 }))
   };
 };
 
@@ -1309,6 +1352,11 @@ export const startRaceHeat = async (supabaseAdmin: SupabaseClient, actor: Sessio
   const clockOffsetMs = Math.round(receivedAt - clientNow);
   const deviceAt = new Date(deviceAtMs).toISOString();
   const startedAt = resolveEventTime({ deviceAt, clockOffsetMs, serverAt: new Date(receivedAt).toISOString() }) as string;
+  // Story 1.107 (AC6): largada guardada na fila do aparelho antes de o organizador zerar a onda não larga de novo.
+  const lastReset = await readLastHeatReset(supabaseAdmin, eventId, heatId);
+  if (lastReset && Date.parse(startedAt) <= Date.parse(lastReset)) {
+    throw new RaceSheetError('Esta largada foi tocada antes de o organizador zerar a onda. Toque em Largar de novo.', 409);
+  }
 
   const result = await supabaseAdmin.rpc('race_start_heat', {
     p_event_id: eventId,
