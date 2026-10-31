@@ -274,6 +274,26 @@ test('view=stations: estações do evento agrupadas pela chave, na ordem, com ti
   assert.equal(fresh.body.stations.length, 8);
 });
 
+test('view=stations: regulamento ainda não travado segue o percurso editado; travado na largada, vale o snapshot (igual à escala)', async (t) => {
+  quiet(t);
+  seed();
+  const ruleset = await race.ensureRaceRuleset(client, EVENT);
+  // O organizador troca a Sled Push da dupla depois de o regulamento existir, antes de largar.
+  const duo = database.rows('divisions').find((row) => row.id === 'div-duo');
+  duo.course_layout = [run('run-1', 0), { id: 'burpee-duo', name: 'Burpee Broad Jump', type: 'station', orderIndex: 1 }];
+  let out = await get(JUDGE, { view: 'stations', eventId: EVENT });
+  assert.equal(out.status, 200, out.body.error);
+  let duoKeys = out.body.stations.filter((item) => item.divisions.some((division) => division.divisionId === 'div-duo')).map((item) => item.key);
+  assert.deepEqual(duoKeys, ['burpee-broad-jump'], 'a lista do judge mostra o percurso atual da dupla');
+  // Travado (primeira largada): nova edição do percurso não muda a lista.
+  database.rows('race_rulesets').find((row) => row.id === ruleset.id).locked_at = new Date().toISOString();
+  duo.course_layout = [run('run-1', 0), { id: 'row-duo', name: 'Row', type: 'station', orderIndex: 1 }];
+  out = await get(JUDGE, { view: 'stations', eventId: EVENT });
+  duoKeys = out.body.stations.filter((item) => item.divisions.some((division) => division.divisionId === 'div-duo')).map((item) => item.key);
+  assert.equal(out.body.stations.some((item) => item.key === 'row'), false);
+  assert.ok(duoKeys.length > 0 && !duoKeys.includes('row'), 'vale o snapshot travado');
+});
+
 test('view=station_board: só ondas largadas, atletas com a estação, dupla como um cartão, tentativa com árbitro e trechos, sem e-mail; 404, 400 e 403', async (t) => {
   quiet(t);
   seed();

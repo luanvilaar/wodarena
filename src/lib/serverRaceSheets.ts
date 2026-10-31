@@ -1541,7 +1541,9 @@ export const readRaceStations = async (supabaseAdmin: SupabaseClient, eventId: s
     supabaseAdmin.from('divisions').select('id, name').eq('event_id', eventId)
   ]);
   const divisions = ((check(divisionsResult) || []) as { id: string; name?: string }[]);
-  const course = ruleset ? ruleset.course : await buildRaceCourseSnapshot(supabaseAdmin, eventId);
+  // Igual à escala e à cobertura: o snapshot só vale depois de travado (primeira
+  // largada); antes disso a lista acompanha o percurso que o organizador editou.
+  const course = ruleset?.locked_at ? ruleset.course : await buildRaceCourseSnapshot(supabaseAdmin, eventId);
   return { event: { id: event.id, name: event.name ?? '', timeZone: event.time_zone || RACE_DEFAULT_TIME_ZONE }, stations: groupRaceEventStations(divisions, course) };
 };
 
