@@ -1,0 +1,98 @@
+schema: 1
+story: '1.95'
+story_title: 'Súmula Fitness Race (F1): Árbitros no Evento Fitness Race'
+gate: PASS
+status_reason: 'Re-gate 2026-10-30: REQ-001 fechado (o tratamento de erro novo vale só para Fitness Race; judgeCreationErrorResponse idêntico ao do HEAD; FF e Qualifier voltam ao 500; 3 de 3 mutações de vazamento derrubadas). Gate anterior (CONCERNS 88): Os 7 ACs estão no código e cobertos por teste; as três race_* são cópia exata das sheet_* com o filtro trocado (diff conferido) e foram executadas pelo QA em PGlite. Fica uma correção obrigatória por decisão do Luan: o tratamento de erro novo (4xx com mensagem) vazou para Functional Fitness e Qualifier e precisa valer só para Fitness Race.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-10-31T19:45:00-03:00'
+expires: '2026-11-13T23:30:00-03:00'
+quality_score: 92
+
+top_issues:
+  - id: REQ-001
+    severity: medium
+    status: resolved
+    resolution: 'Corrigido e conferido no re-gate de 2026-10-30: mensagens novas em raceJudgeErrorResponse, chamado só para RACE_JUDGE_FUNCTIONS em criar/atribuir/remover; teste em tests/race-judges.test.mjs cobre ev-ff e ev-qualifier (4 mensagens x 3 ações + PGRST202).'
+    finding: 'Correção obrigatória (decisão do Luan, 2026-10-30): o mapeamento novo de erros vale para os três tipos de evento. Em FF e Qualifier, atribuir e remover passaram de 500 "Erro ao persistir dados." para 4xx com mensagem (e PGRST202 para 503). O vazamento também atinge o createJudge de FF/Qualifier: as quatro mensagens novas (race_event_required, qualifier_judge_assignment_not_allowed, qualifier_judge_manager_mismatch, qualifier_judge_conflict_of_interest) entraram no judgeCreationErrorResponse compartilhado, então um conflito de interesse vindo de sheet_create_and_assign_judge ou qualifier_create_and_assign_judge, que saía 500, agora sai 409.'
+    refs: ['src/app/api/admin/persistence/route.ts:347-359', 'src/app/api/admin/persistence/route.ts:1146-1150', 'src/app/api/admin/persistence/route.ts:1163-1167', 'src/app/api/admin/persistence/route.ts:1180-1184']
+    suggested_owner: dev
+    suggested_action: 'Aplicar as quatro mensagens novas e o tratamento de erro de atribuir/remover só quando a família escolhida for RACE_JUDGE_FUNCTIONS; FF e Qualifier voltam exatamente ao comportamento anterior (createJudge com o mapeamento antigo; assign/remove com throw). Teste: em ev-ff e ev-qualifier, assign/remove com qualifier_judge_conflict_of_interest e PGRST202 respondem 500 "Erro ao persistir dados."; createJudge em ev-ff com qualifier_judge_manager_mismatch responde 500; ev-race segue com os 4xx e o 503.'
+  - id: REQ-002
+    severity: low
+    finding: 'Gestor de outro evento recebe 500 com "Acesso negado para este evento." em vez do 403 pedido no Testing. É o comportamento de ensureEventOwner em todas as ações da rota; nenhuma função é chamada e a mensagem é fixa (sem vazamento). Divergência declarada pelo @dev.'
+    refs: ['tests/race-judges.test.mjs:152-164']
+    suggested_owner: po
+    suggested_action: 'Story própria para padronizar 403 no ensureEventOwner da rota inteira (afeta FF; fora do escopo aqui).'
+  - id: TEST-001
+    severity: low
+    finding: 'No repositório as regras das race_* são travadas só por regex (o banco em memória não executa plpgsql). A execução real foi feita fora do repo: o QA rodou em PGlite as 63 migrations e a nova reaplicada, e conferiu os 12 casos (criar e atribuir, reatribuir sem erro, evento FF recusado, sheet_assign_judge em Race recusado, gestor de outro evento, judge de outro gestor, conflito por e-mail em maiúsculas, owner remove, gestor vencido, conta não criada quando a atribuição falha).'
+    refs: ['tests/race-judges.test.mjs:261-276']
+    suggested_owner: dev
+    suggested_action: 'Nenhuma agora; padrão do projeto. Reavaliar se o projeto adotar teste de banco real.'
+  - id: SEC-001
+    severity: low
+    finding: 'Herdado das sheet_* (cópia idêntica): v_judge.parent_manager_id <> v_event.organizer_id não recusa judge com parent_manager_id nulo (NULL <> x é nulo). Inalcançável hoje: qualifier_create_judge sempre grava o gestor e a rota de Race exige parent_manager_id.'
+    refs: ['supabase/migrations/20261030130000_race_judges.sql:68']
+    suggested_owner: data-engineer
+    suggested_action: 'Se um dia mexer nas três famílias, usar IS DISTINCT FROM.'
+  - id: DOC-001
+    severity: low
+    finding: 'CodeRabbit não rodado (exige commit).'
+    refs: ['docs/stories/1.95.story.md:137']
+    suggested_owner: dev
+    suggested_action: 'Rodar no DoD antes do push.'
+waiver: { active: false }
+
+evidence:
+  tests_reviewed: 11
+  risks_identified: 5
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7]
+    ac_gaps: []
+  gate_commands:
+    node_test_story: '76/76 (race-judges, race-sheets-route, race-sheets-migration, race-rules), rodado pelo QA'
+    npm_test: '1335/1335, rodado pelo QA'
+    npm_run_lint: '0 erros, 206 warnings (os mesmos); npx eslint nos arquivos da story: só o warning antigo FRAN_ABSENT em tests/scoresheets-route.test.mjs:494 (fora do diff)'
+    npm_run_typecheck: 'verde'
+    npm_run_build: 'verde na 2ª execução; a 1ª caiu no next/font ("reading ''1''"), instabilidade conhecida do loader de fonte, sem relação com a story'
+    migration: 'não aplicada; executada pelo QA em PGlite (63 migrations + reaplicação); pg_get_functiondef das 7 sheet_*/qualifier_* igual antes e depois; as 3 race_* com prosecdef, search_path=public e ACL só service_role'
+  independent_checks: 'diff -w das race_* contra a seção 6 de 20261017120000_scoresheets.sql: só muda o filtro de evento, o nome da exceção e um comentário. Mutação fora do repo (cópia no scratchpad): 9 mutações nos arquivos da 1.95, 9 derrubadas (helper Race->sheet, desconhecido->race, assign sem mapear erro, sem race_event_required, conflito 409->500, migration sem conflito por e-mail, filtro FF, GRANT para authenticated, aba sem filtro de tipo).'
+  regate_2026_10_30: 'judgeCreationErrorResponse comparado com git show HEAD: idêntico. Mutação no scratchpad (restaurada, cmp ok): assign, remove e createJudge vazando para FF/Qualifier, 3/3 derrubadas. npm test 1421/1421; typecheck verde; eslint nos arquivos alterados sem saída; build verde.'
+  notes: 'admin/page.tsx: comparado com o diff da 1.92 guardado antes da story, só entram o import, o tipo, os dois casts, as duas entradas de aba e a linha de render; o diff da 1.92 está intacto. Render da aba sheets de FF e tests/court-ui.test.mjs intactos. Teste alterado de propósito em scoresheets-route.test.mjs conforme a story.'
+
+auto_decisions_review:
+  - decision: 'Tratamento de erro novo também para FF/Qualifier'
+    verdict: 'Recusada pelo Luan: vira REQ-001 (correção obrigatória, inclui o createJudge).'
+  - decision: 'Gestor de outro evento segue 500 "Acesso negado"'
+    verdict: 'Aceitável nesta story (REQ-002, LOW); padronizar o 403 é mudança da rota inteira.'
+  - decision: 'Impressão digital das 61 migrations sem a race_sheets'
+    verdict: 'Aceitável enquanto a race_sheets não for aplicada; travar a impressão dela depois de aplicada.'
+  - decision: 'Helper dentro de route.ts'
+    verdict: 'Correto (arquivo de rota do Next não exporta helper); coberto pelos quatro tipos.'
+
+nfr_validation:
+  security: { status: PASS, notes: 'SECURITY DEFINER com search_path fixo, só service_role; mesmas travas das sheet_*; respostas sem o código do banco (teste confere).' }
+  performance: { status: PASS, notes: 'Sem mudança de custo.' }
+  reliability: { status: PASS, notes: 'Contrato de erro de FF/Qualifier restaurado (REQ-001 fechado no re-gate).' }
+  maintainability: { status: PASS, notes: 'Um helper só; painel copia o comportamento sem importar o de FF.' }
+
+before_applying_migration:
+  - 'Ordem: 20261030120000_race_sheets.sql primeiro, depois 20261030130000_race_judges.sql, e só então publicar o código (1.94 e 1.95 juntas ou nessa ordem).'
+  - 'A race_judges não cria nem altera tabela; reaplicar não falha. Depende de qualifier_create_judge e event_judges (já em produção).'
+  - 'Depois de aplicar: NOTIFY pgrst, ''reload schema''; se criar judge em evento Race responder 503.'
+  - 'Conferir as ACL: select proname, proacl from pg_proc where proname like ''race_%'';  (só service_role).'
+  - 'Rollback: DROP das 3 funções (comentado no cabeçalho); atribuições em event_judges ficam.'
+
+history:
+  - at: '2026-10-30T23:30:00-03:00'
+    gate: PASS
+    note: 'Gate original (ver status_reason).'
+  - at: '2026-10-31T19:45:00-03:00'
+    gate: PASS
+    note: 'Re-verificação de regressão depois da F2 (1.100–1.106) e das decisões D27–D30: veredito mantido. Nada da F2 toca a story: persistence route, RaceJudgesPanel, race-judges.test.mjs e as migrations race_sheets/race_judges iguais aos do gate; a migration da 1.104 só cria tabela e função próprias.'
+
+regression_recheck_2026_10_31:
+  verdict: 'PASS mantido'
+  baseline: 'cópia do código e dos testes de 2026-10-30 22:27 (sandbox do gate da F1) e serverRaceDecisions.ts do re-gate da 1.98 (22:40), comparados com o working tree de 2026-10-31'
+  commands: 'node --test race-*, leaderboard-*, scoresheets-route e court-ui: 307/307 (QA); npm test 1508/1508, lint 0 erros, typecheck e build verdes (coordenador)'
+  new_issues: []

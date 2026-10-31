@@ -1,0 +1,72 @@
+schema: 1
+story: '1.104'
+story_title: 'Súmula Fitness Race (F2): Escala de Judges por Estação, para o Evento Todo e por Onda'
+gate: PASS
+status_reason: 'Os 8 ACs estão no código e cobertos por teste; acesso (judge 403, gestor de outro evento e gestor vencido 403, owner pode), validações do save e a regra "onda com linhas substitui o padrão" foram travados por mutação (9 de 9 derrubadas nesta story). A migration foi conferida em PGlite (66 migrations + reaplicação): RLS sem policy, ACL só service_role na tabela e na função, SECURITY DEFINER com search_path fixo, CHECKs, índice único com COALESCE e gravação atômica; está pronta para aplicar antes do código. Ficam só LOWs.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-10-31T18:10:00-03:00'
+expires: '2026-11-14T18:10:00-03:00'
+quality_score: 92
+
+top_issues:
+  - id: REL-001
+    severity: low
+    finding: 'readAssignmentRows lê a escala do evento sem paginação. O PostgREST do Supabase devolve no máximo 1000 linhas por padrão; a gravação aceita 500 por escopo, então um evento com muitas ondas ajustadas (por exemplo 12 ondas de 80 linhas) passa de 1000 e a leitura corta linhas sem aviso (escala efetiva e "Minhas estações" errados).'
+    refs: ['src/lib/serverRaceAssignments.ts:53-56']
+    suggested_owner: dev
+    suggested_action: 'Paginar com range() ou limitar o total de linhas por evento; teste com mais de 1000 linhas no banco em memória.'
+  - id: REQ-001
+    severity: low
+    finding: 'Antes da primeira largada, com regulamento criado e não travado, a lista do judge (1.102) lê o percurso do regulamento e a escala lê divisions.course_layout; se o percurso mudar nesse intervalo as chaves divergem e "Minhas estações" pode não casar até a largada. Declarado pelo @dev.'
+    refs: ['src/lib/serverRaceAssignments.ts:82-90', 'docs/stories/1.104.story.md:141']
+    suggested_owner: dev
+    suggested_action: 'Usar a mesma fonte de percurso nas duas leituras (helper único) numa story futura.'
+  - id: DATA-001
+    severity: low
+    finding: 'Linhas de onda apagada do cronograma ficam no banco para sempre: são ignoradas na leitura, mas clear_wave_assignments exige onda do cronograma (404) e a função só limpa judge que saiu do evento. Sem efeito funcional, só resíduo.'
+    refs: ['src/lib/serverRaceAssignments.ts:207-216', 'src/lib/serverRaceAssignments.ts:269-275']
+    suggested_owner: dev
+    suggested_action: 'Na gravação do padrão, apagar também linhas de heat_id fora do cronograma (passar a lista de ondas válidas para a função) ou aceitar o resíduo e registrar.'
+  - id: REL-002
+    severity: low
+    finding: 'clear_wave_assignments é um DELETE direto, fora do pg_advisory_xact_lock que serializa race_save_judge_assignments. Um "Voltar ao padrão" e um "Gravar" da mesma onda no mesmo instante resolvem por ordem de chegada (último vence); não corrompe nada.'
+    refs: ['src/lib/serverRaceAssignments.ts:273', 'supabase/migrations/20261101120000_race_judge_assignments.sql:92']
+    suggested_owner: dev
+    suggested_action: 'Aceitar (dois gestores na mesma onda é raro) ou chamar a função com lista vazia, que já limpa o escopo dentro do lock.'
+  - id: A11Y-001
+    severity: low
+    finding: 'O seletor de escopo usa role="radiogroup"/role="radio" em botões sem navegação por setas nem tabIndex itinerante; leitor de tela anuncia rádio, mas o teclado se comporta como lista de botões.'
+    refs: ['src/components/admin/RaceAssignmentsPanel.tsx:180-197', 'src/components/admin/RaceAssignmentsPanel.tsx:224']
+    suggested_owner: dev
+    suggested_action: 'Trocar por aria-pressed (como o filtro de ondas da 1.105) ou implementar as setas.'
+  - id: DOC-001
+    severity: low
+    finding: 'Pendências do DoD: revisão do @data-engineer, migration aplicada em produção antes do código, CodeRabbit pós-commit e conferência visual do painel no navegador. A pergunta ao Luan (escala orienta e não bloqueia) está respondida na prática pela D41 ("mostra o judge que abriu cartão sem estar na escala, a escala só orienta"), mas o item do DoD segue aberto.'
+    refs: ['docs/stories/1.104.story.md:159-164', 'docs/design/fitness-race-sumula/DECISOES.md:80']
+    suggested_owner: po
+    suggested_action: 'Registrar a D41 como resposta à pergunta; aplicar a migration (ordem abaixo) antes de publicar o código.'
+waiver: { active: false }
+
+evidence:
+  tests_reviewed: 24
+  risks_identified: 6
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8]
+    ac_gaps: []
+    notes: 'AC1 (estático + PGlite), AC2 (puro + view), AC3 (save/clear, validações, 500 linhas, 429, 503, atomicidade), AC4 (view=assignments sem e-mail, órfã, snapshot travado vs course_layout), AC5 (estático do painel: seção, 44 px, selos), AC6 (my_stations e open_attempt fora da escala), AC7 (impressão digital das race_* e FF), AC8 (sem DQ, sem raias).'
+  auto_decisions_reviewed:
+    - 'Escala orienta e não bloqueia open_attempt: coerente com D3 e D41.'
+    - 'Onda com linhas próprias substitui o padrão inteiro: correto e travado por mutação.'
+    - 'Coluna id TEXT PK além do AC1: aceitável (o índice com COALESCE não serve de PK).'
+    - 'Órfã já gravada aceita no reenvio: coerente com "avisar e não apagar sozinho".'
+    - 'Onda em andamento = largou e tem corrida racing: ok.'
+  migration_review:
+    file: 'supabase/migrations/20261101120000_race_judge_assignments.sql'
+    ready_to_apply: true
+    order: 'race_sheets, race_judges, race_start_heat, race_publication, depois esta; e só então o código da 1.104/1.105'
+    checks: 'PGlite (independente do @dev, com privilégios padrão do Supabase simulados para tabelas e funções): 66 migrations + reaplicação sem erro; RLS ligada; 0 policies; ACL da tabela só postgres e service_role; função SECURITY DEFINER, search_path=public, EXECUTE só service_role (anon e authenticated false); índice único recusa repetido no padrão e na onda; CHECK recusa heat_id vazio, heat_id > 120 e chave fora do formato; reenvio idempotente (ids preservados); judge removido apagado na gravação seguinte; falha no meio não altera o escopo; evento FF e evento inexistente recusados; ON DELETE CASCADE do evento apaga a escala. Padrão igual ao das race_* anteriores (cabeçalho, rollback comentado, constraints no CREATE TABLE, REVOKE/GRANT).'
+  gate_commands:
+    node_test_story: '24/24 em tests/race-assignments*.test.mjs (rodado pelo QA)'
+    node_test_race: '278/278 em tests/race-*.test.mjs + scoresheets-route (rodado pelo QA)'
+    npm_test_lint_typecheck_build: 'informado pelo coordenador: 1508/1508, 0 erros, verde, verde (build não repetido pelo QA a pedido)'
+  independent_checks: 'Mutação no scratchpad (restaurada e conferida com cmp), todas derrubadas: sem checar judge do evento; sem checar estação; escala com acesso de judge; resolve ignorando judge removido; onda somando o padrão; my_stations sem filtrar quem pede; sem limite de 500; judges de outro gestor aceitos; (e as 5 da 1.105).'

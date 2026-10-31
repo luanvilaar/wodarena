@@ -1,0 +1,98 @@
+schema: 1
+story: '1.98'
+story_title: 'Súmula Fitness Race (F1): Painel do organizador, decisões e republicação'
+gate: PASS
+status_reason: 'Re-gate 2026-10-30: REL-001 e REL-002 fechados (corrida antes da proposta com releitura no 409; correção de largada repetível, corridas primeiro e marca por último); 3 de 5 mutações derrubadas, as 2 sobreviventes são compensações de falha sem teste (TEST-001, LOW). Gate anterior (CONCERNS 85): Os 16 ACs (e o AC7 da 1.96) estão no código e cobertos por teste; acesso (judge e gestor de outro evento 403, só dono ou owner decidem), motivo obrigatório, before completo e o desfazer de DQ e DNF foram travados por mutação. Ficam dois achados MEDIUM do mesmo limite já declarado (sem transação entre a corrida e a decisão): na confirmação de DQ e na correção da largada, uma liberação no mesmo instante deixa o estado pela metade e sem registro em race_decisions. Recomendado corrigir antes do primeiro evento real; não bloqueia.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-10-31T19:45:00-03:00'
+expires: '2026-11-13T23:30:00-03:00'
+quality_score: 90
+
+top_issues:
+  - id: REL-001
+    severity: medium
+    status: resolved
+    obsolete_reason: 'Depois do re-gate, o confirm_dq deixou de existir (D27): item sem objeto.'
+    resolution: 'Re-gate 2026-10-30: a corrida muda antes da proposta; no 409 relê (até 3 tentativas) e desclassifica do estado novo; cancelada no meio = 409 com proposta pending e sem decisão. Teste [REL-001] em tests/race-penalties-panel.test.mjs.'
+    finding: 'Confirmar DQ grava a proposta como confirmed antes de mudar a corrida. Se a corrida muda no meio (o árbitro libera o atleta no mesmo instante), updateRunIf responde 409 e a proposta fica confirmed com a corrida finished, sem decisão gravada e sem republicar. O placar segue com o tempo até a próxima republicação, que então retira o tempo (computeOfficialSeconds devolve nulo) sem publicar DQ. A proposta some da lista de pendentes e "Desfazer DQ" não vale (corrida não está disqualified). Saída manual: "Desclassificar" direto e, se for o caso, "Desfazer DQ". Mesmo padrão em disqualify e mark_dnf se o insert da decisão falhar (corrida presa sem before para desfazer), mas isso só com falha de banco.'
+    refs: ['src/lib/serverRaceDecisions.ts:410-422', 'src/lib/serverRaceDecisions.ts:131-136']
+    suggested_owner: dev
+    suggested_action: 'Mudar a corrida antes da proposta, ou devolver a proposta a pending quando updateRunIf der 409 (compensação). Teste: substituto que faz o update da corrida não pegar e espera a proposta pending e nenhuma decisão. Solução definitiva (RPC com FOR UPDATE) segue para a F2.'
+  - id: REL-002
+    severity: medium
+    status: resolved
+    resolution: 'Re-gate 2026-10-30: corridas primeiro, marca por último, releitura no 409 do laço; o 400 só quando marca e corridas já estão certas. Teste [REL-002] em tests/race-penalties-panel.test.mjs.'
+    finding: 'adjust_heat_start (AC7 da 1.96) grava a largada nova na marca e depois corrida a corrida. Uma liberação durante o laço faz updateRunIf responder 409: parte da onda fica com a largada nova, parte com a antiga, sem decisão gravada e sem republicar. Tentar de novo com o mesmo horário dá 400 "Este já é o horário da largada", porque a marca já mudou; o organizador precisa passar por outro horário e voltar, ou ajustar atleta a atleta. O risco é real quando a correção é feita com atletas da onda terminando; logo depois da largada (caso mais comum) não há liberação e não acontece.'
+    refs: ['src/lib/serverRaceDecisions.ts:653', 'src/lib/serverRaceDecisions.ts:663-683']
+    suggested_owner: dev
+    suggested_action: 'Tornar a ação repetível: comparar também o started_at das corridas (não só a marca) antes do 400, e atualizar as corridas antes da marca; ou mover para uma função no banco numa transação. Teste com uma corrida que muda de racing para finished no meio do laço.'
+  - id: TEST-001
+    severity: low
+    status: obsolete
+    obsolete_reason: 'As compensações do confirmar DQ saíram junto com a ação (D27).'
+    finding: 'Duas compensações de falha do confirmar DQ não têm teste (mutações sobreviveram): desfazer a corrida quando a proposta já foi decidida por outra requisição, e devolver a proposta a pending (com a corrida desfeita) quando o insert da decisão falha. O código está correto na leitura.'
+    refs: ['src/lib/serverRaceDecisions.ts:437-442', 'src/lib/serverRaceDecisions.ts:452-461']
+    suggested_owner: dev
+    suggested_action: 'Dois testes com substituto: updateInfractionIf com 409 (proposta rejeitada por outra requisição) espera a corrida de volta; insertDecision falhando espera 503, proposta pending e corrida de volta.'
+  - id: REL-003
+    severity: low
+    finding: 'Risco residual declarado, sem transação: disqualify e mark_dnf mudam a corrida e depois gravam a decisão; se o insert falhar, a corrida fica mudada sem before para desfazer. Em adjust_heat_start, se o insert da decisão falhar depois das corridas e da marca, a mudança fica sem registro em race_decisions e repetir o mesmo horário dá 400. Só com falha do banco, não com concorrência normal; saída manual.'
+    refs: ['src/lib/serverRaceDecisions.ts:495', 'src/lib/serverRaceDecisions.ts:747-756']
+    suggested_owner: architect
+    suggested_action: 'Item da F2: mover decisões para RPC no banco com transação e FOR UPDATE (junto com DATA-001).'
+  - id: UX-002
+    severity: low
+    finding: '"Lançar à mão" acha o botão da aba pelo texto exato "Lançar Resultados". Se o rótulo mudar em admin/page.tsx, o atalho só mostra o aviso para abrir a aba (sem quebrar).'
+    refs: ['src/components/admin/RacePenaltiesPanel.tsx:111-116']
+    suggested_owner: dev
+    suggested_action: 'Quando admin/page.tsx puder mudar, trocar por um callback ou um data-attribute na aba.'
+  - id: DATA-001
+    severity: low
+    finding: 'Os CHECKs de coerência de race_runs (finished exige bruto e fim, dnf e disqualified sem oficial) da revisão L3 ficaram de fora; a coerência é só do serviço (escrita só por service_role). O CHECK de status já existe.'
+    refs: ['supabase/migrations/20261030120000_race_sheets.sql']
+    suggested_owner: data-engineer
+    suggested_action: 'Migration própria na F2, depois de conferir os dados gravados.'
+  - id: UX-001
+    severity: low
+    finding: 'Divergências da maquete declaradas: cartões em todas as larguras (a maquete usa tabela no desktop; o AC15 manda cartões), bloco do regulamento antes das Ondas, modal de corrigir largada com antes e depois da largada. Falta a conferência em 320/768/1024/1440.'
+    refs: ['docs/stories/1.98.story.md:170-173']
+    suggested_owner: ux-design-expert
+    suggested_action: 'O Luan confere na tela.'
+  - id: DOC-002
+    severity: low
+    finding: 'Re-verificação 2026-10-31: as decisões D27 a D30 (sem DQ, casos de DQ viram tempo, regulamento fixo, sem infração geral à mão) foram aplicadas no código depois deste gate, sem story nem Dev Agent Record. O código segue as decisões e os testes foram trocados sem afrouxar, mas o texto destes ACs, marcados [x], descreve comportamento que não existe mais: AC5, AC6, AC14 e AC16 (inteiros) e a escolha de preset do AC10 (D27, D29, D30).'
+    refs: ['docs/design/fitness-race-sumula/DECISOES.md']
+    suggested_owner: po
+    suggested_action: 'Anotar cada AC como superado pela decisão correspondente (sem apagar o histórico) antes de mover a story para Done.'
+waiver: { active: false }
+
+evidence:
+  tests_reviewed: 23
+  risks_identified: 5
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+    ac_gaps: []
+    story_1_96_ac7: 'coberto (adjust_heat_start: só dono e owner, motivo, race_heat_marks e race_runs, recálculo e republicação); ver REL-002'
+  gate_commands:
+    npm_test: '1419/1419, rodado pelo QA'
+    node_test_race: '160/160 em tests/race-*.test.mjs'
+    npm_run_typecheck: 'verde'
+    npm_run_build: 'verde'
+    eslint_arquivos_novos: '0 erros, 0 avisos'
+  independent_checks: 'Mutação fora do repo (restaurada e conferida com cmp), todas derrubadas: judge decidindo (rota com acesso de judge e sem assertDecider, em par; cada guarda sozinha é coberta pela outra); motivo opcional; undo_dq sem before completo; before sem finish_at; undo_dq sem revogar a proposta confirmada; recálculo do motor reativando revogada e cancelando decidida (em par). race_decisions aceita todas as ações do código (CHECK por regex) e actor_role system, conferido em PGlite.'
+  regate_2026_10_30: 'Mutação no scratchpad (restaurada, cmp ok): confirm_dq sem releitura no 409, 400 só pela marca, laço da largada sem releitura derrubadas; sobreviveram desfazer corrida no 409 da proposta e devolver proposta a pending na falha da decisão (TEST-001). npm test 1421/1421 (disqualify, mark_dnf, undo_dq, set_ruleset e republish_run verdes); typecheck verde; eslint nos arquivos alterados sem saída; build verde.'
+  notes: 'Sem migration nesta story. admin/page.tsx sem mudança desta story (diff igual ao da 1.92 mais as 7 linhas da 1.95).'
+
+history:
+  - at: '2026-10-30T23:30:00-03:00'
+    gate: PASS
+    note: 'Gate original (ver status_reason).'
+  - at: '2026-10-31T19:45:00-03:00'
+    gate: PASS
+    note: 'Re-verificação de regressão depois da F2 (1.100–1.106) e das decisões D27–D30: veredito mantido. decide_dq, disqualify_run, undo_dq, add_infraction e set_ruleset saíram da rota e do serviço; 8 testes dessas ações removidos e teste estático de que não voltaram. Revogar, alterar, ajustar tempo, DNF e desfazer, republicação e correção da largada seguem com os mesmos testes, inclusive [REL-002]. closeIfLastStationReleased (1.101) com mutação derrubada; updateRunIf mais estrito. REL-003 segue para mark_dnf e adjust_heat_start.'
+
+regression_recheck_2026_10_31:
+  verdict: 'PASS mantido'
+  baseline: 'cópia do código e dos testes de 2026-10-30 22:27 (sandbox do gate da F1) e serverRaceDecisions.ts do re-gate da 1.98 (22:40), comparados com o working tree de 2026-10-31'
+  commands: 'node --test race-*, leaderboard-*, scoresheets-route e court-ui: 307/307 (QA); npm test 1508/1508, lint 0 erros, typecheck e build verdes (coordenador)'
+  new_issues: ['DOC-002']

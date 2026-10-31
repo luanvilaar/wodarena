@@ -1,0 +1,65 @@
+schema: 1
+story: '1.97'
+story_title: 'Súmula Fitness Race (F1): Wall Ball, liberação e fechamento do tempo'
+gate: PASS
+status_reason: 'Os 18 ACs estão no código e cobertos por teste. Só a liberação com as reps completas fecha o tempo (D1, D22); exit no Wall Ball é recusado com 400 sem gravar nada; abandon não fecha a tentativa nem a corrida e é desfazível; Propor DQ exige motivo e não muda o tempo (D16); a tentativa liberada recusa registro (409); corrida encerrada recusa registro novo (REQ-001 do gate 1.94 fechado).'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-10-31T19:45:00-03:00'
+expires: '2026-11-13T22:45:00-03:00'
+quality_score: 92
+
+top_issues:
+  - id: UX-001
+    severity: low
+    finding: 'Divergências da maquete declaradas pelo @dev: sem "alvo 2,70 m" (o percurso não guarda a altura do alvo), texto da confirmação do DQ conforme o AC15 e não a maquete, lista da onda sem indicador de sincronização (não tem fila). O tempo exibido (D21) não usa o desvio do relógio; o rótulo "provisório" cobre e o oficial vem do servidor.'
+    refs: ['docs/stories/1.97.story.md:200', 'docs/stories/1.97.story.md:204-208']
+    suggested_owner: ux-design-expert
+    suggested_action: 'O Luan confere na tela; altura do alvo no percurso fica para a F2 se ele quiser.'
+  - id: TEST-001
+    severity: low
+    finding: 'Falta aparelho real (iPhone e Android): vibração, Wake Lock, segurar para liberar e fila com a rede caindo.'
+    refs: ['docs/stories/1.97.story.md:212']
+    suggested_owner: dev
+    suggested_action: 'Ensaio com dois celulares antes do primeiro evento.'
+  - id: DOC-001
+    severity: low
+    finding: 'CodeRabbit não rodado (exige commit).'
+    refs: ['docs/stories/1.97.story.md:212']
+    suggested_owner: dev
+    suggested_action: 'Rodar no DoD antes do push.'
+  - id: DOC-002
+    severity: low
+    finding: 'Re-verificação 2026-10-31: as decisões D27 a D30 (sem DQ, casos de DQ viram tempo, regulamento fixo, sem infração geral à mão) foram aplicadas no código depois deste gate, sem story nem Dev Agent Record. O código segue as decisões e os testes foram trocados sem afrouxar, mas o texto destes ACs, marcados [x], descreve comportamento que não existe mais: AC15 (Propor DQ, inteiro); a parte "só o Wall Ball fecha" de AC7/AC10/AC11 foi trocada pela D34 e está documentada na Story 1.101.'
+    refs: ['docs/design/fitness-race-sumula/DECISOES.md']
+    suggested_owner: po
+    suggested_action: 'Anotar cada AC como superado pela decisão correspondente (sem apagar o histórico) antes de mover a story para Done.'
+waiver: { active: false }
+
+evidence:
+  tests_reviewed: 25
+  risks_identified: 3
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
+    ac_gaps: []
+  gate_commands:
+    npm_test: '1419/1419, rodado pelo QA'
+    node_test_race: '160/160 em tests/race-*.test.mjs'
+    npm_run_typecheck: 'verde'
+    npm_run_build: 'verde (rotas wall-ball e wall-ball/[attemptId])'
+    eslint_arquivos_novos: '0 erros, 0 avisos'
+  independent_checks: 'Mutação fora do repo (restaurada e conferida com cmp), todas derrubadas: exit aceito no Wall Ball; abandon fechando a estação; abandon aceito com o contador travado; fechamento sem as penalidades vigentes (oficial = bruto); recálculo do motor sobrescrevendo e cancelando infração decidida pelo organizador (mutadas em par as duas guardas, decided_at no filtro e no UPDATE).'
+  notes: 'Testes existentes ajustados de propósito em race-sheets-route.test.mjs (exit agora 400; desfazer a liberação 409) conferidos contra D22 e AC10.'
+
+history:
+  - at: '2026-10-30T22:45:00-03:00'
+    gate: PASS
+    note: 'Gate original (ver status_reason).'
+  - at: '2026-10-31T19:45:00-03:00'
+    gate: PASS
+    note: 'Re-verificação de regressão depois da F2 (1.100–1.106) e das decisões D27–D30: veredito mantido. propose_dq saiu da tela e do servidor (teste: recusado 400, nada gravado; renderização sem "Propor DQ"). O fechamento passou a ser a liberação da última estação (1.101); com o Wall Ball no fim nada muda, no meio a tela não mostra tempo. Mutação "qualquer Wall Ball fecha": derrubada. D22, D24 e REQ-001 seguem testados.'
+
+regression_recheck_2026_10_31:
+  verdict: 'PASS mantido'
+  baseline: 'cópia do código e dos testes de 2026-10-30 22:27 (sandbox do gate da F1) e serverRaceDecisions.ts do re-gate da 1.98 (22:40), comparados com o working tree de 2026-10-31'
+  commands: 'node --test race-*, leaderboard-*, scoresheets-route e court-ui: 307/307 (QA); npm test 1508/1508, lint 0 erros, typecheck e build verdes (coordenador)'
+  new_issues: ['DOC-002']

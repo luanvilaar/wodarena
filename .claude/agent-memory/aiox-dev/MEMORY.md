@@ -6,3 +6,9 @@
 - [Browser check via CDP](reference_browser-check-cdp.md) — no Playwright; headless Chrome + CDP; sumula-preview pages, telão via Fetch interception of /api/telao; never the logged-in panel (prod DB)
 - [CodeRabbit on own commit](reference_coderabbit-own-commit.md) — use `--base-commit <parent>`; `--base origin/main` sweeps in other unpushed commits; free tier rate-limits after 3 reviews
 - [Parallel agent commits](project_parallel-agent-commits.md) — @qa commits on main mid-task; check HEAD is yours before `git commit --amend`
+- [Race fixture future start](project_race-fixture-future-start.md) — race test runs start 2026-11-01 (future); backdate started_at or release won't close the run (AC11)
+- [REL-002 flake fixed](project_flaky-rel002-heat-start.md) — was updated_at ms collision in updateRunIf; fixed 2026-10-31, a failure now is a real regression
+- [Harness module instance](project_test-harness-module-instance.md) — importServerModule shares route's module (setters work); fake rows are live refs
+- [Race judge capacity in tests](project_race-judge-capacity-tests.md) — since 1.103 max 2 active attempts per person, solo station alone; spread fixtures across judges
+- [Race split min 1 s in tests](project_race-split-min-duration-tests.md) — since 1.106 split needs >= 1 s; give events past deviceAt or no split key
+- [Coverage waiting estimate](project_coverage-waiting-estimate.md) — 1.105: open attempt = at station, not waiting next (AC3 deviation, pending confirmation)

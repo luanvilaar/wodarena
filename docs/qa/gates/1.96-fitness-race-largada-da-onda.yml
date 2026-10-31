@@ -1,0 +1,63 @@
+schema: 1
+story: '1.96'
+story_title: 'Súmula Fitness Race (F1): Tela de Largada da Onda'
+gate: PASS
+status_reason: 'AC1 a AC6, AC8 (estado e link), AC9, AC10 e AC11 estão no código e cobertos por teste. A largada roda numa transação só (race_start_heat), trava o regulamento antes de criar as corridas e o gatilho recusa mudar regulamento travado; o QA executou a função e o gatilho em PGlite. O AC7 e o botão "Corrigir largada" foram conferidos no gate da 1.98, onde fica o achado REL-002.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-10-31T19:45:00-03:00'
+expires: '2026-11-13T22:45:00-03:00'
+quality_score: 92
+
+top_issues:
+  - id: REL-002-REF
+    severity: low
+    status: obsolete
+    obsolete_reason: 'REL-002 da 1.98 fechado no re-gate de 2026-10-30; teste [REL-002] segue no arquivo.'
+    finding: 'O AC7 (adjust_heat_start) foi conferido no gate da 1.98, conforme a AUTO-DECISION do @po. Lá ficou o REL-002 (MEDIUM): corrigir a largada enquanto atletas da onda estão sendo liberados pode deixar a correção pela metade.'
+    refs: ['docs/qa/gates/1.98-fitness-race-painel-do-organizador.yml', 'src/lib/serverRaceDecisions.ts:663-683']
+    suggested_owner: dev
+    suggested_action: 'Ver REL-002 no gate da 1.98.'
+  - id: UX-001
+    severity: low
+    finding: 'Divergências da maquete declaradas pelo @dev: o indicador de sincronização fica no rodapé fixo (a maquete o põe abaixo do cabeçalho), a próxima onda mantém o selo "Aguardando largada" com o rótulo "Próxima", e segurar Espaço ou Enter não larga (useTapHold não tem isso). Também falta a conferência no navegador (320/390/768/1440) e em aparelho real.'
+    refs: ['docs/stories/1.96.story.md:142-146']
+    suggested_owner: ux-design-expert
+    suggested_action: 'O Luan confere as três divergências na tela; aparelho real (iPhone e Android) antes do primeiro evento.'
+  - id: DOC-001
+    severity: low
+    finding: 'CodeRabbit não rodado (exige commit).'
+    refs: ['docs/stories/1.96.story.md:189']
+    suggested_owner: dev
+    suggested_action: 'Rodar no DoD antes do push.'
+waiver: { active: false }
+
+evidence:
+  tests_reviewed: 20
+  risks_identified: 3
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 8, 9, 10, 11]
+    ac_gaps: []
+    ac_deferred_to_gate_1_98: [7]
+  gate_commands:
+    npm_test: '1419/1419, rodado pelo QA'
+    node_test_race: '160/160 em tests/race-*.test.mjs'
+    npm_run_typecheck: 'verde'
+    npm_run_build: 'verde (rotas /judge/corrida e /judge/corrida/[eventId])'
+    eslint_arquivos_novos: '0 erros, 0 avisos'
+    migration: 'não aplicada; executada pelo QA em PGlite com as 65 migrations e reaplicação. Largada cria 2 corridas racing com started_at = largada e descarta atleta de evento FF; segunda largada devolve started=false; atleta com corrida ativa não duplica; snapshot do percurso gravado na trava e preservado depois; gatilho recusa mudar rules e destravar e aceita mudar o nome; evento FF = race_event_required; race_start_heat SECURITY DEFINER, search_path=public, EXECUTE só service_role; função do gatilho sem EXECUTE para anon/authenticated.'
+  independent_checks: 'Mutação fora do repo (cópia no scratchpad, restaurada e conferida com cmp): migration sem a trava, gatilho sem a regra de rules e 409 da segunda largada desligado, todas derrubadas. CourtShell: só o parâmetro eyebrow com padrão "Arbitragem na quadra"; tests/court-ui.test.mjs intacto.'
+  notes: 'admin/page.tsx não foi tocado pela 1.96. next-env.d.ts aparece alterado no working tree (aponta para .next/dev/types): é gerado pelo next dev, não entra no commit.'
+
+history:
+  - at: '2026-10-30T22:45:00-03:00'
+    gate: PASS
+    note: 'Gate original (ver status_reason).'
+  - at: '2026-10-31T19:45:00-03:00'
+    gate: PASS
+    note: 'Re-verificação de regressão depois da F2 (1.100–1.106) e das decisões D27–D30: veredito mantido. race_start_heat e a trava locked_at sem mudança; HeatStartScreen só ganhou o atalho "Abrir estações" (1.102); teste da ordem dos painéis ajustado para a escala da 1.104. O regulamento garantido na largada passou a ser sempre o 2026/27 (D29).'
+
+regression_recheck_2026_10_31:
+  verdict: 'PASS mantido'
+  baseline: 'cópia do código e dos testes de 2026-10-30 22:27 (sandbox do gate da F1) e serverRaceDecisions.ts do re-gate da 1.98 (22:40), comparados com o working tree de 2026-10-31'
+  commands: 'node --test race-*, leaderboard-*, scoresheets-route e court-ui: 307/307 (QA); npm test 1508/1508, lint 0 erros, typecheck e build verdes (coordenador)'
+  new_issues: []

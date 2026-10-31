@@ -13,3 +13,11 @@
 - [Telão ao vivo 1.53–1.58](project_telao_ao_vivo_1_53_1_58.md) — rodada 3 2026-10-21: 1.56 e 1.58 PASS (só LOW: SEC-003, REQ-004, PERF-003); 1.57 CONCERNS
 - [Cards de evento 1.65](project_event_cards_1_65.md) — PASS 2026-10-22 (90); 4 LOWs (PERF-001 só no next dev, Safari não conferido); medir no build de produção com CPU 4x
 - [Distância 1.66–1.68](project_distancia_1_66_1_68.md) — 1.66 PASS 94, 1.67 PASS 91, 1.68 CONCERNS 88 (2026-10-22); REQ-001 do gestor corrigido na revisão; telão só na 1.69; técnicas de contraste e largura
+- [Fitness Race 1.93 motor de regras](project_fitness_race_1_93.md) — PASS 92 2026-10-30; contratos p/ 1.94 (evaluateRaceRun, snapshot, seq 0-based); mutação fora do repo
+- [Fitness Race 1.94 banco e rota](project_fitness_race_1_94.md) — CONCERNS 88 → PASS 92 no re-gate 2026-10-30; contratos p/ 1.96 (locked_at), 1.97, F2
+- [Fitness Race 1.95 árbitros](project_fitness_race_1_95.md) — CONCERNS 88 → PASS 92 no re-gate 2026-10-30; LOWs e ordem das migrations
+- [Fitness Race 1.104/1.105 escala e cobertura](project_fitness_race_1_104_1_105.md) — 2026-10-31: 1.104 PASS 92 (migration pronta), 1.105 CONCERNS 86 (tentativas sem paginação)
+- [Fitness Race 1.96–1.99 gate combinado](project_fitness_race_1_96_1_99.md) — 2026-10-30: 1.96/1.97/1.99 PASS, 1.98 CONCERNS 85 → PASS 90 (re-gate); LOW TEST-001/REL-003 p/ F2
+- [Fitness Race 1.100–1.101 F2](project_fitness_race_1_100_1_101.md) — PASS 92/90 2026-10-31; LOWs (fila tardia só com tela aberta); mutação em cópia isolada
+- [Fitness Race 1.102–1.103 F2](project_fitness_race_1_102_1_103.md) — 1.102 PASS 91, 1.103 PASS 88 (2026-10-31); LOWs de concorrência/teste e o que conferir
+- [Fitness Race 1.106 + recheck F1](project_fitness_race_f2_recheck_1_106.md) — 1.106 PASS 92; 1.93–1.99 PASS mantidos 2026-10-31; D27–D30 sem story (DOC-002), REL-004 regulamento antigo

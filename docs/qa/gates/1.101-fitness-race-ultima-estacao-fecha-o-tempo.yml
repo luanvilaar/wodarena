@@ -1,0 +1,57 @@
+schema: 1
+story: '1.101'
+story_title: 'Súmula Fitness Race (F2): A Última Estação Fecha o Tempo e o Wall Ball no Meio do Percurso'
+gate: PASS
+status_reason: 'Os 9 ACs estão no código e cobertos por teste. Só a tentativa released da última estação do snapshot fecha o tempo, de qualquer tipo; Wall Ball no meio libera sem fechar nem publicar; exit em reps segue 400 em qualquer posição; exit incompleto de trenó ou seções cobra 180 s por trecho e não fecha nem na última estação (D44 confirmou a AUTO-DECISION); registro tardio em estação anterior com a corrida finished entra e republica; DNF, reps liberado, estação que fechou e tentativa nova seguem 409. Refechamento do painel e "Sem tempo fechado" usam a estação de fechamento. Percurso oficial (Wall Ball por último) sem mudança de resultado. Achados só LOW.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-10-31T12:00:00-03:00'
+expires: '2026-11-14T12:00:00-03:00'
+quality_score: 90
+
+top_issues:
+  - id: REQ-001
+    severity: low
+    finding: 'O registro tardio (AC5) só acontece se a tela do judge da estação anterior continuar aberta: as telas só enviam a fila com a corrida em racing no estado local. Se o judge recarregar a página depois do fechamento, a corrida chega finished, a tela fica sem envio e os registros ficam parados no aparelho. Dentro da D9 (MVP aguenta queda só com a tela já aberta), mas o servidor agora aceitaria.'
+    refs: ['src/components/race/WallBallAttemptScreen.tsx:107', 'src/components/judge/useRaceSync.ts:75', 'src/components/race/StationAttemptScreen.tsx:163']
+    suggested_owner: dev
+    suggested_action: 'Considerar enviar a fila pendente também com a corrida finished (sem liberar toque novo na tela), ou registrar como limite conhecido até a F4.'
+  - id: MNT-001
+    severity: low
+    finding: 'readRaceManageBoard filtra o snapshot por conta própria (sem exigir kind válido) em vez de reusar courseStagesOf/closingStationOf, que exigem. Hoje os snapshots sempre têm kind válido, então o painel e o fechamento apontam para a mesma estação; mas são duas leituras da mesma regra.'
+    refs: ['src/lib/serverRaceDecisions.ts:646', 'src/lib/serverRaceSheets.ts:360-374']
+    suggested_owner: dev
+    suggested_action: 'Exportar e reusar courseStagesOf/lastRaceStation no painel quando tocar nesse trecho.'
+  - id: DOC-001
+    severity: low
+    finding: 'A linha da saída incompleta diz "trechos" também para seções, enquanto o editor da 1.100 chama a meta das seções de "voltas" (AUTO-DECISION declarada, segue o texto do AC7).'
+    refs: ['src/lib/racePenaltiesView.ts:145-148', 'src/lib/raceCourseStructure.ts:105-108']
+    suggested_owner: ux-design-expert
+    suggested_action: 'Decidir uma palavra só para seções no painel e no editor.'
+  - id: REL-001
+    severity: low
+    finding: 'Publicada sozinha, um percurso com Wall Ball no meio deixa de fechar pela súmula (a última estação só abre tentativa com a 1.102). A 1.102 está implementada na mesma árvore; publicar juntas, como o @po anotou.'
+    refs: ['docs/stories/1.101.story.md:72']
+    suggested_owner: devops
+    suggested_action: 'Um commit/push com 1.101 e 1.102 juntas.'
+  - id: TEST-001
+    severity: low
+    finding: 'Falta aparelho real e navegador: tela do Wall Ball com closesTime falso ("segue para a próxima estação") e o painel "Sem tempo fechado" com a linha da saída incompleta. CodeRabbit não rodado (exige commit).'
+    refs: ['docs/stories/1.101.story.md:159-165']
+    suggested_owner: dev
+    suggested_action: 'Ensaio com dois celulares e conferência do painel antes do primeiro evento; CodeRabbit no DoD.'
+waiver: { active: false }
+
+evidence:
+  tests_reviewed: 13
+  risks_identified: 5
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    ac_gaps: []
+  gate_commands:
+    npm_test: '1508/1508 (rodado pelo coordenador no working tree atual)'
+    node_test_story: '182/182 nos arquivos de teste da corrida e de regressão FF (rodado pelo QA)'
+    npm_run_lint: '0 erros; eslint nos arquivos da story sem aviso (rodado pelo QA)'
+    npm_run_typecheck: 'verde (coordenador)'
+    npm_run_build: 'verde (coordenador; cobre o item do DoD que o @dev deixou aberto)'
+  independent_checks: 'Mutação numa cópia isolada do repo, todas derrubadas: fechar por qualquer tentativa liberada (4 falhas); aceitar registro tardio na estação que fechou (1); republishRunId sempre nulo (1); exited_incomplete fechando o tempo (1); refechamento do painel sem o filtro da estação de fechamento (1); lastRaceStation sem ordenar por orderIndex (1); closesTime sempre verdadeiro no quadro (1); recusa de corrida encerrada removida (2); closesTime fora da resposta do append (3). Conferido no motor que release com trechos faltando é recusado e exit sem faltantes resulta em released (fecha como a liberação).'
+  notes: 'Pergunta do DoD sobre a saída incompleta na última estação respondida pela D44 de DECISOES.md (o organizador age; os 180 s seguem gravados). Teste do @dev mostra que "Ajustar tempo" soma os 180 s por trecho como penalidade vigente (3500 + 360 = 3860).'

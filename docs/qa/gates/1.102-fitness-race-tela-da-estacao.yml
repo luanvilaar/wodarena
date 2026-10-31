@@ -1,0 +1,57 @@
+schema: 1
+story: '1.102'
+story_title: 'Súmula Fitness Race (F2): Tela do Judge para uma Estação (Ergômetro, Trenó, Seções e Genérica)'
+gate: PASS
+status_reason: 'Os 12 ACs estão no código e cobertos por teste. open_attempt abre os quatro tipos e o Wall Ball, corrida segue 400 sem tentativa; view=stations e view=station_board agrupam pela chave da estação, trazem closesTime por categoria e não expõem e-mail; o cartão roda o motor no aparelho e mostra a recusa dele; Liberar só acende com o contador completo; exit só em trenó e seções com meta e nunca em reps; abandon nunca sai da tela; a estação final abre a tela de 1 atleta sem Soltar nem Dispensar. Wall Ball (1.97) e Functional Fitness sem mudança. Só achados LOW.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-10-31T23:30:00-03:00'
+expires: '2026-11-14T23:30:00-03:00'
+quality_score: 91
+
+top_issues:
+  - id: A11Y-001
+    severity: low
+    finding: 'As folhas do cartão (infração da estação, infração geral, Atleta saiu) abrem como role=dialog sem levar o foco para dentro, sem fechar com Esc e sem devolver o foco ao botão que abriu. É o mesmo padrão do WallBallCard aprovado na 1.97; afeta leitor de tela e teclado, não o toque.'
+    refs: ['src/components/race/StationCard.tsx:405-415', 'src/components/race/WallBallCard.tsx:230']
+    suggested_owner: dev
+    suggested_action: 'Num ajuste comum às duas telas: focar o título da folha ao abrir, Esc fecha, foco volta ao botão de origem.'
+  - id: UX-001
+    severity: low
+    finding: 'Conferência visual contra a maquete aprovada (dois-cartoes.html, estados do cartão único e da estação final) não foi feita no navegador: a tela só abre logada e o banco é o de produção. O DoD da story ("Desenho do cartão alinhado com a maquete") segue aberto. AUTO-DECISIONs que mudam a tela ainda sem confirmação explícita do Luan: controles de carga só em seção com carga informada; trenó e seções sem botão Iniciar (o 1º toque leva o start, e o split da 1.106 começa nele); texto de "Atleta saiu" na estação final.'
+    refs: ['docs/stories/1.102.story.md:80', 'docs/stories/1.102.story.md:126-129', 'src/lib/raceStation.ts:216-218']
+    suggested_owner: ux-design-expert
+    suggested_action: 'Conferir as telas com o Luan (ambiente de teste ou dados fictícios) antes do primeiro evento.'
+  - id: TEST-001
+    severity: low
+    finding: 'Falta aparelho real (iPhone e Android): segurar 700 ms no Liberar e no Atleta saiu, vibração (ausente no iPhone), Wake Lock, aba em segundo plano e queda de rede com a fila cheia.'
+    refs: ['docs/stories/1.102.story.md:172']
+    suggested_owner: dev
+    suggested_action: 'Ensaio com dois celulares junto do da 1.103.'
+  - id: DOC-001
+    severity: low
+    finding: 'CodeRabbit não rodado (exige commit).'
+    refs: ['docs/stories/1.102.story.md:174']
+    suggested_owner: dev
+    suggested_action: 'Rodar no DoD antes do push.'
+waiver: { active: false }
+
+evidence:
+  tests_reviewed: 14
+  risks_identified: 4
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    ac_gaps: []
+  gate_commands:
+    node_test_relacionados: '100/100 (race-station-screen, race-two-cards, race-sheets-route, race-closing-station, race-wall-ball, court-ui), rodado pelo QA'
+    eslint_arquivos_da_story: '0 erros, 0 avisos'
+    npm_test_lint_typecheck_build: 'informados pelo coordenador no working tree atual: 1508/1508, 0 erros, verde, verde (build não repetido pelo QA para não colidir com revisores em paralelo)'
+  independent_checks: 'Mutação fora do repo (cópia no scratchpad, restaurada e conferida com cmp), todas derrubadas: abertura sem o ergômetro; Atleta saiu visível sem meta; Desfazer atingindo o start; Liberar com trecho faltando; controles de carga sem carga informada; e-mail na lista da onda.'
+  notes: 'Ajuste de teste existente conferido: race-sheets-route.test.mjs passou a abrir o trenó com 200 (regra nova do AC1). race-wall-ball.test.mjs e court-ui.test.mjs sem edição. CourtShell ganhou eyebrow com o padrão de FF ("Arbitragem na quadra"); /api/sheets e useSheetSync sem diff.'
+
+recommendations:
+  immediate: []
+  future:
+    - action: 'Foco e Esc nas folhas do cartão (A11Y-001), junto do WallBallCard.'
+      refs: ['src/components/race/StationCard.tsx:405']
+    - action: 'Conferência visual com o Luan e ensaio em aparelho real (UX-001, TEST-001).'
+      refs: ['docs/design/fitness-race-sumula/telas/dois-cartoes.html']

@@ -1,0 +1,59 @@
+schema: 1
+story: '1.106'
+story_title: 'Súmula Fitness Race (F2): Splits por estação no resultado público'
+gate: PASS
+status_reason: 'Os 7 ACs estão no código e cobertos por teste pela rota real (8 testes novos). buildRaceSplits grava a duração de cada estação conferida pela chave da etapa, de qualquer tipo e posição, com mínimo de 1 s (nunca "00:00"); estação sem judge, sem início ou sem fim fica sem chave; o registro tardio regrava os splits de forma idempotente; racing não publica, DNF publica, desfazer DNF retira e adjust_time não mexe; nenhum dado de árbitro no split e o bootstrap segue sem race_*. Leaderboard muda só nos dois blocos de Fitness Race. Ficam só LOWs.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-10-31T19:30:00-03:00'
+expires: '2026-11-14T19:30:00-03:00'
+quality_score: 92
+
+top_issues:
+  - id: TEST-001
+    severity: low
+    finding: 'A tela pública é conferida só por asserção estática (regex no fonte dos dois blocos de Performance Analysis); não há renderização com um score de várias estações. A conferência visual do DoD (ordem do percurso, estação sem judge ausente, nenhum "00:00") segue aberta.'
+    refs: ['tests/race-splits.test.mjs:305-326', 'src/components/Leaderboard.tsx:1122-1250', 'src/components/Leaderboard.tsx:1392-1520']
+    suggested_owner: dev
+    suggested_action: 'Fazer a conferência visual do DoD com uma corrida de várias estações (uma sem judge). Opcional: extrair o cálculo do splitsArray para uma função pura e testar a ordem e o filtro sem regex.'
+  - id: SEC-001
+    severity: low
+    finding: 'O "Motivo da infração" que o organizador edita ao alterar uma penalidade (texto livre, até 200 caracteres) vai para a chave pública race:penalties do split. O AC5 permite motivo e segundos, e o rótulo padrão vem do regulamento; mas a tela não avisa que esse texto fica público, então um nome ou observação digitado ali seria publicado. Vem da 1.98/1.99, não desta story.'
+    refs: ['src/lib/serverRaceDecisions.ts:298-311', 'src/components/admin/RacePenaltiesPanel.tsx:433', 'src/lib/serverRacePublication.ts:169']
+    suggested_owner: ux-design-expert
+    suggested_action: 'Texto de ajuda no campo: "aparece no resultado público". Alternativa: publicar só o rótulo do regulamento (pelo code) e manter o texto editado só no painel.'
+  - id: REQ-001
+    severity: low
+    finding: 'Efeito colateral declarado (AUTO-DECISION do @dev): a timeline de Fitness Race passa a esconder as etapas sem split também no lançamento manual de splits (antes mostrava "-"), e o cartão "Estações Total" some sem split de estação. Coerente com o AC6, mas muda a tela de quem já lançava splits à mão.'
+    refs: ['docs/stories/1.106.story.md:96-97']
+    suggested_owner: po
+    suggested_action: 'Nada no código; registrar para o Luan na conferência visual.'
+  - id: DATA-001
+    severity: low
+    finding: 'Risco aceito e registrado: apagar ou refazer uma etapa do percurso depois do evento faz o split dela sumir da tela (chave sem etapa). Editar mantém o id.'
+    refs: ['docs/stories/1.106.story.md:60']
+    suggested_owner: po
+    suggested_action: 'Nada agora.'
+waiver: { active: false }
+
+evidence:
+  tests_reviewed: 8
+  risks_identified: 4
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7]
+    ac_gaps: []
+    ac_map:
+      AC1: 'race-splits: buildRaceSplits puro (MM:SS e H:MM:SS, chave da etapa) e percurso completo pela rota (trenó, seções, Wall Ball no meio, genérica)'
+      AC2: 'race-splits: sem início, sem fim, cancelada, abandon e menos de 1 s sem chave; "00:00" nunca aparece'
+      AC3: 'race-splits: registro tardio liberado depois do fechamento entra no split e nas penalidades; republicar 2 vezes deixa a linha igual'
+      AC4: 'race-splits: racing sem linha; DNF com splits; desfazer DNF retira a linha; adjust_time com splits iguais'
+      AC5: 'race-splits: sem id de tentativa, nome ou id de judge e observação; PUBLIC_SCORE_SELECT igual; bootstrap público e privado sem race_'
+      AC6: 'race-splits: os dois blocos (atleta e dupla) leem score.splits[stg.id], filtram secs > 0, timeline pelo splitsArray, cartões de corrida e de estações condicionais'
+      AC7: 'race-splits + leaderboard-*: serverRacePublication sem recalculateWorkoutRanking; trava do lançamento manual no lugar; persistence route sem buildRaceSplits; FF usa ScorePerWorkoutList (ramo eventType !== fitness_racing intocado)'
+  gate_commands:
+    npm_test: '1508/1508, rodado pelo coordenador no working tree atual'
+    node_test_qa: 'race-*, leaderboard-*, scoresheets-route e court-ui: 307/307, rodado pelo QA'
+    npm_run_lint: '0 erros (207 avisos antigos), rodado pelo coordenador'
+    npm_run_typecheck: 'verde, rodado pelo coordenador'
+    npm_run_build: 'verde, rodado pelo coordenador (o QA não rodou, a pedido, para não colidir com o .next)'
+  independent_checks: 'Mutação numa cópia no scratchpad (repo intocado, restauração conferida): mínimo de volta para > 0, sem filtro de cancelada, nome do judge no split, timeline de volta para todas as etapas com "-" e observação na lista de penalidades: todas derrubadas. Sobreviveu só tirar o teste de ended_at nulo, que é mutante equivalente (Date.parse(null) dá NaN e o isFinite descarta).'
+  notes: 'Leaderboard: a ordem segue division.courseLayout, que o painel grava ordenado por orderIndex; o servidor também ordena o snapshot por orderIndex, então a ordem da tela bate com a do percurso. Nenhum texto novo, i18n intocado; computeDivisionStandings intocado. Sem migration.'

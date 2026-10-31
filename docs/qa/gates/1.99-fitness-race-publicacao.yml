@@ -1,0 +1,74 @@
+schema: 1
+story: '1.99'
+story_title: 'Súmula Fitness Race (F1): Publicação na prova TOTAL e no leaderboard'
+gate: PASS
+status_reason: 'Os 13 ACs estão no código e cobertos por teste. value e result saem do mesmo inteiro; tempo normal com result_status nulo; DQ e DNF com 999999 e points nulo; ranking só por tempo sem tocar recalculateWorkoutRanking; upsertScores não sobrescreve resultado da súmula e manual_override é registrado e devolvido ao desfazer; bootstrap sem race_*. A migration foi executada pelo QA em PGlite (CHECK mantém rejected, índice único de race_run_id, reaplicação sem erro).'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-10-31T19:45:00-03:00'
+expires: '2026-11-13T22:45:00-03:00'
+quality_score: 90
+
+top_issues:
+  - id: DATA-002
+    severity: low
+    finding: 'Atleta que muda de categoria depois da largada: a publicação usa race_runs.division_id, gravado na largada, e continua escrevendo na prova TOTAL da categoria antiga, sem erro. Na categoria nova o atleta fica sem resultado (o lançamento manual ali funciona, porque não há race_run_id). Declarado pelo @dev; raro, mas silencioso.'
+    refs: ['src/lib/serverRacePublication.ts:251-257']
+    suggested_owner: po
+    suggested_action: 'Story própria: ao mudar a categoria de atleta com corrida, mover a corrida e republicar (ou recusar a mudança com corrida ativa). Até lá, não trocar categoria de atleta depois que a onda dele largou.'
+  - id: REQ-001
+    severity: low
+    finding: 'Arredondamento para o segundo inteiro (Math.round): tempos com menos de 1 s de diferença empatam no placar (1, 1, 3). A precisão fica em race_runs.gross_seconds. Decisão de produto, declarada ao Luan.'
+    refs: ['src/lib/serverRacePublication.ts:57-60']
+    suggested_owner: po
+    suggested_action: 'O Luan decide se aceita o empate ou se quer desempate pelo bruto com décimos (mudaria value e o leaderboard).'
+  - id: UX-003
+    severity: low
+    finding: 'No leaderboard, DQ e DNF aparecem como "–" e sem posição, atrás dos tempos (AC10 atendido); o rótulo "DQ"/"DNF" visível fica para a F3.'
+    refs: ['docs/stories/1.99.story.md:124']
+    suggested_owner: po
+    suggested_action: 'Nada agora; F3.'
+  - id: REL-001-REF
+    severity: low
+    status: obsolete
+    obsolete_reason: 'Sem confirmar DQ (D27).'
+    finding: 'Efeito do REL-001 da 1.98 na publicação: proposta confirmed com a corrida finished faz a republicação retirar o tempo sem publicar DQ. Corrigir lá.'
+    refs: ['docs/qa/gates/1.98-fitness-race-painel-do-organizador.yml']
+    suggested_owner: dev
+    suggested_action: 'Ver REL-001 no gate da 1.98.'
+  - id: DOC-002
+    severity: low
+    finding: 'Re-verificação 2026-10-31: as decisões D27 a D30 (sem DQ, casos de DQ viram tempo, regulamento fixo, sem infração geral à mão) foram aplicadas no código depois deste gate, sem story nem Dev Agent Record. O código segue as decisões e os testes foram trocados sem afrouxar, mas o texto destes ACs, marcados [x], descreve comportamento que não existe mais: a parte DQ do AC5, do AC10 e do AC13.'
+    refs: ['docs/design/fitness-race-sumula/DECISOES.md']
+    suggested_owner: po
+    suggested_action: 'Anotar cada AC como superado pela decisão correspondente (sem apagar o histórico) antes de mover a story para Done.'
+waiver: { active: false }
+
+evidence:
+  tests_reviewed: 17
+  risks_identified: 4
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+    ac_gaps: []
+  gate_commands:
+    npm_test: '1419/1419, rodado pelo QA'
+    node_test_race: '160/160 em tests/race-*.test.mjs'
+    npm_run_typecheck: 'verde'
+    npm_run_build: 'verde'
+    eslint_arquivos_novos: '0 erros, 0 avisos'
+    migration: 'não aplicada; executada pelo QA em PGlite depois das outras 64 e reaplicada: scores aceita disqualified, dnf e segue aceitando rejected; valor fora da lista recusado; segundo race_run_id igual recusado pelo índice único; manual_override com actor_role system aceito. Nenhum grant novo.'
+  independent_checks: 'Mutação fora do repo (restaurada e conferida com cmp), todas derrubadas: proposta pendente publicando DQ; result_status validated no tempo normal; DQ com valor 0; result de inteiro diferente do value; ranking com pontos; trava manual desligada; sem manual_override; retirada sem devolver o manual; CHECK sem rejected; índice não único; race_run_id no PUBLIC_SCORE_SELECT.'
+  notes: 'FF intacto: serverScoresheets, /api/sheets, bootstrapPayload, leaderboardStandings, Leaderboard e /judge/quadra sem referência a race_*. No upsertScores, o filtro da trava roda também em FF, mas só age em linha com race_run_id; sem a coluna (migration não aplicada) não faz nada.'
+
+history:
+  - at: '2026-10-30T22:45:00-03:00'
+    gate: PASS
+    note: 'Gate original (ver status_reason).'
+  - at: '2026-10-31T19:45:00-03:00'
+    gate: PASS
+    note: 'Re-verificação de regressão depois da F2 (1.100–1.106) e das decisões D27–D30: veredito mantido. racePublicationOf não publica DQ; rankRaceScores sem disqualified (999999 também fica fora). Testes de manual_override e desfazer passaram a usar mark_dnf/unmark_dnf com a mesma proteção. Story 1.106 mudou só buildRaceSplits (mínimo de 1 s) e o Leaderboard; PUBLIC_SCORE_SELECT, trava manual e ranking por tempo iguais. CHECK ainda aceita disqualified, sem uso.'
+
+regression_recheck_2026_10_31:
+  verdict: 'PASS mantido'
+  baseline: 'cópia do código e dos testes de 2026-10-30 22:27 (sandbox do gate da F1) e serverRaceDecisions.ts do re-gate da 1.98 (22:40), comparados com o working tree de 2026-10-31'
+  commands: 'node --test race-*, leaderboard-*, scoresheets-route e court-ui: 307/307 (QA); npm test 1508/1508, lint 0 erros, typecheck e build verdes (coordenador)'
+  new_issues: ['DOC-002']

@@ -1,0 +1,165 @@
+schema: 1
+story: '1.94'
+story_title: 'Súmula Fitness Race (F1): Banco, Serviço e Rota /api/race-sheets'
+gate: PASS
+status_reason: 'Re-gate 2026-10-30 depois da passada de endurecimento: TEST-001 (MEDIUM) e TEST-002 fechados com testes que caem sem a guarda (conferido por mutação pelo QA); L9, M1, M3 e a guarda mínima do M2 corretos. Ficam só LOWs que são contrato de 1.96, 1.97/1.98 e F2. Primeiro gate: CONCERNS 88.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-10-31T19:45:00-03:00'
+expires: '2026-11-13T21:40:00-03:00'
+quality_score: 92
+
+top_issues:
+  - id: TEST-001
+    severity: medium
+    status: resolved
+    resolution: 'Re-gate: testes de judge de gestor vencido (lista, open, append), judge de outro gestor e judge que saiu de event_judges. Mutações do QA derrubadas: assertOrganizerIsOperational do caminho do judge, conferência judge x gestor e acesso por evento do append.'
+    finding: 'O AC4 exige gestor com acesso válido também para o judge, mas nenhum teste cobre judge de gestor vencido: tirar assertOrganizerIsOperational do caminho do judge (abrir, gravar) e da lista de eventos do judge deixa os 21 testes verdes. Também sobrevivem: tirar a conferência judge x gestor do evento (o event_judges segura sozinho) e tirar o acesso por evento do append na rota (assertAttemptWriter segura enquanto o judge continuar dono da tentativa, mesmo desatribuído do evento). O código está certo; o risco é uma refatoração futura soltar a trava sem teste avisar.'
+    refs: ['src/lib/serverRaceSheetAccess.ts:85-86', 'src/lib/serverRaceSheetAccess.ts:117', 'src/app/api/race-sheets/route.ts:106', 'tests/race-sheets-route.test.mjs:146-161']
+    suggested_owner: dev
+    suggested_action: 'Acrescentar judge de gestor vencido (open_attempt, append e view=events: 403) e judge que assumiu a tentativa e depois saiu de event_judges (append 403). Pode entrar junto com a 1.95, que cria e atribui judges em evento Race.'
+  - id: TEST-002
+    severity: low
+    status: resolved
+    resolution: 'Re-gate: claim concorrente, tentativa/corrida cancelada e mensagem do toString testados. Mutações do QA derrubadas: .is(judge_user_id, null) do claim e Object.hasOwn trocado por in.'
+    finding: 'Sem teste: corrida de dois judges assumindo a mesma tentativa sem árbitro (a guarda .is(judge_user_id, null) sobrevive à mutação); tentativa cancelada fora do open e do recálculo (filtros de status cancelled sobrevivem); o caso "toString" confere só o status 400, que também sai pelo caminho do append, então trocar Object.hasOwn por "in" passa.'
+    refs: ['src/lib/serverRaceSheets.ts:551-560', 'src/lib/serverRaceSheets.ts:504-507', 'src/lib/serverRaceSheets.ts:860-861', 'src/app/api/race-sheets/route.ts:72', 'tests/race-sheets-route.test.mjs:158']
+    suggested_owner: dev
+    suggested_action: 'Teste de claim concorrente com onceBeforeUpdate (ou equivalente) e asserção da mensagem "Ação desconhecida." no toString. Tentativa cancelada pode ser coberta pela 1.98, que é quem cancela.'
+  - id: REL-001
+    severity: low
+    finding: 'O recálculo não é serializado por corrida: cada append lê os logs de todas as tentativas da corrida e regrava estado, progresso e infrações de todas. Dois lotes simultâneos em tentativas diferentes da mesma corrida podem gravar progresso velho e até marcar como cancelled a infração recém-criada pela outra (some de computedKeys). Corrige sozinho no próximo lote da corrida. Na F1 não é alcançável (só o Wall Ball abre, uma estação por corrida); vira real quando a F2 ampliar RACE_OPENABLE_STATION_KINDS.'
+    refs: ['src/lib/serverRaceSheets.ts:45', 'src/lib/serverRaceSheets.ts:856-951']
+    suggested_owner: architect
+    suggested_action: 'Antes de abrir mais estações (F2): serializar o recálculo por corrida (advisory lock numa RPC ou versão/contador na race_runs com update condicional). Na 1.97, fechar o tempo a partir do log, não só do status gravado da tentativa.'
+  - id: REL-002
+    severity: low
+    finding: 'readEvents lê o log sem paginação e RACE_MAX_EVENTS_PER_ATTEMPT é 2000, mas o PostgREST do Supabase devolve no máximo 1000 linhas por padrão. Passando de 1000 eventos, count fica em 1000, todo lote cai em 409 (seq repetida) e o motor avalia o log cortado. Inalcançável com Wall Ball de 100 reps; o mesmo padrão já existe na súmula de FF (5000).'
+    refs: ['src/lib/serverRaceSheets.ts:49', 'src/lib/serverRaceSheets.ts:519-526']
+    suggested_owner: dev
+    suggested_action: 'Baixar o limite por tentativa para 1000 ou paginar a leitura com range().'
+  - id: ARCH-001
+    severity: low
+    finding: 'set_ruleset troca o preset na mesma versão quando o regulamento não foi usado; a gravação só é guardada por locked_at nulo. Se a 1.96 criar race_runs antes de preencher locked_at, uma corrida criada entre isRulesetUsed e o update fica com o regulamento reescrito.'
+    refs: ['src/lib/serverRaceSheets.ts:415-419', 'src/lib/serverRaceSheets.ts:455-469']
+    suggested_owner: dev
+    suggested_action: 'Contrato da 1.96: preencher race_rulesets.locked_at antes (ou no mesmo passo) de criar as corridas da onda.'
+  - id: REQ-001
+    severity: low
+    finding: 'append só recusa corrida cancelled. Com a corrida finished, dnf ou disqualified (1.96 a 1.98), o judge dono da tentativa ainda grava e o recálculo muda infrações depois do tempo fechado; penalty_seconds e official_seconds não são recalculados aqui (decisão registrada pelo @dev).'
+    refs: ['src/lib/serverRaceSheets.ts:740-742', 'src/lib/serverRaceSheets.ts:856-951']
+    suggested_owner: po
+    suggested_action: 'Decidir na 1.97/1.98: bloquear append depois do fechamento ou recalcular o tempo oficial a cada lote de corrida encerrada.'
+  - id: DOC-001
+    severity: low
+    finding: 'A revisão do @data-engineer recomendada pelo @po não está registrada na story. O QA refez a validação em PGlite (as 62 migrations em ordem, a nova reaplicada, RLS nas sete, nenhuma policy, nenhum grant para anon/authenticated, service_role nas sete, os 7 índices únicos e os CHECKs de chip e actor_role recusando, cascata do evento). CodeRabbit não rodado (exige commit).'
+    refs: ['docs/stories/1.94.story.md:110', 'docs/stories/1.94.story.md:145-153']
+    suggested_owner: po
+    suggested_action: 'Registrar ou dispensar a revisão do @data-engineer; rodar o CodeRabbit no DoD antes do push.'
+  - id: DOC-001b
+    severity: low
+    finding: 'Re-gate: revisão do @data-engineer agora registrada na story (aprovada com ressalvas). race_decisions_actor_role_check passou a aceitar judge e system (M3): a regra de que só gestor/owner decide fica só no servidor (actorRole devolve owner ou manager); CodeRabbit segue pendente.'
+    refs: ['supabase/migrations/20261030120000_race_sheets.sql:196', 'src/lib/serverRaceSheets.ts:422']
+    suggested_owner: dev
+    suggested_action: 'Na 1.98, gravar judge em actor_role só para registro que não é decisão; CodeRabbit no DoD.'
+  - id: DOC-002
+    severity: low
+    finding: 'Re-verificação 2026-10-31: as decisões D27 a D30 (sem DQ, casos de DQ viram tempo, regulamento fixo, sem infração geral à mão) foram aplicadas no código depois deste gate, sem story nem Dev Agent Record. O código segue as decisões e os testes foram trocados sem afrouxar, mas o texto destes ACs, marcados [x], descreve comportamento que não existe mais: AC5 e AC11 (set_ruleset, D29), AC6 ("só Wall Ball", trocado pela Story 1.102) e AC9 (proposta de DQ pending).'
+    refs: ['docs/design/fitness-race-sumula/DECISOES.md']
+    suggested_owner: po
+    suggested_action: 'Anotar cada AC como superado pela decisão correspondente (sem apagar o histórico) antes de mover a story para Done.'
+waiver: { active: false }
+
+regate_2026_10_30:
+  verdict: PASS
+  checks: 'Mutação fora do repo nas guardas novas, 8 de 8 derrubadas: judge de gestor vencido (open/append), judge x gestor, claim sem .is, hasOwn->in, L9 sempre 409, M2 sem recontagem, M2 sem guarda de source_seq, append sem acesso por evento. M1: os 3 índices presentes; M3: CHECK nomeado com judge/manager/owner/system; L9: reenvio paralelo do mesmo lote segue 200, outro lote 409 com serverCount relido. raceRules: release orienta completar (D22), propose_dq com reason aparado até 500 (cabe no note de 1000). npm test 1335/1335, typecheck e build verdes. Sem pendência equivalente à REQ-001 da 1.95: a 1.94 não altera rota nem tratamento de erro de Functional Fitness/Qualifier.'
+  still_open: ['REL-001 (F2)', 'REL-002', 'ARCH-001 (1.96)', 'REQ-001 (1.97/1.98)', 'DOC-001 (CodeRabbit)']
+
+evidence:
+  tests_reviewed: 29
+  risks_identified: 7
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+    ac_gaps: []
+    ac_partial_test: ['AC4 (judge de gestor vencido sem teste, TEST-001)']
+  gate_commands:
+    node_test_story: '29/29 (tests/race-sheets-route.test.mjs 21, tests/race-sheets-migration.test.mjs 8), rodado pelo QA'
+    npm_test: '1315/1315, rodado pelo QA (working tree com a 1.92 sem commit)'
+    npm_run_lint: '0 erros, 206 warnings (os mesmos do gate da 1.93); npx eslint nos 6 arquivos da story sem saída'
+    npm_run_typecheck: 'verde, rodado pelo QA'
+    npm_run_build: 'verde, rodado pelo QA; /api/race-sheets aparece como rota dinâmica'
+    coderabbit: 'não rodado: exige commit (--committed); fica no DoD antes do push'
+    migration: 'não aplicada em banco nenhum; validada em PGlite pelo QA (62 migrations + reaplicação)'
+  independent_checks: 'Mutação fora do repo (cópia de src/tests/supabase no scratchpad, repo intocado, conferido com cmp): 47 mutações simples + 3 combinadas, 37 derrubadas. Derrubadas, entre as pedidas: reenvio duplicando, 409 ausente e 409 sem serverCount, seq 1-based e com buraco, recálculo estação a estação (REL-002), DQ nascendo confirmed, penalidade nascendo pending, gestor de outro evento, gestor vencido (caminho do gestor), judge liberando (rota e serviço juntos), decisão do organizador sobrescrita (continue e .is juntos) e cancelada pelo undo (guarda e .is juntos). Também: source_key sem tentativa, undo sem cancelar, evento FF aceito, judge não atribuído, set_ruleset por judge, chave de limite sem ação ou sem pessoa, append sem dono, GET attempt sem acesso, corrida encerrada abrindo, Sled abrível, atleta de outro evento, versão usada trocada no lugar, Sled 10 m, desvio com sinal trocado, resolveEventTime sem teto, deviceAt sem janela, sem 503, motor ignorado, limite por tentativa, snapshot sem reps, outro árbitro sem 409 no open, owner bloqueado. Sobreviveram: judge de gestor vencido (2 pontos) e judge sem vínculo com o gestor (TEST-001), append sem acesso por evento na rota (TEST-001), claim sem guarda .is, tentativa cancelada no open e no recálculo, hasOwn trocado por in (TEST-002). Sobrevivem isoladas, mas com proteção dupla (derrubadas em par): continue das decididas, guarda decided_at do undo, conferência de papel do release, 409 do claim.'
+  notes: 'Functional Fitness intocado: git diff sem mudança em serverSheetAccess.ts, sheets/route.ts, serverScoresheets.ts, scoresheet.ts, fakeSupabase.mjs nem em migration anterior (impressão SHA-256 das 61 confere); isPresentialEventType igual; o único arquivo de teste antigo alterado é serverModuleHarness.mjs (stub next/link), da Story 1.92. Segurança: requireSession com judge/manager/owner, acesso por evento antes de qualquer leitura ou gravação, LIMITS por pessoa e ação com Object.hasOwn, consultas só pelo query builder (sem SQL montado), mensagens de erro de texto fixo (sem eco da entrada), resposta sem e-mail (teste confere), release só gestor dono/owner em duas camadas, DQ nunca confirmado pelo servidor (só pending), judge sem caminho para decided_at. Conflito de interesse: conta de judge é papel próprio, sem vínculo com atleta no modelo de dados (igual à FF); a autoridade de decidir é só do gestor/owner (actor_role com CHECK manager/owner). GET sem rate limit, como o GET de /api/sheets.'
+
+contracts_from_1_93:
+  REL-001: 'Atendido: snapshot grava reps do Wall Ball e expectedUnits do Sled (50 m = 4); mutações Sled 10 m e snapshot sem reps derrubadas; 101º rep recusado com o percurso já mudado para 80.'
+  REL-002: 'Atendido: recálculo por evaluateRaceRun sobre as tentativas da corrida na ordem do percurso; mutação estação a estação derrubada.'
+  ARCH-001: 'Atendido: seq contínuo por tentativa a partir de 0; source_key {tentativa}:{chave do motor}; mutações 1-based, com buraco e chave sem tentativa derrubadas; casamento por chave depois do undo testado.'
+  REL-003: 'Comportamento da rota fixado por teste (start desfeito volta a waiting, reps ficam no log sem efeito); a confirmação na tela segue com a 1.97.'
+  TEST-001_MNT-001_REQ-001_REQ-002: 'Sem ação aqui, como registrado pelo @dev.'
+
+auto_decisions_review:
+  - decision: 'clientNow obrigatório por lote, deviceAt opcional por evento, janela [clientNow - 24 h, clientNow + 5 s]'
+    verdict: 'De acordo com o AC10 e com D9 (offline só com a tela aberta, 24 h de folga basta). Testado.'
+  - decision: 'resolveEventTime nunca depois de recorded_at'
+    verdict: 'Correto: protege contra relógio adiantado. Testado (mutação sem teto derrubada).'
+  - decision: '"Já usado" = locked_at ou alguma corrida apontando; sem uso troca na mesma versão'
+    verdict: 'Leitura correta do AC5; a guarda depende de a 1.96 travar antes de criar corridas (ARCH-001).'
+  - decision: 'set_ruleset grava em race_decisions'
+    verdict: 'Bom: dá trilha à troca de regulamento, coerente com D1/D14. actor_role só manager/owner no banco.'
+  - decision: 'Liberar dentro de claim_attempt (release: true)'
+    verdict: 'Aceitável: duas camadas (rota com acesso de gestor e serviço com papel); a 1.98 pode expor ação própria.'
+  - decision: 'Tentativa sem árbitro: judge que abre assume; gestor/owner leem. Tentativa nova aberta por gestor fica com o gestor'
+    verdict: 'Aceitável: gestor dono pode arbitrar (AC4, D4); mesmo comportamento de openSheet.'
+  - decision: 'Corrida encerrada não abre tentativa nova; a existente pode ser retomada'
+    verdict: 'Aceitável; ver REQ-001 sobre gravar depois do fechamento.'
+  - decision: 'Decisão do organizador = decided_at; recálculo pula e todas as gravações levam .is(decided_at, null)'
+    verdict: 'Correto e robusto (proteção dupla conferida por mutação em par).'
+  - decision: 'Recálculo também no reenvio sem eventos novos'
+    verdict: 'Bom: reenvio refaz recálculo interrompido; também atenua REL-001.'
+  - decision: 'race_decisions.action com CHECK de formato'
+    verdict: 'Aceitável: evita recriar CHECK a cada story; quem grava é só o servidor.'
+  - decision: 'race_runs.ruleset_id sem ON DELETE'
+    verdict: 'Conferido em PGlite: apagar o evento apaga corridas e regulamentos em cascata sem erro.'
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: 'RLS ligada sem policy e REVOKE de PUBLIC/anon/authenticated nas sete (conferido em PGlite); acesso por evento e papel em toda ação; limite por pessoa e ação; sem dado sensível na resposta. Lacuna de teste no judge de gestor vencido (TEST-001), não de código.'
+  performance:
+    status: PASS
+    notes: 'Cada lote: checkRaceEvent por evento (O(lote x log)) e recálculo da corrida com um update por tentativa. Com Wall Ball (~100 a 200 eventos) é desprezível. Limite de 1000 linhas do PostgREST em REL-002.'
+  reliability:
+    status: CONCERNS
+    notes: 'Reenvio idempotente, 409 com serverCount, chaves únicas no banco e decisão do organizador preservada. Recálculo sem serialização por corrida (REL-001, só na F2) e leitura do log sem paginação (REL-002).'
+  maintainability:
+    status: PASS
+    notes: 'Arquivos novos, sem importar de serverScoresheets.ts; comentários citam D2, D3, D6 e os contratos do gate da 1.93; fakeRaceSupabase separado do fakeSupabase.'
+
+regression_review:
+  files_in_story: ['supabase/migrations/20261030120000_race_sheets.sql (novo)', 'src/lib/serverRaceSheetAccess.ts (novo)', 'src/lib/serverRaceSheets.ts (novo)', 'src/app/api/race-sheets/route.ts (novo)', 'tests/race-sheets-route.test.mjs (novo)', 'tests/race-sheets-migration.test.mjs (novo)', 'tests/support/fakeRaceSupabase.mjs (novo)', 'docs/stories/1.94.story.md']
+  other_working_tree_changes: 'admin/page.tsx, serverModuleHarness.mjs, AdminLoginScreen.tsx, loginFont.ts, loginPreferences.ts e os testes de login são da Story 1.92; raceRules.ts e raceRulePresets.ts são da 1.93 (sem mudança desde aquele gate).'
+  old_tests_changed: 'nenhum'
+
+before_applying_migration:
+  - 'Ordem: depois de 20261028120000_service_fee_payer.sql e antes de publicar o código. Só cria tabelas novas; não toca dado nem tabela existente; reaplicar não falha.'
+  - 'O banco é único (produção). Depois de aplicar, conferir que service_role tem acesso e anon/authenticated não: select grantee, privilege_type from information_schema.role_table_grants where table_name like ''race_%'';'
+  - 'Se a rota seguir respondendo 503 depois de aplicar, recarregar o cache do PostgREST: NOTIFY pgrst, ''reload schema'';'
+  - 'Rollback só antes de qualquer gravação (DROP apaga corridas e log); a ordem está no cabeçalho.'
+  - 'Sem a 1.96 nada cria race_runs: publicada sozinha, a rota responde 409 "A onda ainda não largou." em open_attempt; nenhum efeito visível para usuário.'
+  - 'Os presets seguem verified: false (pendência da 1.93) antes do primeiro evento real.'
+
+history:
+  - at: '2026-10-30T21:40:00-03:00'
+    gate: PASS
+    note: 'Gate original (ver status_reason).'
+  - at: '2026-10-31T19:45:00-03:00'
+    gate: PASS
+    note: 'Re-verificação de regressão depois da F2 (1.100–1.106) e das decisões D27–D30: veredito mantido. set_ruleset saiu (D29); testes de acesso, limite e 503 passaram a usar mark_dnf/adjust_heat_start com a mesma proteção. RACE_OPENABLE_STATION_KINDS com os cinco tipos (1.102), soltar cartão pelo judge dono (1.103, acesso por evento na rota), registro tardio em finished (1.101). REQ-001 (DNF não recebe registro): mutação derrubada. REL-001 (serialização do recálculo por corrida) agora é alcançável com a F2 e segue LOW: as guardas de contagem do log e de cancelamento até o tamanho lido seguram o caso comum (mutação sem a segunda guarda derrubada); recomendado RPC com FOR UPDATE antes de eventos grandes.'
+
+regression_recheck_2026_10_31:
+  verdict: 'PASS mantido'
+  baseline: 'cópia do código e dos testes de 2026-10-30 22:27 (sandbox do gate da F1) e serverRaceDecisions.ts do re-gate da 1.98 (22:40), comparados com o working tree de 2026-10-31'
+  commands: 'node --test race-*, leaderboard-*, scoresheets-route e court-ui: 307/307 (QA); npm test 1508/1508, lint 0 erros, typecheck e build verdes (coordenador)'
+  new_issues: ['DOC-002']

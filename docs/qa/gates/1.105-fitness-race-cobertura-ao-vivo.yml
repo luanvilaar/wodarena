@@ -1,0 +1,63 @@
+schema: 1
+story: '1.105'
+story_title: 'Súmula Fitness Race (F2): Painel de Cobertura e Alerta ao Vivo'
+gate: CONCERNS
+status_reason: 'Maquete aprovada (D42) e seguida; os 7 ACs estão no código e cobertos por teste, com D40/D41, acesso (judge e gestor de outro evento 403) e leitura sem a tabela da escala travados por mutação (6 de 6 derrubadas nesta story). Fica um MEDIUM herdado: a leitura busca todas as tentativas do evento sem paginação e, acima de 1000 linhas (limite padrão do Supabase), o painel mostra cartões e estimativas incompletos sem aviso; recomendado corrigir antes de um evento grande.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-10-31T18:10:00-03:00'
+expires: '2026-11-14T18:10:00-03:00'
+quality_score: 86
+
+top_issues:
+  - id: REL-001
+    severity: medium
+    finding: 'readRaceCoverage usa readRaceBoardSources, que lê race_attempts do evento inteiro com select("*") e sem range(). O PostgREST do Supabase devolve no máximo 1000 linhas por padrão e sem ORDER BY; com a F2 todas as estações abrem cartão, então um evento com cerca de 125 atletas e 8 estações já passa de 1000. O painel perde cartões abertos e a posição dos atletas sem nenhum aviso (avisos falsos ou ausentes). O mesmo corte atinge o painel do organizador (1.98) e as listas de estação e Wall Ball; a cobertura é a leitura mais sensível porque precisa também das tentativas encerradas, a cada 15 s por aba aberta.'
+    refs: ['src/lib/serverRaceSheets.ts:1436', 'src/lib/serverRaceCoverage.ts:73-79', 'src/lib/serverRaceDecisions.ts:615']
+    suggested_owner: dev
+    suggested_action: 'Paginar a leitura com range() até esgotar (ou ler só as colunas usadas: id, run_id, station_id, station_kind, status, judge_user_id, judge_name, progress, created_at, updated_at); teste com mais de 1000 tentativas no banco em memória com corte simulado. Conferir o max rows configurado no projeto Supabase. Corrigir antes de um evento com mais de ~100 atletas.'
+  - id: REQ-001
+    severity: low
+    finding: 'AC3 diz que a posição é a estação mais adiante com tentativa "aberta ou encerrada" e que o atleta espera a seguinte; a implementação não conta como esperando quem está com o cartão aberto (AUTO-DECISION do @dev) e trocou o texto da nota aprovada na maquete ("última em que teve cartão" virou "cartão encerrado" + "Quem está com cartão aberto está na estação"). A leitura é sensata (evita "Judges lotados" falso), mas muda AC e texto aprovado.'
+    refs: ['src/lib/raceCoverage.ts:376', 'src/lib/raceCoverage.ts:217', 'docs/stories/1.105.story.md:117']
+    suggested_owner: po
+    suggested_action: 'Luan confirma a regra; se confirmada, @po ajusta o AC3 e a maquete fica com o texto novo.'
+  - id: UX-001
+    severity: low
+    finding: '"Judge acima do limite" é gerado em cada estação da onda em que o judge aparece; como a escala permite várias estações por judge, um judge escalado em 3 estações gera 3 avisos iguais na mesma onda (AUTO-DECISION declarada, mas infla a lista de avisos e o contador "n avisos" do filtro).'
+    refs: ['src/lib/raceCoverage.ts:542-553']
+    suggested_owner: dev
+    suggested_action: 'Deduplicar por judge na lista do topo da onda (manter o selo na estação) ou confirmar com o Luan que a repetição é desejada.'
+  - id: TEST-001
+    severity: low
+    finding: 'Sem teste de gestor com acesso vencido em view=coverage (a guarda assertRaceManagerAccess é a mesma da 1.104, coberta lá) e sem conferência visual: o DoD "conferido com uma onda real ou simulada" segue aberto.'
+    refs: ['tests/race-coverage.test.mjs:418-425', 'docs/stories/1.105.story.md:171']
+    suggested_owner: dev
+    suggested_action: 'Acrescentar a asserção do gestor vencido; o Luan confere numa onda simulada depois da migration da 1.104.'
+  - id: DOC-001
+    severity: low
+    finding: 'CodeRabbit pós-commit pendente (DoD). Até a migration da 1.104 ser aplicada o painel mostra o estado "sem escala" com a linha da migration pendente (comportamento previsto e testado).'
+    refs: ['docs/stories/1.105.story.md:173']
+    suggested_owner: dev
+    suggested_action: 'Rodar coderabbit review --agent --committed --base origin/main depois do commit.'
+waiver: { active: false }
+
+evidence:
+  tests_reviewed: 13
+  risks_identified: 5
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7]
+    ac_gaps: []
+    notes: 'AC1: telas/cobertura.html existe, tem os estados pedidos (Tudo coberto, Alertas ao vivo, Onda que não largou, Sem escala, Fora da escala, Carregando, Falha ao atualizar) e está aprovada (D42); textos dos avisos iguais aos da maquete. AC2: view=coverage só gestor dono/owner, sem e-mail nem pagamento, só leitura, fora do bootstrap. AC3/AC4: buildRaceCoverage puro com os 5 avisos, D40 e D41 (ver REQ-001). AC5/AC6: painel com 15 s ligado ao visibilitychange, Atualizar, "Atualizado às", falha mantendo o último dado, Montar a escala, Judges com cartão aberto. AC7: RacePenaltiesPanel intocado, open_attempt não lê a cobertura, sem DQ.'
+  auto_decisions_reviewed:
+    - '"Mais de 2 por judge" virou "Judges lotados" + "Judge acima do limite": coberto pela aprovação da maquete (D42).'
+    - 'Sem escala também sem estimativa e sem selos: está na maquete aprovada (D42).'
+    - 'Estação só com judge de fora mantém "Sem judge escalado": ok, travado em teste.'
+    - 'Tabela da escala ausente = evento sem escala com assignmentsAvailable false: ok, travado por mutação.'
+    - 'Cartão aberto não espera a próxima estação: ver REQ-001.'
+    - 'Aviso de acima do limite por estação: ver UX-001.'
+  gate_commands:
+    node_test_story: '13/13 em tests/race-coverage.test.mjs (rodado pelo QA)'
+    node_test_race: '278/278 em tests/race-*.test.mjs + scoresheets-route (rodado pelo QA)'
+    npm_test_lint_typecheck_build: 'informado pelo coordenador: 1508/1508, 0 erros, verde, verde (build não repetido pelo QA a pedido)'
+  independent_checks: 'Mutação no scratchpad (restaurada e conferida com cmp), todas derrubadas: coverage com acesso de judge; D40 desligado; lotados contando judge de fora; sem fallback da tabela ausente; cartão aberto contado como esperando; acima do limite sem a regra de estação de 1 atleta.'
+  notes: 'Sem migration nesta story. admin/page.tsx sem mudança desta story; a seção é montada só com a aba "race" ativa, então o polling para ao trocar de aba do painel.'

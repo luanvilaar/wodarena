@@ -1,0 +1,76 @@
+schema: 1
+story: '1.103'
+story_title: 'Súmula Fitness Race (F2): Tela de Dois Cartões e Limite de Dois Atletas por Judge'
+gate: PASS
+status_reason: 'Os 10 ACs estão no código e cobertos por teste. A maquete dois-cartoes.html existe, cobre os estados do AC1 e foi aprovada pelo Luan (D42); a implementação segue os estados conferidos no código (vaga livre, 2 cartões, terceiro recusado, Soltar/Dispensar, estação final de 1 atleta, outro judge assume). A regra de capacidade é uma função pura usada pelo servidor e pela tela; open_attempt e assumir conferem antes e reconferem depois de gravar; dois open_attempt simultâneos nunca deixam 3 ativas. Dispensar e soltar só pelo dono e só em estação de 2 cartões; o gestor segue liberando qualquer tentativa com o acesso de gestor. O ajuste do updateRunIf (REL-002) é correção real, não máscara. Só achados LOW.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-10-31T23:30:00-03:00'
+expires: '2026-11-14T23:30:00-03:00'
+quality_score: 88
+
+top_issues:
+  - id: TEST-001
+    severity: low
+    finding: 'Caminhos de concorrência sem teste próprio: (a) a reconferência depois de assumir (claimAttemptRow) desfaz o assumir quando passa do limite, mas nenhum teste a exercita (mutação que a remove sobreviveu); (b) no dispensar, a segunda contagem que devolve o estado quando um registro chega no meio só cai mutada junto com a primeira; (c) a rota de soltar pelo gestor (acesso de gestor) não tem teste que a distinga do acesso de judge (mutação sobreviveu).'
+    refs: ['src/lib/serverRaceSheets.ts:605', 'src/lib/serverRaceSheets.ts:765-768', 'src/app/api/race-sheets/route.ts:235']
+    suggested_owner: dev
+    suggested_action: 'Teste com onceBeforeInsert/beforeUpdate simulando outro open_attempt durante o assumir; teste com um registro gravado entre o cancelamento e a segunda contagem; teste de gestora de outro evento (ou com acesso vencido) tentando soltar: 403.'
+  - id: TEST-002
+    severity: low
+    finding: 'A correção do updateRunIf (confere a situação além do updated_at) é efetiva: com ela, 25 de 25 rodadas do [REL-002] passaram; sem ela, 4 de 30 falharam. Mas o teste só pega a regressão por acaso (depende de duas gravações no mesmo milissegundo), então uma reversão passa na maioria das rodadas.'
+    refs: ['src/lib/serverRaceDecisions.ts:138', 'tests/race-penalties-panel.test.mjs:361']
+    suggested_owner: dev
+    suggested_action: 'Fixar o relógio no teste (o gatilho grava o mesmo updated_at da decisão) para a colisão acontecer sempre.'
+  - id: REL-001
+    severity: low
+    finding: 'Dispensar não é transacional: entre cancelar e reconferir o log, a tentativa fica cancelada por um instante. Um lote de outro aparelho do mesmo judge que leu a tentativa antes pode gravar depois da segunda contagem (registro numa tentativa cancelada), e outra pessoa pode abrir uma tentativa nova no mesmo atleta e estação, fazendo a volta ao estado anterior bater no índice único (erro 500). Exige dois aparelhos e o cartão sem nenhum registro; a tela só oferece Dispensar com a fila vazia.'
+    refs: ['src/lib/serverRaceSheets.ts:751-772']
+    suggested_owner: dev
+    suggested_action: 'Na F2/F4, mover para uma RPC com trava (FOR UPDATE) junto do item REL-003 da 1.98; até lá, aceitar.'
+  - id: UX-001
+    severity: low
+    finding: 'Divergências e lacunas de tela: (a) "Wall Ball: 2º atleta" da maquete é uma folha com o aviso; a lista do Wall Ball (1.97, mantida sem edição pelo AC9) mostra a recusa do servidor como texto de erro no topo, sem "Ver meus cartões"; (b) cartão de corrida já encerrada (run finished com a tentativa ainda ativa) aparece travado na tela de dois cartões sem a frase que a tela de cartão único mostra; (c) ao liberar um cartão, o topo diz "1 vaga livre" mas a vaga só aparece depois de Fechar.'
+    refs: ['src/components/race/WallBallListScreen.tsx:58', 'src/components/race/TwoCardsScreen.tsx:362-374', 'src/components/race/StationAttemptScreen.tsx:332-334', 'src/components/race/TwoCardsScreen.tsx:180-183']
+    suggested_owner: ux-design-expert
+    suggested_action: 'Conferir com o Luan; (b) é uma linha (reaproveitar o aviso do StationRunner no TwoCardsCard).'
+  - id: A11Y-001
+    severity: low
+    finding: 'Abas do celular em pé usam role=tab sem aria-controls/tabpanel e sem setas; o botão de fechar o aviso tem 44 px (o AC8 pede 56 px em qualquer layout); as folhas do cartão não levam o foco nem fecham com Esc (mesmo padrão do Wall Ball).'
+    refs: ['src/components/race/TwoCardsScreen.tsx:231-262', 'src/components/race/TwoCardsScreen.tsx:213', 'src/components/race/StationCard.tsx:405-415']
+    suggested_owner: dev
+    suggested_action: 'min-h-14 min-w-14 no fechar; aria-controls nas abas; foco e Esc nas folhas junto da 1.102 (A11Y-001).'
+  - id: REQ-001
+    severity: low
+    finding: 'Leituras assumidas ainda sem confirmação do Luan (item aberto do DoD): sem Soltar nem Dispensar na estação final (tentativa aberta por engano prende o judge até o organizador agir); judge com cartões abertos não abre a estação final; Soltar exige a fila do cartão vazia. Wall Ball no meio = 1 por judge já está confirmado (D43).'
+    refs: ['docs/stories/1.103.story.md:77-79', 'docs/stories/1.103.story.md:126', 'docs/stories/1.103.story.md:168']
+    suggested_owner: po
+    suggested_action: 'Confirmar com o Luan antes do primeiro evento.'
+  - id: TEST-003
+    severity: low
+    finding: 'Falta aparelho real com dois cartões (toque, fila independente por cartão, queda de rede, recarga) e a conferência visual no navegador (celular em pé com abas, deitado e tablet lado a lado). CodeRabbit não rodado (exige commit).'
+    refs: ['docs/stories/1.103.story.md:171', 'docs/stories/1.103.story.md:173']
+    suggested_owner: dev
+    suggested_action: 'Ensaio com dois celulares e um tablet; CodeRabbit no DoD.'
+waiver: { active: false }
+
+evidence:
+  tests_reviewed: 14
+  risks_identified: 7
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    ac_gaps: []
+  gate_commands:
+    node_test_relacionados: '100/100 (race-two-cards, race-station-screen, race-sheets-route, race-closing-station, race-wall-ball, court-ui), rodado pelo QA'
+    rel002_repetido: '25/25 com a correção; 26/30 com a correção revertida no scratchpad'
+    eslint_arquivos_da_story: '0 erros, 0 avisos'
+    npm_test_lint_typecheck_build: 'informados pelo coordenador no working tree atual: 1508/1508, 0 erros, verde, verde (build não repetido pelo QA)'
+  independent_checks: 'Mutação fora do repo (cópia no scratchpad com a maquete, restaurada e conferida com cmp). Derrubadas: sem reconferência no open_attempt; reconferência sem a ordem de criação; sem conferência antes de gravar; soltar e dispensar sem a trava da estação de 1 atleta; soltar e dispensar por outro judge; tentativa de corrida dnf/cancelled contando; estação final fora da estação de 1 atleta; limite 3; exclusividade num sentido só; as duas contagens do dispensar mutadas em par. Sobreviveram (TEST-001/TEST-002): reconferência do assumir; acesso de gestor no soltar; a conferência de situação do updateRunIf numa rodada só.'
+  notes: 'Ajustes de testes existentes conferidos e legítimos (regra nova, não máscara): 1.94 race-sheets-route (o judge dono do Wall Ball passa de 403 para 409 "só o organizador libera" pela D39; o judge que não é dono segue 403; o Wall Ball ao lado do trenó passa para outro judge); 1.98 race-penalties-panel (o 2º Wall Ball é aberto pela gestora); 1.101 race-closing-station (um judge por Wall Ball); 1.102 race-station-screen (dispensa o cartão vazio antes do próximo; a estação final é liberada pela gestora). Asserções de regra de jogo intactas; a do REL-002 também. race-wall-ball.test.mjs e court-ui.test.mjs sem edição; /api/sheets e useSheetSync sem diff.'
+
+recommendations:
+  immediate: []
+  future:
+    - action: 'Testes dos caminhos de concorrência (TEST-001) e relógio fixo no REL-002 (TEST-002).'
+      refs: ['tests/race-two-cards.test.mjs', 'tests/race-penalties-panel.test.mjs:361']
+    - action: 'RPC transacional para dispensar/assumir junto do REL-003 da 1.98 (REL-001).'
+      refs: ['src/lib/serverRaceSheets.ts:751']

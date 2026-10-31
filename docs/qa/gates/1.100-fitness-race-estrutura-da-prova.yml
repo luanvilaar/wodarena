@@ -1,0 +1,51 @@
+schema: 1
+story: '1.100'
+story_title: 'Súmula Fitness Race (F2): Estrutura da Prova com Tipo de Conferência e Metas por Estação'
+gate: PASS
+status_reason: 'Os 8 ACs estão no código e cobertos por teste. CourseStage ganhou conferenceKind e units opcionais; percurso antigo resolve exatamente como antes (Sled 50 m = 4 trechos, Wall Balls 100 reps). A sugestão por nome reaproveita resolveRaceStationKind sem ampliar o reconhecimento; reps vira wall_ball; units de 1 a 200; valor inválido no JSON é ignorado sem lançar. O snapshot leva só kind e expectedUnits resolvidos, por categoria, e não muda depois do locked_at. Nenhuma leitura de tipo por nome sobrou fora de raceCourseStructure. Achados só LOW.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-10-31T12:00:00-03:00'
+expires: '2026-11-14T12:00:00-03:00'
+quality_score: 92
+
+top_issues:
+  - id: TEST-001
+    severity: low
+    finding: 'O chip de tipo e meta na lista de etapas (AC4) não tem asserção de render: a função describeRaceStageConference é testada, mas a mutação que deixa de mostrar o chip em admin/page.tsx passou com os testes verdes.'
+    refs: ['src/app/admin/page.tsx:5703', 'tests/race-course-structure.test.mjs:281']
+    suggested_owner: dev
+    suggested_action: 'No teste estático do editor, casar a chamada describeRaceStageConference(stg) e o render {conferenceLabel && ( na linha da etapa.'
+  - id: UX-001
+    severity: low
+    finding: 'Duas arestas do editor: (a) o aviso de erro (role="alert") aparece assim que o tipo fica Reps sem repetições, antes de o organizador tentar salvar, e é anunciado pelo leitor de tela a cada mudança; (b) como todo salvamento grava conferenceKind, ao editar de novo a estação o tipo conta como "escolhido à mão" e deixa de acompanhar o nome (AUTO-DECISION declarada pelo @dev).'
+    refs: ['src/components/admin/CourseStageConferenceFields.tsx:92', 'src/app/admin/page.tsx:5104']
+    suggested_owner: ux-design-expert
+    suggested_action: 'Conferir no navegador; se incomodar, mostrar o erro só depois da primeira tentativa de salvar. O comportamento (b) é aceitável e está documentado.'
+  - id: REQ-001
+    severity: low
+    finding: 'Pendências de produto já registradas pelo @po/@sm, não defeitos: estação Reps que não é Wall Ball usa os 6 motivos de no-rep do Wall Ball; o quadro do Wall Ball pega só a primeira estação wall_ball do percurso (duas estações Reps na mesma categoria); meta errada depois da primeira largada não tem correção (snapshot travado).'
+    refs: ['docs/stories/1.100.story.md:68-74', 'src/lib/serverRaceSheets.ts:1470']
+    suggested_owner: po
+    suggested_action: 'Levar ao Luan; até decisão, o percurso oficial (um Wall Ball) não muda.'
+  - id: TEST-002
+    severity: low
+    finding: 'Editor não conferido no navegador (o painel logado usa o banco de produção); CodeRabbit não rodado (exige commit).'
+    refs: ['docs/stories/1.100.story.md:153-155']
+    suggested_owner: dev
+    suggested_action: 'Conferir o modal com percurso oficial e com estação personalizada ajustada à mão; rodar o CodeRabbit no DoD antes do push.'
+waiver: { active: false }
+
+evidence:
+  tests_reviewed: 14
+  risks_identified: 4
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8]
+    ac_gaps: []
+  gate_commands:
+    npm_test: '1508/1508 (rodado pelo coordenador no working tree atual)'
+    node_test_story: '182/182 em race-course-structure, race-closing-station, race-sheets-route, race-wall-ball, race-penalties-panel, race-publication, race-rules, fitness-racing, court-ui e scoresheets-route (rodado pelo QA)'
+    npm_run_lint: '0 erros; eslint nos arquivos da story sem aviso (rodado pelo QA)'
+    npm_run_typecheck: 'verde (coordenador)'
+    npm_run_build: 'verde (coordenador; o QA não rodou para não colidir com o .next de outros revisores)'
+  independent_checks: 'Mutação numa cópia isolada do repo (fora da árvore de trabalho): conferenceKind ignorado (5 falhas), units sem teto (3), reps sem tradução para wall_ball (68), trenó sem o fallback da distância (6), validação do editor removida (1): todas derrubadas. Sobreviveu só a remoção do chip da lista (TEST-001). Conferido que course_layout passa como JSON bruto pelo AppContext e pela persistência (os campos novos não se perdem) e que nenhum código fora de raceCourseStructure lê o tipo pelo nome.'
+  notes: 'raceCourseStructure.ts e serverRaceSheets.ts já contêm acréscimos das stories 1.101 a 1.103 (lastRaceStation, raceStationKey, closesTime); revisados no gate da 1.101 ou ficam para os gates das outras.'

@@ -1,0 +1,139 @@
+schema: 1
+story: '1.93'
+story_title: 'Súmula Fitness Race (F0): Regulamento Versionado e Motor de Regras'
+gate: PASS
+status_reason: 'Os 14 ACs têm evidência no código e em testes que de fato falham quando a regra quebra (21 de 22 mutações derrubadas, fora do repo). Test, typecheck, lint e build verdes. Ficam só itens LOW, a maioria contrato que a Story 1.94 precisa respeitar ao montar o snapshot e o log.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-10-31T19:45:00-03:00'
+expires: '2026-11-13T18:00:00-03:00'
+quality_score: 92
+
+top_issues:
+  - id: TEST-001
+    severity: low
+    finding: 'A recusa de "exit" com REFAZER em aberto não tem teste: removida a linha, os 27 testes seguem verdes (única mutação que sobreviveu). O teste de pureza confere imports estáticos e algumas chamadas, mas não pega require( nem import( dinâmico.'
+    refs: ['src/lib/raceRules.ts:444', 'tests/race-rules.test.mjs:27-34']
+    suggested_owner: dev
+    suggested_action: 'Na 1.94 ou antes, acrescentar a asserção de que [start, wrong_load, exit] recusa o exit, e incluir require( e import( na regex de pureza.'
+  - id: REL-001
+    severity: low
+    finding: 'Sem meta no snapshot não há trava nem cobrança: Wall Ball sem reps e estação de trechos sem expectedUnits saem "released" sem penalidade, nos dois presets. toRaceCourseStage não deriva expectedUnits da distância (Sled 50 m = 4 tem de vir de quem chama), e seções de BBJ, Farmers e Lunges dependem do mapa do local (F2). Em 2026/27 uma estação de seções incompleta não gera proposta de DQ até lá. Coerente com D6 e documentado pelo @dev.'
+    refs: ['src/lib/raceRules.ts:99-100', 'src/lib/raceRules.ts:125-134', 'src/lib/raceRules.ts:446-459']
+    suggested_owner: dev
+    suggested_action: 'Story 1.94: o snapshot por evento grava reps do Wall Ball e expectedUnits do Sled (distância / 12,5 m) e testa que eles chegam ao motor; deixar explícito na tela que as seções 4 a 7 ainda não cobram falta.'
+  - id: REL-002
+    severity: low
+    status: obsolete
+    obsolete_reason: 'Sem DQ (D27/D28), a 2ª estação fora de ordem cobra 180 s de novo; avaliar estação por estação dá o mesmo tempo.'
+    finding: 'A contagem de "estação fora de ordem" só atravessa estações via evaluateRaceRun. Se o servidor avaliar cada estação sozinha com evaluateRaceStation sem options, a 2ª ocorrência sai 180 s de novo em vez de proposta de DQ (conferido por script). A contagem segue a ordem do array (percurso), não a cronológica: o total não muda, mas qual das duas vira a proposta pode trocar.'
+    refs: ['src/lib/raceRules.ts:386-389', 'src/lib/raceRules.ts:595-607']
+    suggested_owner: dev
+    suggested_action: 'Story 1.94: recalcular a corrida inteira por evaluateRaceRun (ou passar generalOccurrences), com teste de rota cobrindo duas estações fora de ordem.'
+  - id: ARCH-001
+    severity: low
+    finding: 'undo.of e sourceKey usam a posição 0-based no array de eventos de uma estação. Se o seq da 1.94 for 1-based, global da corrida ou tiver buracos, undo aponta para o evento errado e as chaves deixam de casar com as infrações já revogadas.'
+    refs: ['src/lib/raceRules.ts:140-143', 'src/lib/raceRules.ts:296', 'src/lib/raceRules.ts:511-539']
+    suggested_owner: dev
+    suggested_action: 'Story 1.94: seq contínuo por tentativa (atleta x estação) começando em 0, ou mapear seq do banco para posição antes de chamar o motor; teste de casamento de sourceKey depois de um undo.'
+  - id: REL-003
+    severity: low
+    finding: 'Evento aceito que perde a base depois de um undo some sem aviso: desfazer o "start" depois de 50 reps zera o contador, mas as 50 reps não aparecem em rejected nem em voided (conferido por script). O log fica certo, só o árbitro não vê por quê.'
+    refs: ['src/lib/raceRules.ts:502-509']
+    suggested_owner: dev
+    suggested_action: 'Na 1.97 (tela do Wall Ball): pedir confirmação ao desfazer o start com registros depois dele, ou o motor expor os eventos sem efeito numa lista própria.'
+  - id: MNT-001
+    severity: low
+    finding: 'RACE_RULE_PRESET_2025_26, RACE_RULE_PRESET_2026_27 e RACE_RULE_PRESETS são objetos mutáveis exportados. Um consumidor que edite o preset direto (em vez de createCustomRaceRuleset) muda o padrão do processo inteiro.'
+    refs: ['src/lib/raceRulePresets.ts:117-135']
+    suggested_owner: dev
+    suggested_action: 'Congelar em profundidade os presets ou exportar só uma função que devolve cópia; a edição do regulamento (1.98) sempre por createCustomRaceRuleset.'
+  - id: REQ-001
+    severity: low
+    finding: 'O catálogo é por tipo de estação: BBJ, Farmers e Lunges compartilham "sections". O motor aceita "Sandbag fora dos ombros" (imediata, 15 s) no BBJ e no Farmers, e return_wrong e wrong_load no BBJ (este último o @dev registrou). A filtragem fica para a tela.'
+    refs: ['src/lib/raceRulePresets.ts:42-56', 'src/lib/raceRules.ts:393-418']
+    suggested_owner: dev
+    suggested_action: 'Quando as estações 1 a 7 ganharem tela (F2), filtrar motivos por estação na interface ou levar o catálogo para o nível da estação no regulamento.'
+  - id: REQ-002
+    severity: low
+    status: obsolete
+    obsolete_reason: 'Sem DQ (D27): a proposta de DQ deixou de existir.'
+    finding: 'Em 2025/26, a 3ª ocorrência de sandbag fora dos ombros gera uma nova proposta de DQ pendente (cada uma a partir da 2ª). Não erra o tempo (0 s, pendente), mas duplica itens no painel do organizador.'
+    refs: ['src/lib/raceRules.ts:357-361']
+    suggested_owner: po
+    suggested_action: 'Decidir na 1.98 se o painel agrupa propostas repetidas da mesma estação ou se o motor gera só uma.'
+  - id: REL-004
+    severity: low
+    finding: 'Re-verificação 2026-10-31: o motor lê o regulamento gravado em race_rulesets.rules. Um regulamento criado antes da mudança da D28 (JSON sem missingUnit.perUnitSeconds e sem wrongLoad.declinedSeconds) faz o motor novo gravar a penalidade de trecho faltando e de "não refez" sem segundos, valendo 0 s, sem erro (conferido numa cópia com o preset antigo). Só atinge evento cuja primeira largada foi antes de 2026-10-30 23h.'
+    refs: ['src/lib/raceRules.ts:420', 'src/lib/raceRules.ts:447', 'src/lib/serverRaceSheets.ts:376-382']
+    suggested_owner: dev
+    suggested_action: 'rulesOf completa os campos que faltam a partir do preset do código (ou recusa com 409 claro), com teste. Antes do primeiro evento real, conferir só por leitura se existe linha em race_rulesets.'
+  - id: DOC-002
+    severity: low
+    finding: 'Re-verificação 2026-10-31: as decisões D27 a D30 (sem DQ, casos de DQ viram tempo, regulamento fixo, sem infração geral à mão) foram aplicadas no código depois deste gate, sem story nem Dev Agent Record. O código segue as decisões e os testes foram trocados sem afrouxar, mas o texto destes ACs, marcados [x], descreve comportamento que não existe mais: AC7, AC8, AC9, AC10 (inteiro), AC11 e AC12 nas partes de DQ e rejected.'
+    refs: ['docs/design/fitness-race-sumula/DECISOES.md']
+    suggested_owner: po
+    suggested_action: 'Anotar cada AC como superado pela decisão correspondente (sem apagar o histórico) antes de mover a story para Done.'
+waiver: { active: false }
+
+evidence:
+  tests_reviewed: 27
+  risks_identified: 8
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+    ac_gaps: []
+  gate_commands:
+    node_test_story: '27/27 (tests/race-rules.test.mjs), rodado pelo QA'
+    npm_test: '1286/1286, rodado pelo QA (working tree com a 1.92 sem commit)'
+    npm_run_lint: '0 erros, 206 warnings (nenhum nos 3 arquivos da story; eslint dos 3 arquivos sem saída)'
+    npm_run_typecheck: 'verde, rodado pelo QA'
+    npm_run_build: 'verde, rodado pelo QA (o @dev não rodou; os módulos novos não são importados por nenhuma tela ou rota)'
+    coderabbit: 'não rodado: exige commit (--committed); fica no DoD antes do push'
+    migration: 'nenhuma'
+  independent_checks: 'Mutação fora do repo (cópias no scratchpad, repo intocado): 22 mutações, 21 derrubadas pelos testes. Derrubadas: 15 s para 10 s, 15 s por rep para 10 s, esquecer o cancelamento da devolução, pendentes somadas como vigentes, imediata sem consumir a advertência (D13), advertência contada por motivo, sem trava de reps, trava fixa em 100, undo de undo aceito, motor confirmando DQ, gerais passando pela advertência, secondOccurrence ignorado, contagem fora de ordem por estação, DQ confirmado com tempo, devolução corrigível depois da Roxzone, redo_declined sem proposta, undo sem refazer o estado, sourceKey sem estação, magnésio 120 para 60, trecho 180 para 120, devolução 30 para 15. Sobreviveu: exit com REFAZER em aberto (TEST-001). Script de sondagem: log com lixo (string, array, número, evento sem campo) nunca lança; recálculo com undo no meio idêntico em duas rodadas; checkRaceEvent espelha a recusa de undo de undo.'
+  notes: 'Pureza conferida no código: só import type de @/types e @/lib/raceRules, sem React, Supabase, fetch, Date, performance, process.env; único global é structuredClone. Nenhuma leitura de .preset nem comparação com temporada no motor; tudo que muda entre 2025/26 e 2026/27 está em dados (secondOccurrence do sandbag e missingUnit). Nenhuma carga, distância ou reps nos presets; Wall Ball lê stage.reps (100 em fitnessRacing.ts). Story 1.92: tests/support/serverModuleHarness.mjs (stub next/link) e admin/page.tsx são da 1.92, não desta.'
+
+auto_decisions_review:
+  - decision: 'Sandbag fora dos ombros como motivo imediato do catálogo de sections, 2ª ocorrência só proposta de DQ em 2025/26'
+    verdict: 'De acordo com o plano ("15 s sem advertência; 2ª ocorrência é DQ") e com D13 (consome a advertência). Ver REQ-001 e REQ-002.'
+  - decision: 'Estação fora de ordem contada pela corrida inteira'
+    verdict: 'Leitura correta: a 2ª ocorrência acontece em outra estação. Depende de a 1.94 usar evaluateRaceRun (REL-002).'
+  - decision: 'REFAZER recusado gera proposta de DQ pendente; REFAZER resolvido fica confirmed com 0 s'
+    verdict: 'De acordo com AC7 e o plano ("se não refizer, o árbitro propõe DQ"). confirmed com 0 s não pesa no tempo.'
+  - decision: 'Ajuda externa 120 s nos dois presets'
+    verdict: 'Aceitável: o plano e o planonovo.md dão "2 ou 3 min, configurável" sem separar temporada; o teste prova a troca para 180 s num custom. Entra na conferência com o regulamento oficial (verified: false).'
+  - decision: 'Wall Ball sem reps e trechos sem expectedUnits: sem trava e sem cobrança'
+    verdict: 'Coerente com D6 (nenhum número no código), mas transfere o risco para o snapshot da 1.94 (REL-001).'
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: 'Sem I/O, sem rota, sem migration, sem segredo. Entrada desconhecida vira recusa com texto fixo, sem eco do conteúdo. A autoridade de DQ fica fora do motor (nunca devolve DQ confirmado); o 403 do árbitro é da 1.94/1.98.'
+  performance:
+    status: PASS
+    notes: 'Cada undo refaz o log até ali: O(n) por undo, O(n x undos) no pior caso. Com logs de estação de centenas de eventos é irrelevante.'
+  reliability:
+    status: PASS
+    notes: 'Determinístico, não muta o log, não lança com entrada malformada. Itens LOW REL-001 a REL-003 e ARCH-001 são contrato para a 1.94/1.97.'
+  maintainability:
+    status: PASS
+    notes: 'Regulamento como dado, tipos exportados, comentários citam D2, D6 e D13. MNT-001 (presets mutáveis).'
+
+regression_review:
+  files_in_story: ['src/lib/raceRules.ts (novo)', 'src/lib/raceRulePresets.ts (novo)', 'tests/race-rules.test.mjs (novo)', 'docs/stories/1.93.story.md']
+  other_working_tree_changes: 'admin/page.tsx, serverModuleHarness.mjs, AdminLoginScreen.tsx, loginFont.ts, loginPreferences.ts e os testes de login são da Story 1.92. src/lib/fitnessRacing.ts não mudou.'
+  importers: 'nenhum arquivo do app importa raceRules ou raceRulePresets'
+  old_tests_changed: 'nenhum'
+
+history:
+  - at: '2026-10-30T18:00:00-03:00'
+    gate: PASS
+    note: 'Gate original (ver status_reason).'
+  - at: '2026-10-31T19:45:00-03:00'
+    gate: PASS
+    note: 'Re-verificação de regressão depois da F2 (1.100–1.106) e das decisões D27–D30: veredito mantido. Motor mudou com D27/D28 (sem propose_dq/dq_proposal; carga errada não refeita, trecho faltando e 2ª ocorrência cobram tempo). Testes reescritos com os valores novos e teste "não há DQ"; contratos (evaluateRaceRun, seq 0-based, sourceKey, travas) intactos. Mutações derrubadas: missing_units sem cobrar, redo_declined sem cobrar, snapshot sem a meta de 12,5 m do trenó (13 falhas).'
+
+regression_recheck_2026_10_31:
+  verdict: 'PASS mantido'
+  baseline: 'cópia do código e dos testes de 2026-10-30 22:27 (sandbox do gate da F1) e serverRaceDecisions.ts do re-gate da 1.98 (22:40), comparados com o working tree de 2026-10-31'
+  commands: 'node --test race-*, leaderboard-*, scoresheets-route e court-ui: 307/307 (QA); npm test 1508/1508, lint 0 erros, typecheck e build verdes (coordenador)'
+  new_issues: ['REL-004', 'DOC-002']

@@ -1,1 +1,2 @@
 - [Design System](project_design-system.md) — tokens, piso de qualidade UI (sem shadow/gradiente), direção da aba Horário, gaps de conformidade
+- [Maquetes súmula Fitness Race](project_fitness_race_sumula_mockups.md) — F1 aprovadas (D23); F2 dois-cartoes 1.103 e cobertura 1.105 entregues 2026-10-31, aguardando Luan
