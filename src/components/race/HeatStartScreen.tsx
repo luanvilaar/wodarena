@@ -199,6 +199,10 @@ export function HeatStartScreen({ eventId, heatId }: { eventId: string; heatId: 
       <span>{syncText}</span>
     </div>
   );
+  // Sessão expirada: o caminho para entrar de novo fica junto da barra, na lista e na onda.
+  const sessionLogin = syncStatus === 'session' && queue.length > 0 && (
+    <Link href="/admin" className="flex min-h-14 items-center justify-center rounded-xl border-2 border-card-border bg-card text-base font-extrabold hover:border-primary">Entrar de novo</Link>
+  );
 
   const listHref = `/judge/corrida/${encodeURIComponent(eventId)}`;
   const footerClass = 'sticky bottom-0 z-20 -mx-4 mt-5 space-y-2 border-t border-card-border bg-background/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur';
@@ -241,6 +245,7 @@ export function HeatStartScreen({ eventId, heatId }: { eventId: string; heatId: 
         {payload && (
           <div className={footerClass}>
             {syncBar}
+            {sessionLogin}
             {/* Árbitro do Wall Ball (Story 1.97) e das outras estações (Story 1.102): as listas da onda ficam a partir da tela do evento. */}
             <div className="grid grid-cols-2 gap-2">
               <Link href={`${listHref}/wall-ball`} className="flex min-h-14 items-center justify-center rounded-xl border-2 border-card-border bg-card text-base font-extrabold hover:border-primary">
@@ -269,10 +274,7 @@ export function HeatStartScreen({ eventId, heatId }: { eventId: string; heatId: 
           </div>
         )}
         {waveNotice?.kind === 'session' && (
-          <div role="alert" className="space-y-2 rounded-md border border-trading-down bg-trading-down/10 px-4 py-3 text-sm font-semibold">
-            <p>{waveNotice.text}</p>
-            <Link href="/admin" className="flex min-h-14 items-center justify-center rounded-xl border-2 border-card-border bg-card font-extrabold">Entrar de novo</Link>
-          </div>
+          <p role="alert" className="rounded-md border border-trading-down bg-trading-down/10 px-4 py-3 text-sm font-semibold">{waveNotice.text}</p>
         )}
         {waveNotice?.kind === 'error' && (
           <p role="alert" className="rounded-md border border-trading-down bg-trading-down/10 px-4 py-3 text-sm font-semibold">{waveNotice.text}</p>
@@ -333,6 +335,7 @@ export function HeatStartScreen({ eventId, heatId }: { eventId: string; heatId: 
 
       <div className={footerClass}>
         {syncBar}
+        {sessionLogin}
         {wave.startedAt ? (
           <div className="flex min-h-14 items-center justify-center gap-2 rounded-xl border-2 border-trading-up text-base font-extrabold text-trading-up">
             <CheckCircle2 className="h-5 w-5" aria-hidden="true" />

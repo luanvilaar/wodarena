@@ -332,7 +332,9 @@ test('resposta da largada: só sai da fila confirmada ou recusada de vez; sessã
   assert.match(screen, /classifyHeatStartResponse\(response\.status, Boolean\(data\.startedAt\)\)/);
   // 401: guarda, avisa e não agenda nova tentativa (sobe quando a tela volta com o login).
   assert.match(screen, /if \(outcome === 'session'\) \{\s*setSyncStatus\('session'\);\s*setNotice\(\{ kind: 'session', heatId: item\.heatId, text: RACE_SESSION_EXPIRED_MESSAGE \}\);\s*return;\s*\}/);
-  assert.match(screen, /href="\/admin"[^>]*>Entrar de novo<\/Link>/);
+  assert.match(screen, /const sessionLogin = syncStatus === 'session' && queue\.length > 0 && \(\s*<Link href="\/admin"[^>]*>Entrar de novo<\/Link>/);
+  // O botão fica junto da barra de sincronização: na lista de ondas e na onda aberta.
+  assert.equal(screen.match(/\{syncBar\}\s*\{sessionLogin\}/g)?.length, 2);
   assert.doesNotMatch(screen, /response\.status !== 503/);
 });
 
