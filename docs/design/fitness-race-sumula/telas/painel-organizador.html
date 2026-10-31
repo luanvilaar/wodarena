@@ -1,0 +1,731 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maquete · Painel do organizador · Súmula Fitness Race (Story 1.98)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@500;600;700&family=Inter:wght@400;500;600;700;800&display=swap">
+<style>
+/* Maquete estática da Story 1.98 (com a seção "Ondas" da 1.96 AC8). Segue a
+   linguagem do admin atual (ScoresheetsPanel.tsx): tema escuro, cartões
+   bg-card com borda card-border, rótulos em caixa alta com o amarelo do app,
+   botões pequenos em caixa alta. O admin só tem tema escuro, então a maquete
+   também. Sem sombra, sem gradiente, sem transition: all. */
+:root{
+  --font-body:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --font-num:"IBM Plex Sans","JetBrains Mono",ui-monospace,Menlo,monospace;
+  --background:#0b0e11; --foreground:#eaecef; --card:#1e2329; --card-border:#2b3139; --primary:#fcd535; --primary-hover:#f0b90b;
+  --muted:#929aa5; --muted-soft:#707a8a; --dark-gray:#181a20; --elevated:#2b3139; --ink:#181a20; --white:#ffffff;
+  --up:#0ecb81; --down:#f6465d; --info:#3b82f6;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{background:var(--background)}
+body{margin:0;background:var(--background);color:var(--foreground);font-family:var(--font-body);font-size:14px;line-height:1.5}
+h1,h2,h3,h4{margin:0;line-height:1.2;text-wrap:balance}
+p{margin:0}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+button:disabled{cursor:not-allowed;opacity:.5}
+:focus-visible{outline:2px solid var(--info);outline-offset:3px}
+.num,td.num{font-family:var(--font-num);font-variant-numeric:tabular-nums}
+.wrap{max-width:1320px;margin:0 auto;padding:32px 16px 72px;display:grid;gap:28px}
+.eyebrow{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--primary)}
+.doc-head{display:grid;gap:12px}
+.doc-head h1{font-size:clamp(26px,4.5vw,38px);font-weight:800;letter-spacing:-.02em}
+.lead{max-width:80ch;color:var(--muted);font-size:15px}
+.pills{display:flex;flex-wrap:wrap;gap:8px}
+.pill{font-size:12px;font-weight:600;border:1px solid var(--card-border);background:var(--card);border-radius:999px;padding:6px 12px}
+.toolbar{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;border:1px dashed var(--card-border);border-radius:12px;padding:12px}
+.tgroup{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.tgroup > span{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-right:4px}
+.tbtn{min-height:36px;border:1px solid var(--card-border);background:var(--dark-gray);border-radius:8px;padding:0 12px;font-size:13px;font-weight:600;transition:border-color .15s,background-color .15s}
+.tbtn:hover{border-color:var(--primary)}
+.tbtn[aria-pressed="true"],.tbtn[aria-checked="true"]{background:var(--primary);border-color:var(--primary);color:var(--ink)}
+
+/* Moldura da tela do admin */
+.frame{margin:0 auto;width:100%;border:1px solid var(--card-border);border-radius:16px;padding:8px;background:var(--dark-gray)}
+.app{border-radius:10px;overflow:hidden;background:var(--background)}
+.frame[data-size="tablet"]{max-width:838px}
+.app{container-type:inline-size}
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--card-border)}
+.topbar b{font-size:15px}
+.topbar span{color:var(--muted);font-size:12px}
+.tabs{display:flex;gap:8px;overflow-x:auto;border-bottom:1px solid var(--card-border);padding:0 20px;scrollbar-width:none}
+.tab{border:0;border-bottom:2px solid transparent;background:none;padding:10px 14px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);white-space:nowrap}
+.tab[aria-current="page"]{border-bottom-color:var(--primary);color:var(--white)}
+.content{padding:20px;display:grid;gap:20px}
+
+.notice{border:1px solid var(--card-border);background:var(--dark-gray);border-radius:8px;padding:10px 12px;font-size:12.5px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.notice.warn{border-color:var(--down)}
+.notice.warn b{color:var(--down)}
+.summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+@container (max-width:900px){.summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.stat{border:1px solid var(--card-border);background:var(--card);border-radius:12px;padding:14px;display:grid;gap:2px;text-align:left}
+.stat .v{font-family:var(--font-num);font-variant-numeric:tabular-nums;font-size:26px;font-weight:700;line-height:1.1}
+.stat .l{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.stat .d{font-size:12px;color:var(--muted)}
+.stat.attn{border-color:var(--primary)}
+.stat.attn .v{color:var(--primary)}
+
+.panel{border:1px solid var(--card-border);background:var(--card);border-radius:12px;padding:20px;display:grid;gap:16px;min-width:0}
+.panel.hl{border:2px solid var(--primary)}
+.ph{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:10px}
+.ph .eb{font-size:12px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--primary)}
+.ph h3{margin-top:4px;font-size:18px;font-weight:700;text-transform:uppercase}
+.ph .aside{font-size:12.5px;color:var(--muted);max-width:52ch}
+.muted{color:var(--muted)}
+.small{font-size:12px}
+
+.sbtn{display:inline-flex;align-items:center;gap:6px;min-height:36px;border:1px solid var(--card-border);background:var(--dark-gray);border-radius:6px;padding:0 12px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--white);transition:border-color .15s;white-space:nowrap;text-decoration:none}
+.sbtn:hover:not(:disabled){border-color:var(--primary)}
+.sbtn.pri{background:var(--primary);border-color:var(--primary);color:var(--ink)}
+.sbtn.pri:hover:not(:disabled){background:var(--primary-hover)}
+.sbtn.danger{border-color:var(--down);color:var(--down);background:var(--dark-gray)}
+.sbtn.danger-fill{background:var(--down);border-color:var(--down);color:var(--ink)}
+@container (max-width:900px){.sbtn{min-height:44px;padding:0 12px}}
+svg.i{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.chip{display:inline-flex;align-items:center;gap:4px;border:1px solid;border-radius:999px;padding:4px 10px;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;white-space:nowrap}
+.c-up{border-color:color-mix(in srgb,var(--up) 60%,transparent);color:var(--up)}
+.c-pri{border-color:color-mix(in srgb,var(--primary) 60%,transparent);color:var(--primary)}
+.c-down{border-color:color-mix(in srgb,var(--down) 60%,transparent);color:var(--down)}
+.c-mut{border-color:var(--card-border);color:var(--muted)}
+.c-fg{border-color:var(--muted-soft);color:var(--foreground)}
+
+/* Filtros */
+.filters{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.search{position:relative;flex:1 1 240px;max-width:360px}
+.search svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:var(--muted)}
+.input,select.input,textarea.input{width:100%;min-height:40px;border:1px solid var(--card-border);background:var(--dark-gray);border-radius:6px;padding:8px 12px;font-size:14px;color:var(--white)}
+.search .input{padding-left:34px}
+.input::placeholder{color:var(--muted)}
+.input:focus{border-color:color-mix(in srgb,var(--primary) 50%,transparent);outline:none}
+.input:focus-visible{outline:2px solid var(--info);outline-offset:1px}
+.seg{display:flex;flex-wrap:wrap;border:1px solid var(--card-border);border-radius:8px;overflow:hidden}
+.seg button{border:0;border-right:1px solid var(--card-border);border-bottom:2px solid transparent;background:var(--dark-gray);min-height:40px;padding:0 12px;font-size:12px;font-weight:700;color:var(--muted)}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--elevated);color:var(--white);border-bottom-color:var(--primary)}
+.seg .n{font-family:var(--font-num);margin-left:4px;color:var(--muted)}
+.auto{font-size:12px;color:var(--muted);margin-left:auto}
+.lab{display:block;margin-bottom:6px;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+
+/* Tabelas (viram cartões em tablet) */
+.tscroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%}
+th,td{text-align:left;vertical-align:top;padding:10px;border-bottom:1px solid var(--card-border)}
+th{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700;font-family:var(--font-body)}
+td{font-size:13.5px}
+td .who{display:block;font-weight:700;color:var(--white)}
+td .sub{display:block;font-size:12px;color:var(--muted)}
+td.sec{font-family:var(--font-num);font-variant-numeric:tabular-nums;font-weight:700;white-space:nowrap}
+.strike{text-decoration:line-through;color:var(--muted)}
+.acts{display:flex;gap:6px;flex-wrap:wrap}
+tr.rev td{opacity:.75}
+tr.log td{background:var(--dark-gray);padding:12px}
+.reglog{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.reglog li{font-size:12.5px;border-left:2px solid var(--primary);padding-left:10px}
+.reglog li b{color:var(--white)}
+@container (max-width:900px){
+  table.cards thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  table.cards,table.cards tbody,table.cards tr,table.cards td{display:block;width:100%}
+  table.cards tr{border:1px solid var(--card-border);border-radius:10px;margin-bottom:12px;padding:8px;background:var(--dark-gray)}
+  table.cards tr.log{margin-top:-10px;border-top:0;border-radius:0 0 10px 10px}
+  table.cards td{border:0;padding:6px 8px;display:flex;justify-content:space-between;gap:12px}
+  table.cards td::before{content:attr(data-l);font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);flex-shrink:0;padding-top:2px}
+  table.cards td.full{display:block}
+  table.cards td.full::before{display:none}
+  table.cards td .acts{justify-content:flex-end}
+}
+
+/* DQ e Sem tempo */
+.dqgrid,.ntgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
+.dq{border:1px solid var(--card-border);background:var(--dark-gray);border-radius:10px;padding:14px;display:grid;gap:8px}
+.dq .t{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.dq b{font-size:14px;color:var(--white)}
+.dq q{font-size:13.5px;border-left:2px solid var(--down);padding-left:10px;quotes:"\201C" "\201D"}
+.empty{font-size:13px;color:var(--muted)}
+
+/* Regulamento */
+.rgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:16px}
+@container (max-width:900px){.rgrid{grid-template-columns:1fr}}
+.warnbox{border:1px solid var(--primary);border-radius:8px;padding:10px 12px;font-size:12.5px;display:flex;gap:8px;align-items:flex-start}
+.warnbox svg{width:16px;height:16px;color:var(--primary);margin-top:2px}
+.kvs{display:grid;gap:6px;font-size:13px}
+.kvs div{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid var(--card-border);padding-bottom:6px}
+.kvs span{color:var(--muted)}
+.presets{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.preset{display:grid;gap:2px;border:1px solid var(--card-border);background:var(--dark-gray);border-radius:10px;padding:12px;text-align:left;min-height:64px}
+.preset[aria-checked="true"]{border:2px solid var(--primary)}
+.preset b{font-size:14px}
+.preset span{font-size:12px;color:var(--muted)}
+th.cur,td.cur{background:color-mix(in srgb,var(--primary) 7%,transparent)}
+
+/* Diálogo */
+dialog{border:1px solid var(--card-border);background:var(--card);color:var(--foreground);border-radius:14px;padding:0;width:min(560px,calc(100vw - 32px))}
+dialog::backdrop{background:color-mix(in srgb,var(--background) 75%,transparent)}
+.dlg{padding:20px;display:grid;gap:14px}
+.dlg h2{font-size:18px;font-weight:800}
+.dlg .ctx{border:1px solid var(--card-border);background:var(--dark-gray);border-radius:8px;padding:10px 12px;font-size:13px;display:grid;gap:2px}
+.dlg .ctx b{color:var(--white)}
+.dlg .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:520px){.dlg .grid2{grid-template-columns:1fr}}
+.preview{border:1px solid var(--primary);border-radius:8px;padding:10px 12px;font-size:13px}
+.preview .num{font-weight:700;color:var(--white)}
+.dlg .foot{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.err{font-size:12px;font-weight:700;color:var(--down)}
+.help{font-size:12px;color:var(--muted);margin-top:4px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.legend{display:grid;gap:8px;border:1px solid var(--card-border);background:var(--card);border-radius:12px;padding:16px}
+.legend h2{font-size:16px;font-weight:800}
+.legend ul{margin:0;padding-left:18px;display:grid;gap:4px;color:var(--foreground);font-size:13.5px}
+@media (prefers-reduced-motion:no-preference){
+  dialog[open]{animation:dlg-in .18s cubic-bezier(.16,1,.3,1)}
+  @keyframes dlg-in{from{opacity:0;transform:translateY(8px)}}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc-head">
+  <span class="eyebrow">Maquete · Story 1.98</span>
+  <h1>Painel do organizador: penalidades e decisões</h1>
+  <p class="lead">Aba "Súmula Fitness Race" do evento. Pelo D2 as penalidades já valem quando nascem: este painel é de <b>revisão e ajuste</b>, não de confirmação prévia. Toda decisão pede motivo e fica no registro com o antes e o depois. Desktop primeiro, utilizável em tablet (alterne a largura abaixo).</p>
+  <div class="pills">
+    <span class="pill">Aguardando aprovação do Luan</span>
+    <span class="pill">Inclui a seção Ondas da Story 1.96</span>
+    <span class="pill">Mesma linguagem do painel de Súmulas (FF)</span>
+    <span class="pill">Atualiza a cada 20 s</span>
+    <span class="pill">Valores de penalidade a conferir</span>
+    <span class="pill">Dados fictícios</span>
+  </div>
+</header>
+
+<div class="toolbar" role="group" aria-label="Controles da maquete">
+  <div class="tgroup"><span>Largura</span>
+    <button type="button" class="tbtn" data-size="desktop" aria-pressed="true">Desktop</button>
+    <button type="button" class="tbtn" data-size="tablet" aria-pressed="false">Tablet (820 px)</button>
+  </div>
+  <div class="tgroup"><span>Abrir</span>
+    <button type="button" class="tbtn" data-demo="alter">Modal: alterar penalidade</button>
+    <button type="button" class="tbtn" data-demo="revoke">Modal: revogar</button>
+    <button type="button" class="tbtn" data-demo="dq">Modal: confirmar DQ</button>
+    <button type="button" class="tbtn" data-demo="adjust">Ajustar tempo</button>
+    <button type="button" class="tbtn" data-demo="start">Corrigir largada</button>
+    <button type="button" class="tbtn" data-demo="ruleset">Trocar regulamento</button>
+  </div>
+  <div class="tgroup"><span>Simular</span>
+    <button type="button" class="tbtn" id="failBtn" aria-pressed="false">Falha na atualização do resultado</button>
+    <button type="button" class="tbtn" id="emptyBtn" aria-pressed="false">Evento sem pendências</button>
+  </div>
+</div>
+
+<div class="frame" id="frame" data-size="desktop">
+  <div class="app">
+    <div class="topbar"><b>Corrida Fictícia do Litoral</b><span>Fitness Race · 30/10/2026 · Gestor Exemplo</span></div>
+    <nav class="tabs" aria-label="Abas do evento">
+      <button type="button" class="tab">Informações Gerais</button>
+      <button type="button" class="tab">Categorias</button>
+      <button type="button" class="tab">Configuração do Percurso</button>
+      <button type="button" class="tab">Cronograma</button>
+      <button type="button" class="tab">Inscrições</button>
+      <button type="button" class="tab">Lançar Resultados</button>
+      <button type="button" class="tab">Leaderboard</button>
+      <button type="button" class="tab" aria-current="page">Súmula Fitness Race</button>
+    </nav>
+    <main class="content" id="content"></main>
+  </div>
+</div>
+
+<section class="legend" aria-labelledby="lg">
+  <h2 id="lg">Legenda das situações</h2>
+  <ul>
+    <li><span class="chip c-up">Vigente</span> soma no tempo oficial (nasceu confirmada, D2).</li>
+    <li><span class="chip c-up">Vigente</span> <span class="chip c-pri">Alterada</span> vigente depois de uma alteração do organizador; os segundos antigos aparecem riscados e o registro mostra quem, quando e por quê.</li>
+    <li><span class="chip c-fg">Advertência</span> 0 s, aparece e não soma (estações 1 a 7, fase F2).</li>
+    <li><span class="chip c-mut">Revogada</span> retirada pelo organizador; o recálculo do motor não a reativa.</li>
+    <li><span class="chip c-mut">Cancelada</span> desfeita pelo próprio árbitro (evento <code>undo</code>).</li>
+    <li><span class="chip c-pri">Proposta</span> proposta de DQ aguardando decisão; <span class="chip c-mut">Rejeitada</span> proposta recusada.</li>
+    <li><span class="chip c-down">DQ confirmado</span> desclassificação confirmada pelo organizador, a partir da proposta do árbitro ou direto pelo botão "Desclassificar" em Corridas (aprovado em D15).</li>
+  </ul>
+</section>
+
+</div>
+
+<dialog id="dlg" aria-labelledby="dlg-t"><form class="dlg" id="dlgForm" novalidate></form></dialog>
+
+<script>
+(function () {
+  'use strict';
+  var ICONS = {
+    search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+    pencil: '<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/>',
+    undo: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
+    history: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>',
+    ban: '<circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/>',
+    check: '<path d="M20 6 9 17l-5-5"/>',
+    x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+    clock: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+    alert: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+    flag: '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/>',
+    ext: '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
+    plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
+    userX: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="17" x2="22" y1="8" y2="13"/><line x1="22" x2="17" y1="8" y2="13"/>'
+  };
+  function ic(n) { return '<svg class="i" viewBox="0 0 24 24" aria-hidden="true">' + ICONS[n] + '</svg>'; }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function hms(sec) { if (sec == null) return '—'; var h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60; return h + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0'); }
+  function parseHms(v) { var m = /^(\d{1,2}):([0-5]\d):([0-5]\d)$/.exec(String(v).trim()); return m ? (+m[1]) * 3600 + (+m[2]) * 60 + (+m[3]) : null; }
+  function pen(sec) { if (!sec) return '0 s'; var m = Math.floor(sec / 60), r = sec % 60; return (m ? m + ' min' : '') + (m && r ? ' ' : '') + (r ? r + ' s' : ''); }
+  var ME = 'Gestor Exemplo';
+  var clock = 10 * 60 + 44;
+  function now() { clock += 1; return '10:' + String(clock % 60).padStart(2, '0'); }
+
+  // ---- Dados fictícios ----
+  var RUNS = [
+    { id: 'r1', name: 'Ana Fictícia', cat: 'Women Pro', wave: 3, gross: 4360, status: 'finished', src: 'sheet', log: [] },
+    { id: 'r2', name: 'Bruno Exemplo', cat: 'Men Pro', wave: 3, gross: 3998, status: 'finished', src: 'sheet', log: [] },
+    { id: 'r3', name: 'Carla Teste', cat: 'Women Pro', wave: 3, gross: 4512, status: 'finished', src: 'sheet', log: [] },
+    { id: 'r4', name: 'Diego Modelo', cat: 'Men Pro', wave: 3, gross: 3875, status: 'finished', src: 'sheet', log: [] },
+    { id: 'r5', name: 'Elisa Amostra', cat: 'Women Pro', wave: 3, gross: 4710, status: 'finished', src: 'sheet', log: [] },
+    { id: 'r6', name: 'Fábio Simulado', cat: 'Men', wave: 2, gross: null, status: 'racing', src: 'sheet', noTime: 'Sem liberação do Wall Ball (sem árbitro na estação)', log: [] },
+    { id: 'r7', name: 'Gabi Protótipo e Íris Rascunho', cat: 'Doubles Women', wave: 4, gross: null, status: 'racing', src: 'sheet', noTime: 'Liberação registrada antes da largada (relógio do aparelho)', log: [] },
+    { id: 'r8', name: 'Hugo Ensaio', cat: 'Men', wave: 2, gross: null, status: 'dnf', src: 'sheet', log: [{ at: '09:58', who: ME, what: 'Marcou DNF', before: 'Em corrida', after: 'DNF', why: 'Abandonou no km 5, avisado pelo staff' }] },
+    { id: 'r9', name: 'Júlio Maquete', cat: 'Men Pro', wave: 3, gross: 4100, status: 'finished', src: 'sheet', log: [] },
+    { id: 'r10', name: 'Lia Exemplar', cat: 'Women', wave: 1, gross: null, status: 'racing', src: 'sheet', noTime: 'Sem liberação do Wall Ball (árbitro não liberou)', log: [] }
+  ];
+  var INF = [
+    { id: 'i1', run: 'r1', st: 'Wall Ball', reason: 'Magnésio no Wall Ball', sec: 120, kind: 'penalty', by: 'Judge Paula', at: '10:31:52', status: 'confirmed', log: [] },
+    { id: 'i2', run: 'r5', st: 'Geral', reason: 'Ajuda externa', sec: 120, kind: 'penalty', by: 'Judge Paula', at: '10:31:10', status: 'confirmed', log: [] },
+    { id: 'i3', run: 'r3', st: 'Geral', reason: 'Arcos IN/OUT', sec: 60, orig: 120, kind: 'penalty', by: 'Judge Rafa', at: '10:12:05', status: 'confirmed', log: [{ at: '10:40', who: ME, what: 'Alterou', before: '120 s · Arcos IN/OUT', after: '60 s · Arcos IN/OUT', why: 'Vídeo mostra que voltou ao arco na hora; mantida metade' }] },
+    { id: 'i4', run: 'r2', st: 'Geral', reason: 'Lixo no percurso', sec: 120, kind: 'penalty', by: 'Organizador', at: '10:05:44', status: 'confirmed', log: [{ at: '10:05', who: ME, what: 'Lançou infração geral', before: '—', after: '120 s · Lixo no percurso', why: 'Garrafa descartada na Roxzone' }] },
+    { id: 'i5', run: 'r4', st: 'Wall Ball', reason: 'Magnésio no Wall Ball', sec: 120, kind: 'penalty', by: 'Judge Paula', at: '10:02:30', status: 'revoked', log: [{ at: '10:20', who: ME, what: 'Revogou', before: '120 s vigente', after: 'Revogada', why: 'Magnésio era da raia vizinha' }] },
+    { id: 'i6', run: 'r9', st: 'Sled Push', reason: 'Invadiu a raia', sec: 0, kind: 'warning', by: 'Motor', at: '09:41:12', status: 'confirmed', log: [] },
+    { id: 'i7', run: 'r9', st: 'Wall Ball', reason: 'Magnésio no Wall Ball', sec: 120, kind: 'penalty', by: 'Judge Paula', at: '10:28:03', status: 'cancelled', log: [{ at: '10:28', who: 'Judge Paula', what: 'Desfez no aparelho', before: '120 s', after: 'Cancelada', why: 'Lançada no atleta errado' }] },
+    { id: 'i8', run: 'r2', st: 'Wall Ball', reason: 'Recebeu ajuda externa para pegar a bola duas vezes', sec: null, kind: 'dq', by: 'Judge Rafa', at: '10:20:11', status: 'pending', log: [] },
+    { id: 'i9', run: 'r4', st: 'Geral', reason: 'Estação fora de ordem (2ª ocorrência)', sec: null, kind: 'dq', by: 'Motor', at: '10:09:40', status: 'pending', log: [] },
+    { id: 'i10', run: 'r3', st: 'Wall Ball', reason: 'Lançou com uma mão repetidas vezes', sec: null, kind: 'dq', by: 'Judge Paula', at: '09:50:02', status: 'rejected', log: [{ at: '10:01', who: ME, what: 'Rejeitou DQ', before: 'Proposta', after: 'Rejeitada', why: 'No-reps já registrados; não cabe DQ' }] }
+  ];
+  var WAVES = [
+    { n: 1, title: 'Onda 1 · Women', planned: '08:00', start: '08:00:07', count: '12 atletas' },
+    { n: 2, title: 'Onda 2 · Men', planned: '08:20', start: '08:20:03', count: '14 atletas' },
+    { n: 3, title: 'Onda 3 · Pro', planned: '08:40', start: '08:40:02', count: '10 atletas', log: [] },
+    { n: 4, title: 'Onda 4 · Doubles', planned: '09:00', start: '09:00:11', count: '8 duplas' },
+    { n: 5, title: 'Onda 5 · Women', planned: '09:20', start: null, count: '12 atletas' }
+  ];
+  var GENERAL = [['Magnésio no Wall Ball', 120], ['Ajuda externa', 120], ['Raia ou equipamento não atribuído', 120], ['Magnésio fora do lugar', 120], ['Arcos IN/OUT', 120], ['Lixo no percurso', 120], ['Cuspir', 120], ['Se molhar com a água', 120], ['Estação fora de ordem (1ª)', 180]];
+  var RULES = [
+    ['Estações 1 a 7', '1 advertência por estação; depois 15 s cada', '1 advertência por estação; depois 15 s cada'],
+    ['Wall Ball: rep faltante ao sair', '15 s por rep (fora de uso: D22)', '15 s por rep (fora de uso: D22)'],
+    ['Magnésio no Wall Ball', '2 min', '2 min'],
+    ['Sandbag fora dos ombros', '15 s; 2ª ocorrência = proposta de DQ', '15 s por ocorrência'],
+    ['Trecho ou volta faltando', '3 min por unidade', 'Proposta de DQ (estação incompleta)'],
+    ['Devolução incorreta (Farmers, Sandbag)', '30 s, cancelável na Roxzone', '30 s, cancelável na Roxzone'],
+    ['Infrações gerais', '2 min', '2 min'],
+    ['Ajuda externa', '2 min', '2 min'],
+    ['Estação fora de ordem', '3 min na 1ª; DQ na 2ª', '3 min na 1ª; DQ na 2ª'],
+    ['Doubles separados', '1 min por trecho, máx. 3', 'Limite de 10 s entre parceiros nos tapetes']
+  ];
+  var ruleset = { version: 1, preset: '2026_27', locked: '30/10/2026 às 08:00:07 (primeira largada)', choice: '2026_27' };
+
+  var ui = { filter: 'confirmed', q: '', cat: '', openLog: {}, fail: false, empty: false, notice: null };
+
+  function run(id) { return RUNS.filter(function (r) { return r.id === id; })[0]; }
+  function penOf(r) { return INF.filter(function (i) { return i.run === r.id && i.status === 'confirmed' && i.kind !== 'dq'; }).reduce(function (a, i) { return a + (i.sec || 0); }, 0); }
+  function official(r) { return r.status === 'finished' && r.gross != null ? r.gross + penOf(r) : null; }
+
+  function statusChips(i) {
+    if (i.kind === 'dq') return i.status === 'pending' ? '<span class="chip c-pri">Proposta de DQ</span>' : i.status === 'rejected' ? '<span class="chip c-mut">DQ rejeitado</span>' : '<span class="chip c-down">DQ confirmado</span>';
+    if (i.status === 'confirmed') return (i.kind === 'warning' ? '<span class="chip c-fg">Advertência</span>' : '<span class="chip c-up">Vigente</span>') + (i.orig != null ? ' <span class="chip c-pri">Alterada</span>' : '');
+    return '<span class="chip c-mut">' + { revoked: 'Revogada', cancelled: 'Cancelada', rejected: 'Rejeitada', pending: 'Proposta' }[i.status] + '</span>';
+  }
+
+  function countBy(f) {
+    var vis = INF.filter(matchQ);
+    return vis.filter(f).length;
+  }
+  function matchQ(i) {
+    var r = run(i.run);
+    if (ui.q && r.name.toLowerCase().indexOf(ui.q.toLowerCase()) < 0) return false;
+    if (ui.cat && r.cat !== ui.cat) return false;
+    return true;
+  }
+  var FILTERS = [
+    ['confirmed', 'Em vigor', function (i) { return i.status === 'confirmed'; }],
+    ['pending', 'Propostas', function (i) { return i.status === 'pending'; }],
+    ['revoked', 'Revogadas', function (i) { return i.status === 'revoked'; }],
+    ['cancelled', 'Canceladas', function (i) { return i.status === 'cancelled'; }],
+    ['rejected', 'Rejeitadas', function (i) { return i.status === 'rejected'; }],
+    ['all', 'Todas', function () { return true; }]
+  ];
+
+  // ---------- Seções ----------
+  function sNotice() {
+    if (!ui.notice) return '';
+    if (ui.notice.fail) return '<p class="notice warn" role="alert"><b>Decisão gravada, mas o resultado não foi atualizado.</b><span>' + esc(ui.notice.text) + '</span><button type="button" class="sbtn" data-act="retry">' + ic('undo') + 'Tentar de novo</button></p>';
+    return '<p class="notice" role="status" aria-live="polite">' + esc(ui.notice.text) + '</p>';
+  }
+
+  function sSummary() {
+    var vig = INF.filter(function (i) { return i.status === 'confirmed' && i.kind !== 'dq'; });
+    var secs = vig.reduce(function (a, i) { return a + (i.sec || 0); }, 0);
+    var dqs = INF.filter(function (i) { return i.kind === 'dq' && i.status === 'pending'; }).length;
+    var nt = RUNS.filter(function (r) { return r.status === 'racing' && r.noTime; }).length;
+    return '<div class="summary">' +
+      '<div class="stat"><span class="l">Penalidades em vigor</span><span class="v">' + vig.length + '</span><span class="d">' + pen(secs) + ' somados</span></div>' +
+      '<a class="stat' + (dqs ? ' attn' : '') + '" href="#sec-dq" style="text-decoration:none;color:inherit"><span class="l">Propostas de DQ</span><span class="v">' + dqs + '</span><span class="d">' + (dqs ? 'aguardando sua decisão' : 'nenhuma pendente') + '</span></a>' +
+      '<a class="stat' + (nt ? ' attn' : '') + '" href="#sec-nt" style="text-decoration:none;color:inherit"><span class="l">Sem tempo fechado</span><span class="v">' + nt + '</span><span class="d">' + (nt ? 'lançar à mão ou ajustar' : 'todas fechadas') + '</span></a>' +
+      '<div class="stat"><span class="l">Regulamento</span><span class="v" style="font-size:18px;padding-top:6px">Fitness Race ' + (ruleset.preset === '2026_27' ? '2026/27' : '2025/26') + '</span><span class="d">versão ' + ruleset.version + ' · a conferir</span></div>' +
+      '</div>';
+  }
+
+  function sDQ() {
+    var list = INF.filter(function (i) { return i.kind === 'dq' && i.status === 'pending'; });
+    var h = '<section class="panel hl" id="sec-dq" aria-labelledby="h-dq"><div class="ph"><div><p class="eb">Pede sua decisão</p><h3 id="h-dq">Propostas de DQ</h3></div><p class="aside">O árbitro só propõe. Confirmar tira o atleta do resultado (sem tempo oficial); rejeitar mantém a corrida. As duas pedem motivo e ficam no registro.</p></div>';
+    if (!list.length) return h + '<p class="empty">Nenhuma proposta de DQ pendente.</p></section>';
+    h += '<div class="dqgrid">' + list.map(function (i) {
+      var r = run(i.run);
+      return '<article class="dq"><div class="t"><div><b>' + esc(r.name) + '</b><div class="small muted">' + r.cat + ' · Onda ' + r.wave + ' · ' + i.st + '</div></div><span class="chip c-pri">Proposta</span></div>' +
+        '<q>' + esc(i.reason) + '</q><p class="small muted">Proposto por ' + esc(i.by) + ' às <span class="num">' + i.at + '</span></p>' +
+        '<div class="acts"><button type="button" class="sbtn danger-fill" data-act="dq-confirm" data-id="' + i.id + '">' + ic('ban') + 'Confirmar DQ</button><button type="button" class="sbtn" data-act="dq-reject" data-id="' + i.id + '">' + ic('x') + 'Rejeitar</button></div></article>';
+    }).join('') + '</div></section>';
+    return h;
+  }
+
+  function sNoTime() {
+    var list = RUNS.filter(function (r) { return r.status === 'racing' && r.noTime; });
+    var h = '<section class="panel" id="sec-nt" aria-labelledby="h-nt"><div class="ph"><div><p class="eb">Pede sua decisão</p><h3 id="h-nt">Sem tempo fechado</h3></div><p class="aside">A onda largou, mas o Wall Ball não liberou o atleta. A súmula não inventa tempo: lance pelo fluxo manual ou ajuste aqui.</p></div>';
+    if (!list.length) return h + '<p class="empty">Todas as corridas que largaram têm tempo fechado.</p></section>';
+    return h + '<div class="ntgrid">' + list.map(function (r) {
+      var w = WAVES[r.wave - 1];
+      return '<article class="dq"><div class="t"><div><b>' + esc(r.name) + '</b><div class="small muted">' + r.cat + ' · Onda ' + r.wave + ' · largou às <span class="num">' + (w.start || '—') + '</span></div></div><span class="chip c-pri">Em corrida</span></div>' +
+        '<p class="small">' + esc(r.noTime) + '</p>' +
+        '<div class="acts"><a class="sbtn pri" href="#" data-act="manual">' + ic('ext') + 'Lançar à mão</a><button type="button" class="sbtn" data-act="adjust" data-id="' + r.id + '">' + ic('clock') + 'Ajustar tempo</button><button type="button" class="sbtn" data-act="dnf" data-id="' + r.id + '">' + ic('userX') + 'Marcar DNF</button></div></article>';
+    }).join('') + '</div></section>';
+  }
+
+  function sPenalties() {
+    var f = FILTERS.filter(function (x) { return x[0] === ui.filter; })[0];
+    var rows = INF.filter(matchQ).filter(f[2]);
+    var cats = ['Women', 'Women Pro', 'Men', 'Men Pro', 'Doubles Women'];
+    var h = '<section class="panel" aria-labelledby="h-pen"><div class="ph"><div><p class="eb">Súmula Fitness Race</p><h3 id="h-pen">Penalidades</h3></div>' +
+      '<button type="button" class="sbtn pri" data-act="general">' + ic('plus') + 'Lançar infração geral</button></div>';
+    h += '<div class="filters" role="search">' +
+      '<div class="search">' + ic('search') + '<label class="sr" for="q">Buscar atleta</label><input id="q" class="input" type="search" placeholder="Buscar atleta pelo nome" value="' + esc(ui.q) + '"></div>' +
+      '<div><label class="sr" for="cat">Categoria</label><select id="cat" class="input" style="min-width:170px"><option value="">Todas as categorias</option>' + cats.map(function (c) { return '<option' + (ui.cat === c ? ' selected' : '') + '>' + c + '</option>'; }).join('') + '</select></div>' +
+      '<span class="auto" aria-live="off">' + ic('clock') + ' Atualizado há 8 s · atualiza a cada 20 s</span></div>';
+    h += '<div class="seg" role="group" aria-label="Filtrar por situação">' + FILTERS.map(function (x) {
+      return '<button type="button" data-filter="' + x[0] + '" aria-pressed="' + (ui.filter === x[0]) + '">' + x[1] + '<span class="n">' + countBy(x[2]) + '</span></button>';
+    }).join('') + '</div>';
+    if (!rows.length) return h + '<p class="empty">' + (ui.q ? 'Nenhuma penalidade para "' + esc(ui.q) + '" nesta situação.' : 'Nenhuma penalidade nesta situação.') + '</p></section>';
+    h += '<div class="tscroll"><table class="cards"><thead><tr><th>Horário</th><th>Atleta</th><th>Estação</th><th>Motivo</th><th>Segundos</th><th>Lançado por</th><th>Situação</th><th><span class="sr">Ações</span></th></tr></thead><tbody>';
+    rows.forEach(function (i) {
+      var r = run(i.run);
+      var secTxt = i.kind === 'dq' ? 'DQ' : i.kind === 'warning' ? '0 s' : (i.orig != null ? '<span class="strike">' + i.orig + ' s</span> ' : '') + (i.status === 'confirmed' ? '' : '<span class="strike">') + i.sec + ' s' + (i.status === 'confirmed' ? '' : '</span>');
+      var acts = '';
+      if (i.status === 'confirmed' && i.kind === 'penalty') acts += '<button type="button" class="sbtn" data-act="alter" data-id="' + i.id + '">' + ic('pencil') + 'Alterar</button><button type="button" class="sbtn danger" data-act="revoke" data-id="' + i.id + '">' + ic('undo') + 'Revogar</button>';
+      if (i.status === 'pending' && i.kind === 'dq') acts += '<a class="sbtn pri" href="#sec-dq">Decidir</a>';
+      acts += '<button type="button" class="sbtn" data-act="log" data-id="' + i.id + '" aria-expanded="' + !!ui.openLog[i.id] + '">' + ic('history') + 'Registro' + (i.log.length ? ' <span class="num">(' + i.log.length + ')</span>' : '') + '</button>';
+      h += '<tr class="' + (i.status === 'confirmed' || i.status === 'pending' ? '' : 'rev') + '">' +
+        '<td class="num" data-l="Horário">' + i.at + '</td>' +
+        '<td data-l="Atleta"><span><span class="who">' + esc(r.name) + '</span><span class="sub">' + r.cat + ' · Onda ' + r.wave + '</span></span></td>' +
+        '<td data-l="Estação">' + i.st + '</td>' +
+        '<td data-l="Motivo">' + esc(i.reason) + (i.kind === 'warning' ? '<span class="sub">Advertência: não soma</span>' : '') + '</td>' +
+        '<td class="sec" data-l="Segundos">' + secTxt + '</td>' +
+        '<td data-l="Lançado por">' + esc(i.by) + '</td>' +
+        '<td data-l="Situação">' + statusChips(i) + '</td>' +
+        '<td class="full"><div class="acts">' + acts + '</div></td></tr>';
+      if (ui.openLog[i.id]) h += '<tr class="log"><td colspan="8" class="full">' + regLog(i.log, 'Lançada por ' + i.by + ' às ' + i.at + '.') + '</td></tr>';
+    });
+    return h + '</tbody></table></div></section>';
+  }
+
+  function regLog(log, origin) {
+    return '<ul class="reglog"><li>' + esc(origin) + '</li>' + log.map(function (d) {
+      return '<li><b>' + esc(d.what) + '</b> por ' + esc(d.who) + ' às <span class="num">' + d.at + '</span>: ' + esc(d.before) + ' → ' + esc(d.after) + '. Motivo: “' + esc(d.why) + '”</li>';
+    }).join('') + '</ul>';
+  }
+
+  function sRuns() {
+    var rows = RUNS.filter(function (r) { return (!ui.q || r.name.toLowerCase().indexOf(ui.q.toLowerCase()) >= 0) && (!ui.cat || r.cat === ui.cat); });
+    var h = '<section class="panel" aria-labelledby="h-runs"><div class="ph"><div><p class="eb">Tempo oficial</p><h3 id="h-runs">Corridas</h3></div><p class="aside">Bruto = largada da onda até a liberação do Wall Ball (D1). Oficial = bruto + penalidades vigentes. A busca e a categoria acima também filtram aqui.</p></div>' +
+      '<p class="warnbox" role="note">' + ic('alert') + '<span><b>Desclassificar direto (aprovado em D15):</b> o organizador desclassifica sem proposta do árbitro, por exemplo por infração vista pelo staff ou pelo vídeo. O motivo é obrigatório e a decisão fica no registro.</span></p>';
+    h += '<div class="tscroll"><table class="cards"><thead><tr><th>Atleta</th><th>Onda</th><th>Bruto</th><th>Penalidades</th><th>Oficial</th><th>Origem</th><th>Situação</th><th><span class="sr">Ações</span></th></tr></thead><tbody>';
+    rows.forEach(function (r) {
+      var st = { finished: '<span class="chip c-up">Finalizada</span>', racing: '<span class="chip c-pri">Em corrida</span>', dnf: '<span class="chip c-down">DNF</span>', disqualified: '<span class="chip c-down">Desclassificada</span>' }[r.status];
+      var acts = '';
+      if (r.status === 'finished' || r.status === 'racing') acts += '<button type="button" class="sbtn" data-act="adjust" data-id="' + r.id + '">' + ic('clock') + 'Ajustar tempo</button><button type="button" class="sbtn" data-act="dnf" data-id="' + r.id + '">' + ic('userX') + 'Marcar DNF</button><button type="button" class="sbtn danger" data-act="dq-direct" data-id="' + r.id + '">' + ic('ban') + 'Desclassificar</button>';
+      if (r.status === 'dnf') acts += '<button type="button" class="sbtn" data-act="undnf" data-id="' + r.id + '">' + ic('undo') + 'Desfazer DNF</button>';
+      acts += '<button type="button" class="sbtn" data-act="rlog" data-id="' + r.id + '" aria-expanded="' + !!ui.openLog[r.id] + '">' + ic('history') + 'Registro' + (r.log.length ? ' <span class="num">(' + r.log.length + ')</span>' : '') + '</button>';
+      var p = penOf(r);
+      h += '<tr><td data-l="Atleta"><span><span class="who">' + esc(r.name) + '</span><span class="sub">' + r.cat + '</span></span></td>' +
+        '<td class="num" data-l="Onda">' + r.wave + '</td>' +
+        '<td class="sec" data-l="Bruto">' + (r.status === 'dnf' || r.status === 'disqualified' ? '—' : hms(r.gross)) + '</td>' +
+        '<td class="sec" data-l="Penalidades">' + (p ? '+' + pen(p) : '—') + '</td>' +
+        '<td class="sec" data-l="Oficial" style="color:var(--white)">' + hms(official(r)) + '</td>' +
+        '<td data-l="Origem">' + (r.src === 'manual' ? 'Lançado à mão' : 'Súmula') + '</td>' +
+        '<td data-l="Situação">' + st + '</td>' +
+        '<td class="full"><div class="acts">' + acts + '</div></td></tr>';
+      if (ui.openLog[r.id]) h += '<tr class="log"><td colspan="8" class="full">' + regLog(r.log, r.status === 'racing' ? 'Corrida aberta na largada da onda ' + r.wave + '.' : 'Tempo fechado pela súmula do Wall Ball.') + '</td></tr>';
+    });
+    return h + '</tbody></table></div></section>';
+  }
+
+  function sWaves() {
+    var h = '<section class="panel" aria-labelledby="h-waves"><div class="ph"><div><p class="eb">Largada</p><h3 id="h-waves">Ondas</h3></div><p class="aside">Ondas do Cronograma. A correção muda a largada da onda inteira e recalcula o bruto das corridas já fechadas (D14a).</p></div>';
+    h += '<div class="tscroll"><table class="cards"><thead><tr><th>Onda</th><th>Previsto</th><th>Largada</th><th>Atletas</th><th><span class="sr">Ações</span></th></tr></thead><tbody>';
+    WAVES.forEach(function (w) {
+      h += '<tr><td data-l="Onda"><span class="who">' + w.title + '</span></td><td class="num" data-l="Previsto">' + w.planned + '</td>' +
+        '<td data-l="Largada">' + (w.start ? '<span class="chip c-up">Largou às <span class="num">' + w.start + '</span></span>' + (w.fixed ? ' <span class="chip c-pri">Corrigida</span>' : '') : '<span class="chip c-mut">Aguardando largada</span>') + '</td>' +
+        '<td data-l="Atletas">' + w.count + '</td>' +
+        '<td class="full"><div class="acts"><a class="sbtn" href="largada.html">' + ic('flag') + 'Abrir tela de largada</a>' + (w.start ? '<button type="button" class="sbtn" data-act="start" data-n="' + w.n + '">' + ic('clock') + 'Corrigir largada</button>' : '') + '</div></td></tr>';
+    });
+    return h + '</tbody></table></div></section>';
+  }
+
+  function sRules() {
+    var cur = ruleset.preset;
+    var h = '<section class="panel" aria-labelledby="h-rules"><div class="ph"><div><p class="eb">Valores de penalidade</p><h3 id="h-rules">Regulamento do evento</h3></div></div>';
+    h += '<div class="rgrid"><div style="display:grid;gap:12px;align-content:start">' +
+      '<div class="warnbox" role="note">' + ic('alert') + '<span><b>Valores a conferir com o regulamento oficial.</b> Os presets são ponto de partida; confira antes do primeiro evento real.</span></div>' +
+      '<div class="kvs"><div><span>Vigente</span><b>Fitness Race ' + (cur === '2026_27' ? '2026/27' : '2025/26') + '</b></div><div><span>Versão</span><b class="num">' + ruleset.version + '</b></div><div><span>Travado em</span><b>' + ruleset.locked + '</b></div><div><span>Situação</span><b>A conferir</b></div></div>' +
+      '<p class="lab" id="lab-pre" style="margin:4px 0 0">Preset</p><div class="presets" role="radiogroup" aria-labelledby="lab-pre">' +
+      preset('2025_26', 'Fitness Race 2025/26', 'Temporada anterior') + preset('2026_27', 'Fitness Race 2026/27', 'Padrão dos eventos novos') + '</div>' +
+      '<button type="button" class="sbtn pri" data-act="ruleset"' + (ruleset.choice === cur ? ' disabled' : '') + ' style="justify-self:start">' + (ruleset.choice === cur ? 'Preset em uso' : 'Usar ' + (ruleset.choice === '2026_27' ? '2026/27' : '2025/26')) + '</button>' +
+      '<p class="help">Como o regulamento já foi usado, trocar cria a versão ' + (ruleset.version + 1) + '. Corridas abertas mantêm a versão delas. Editar valores um a um fica fora desta story.</p></div>';
+    h += '<div class="tscroll"><table class="cards"><thead><tr><th>Situação</th><th class="' + (cur === '2025_26' ? 'cur' : '') + '">2025/26</th><th class="' + (cur === '2026_27' ? 'cur' : '') + '">2026/27</th></tr></thead><tbody>' +
+      RULES.map(function (r) { var diff = r[1] !== r[2]; return '<tr><td data-l="Situação"><b>' + r[0] + '</b>' + (diff ? ' <span class="chip c-pri">muda</span>' : '') + '</td><td data-l="2025/26" class="' + (cur === '2025_26' ? 'cur' : '') + '">' + r[1] + '</td><td data-l="2026/27" class="' + (cur === '2026_27' ? 'cur' : '') + '">' + r[2] + '</td></tr>'; }).join('') +
+      '</tbody></table></div></div></section>';
+    return h;
+  }
+  function preset(id, name, sub) { return '<button type="button" class="preset" role="radio" data-preset="' + id + '" aria-checked="' + (ruleset.choice === id) + '"><b>' + name + '</b><span>' + sub + (ruleset.preset === id ? ' · em uso' : '') + '</span></button>'; }
+
+  function sJudges() {
+    return '<section class="panel" aria-labelledby="h-j"><div class="ph"><div><p class="eb">Equipe de arbitragem</p><h3 id="h-j">Judges do evento</h3></div><p class="aside">Seção da Story 1.95, já prevista no contêiner. Aparece aqui só para mostrar a ordem das seções.</p></div><p class="small muted">Judge Paula · Judge Rafa · 2 judges</p></section>';
+  }
+
+  var content = document.getElementById('content');
+  function render() {
+    var keepFocus = document.activeElement && document.activeElement.id;
+    content.innerHTML = sNotice() + sSummary() + sDQ() + sNoTime() + sPenalties() + sRuns() + sWaves() + sRules() + sJudges();
+    var q = document.getElementById('q');
+    q.addEventListener('input', function () { ui.q = q.value; render(); var n = document.getElementById('q'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); });
+    document.getElementById('cat').addEventListener('change', function (e) { ui.cat = e.target.value; render(); document.getElementById('cat').focus(); });
+    if (keepFocus === 'cat') document.getElementById('cat').focus();
+  }
+
+  // ---------- Diálogos ----------
+  var dlg = document.getElementById('dlg');
+  var form = document.getElementById('dlgForm');
+  var current = null;
+
+  function reasonField(label, help) {
+    return '<div><label class="lab" for="why">' + label + '</label><textarea id="why" class="input" rows="3" required minlength="3" maxlength="500" aria-describedby="why-help why-err"></textarea><p class="help" id="why-help">' + (help || 'Obrigatório. Fica no registro com o antes e o depois.') + '</p><p class="err" id="why-err" hidden>Escreva o motivo (pelo menos 3 caracteres).</p></div>';
+  }
+  function foot(label, cls) { return '<div class="foot"><button type="button" class="sbtn" data-close>Cancelar</button><button type="submit" class="sbtn ' + (cls || 'pri') + '">' + label + '</button></div>'; }
+
+  function open(kind, id) {
+    current = { kind: kind, id: id };
+    var h = '', i, r;
+    if (kind === 'alter') {
+      i = INF.filter(function (x) { return x.id === id; })[0]; r = run(i.run);
+      h = '<h2 id="dlg-t">Alterar penalidade</h2><div class="ctx"><b>' + esc(r.name) + ' · ' + r.cat + '</b><span>' + i.st + ' · ' + esc(i.reason) + ' · ' + i.sec + ' s vigentes · lançada por ' + esc(i.by) + ' às ' + i.at + '</span></div>' +
+        '<div class="grid2"><div><label class="lab" for="secs">Segundos</label><input id="secs" class="input num" type="number" min="0" step="1" inputmode="numeric" value="' + i.sec + '"></div>' +
+        '<div><label class="lab" for="rsn">Motivo da infração</label><select id="rsn" class="input">' + GENERAL.map(function (g) { return '<option' + (i.reason.indexOf(g[0]) === 0 ? ' selected' : '') + '>' + g[0] + '</option>'; }).join('') + '</select></div></div>' +
+        reasonField('Justificativa') +
+        '<p class="preview" id="prev"></p>' + foot('Salvar alteração');
+    } else if (kind === 'revoke') {
+      i = INF.filter(function (x) { return x.id === id; })[0]; r = run(i.run);
+      h = '<h2 id="dlg-t">Revogar penalidade</h2><div class="ctx"><b>' + esc(r.name) + ' · ' + r.cat + '</b><span>' + i.st + ' · ' + esc(i.reason) + ' · ' + i.sec + ' s · lançada por ' + esc(i.by) + '</span></div>' +
+        reasonField('Motivo da revogação', 'Obrigatório. A penalidade sai do tempo oficial e o recálculo do motor não a traz de volta.') +
+        '<p class="preview">Tempo oficial de ' + esc(r.name) + ': <span class="num">' + hms(official(r)) + '</span> → <span class="num">' + hms(official(r) != null ? official(r) - i.sec : null) + '</span></p>' + foot('Revogar', 'danger-fill');
+    } else if (kind === 'dq-confirm' || kind === 'dq-reject') {
+      i = INF.filter(function (x) { return x.id === id; })[0]; r = run(i.run);
+      var conf = kind === 'dq-confirm';
+      h = '<h2 id="dlg-t">' + (conf ? 'Confirmar DQ' : 'Rejeitar proposta de DQ') + '</h2><div class="ctx"><b>' + esc(r.name) + ' · ' + r.cat + '</b><span>Proposta de ' + esc(i.by) + ' às ' + i.at + ': “' + esc(i.reason) + '”</span></div>' +
+        reasonField('Motivo da decisão') +
+        '<p class="preview">' + (conf ? esc(r.name) + ' fica <b>desclassificado</b>, sem tempo oficial, e sai do resultado da categoria.' : 'A corrida continua valendo com o tempo oficial atual (<span class="num">' + hms(official(r)) + '</span>).') + '</p>' +
+        foot(conf ? 'Confirmar DQ' : 'Rejeitar proposta', conf ? 'danger-fill' : 'pri');
+    } else if (kind === 'adjust') {
+      r = run(id);
+      h = '<h2 id="dlg-t">Ajustar tempo</h2><div class="ctx"><b>' + esc(r.name) + ' · ' + r.cat + ' · Onda ' + r.wave + '</b><span>Bruto atual: <span class="num">' + hms(r.gross) + '</span> · penalidades vigentes: ' + (penOf(r) ? pen(penOf(r)) : 'nenhuma') + ' · origem: ' + (r.src === 'manual' ? 'lançado à mão' : 'súmula') + '</span></div>' +
+        '<div><label class="lab" for="gross">Novo tempo bruto (H:MM:SS)</label><input id="gross" class="input num" inputmode="numeric" placeholder="1:12:40" value="' + (r.gross != null ? hms(r.gross) : '') + '" aria-describedby="gross-err"><p class="err" id="gross-err" hidden>Use o formato H:MM:SS, por exemplo 1:12:40.</p></div>' +
+        reasonField('Justificativa') + '<p class="preview" id="prev"></p>' + foot('Salvar tempo');
+    } else if (kind === 'dq-direct') {
+      r = run(id);
+      h = '<h2 id="dlg-t">Desclassificar</h2><div class="ctx"><b>' + esc(r.name) + ' · ' + r.cat + ' · Onda ' + r.wave + '</b><span>Decisão do organizador, sem proposta do árbitro. Tempo oficial atual: <span class="num">' + hms(official(r)) + '</span></span></div>' +
+        reasonField('Motivo da desclassificação') +
+        '<p class="preview">' + esc(r.name) + ' fica <b>desclassificado</b>, sem tempo oficial, e sai do resultado da categoria. Pode ser desfeito só com nova decisão registrada.</p>' + foot('Desclassificar', 'danger-fill');
+    } else if (kind === 'dnf' || kind === 'undnf') {
+      r = run(id);
+      var on = kind === 'dnf';
+      h = '<h2 id="dlg-t">' + (on ? 'Marcar DNF' : 'Desfazer DNF') + '</h2><div class="ctx"><b>' + esc(r.name) + ' · ' + r.cat + ' · Onda ' + r.wave + '</b><span>' + (on ? 'Não largou ou não terminou.' : 'Volta para a situação anterior.') + '</span></div>' +
+        reasonField('Motivo') + '<p class="preview">' + (on ? 'A corrida fica sem tempo oficial e aparece como DNF. Pode ser desfeito depois, com novo registro.' : 'A corrida volta a "Em corrida"; feche o tempo pelo ajuste ou pelo lançamento manual.') + '</p>' + foot(on ? 'Marcar DNF' : 'Desfazer DNF', on ? 'danger-fill' : 'pri');
+    } else if (kind === 'start') {
+      var w = WAVES[id - 1];
+      var closed = RUNS.filter(function (x) { return x.wave === w.n && x.status === 'finished'; }).length;
+      h = '<h2 id="dlg-t">Corrigir largada da ' + w.title.split(' · ')[0].toLowerCase() + '</h2><div class="ctx"><b>' + w.title + ' · ' + w.count + '</b><span>Largada registrada: <span class="num">' + w.start + '</span> · previsto ' + w.planned + '</span></div>' +
+        '<div><label class="lab" for="st">Horário correto da largada (HH:MM:SS)</label><input id="st" class="input num" inputmode="numeric" value="' + w.start + '" aria-describedby="st-err"><p class="err" id="st-err" hidden>Use o formato HH:MM:SS.</p></div>' +
+        reasonField('Motivo da correção') +
+        '<p class="preview">Vale para a onda inteira. Recalcula o tempo bruto de <b class="num">' + closed + '</b> corridas já fechadas e atualiza o resultado delas.</p>' + foot('Corrigir largada');
+    } else if (kind === 'general') {
+      h = '<h2 id="dlg-t">Lançar infração geral</h2>' +
+        '<div class="grid2"><div><label class="lab" for="ath">Atleta</label><select id="ath" class="input">' + RUNS.map(function (x) { return '<option value="' + x.id + '">' + esc(x.name) + ' · ' + x.cat + '</option>'; }).join('') + '</select></div>' +
+        '<div><label class="lab" for="gi">Infração</label><select id="gi" class="input">' + GENERAL.map(function (g, k) { return '<option value="' + k + '">' + g[0] + ' · ' + pen(g[1]) + '</option>'; }).join('') + '</select></div></div>' +
+        '<div><label class="lab" for="obs">Observação (opcional, não fica pública)</label><input id="obs" class="input" maxlength="300"></div>' +
+        '<p class="help">Vale na hora (D2) e entra no registro como lançada pelo organizador.</p>' + foot('Lançar infração');
+    } else if (kind === 'ruleset') {
+      var to = ruleset.choice === cur() ? (cur() === '2026_27' ? '2025_26' : '2026_27') : ruleset.choice;
+      current.to = to;
+      h = '<h2 id="dlg-t">Usar Fitness Race ' + (to === '2026_27' ? '2026/27' : '2025/26') + '</h2>' +
+        '<div class="ctx"><b>Cria a versão ' + (ruleset.version + 1) + ' do regulamento</b><span>As corridas já abertas continuam na versão ' + ruleset.version + '. As ondas que ainda não largaram usam a versão nova.</span></div>' +
+        '<div class="warnbox">' + ic('alert') + '<span>Os valores dos dois presets ainda estão a conferir com o regulamento oficial.</span></div>' +
+        foot('Criar versão ' + (ruleset.version + 1));
+    }
+    form.innerHTML = h;
+    wirePreview();
+    dlg.showModal();
+    var first = form.querySelector('input,select,textarea'); if (first) first.focus();
+  }
+  function cur() { return ruleset.preset; }
+
+  function wirePreview() {
+    form.oninput = null;
+    var prev = form.querySelector('#prev'); if (!prev || !current) return;
+    function upd() {
+      if (current.kind === 'alter') {
+        var i = INF.filter(function (x) { return x.id === current.id; })[0], r = run(i.run);
+        var s = Math.max(0, +form.querySelector('#secs').value || 0);
+        prev.innerHTML = 'Tempo oficial de ' + esc(r.name) + ': <span class="num">' + hms(official(r)) + '</span> → <span class="num">' + hms(official(r) != null ? official(r) - i.sec + s : null) + '</span>';
+      } else if (current.kind === 'adjust') {
+        var rr = run(current.id), g = parseHms(form.querySelector('#gross').value);
+        prev.innerHTML = g == null ? 'Digite o tempo bruto para ver o oficial.' : 'Oficial: <span class="num">' + hms(g + penOf(rr)) + '</span> (bruto <span class="num">' + hms(g) + '</span> + ' + (penOf(rr) ? pen(penOf(rr)) : 'sem penalidade') + ')' + (rr.status === 'racing' ? '. A corrida passa a Finalizada.' : '');
+      }
+    }
+    form.oninput = upd; upd();
+  }
+
+  function needWhy() {
+    var w = form.querySelector('#why'); if (!w) return '';
+    var ok = w.value.trim().length >= 3;
+    form.querySelector('#why-err').hidden = ok;
+    w.setAttribute('aria-invalid', ok ? 'false' : 'true');
+    if (!ok) { w.focus(); return null; }
+    return w.value.trim();
+  }
+
+  form.addEventListener('click', function (e) { if (e.target.closest('[data-close]')) dlg.close(); });
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var c = current, why = needWhy(); if (why === null) return;
+    var i, r, t = now(), msg = '';
+    if (c.kind === 'alter') {
+      i = INF.filter(function (x) { return x.id === c.id; })[0]; r = run(i.run);
+      var s = Math.max(0, +form.querySelector('#secs').value || 0), rs = form.querySelector('#rsn').value;
+      i.log.push({ at: t, who: ME, what: 'Alterou', before: i.sec + ' s · ' + i.reason, after: s + ' s · ' + rs, why: why });
+      if (i.orig == null) i.orig = i.sec; i.sec = s; i.reason = rs; ui.openLog[i.id] = true;
+      msg = 'Penalidade de ' + r.name + ' alterada para ' + s + ' s. Registro atualizado.';
+    } else if (c.kind === 'revoke') {
+      i = INF.filter(function (x) { return x.id === c.id; })[0]; r = run(i.run);
+      i.log.push({ at: t, who: ME, what: 'Revogou', before: i.sec + ' s vigente', after: 'Revogada', why: why }); i.status = 'revoked';
+      msg = 'Penalidade de ' + r.name + ' revogada. Ela aparece no filtro "Revogadas".';
+    } else if (c.kind === 'dq-confirm' || c.kind === 'dq-reject') {
+      i = INF.filter(function (x) { return x.id === c.id; })[0]; r = run(i.run);
+      var conf = c.kind === 'dq-confirm';
+      i.status = conf ? 'confirmed' : 'rejected';
+      i.log.push({ at: t, who: ME, what: conf ? 'Confirmou DQ' : 'Rejeitou DQ', before: 'Proposta', after: conf ? 'DQ confirmado' : 'Rejeitada', why: why });
+      if (conf) { r.status = 'disqualified'; r.log.push({ at: t, who: ME, what: 'Confirmou DQ', before: 'Finalizada', after: 'Desclassificada', why: why }); }
+      msg = conf ? r.name + ' desclassificado.' : 'Proposta de DQ de ' + r.name + ' rejeitada.';
+    } else if (c.kind === 'adjust') {
+      r = run(c.id); var g = parseHms(form.querySelector('#gross').value);
+      if (g == null) { form.querySelector('#gross-err').hidden = false; form.querySelector('#gross').focus(); return; }
+      r.log.push({ at: t, who: ME, what: 'Ajustou o tempo', before: hms(r.gross), after: hms(g), why: why });
+      r.gross = g; r.status = 'finished'; r.noTime = null; ui.openLog[r.id] = true;
+      msg = 'Tempo de ' + r.name + ' ajustado para ' + hms(g) + ' (oficial ' + hms(official(r)) + ').';
+    } else if (c.kind === 'dq-direct') {
+      r = run(c.id);
+      r.log.push({ at: t, who: ME, what: 'Desclassificou (direto)', before: r.status === 'racing' ? 'Em corrida' : 'Finalizada', after: 'Desclassificada', why: why });
+      INF.unshift({ id: 'd' + Date.now(), run: r.id, st: 'Geral', reason: why, sec: null, kind: 'dq', by: 'Organizador', at: t + ':00', status: 'confirmed', log: [{ at: t, who: ME, what: 'Desclassificou direto', before: '—', after: 'DQ confirmado', why: why }] });
+      r.status = 'disqualified'; r.noTime = null; ui.openLog[r.id] = true;
+      msg = r.name + ' desclassificado pelo organizador.';
+    } else if (c.kind === 'dnf' || c.kind === 'undnf') {
+      r = run(c.id); var on = c.kind === 'dnf';
+      r.log.push({ at: t, who: ME, what: on ? 'Marcou DNF' : 'Desfez DNF', before: on ? (r.status === 'racing' ? 'Em corrida' : 'Finalizada') : 'DNF', after: on ? 'DNF' : 'Em corrida', why: why });
+      r.status = on ? 'dnf' : 'racing'; if (on) r.noTime = null; else r.noTime = 'DNF desfeito: falta fechar o tempo';
+      msg = on ? r.name + ' marcado como DNF.' : 'DNF de ' + r.name + ' desfeito.';
+    } else if (c.kind === 'start') {
+      var w = WAVES[c.id - 1], v = form.querySelector('#st').value.trim();
+      if (!/^\d{2}:[0-5]\d:[0-5]\d$/.test(v)) { form.querySelector('#st-err').hidden = false; form.querySelector('#st').focus(); return; }
+      var delta = parseHms(v) - parseHms(w.start);
+      RUNS.forEach(function (x) { if (x.wave === w.n && x.status === 'finished' && x.gross != null) { x.log.push({ at: t, who: ME, what: 'Largada da onda corrigida', before: hms(x.gross), after: hms(x.gross - delta), why: why }); x.gross -= delta; } });
+      w.start = v; w.fixed = true;
+      msg = 'Largada da ' + w.title + ' corrigida para ' + v + '. Brutos recalculados.';
+    } else if (c.kind === 'general') {
+      r = run(form.querySelector('#ath').value); var gi = GENERAL[+form.querySelector('#gi').value];
+      INF.unshift({ id: 'n' + Date.now(), run: r.id, st: 'Geral', reason: gi[0], sec: gi[1], kind: 'penalty', by: 'Organizador', at: t + ':00', status: 'confirmed', log: [{ at: t, who: ME, what: 'Lançou infração geral', before: '—', after: gi[1] + ' s · ' + gi[0], why: form.querySelector('#obs').value || 'sem observação' }] });
+      msg = 'Infração geral lançada para ' + r.name + ' (' + pen(gi[1]) + '), já em vigor.';
+    } else if (c.kind === 'ruleset') {
+      ruleset.version += 1; ruleset.preset = c.to; ruleset.choice = c.to; ruleset.locked = 'ainda não usada';
+      msg = 'Versão ' + ruleset.version + ' criada com o preset ' + (c.to === '2026_27' ? '2026/27' : '2025/26') + '.';
+    }
+    ui.notice = { text: msg + (ui.fail && c.kind !== 'ruleset' ? ' A atualização do resultado falhou.' : ''), fail: ui.fail && c.kind !== 'ruleset' };
+    dlg.close();
+    render();
+    var nEl = content.querySelector('.notice'); if (nEl) { nEl.setAttribute('tabindex', '-1'); nEl.focus(); }
+  });
+
+  content.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-act],[data-filter],[data-preset]'); if (!b) return;
+    if (b.dataset.filter) { ui.filter = b.dataset.filter; render(); content.querySelector('[data-filter="' + ui.filter + '"]').focus(); return; }
+    if (b.dataset.preset) { ruleset.choice = b.dataset.preset; render(); content.querySelector('[data-preset="' + ruleset.choice + '"]').focus(); return; }
+    var a = b.dataset.act;
+    if (a === 'log' || a === 'rlog') { ui.openLog[b.dataset.id] = !ui.openLog[b.dataset.id]; render(); var f = content.querySelector('[data-act="' + a + '"][data-id="' + b.dataset.id + '"]'); if (f) f.focus(); return; }
+    if (a === 'manual') { e.preventDefault(); ui.notice = { text: 'Na implementação, este botão abre a aba "Lançar Resultados" com o atleta selecionado.' }; render(); return; }
+    if (a === 'retry') { ui.notice = { text: 'Resultado atualizado.' }; render(); return; }
+    if (a === 'start') { open('start', +b.dataset.n); return; }
+    open(a, b.dataset.id);
+  });
+
+  document.querySelectorAll('[data-size]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.getElementById('frame').dataset.size = b.dataset.size;
+      document.querySelectorAll('[data-size]').forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+    });
+  });
+  document.querySelectorAll('[data-demo]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var d = b.dataset.demo;
+      if (d === 'alter') open('alter', 'i1');
+      if (d === 'revoke') open('revoke', 'i4');
+      if (d === 'dq') { var p = INF.filter(function (i) { return i.kind === 'dq' && i.status === 'pending'; })[0]; if (p) open('dq-confirm', p.id); }
+      if (d === 'adjust') open('adjust', 'r6');
+      if (d === 'start') open('start', 3);
+      if (d === 'ruleset') { ruleset.choice = ruleset.preset === '2026_27' ? '2025_26' : '2026_27'; render(); open('ruleset'); }
+    });
+  });
+  document.getElementById('failBtn').addEventListener('click', function () {
+    ui.fail = !ui.fail; this.setAttribute('aria-pressed', ui.fail ? 'true' : 'false');
+    ui.notice = ui.fail ? { text: 'Simulação: a próxima decisão grava, mas a atualização do resultado falha (AC12).' } : null; render();
+  });
+  var backup = null;
+  document.getElementById('emptyBtn').addEventListener('click', function () {
+    var on = this.getAttribute('aria-pressed') !== 'true';
+    this.setAttribute('aria-pressed', on ? 'true' : 'false');
+    if (on) {
+      backup = { inf: INF.map(function (i) { return Object.assign({}, i); }), runs: RUNS.map(function (r) { return Object.assign({}, r); }) };
+      INF.forEach(function (i) { if (i.kind === 'dq' && i.status === 'pending') i.status = 'rejected'; });
+      RUNS.forEach(function (r) { if (r.noTime) { r.noTime = null; r.status = 'finished'; r.gross = 4444; } });
+    } else if (backup) {
+      INF.length = 0; backup.inf.forEach(function (i) { INF.push(i); });
+      RUNS.length = 0; backup.runs.forEach(function (r) { RUNS.push(r); });
+    }
+    render();
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

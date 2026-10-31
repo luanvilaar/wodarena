@@ -1,0 +1,1067 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maquete · Dois cartões do judge · Súmula Fitness Race (Story 1.103)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@500;600;700&family=Inter:wght@400;500;600;700;800&display=swap">
+<style>
+/* Maquete estática da Story 1.103 (inclui o StationCard da 1.102). Mesmos
+   tokens e componentes de wall-ball.html: página no escuro do app, tela do
+   judge na casca clara de alto contraste da quadra; escuro só para comparação.
+   Sem sombra, sem gradiente, sem transition: all. */
+:root{
+  --font-body:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --font-num:"IBM Plex Sans","JetBrains Mono",ui-monospace,Menlo,monospace;
+  --p-bg:#0b0e11; --p-card:#1e2329; --p-line:#2b3139; --p-fg:#eaecef; --p-muted:#929aa5; --p-accent:#fcd535; --p-gray:#181a20;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{background:var(--p-bg)}
+body{margin:0;background:var(--p-bg);color:var(--p-fg);font-family:var(--font-body);font-size:15px;line-height:1.5}
+h1,h2,h3{margin:0;line-height:1.2;text-wrap:balance}
+p{margin:0}
+button,input{font:inherit}
+button{cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+button:disabled{cursor:not-allowed}
+:focus-visible{outline:2px solid #3b82f6;outline-offset:3px}
+.num{font-family:var(--font-num);font-variant-numeric:tabular-nums}
+.wrap{max-width:1240px;margin:0 auto;padding:32px 16px 72px;display:grid;gap:36px}
+.eyebrow{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--p-accent)}
+.doc-head{display:grid;gap:12px}
+.doc-head h1{font-size:clamp(26px,4.5vw,38px);font-weight:800;letter-spacing:-.02em}
+.lead{max-width:78ch;color:var(--p-muted)}
+.pills{display:flex;flex-wrap:wrap;gap:8px}
+.pill{font-size:12px;font-weight:600;border:1px solid var(--p-line);background:var(--p-card);border-radius:999px;padding:6px 12px}
+.toolbar{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;border:1px solid var(--p-line);background:var(--p-card);border-radius:12px;padding:12px}
+.tgroup{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.tgroup > span{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--p-muted);margin-right:4px}
+.tbtn{min-height:36px;border:1px solid var(--p-line);background:var(--p-gray);color:var(--p-fg);border-radius:8px;padding:0 12px;font-size:13px;font-weight:600;transition:border-color .15s,background-color .15s}
+.tbtn:hover{border-color:var(--p-accent)}
+.tbtn[aria-selected="true"],.tbtn[aria-pressed="true"],.tbtn[aria-checked="true"]{background:var(--p-accent);border-color:var(--p-accent);color:#181a20}
+.stage{display:grid;grid-template-columns:minmax(0,390px) minmax(0,1fr);gap:28px;align-items:start}
+.stage.wide{grid-template-columns:minmax(0,1fr)}
+@media (max-width:860px){.stage{grid-template-columns:1fr}}
+.notes{display:grid;gap:14px;border:1px solid var(--p-line);background:var(--p-card);border-radius:12px;padding:18px}
+.notes h2{font-size:18px;font-weight:800}
+.notes ul{margin:0;padding-left:18px;display:grid;gap:6px}
+.notes .src{font-size:12.5px;color:var(--p-muted)}
+.gallery{display:grid;gap:16px}
+.gallery h2{font-size:20px;font-weight:800}
+.gallery .sub{color:var(--p-muted);max-width:78ch}
+.ggrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:20px}
+.ggrid.wide{grid-template-columns:minmax(0,1fr)}
+.ggrid figure{margin:0;display:grid;gap:8px}
+.ggrid figcaption{font-size:13px;font-weight:700}
+.ggrid figcaption span{display:block;font-weight:500;color:var(--p-muted)}
+.decide{display:grid;gap:10px;border:1px solid var(--p-accent);background:var(--p-card);border-radius:12px;padding:18px}
+.decide h2{font-size:18px;font-weight:800}
+.decide ol{margin:0;padding-left:20px;display:grid;gap:6px}
+
+/* ===== Aparelho ===== */
+.dev{width:100%;border:1px solid var(--p-line);overflow:hidden;position:relative}
+.dev[data-w="portrait"],.dev[data-w="stack"]{max-width:390px;height:800px;border-radius:28px}
+.dev[data-w="land"]{max-width:844px;height:390px;border-radius:24px}
+.dev[data-w="tablet"]{max-width:1024px;height:740px;border-radius:22px}
+.ggrid .dev[data-w="portrait"],.ggrid .dev[data-w="stack"]{height:760px}
+
+/* ===== Tela do judge (tokens da quadra, iguais a wall-ball.html) ===== */
+.court{
+  --bg:#ffffff; --fg:#0b0e11; --card:#f3f4f6; --line:#b9c0cb; --gray:#ffffff; --elev:#dde1e7; --muted:#3f4652;
+  --primary:#f5c518; --primary-h:#e0b100; --primary-text:#7a5c00; --primary-border:#b88f00; --ink:#0b0e11;
+  --up:#0a7d52; --on-up:#ffffff; --down:#b8243a; --on-down:#ffffff; --info:#1f5fd1;
+  background:var(--bg); color:var(--fg); color-scheme:light;
+  height:100%; display:flex; flex-direction:column; font-size:14px; position:relative;
+}
+.court[data-theme="dark"]{
+  --bg:#0b0e11; --fg:#eaecef; --card:#1e2329; --line:#2b3139; --gray:#181a20; --elev:#2b3139; --muted:#929aa5;
+  --primary:#fcd535; --primary-h:#f0b90b; --primary-text:#fcd535; --primary-border:#fcd535; --ink:#181a20;
+  --up:#0ecb81; --on-up:#181a20; --down:#f6465d; --on-down:#181a20; --info:#3b82f6;
+  color-scheme:dark;
+}
+.court :focus-visible{outline:2px solid var(--info);outline-offset:3px}
+.c-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.c-head .l{display:flex;align-items:center;gap:8px;min-width:0}
+.c-head .r{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.c-eyebrow{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--primary-text)}
+.c-title{font-size:17px;font-weight:800;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.c-sub{font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.court.land .c-head{padding:6px 12px}
+.court.land .c-title{font-size:15px}
+.ibtn{display:flex;align-items:center;justify-content:center;gap:6px;min-height:44px;min-width:44px;border:1px solid var(--line);background:var(--gray);color:var(--fg);border-radius:8px;padding:0 10px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;flex-shrink:0}
+svg.i{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+svg.i.lg{width:24px;height:24px}
+.sync{display:flex;align-items:center;gap:8px;margin:8px 14px 0;border:1px solid;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:700}
+.sync.ok{border-color:var(--up);color:var(--up)}
+.sync.wait{border-color:var(--primary-border);color:var(--fg)}
+.sync.off{border-color:var(--down);color:var(--down)}
+.c-head .sync{margin:0;padding:8px 10px;min-height:44px}
+@media (prefers-reduced-motion:no-preference){.sync .spin{animation:spin 1s linear infinite}}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.c-body{flex:1;min-height:0;overflow-y:auto;padding:10px 14px calc(12px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:10px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;border:1px solid var(--line);color:var(--muted);border-radius:999px;padding:4px 10px;white-space:nowrap}
+.chip svg.i{width:14px;height:14px}
+.chip.run{border-color:var(--primary-border);color:var(--primary-text)}
+.chip.ok{border-color:var(--up);color:var(--up)}
+.chip.down{border-color:var(--down);color:var(--down)}
+.chip.fg{color:var(--fg)}
+.lastline{min-height:20px;font-size:12.5px;font-weight:700;color:var(--fg)}
+.lastline .m{color:var(--muted);font-weight:600}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.row3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.btn{display:flex;align-items:center;justify-content:center;gap:6px;min-height:56px;border:1px solid var(--line);background:var(--gray);color:var(--fg);border-radius:12px;font-size:13.5px;font-weight:800;padding:0 8px;text-align:center;line-height:1.15}
+.btn:hover:not(:disabled){border-color:var(--primary-border)}
+.btn:disabled{opacity:.4}
+.btn.big{min-height:64px;font-size:15px}
+.btn.sm{font-size:12.5px;flex-direction:column;gap:3px}
+.btn.danger{background:var(--down);border-color:var(--down);color:var(--on-down)}
+.btn.pri{background:var(--primary);border-color:var(--primary-border);color:var(--ink)}
+.btn.warn{border:2px solid var(--down);color:var(--down)}
+.hold{position:relative;overflow:hidden;min-height:64px;width:100%;border:2px solid var(--up);background:var(--up);color:var(--on-up);border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-weight:800;padding:6px 8px;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.hold:disabled{opacity:.4}
+.hold .fill{position:absolute;inset:0;background:var(--fg);opacity:.22;transform:scaleX(0);transform-origin:left center}
+.hold.holding .fill{transform:scaleX(1);transition:transform 700ms linear}
+.hold .lbl{position:relative;display:flex;align-items:center;gap:6px;font-size:16px;text-align:center}
+.hold .sm{position:relative;font-size:11.5px;font-weight:700;text-align:center}
+@media (prefers-reduced-motion:reduce){.hold.holding .fill{transition:none}}
+.hold.alt{border:2px solid var(--primary-border);background:var(--gray);color:var(--fg)}
+.hold.alt .fill{background:var(--primary);opacity:1}
+.hold.red{border:2px solid var(--down);background:var(--gray);color:var(--down)}
+.hold.red .fill{background:var(--down);opacity:.25}
+.alert{border:2px solid;border-radius:12px;padding:10px 12px;display:grid;gap:3px}
+.alert.info{border-color:var(--primary-border);background:color-mix(in srgb,var(--primary) 12%,var(--bg))}
+.alert.up{border-color:var(--up);background:color-mix(in srgb,var(--up) 10%,var(--bg))}
+.alert.down{border-color:var(--down);background:color-mix(in srgb,var(--down) 8%,var(--bg))}
+.alert b{font-size:14.5px}
+.alert p{font-size:13px}
+.k{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.hint{font-size:12px;color:var(--muted);font-weight:600}
+.big-time{font-family:var(--font-num);font-variant-numeric:tabular-nums;font-size:32px;font-weight:700;line-height:1.05}
+.bar{width:100%;height:8px;border-radius:999px;background:var(--elev);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--primary)}
+.bar.up i{background:var(--up)}
+
+/* Meus cartões */
+.kwrap{flex:1;min-height:0;display:flex;flex-direction:column;gap:8px;padding:8px 12px calc(10px + env(safe-area-inset-bottom))}
+.kgrid{flex:1;min-height:0;display:grid;gap:10px}
+.kgrid.side{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.kgrid.single{grid-template-columns:minmax(0,1fr)}
+.kgrid.stack{grid-template-columns:minmax(0,1fr);grid-auto-rows:max-content;overflow-y:auto}
+.card{position:relative;min-height:0;display:flex;flex-direction:column;border:2px solid var(--line);border-radius:16px;background:var(--bg);overflow:hidden}
+.card.focus{border-color:var(--primary-border)}
+.card.bad{border-color:var(--down)}
+.card.solo{border:0;border-radius:0}
+.card.solo .k-body{padding:4px 2px}
+.kgrid.stack .card{overflow:visible}
+.k-body{flex:1;min-height:0;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:8px}
+.kgrid.stack .k-body{overflow:visible}
+.k-h{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.k-who{min-width:0}
+.k-who b{display:block;font-size:16px;font-weight:800;line-height:1.2;overflow-wrap:anywhere}
+.k-who .meta{display:block;font-size:12px;font-weight:600;color:var(--muted)}
+.ktag{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;border:1px solid;border-radius:999px;padding:4px 8px;white-space:nowrap;flex-shrink:0}
+.ktag svg.i{width:14px;height:14px}
+.ktag.ok{border-color:var(--up);color:var(--up)}
+.ktag.wait{border-color:var(--primary-border);color:var(--fg)}
+.ktag.off,.ktag.bad{border-color:var(--down);color:var(--down)}
+.ktimes{font-size:12.5px;font-weight:600;color:var(--muted)}
+.ktimes b{color:var(--fg);font-family:var(--font-num);font-variant-numeric:tabular-nums}
+.kctr{display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px;align-items:center}
+.kcount{display:grid;justify-items:start;line-height:1}
+.kcount .n{font-family:var(--font-num);font-variant-numeric:tabular-nums;font-size:56px;font-weight:700;letter-spacing:-.03em;line-height:.95}
+.kcount .n.full{color:var(--up)}
+.kcount .of{font-size:12.5px;font-weight:700;color:var(--muted)}
+.plus{min-height:72px;border:2px solid var(--primary-border);background:var(--primary);color:var(--ink);border-radius:14px;font-size:20px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:8px;user-select:none;-webkit-user-select:none}
+.plus:disabled{opacity:.4}
+.reason{min-height:56px;border:2px solid var(--down);background:var(--gray);color:var(--fg);border-radius:12px;font-size:13.5px;font-weight:800;padding:8px 10px;line-height:1.2}
+.reason:hover{background:color-mix(in srgb,var(--down) 8%,var(--bg))}
+.slot{border:2px dashed var(--line);border-radius:16px;display:flex;flex-direction:column;align-items:stretch;justify-content:center;gap:10px;padding:16px;text-align:center;min-height:0}
+.slot b{font-size:17px}
+.flash{border:1px solid var(--line);background:var(--card);border-radius:10px;padding:8px 12px;font-size:12.5px;font-weight:700;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.ktabs{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.ktab{min-height:64px;border:2px solid var(--line);background:var(--card);color:var(--fg);border-radius:12px;padding:6px 10px;text-align:left;display:grid;gap:2px;align-content:center;min-width:0}
+.ktab b{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ktab .s{font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ktab[aria-selected="true"]{border-color:var(--primary-border);background:var(--bg)}
+.ktab.bad{border-color:var(--down)}
+.ktab.slt{border-style:dashed}
+.ktab .ktag{justify-self:start}
+.court.land .kwrap{padding:6px 10px 8px}
+.court.land .kcount .n{font-size:44px}
+.court.land .plus{min-height:60px;font-size:18px}
+.court.land .k-body{padding:8px;gap:6px}
+.court.land .ktimes,.court.land .k-st,.court.land .card .bar,.court.land .ssheet-row{display:none}
+.land-only{display:none}
+.court.land .land-only{display:flex}
+.court.land .row3.k4{grid-template-columns:repeat(4,1fr)}
+
+/* Lista da onda */
+.search{width:100%;min-height:56px;border:1px solid var(--line);background:var(--gray);color:var(--fg);border-radius:12px;padding:0 14px;font-size:15px}
+.search::placeholder{color:var(--muted)}
+.ath{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:64px;width:100%;text-align:left;border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:12px;padding:10px 12px}
+.ath:hover:not(:disabled){border-color:var(--primary-border)}
+.ath:disabled{opacity:.75}
+.ath.hl{border:2px solid var(--primary-border)}
+.ath b{font-size:15px;display:block}
+.ath .meta{font-size:12px;color:var(--muted);font-weight:600}
+.ath.done{background:var(--bg)}
+.sec-t{font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;margin-top:6px}
+
+/* Folhas: dentro do cartão (csheet) ou na tela inteira (sheet) */
+.scrim{position:absolute;inset:0;background:color-mix(in srgb,var(--fg) 45%,transparent);z-index:5}
+.sheet{position:absolute;left:0;right:0;bottom:0;z-index:6;background:var(--bg);border-top:2px solid var(--line);border-radius:18px 18px 0 0;padding:14px 14px calc(14px + env(safe-area-inset-bottom));display:grid;gap:10px;max-height:82%;overflow-y:auto}
+.sheet h2{font-size:18px;font-weight:800}
+.cscrim{position:absolute;inset:0;background:color-mix(in srgb,var(--fg) 40%,transparent);z-index:2}
+.csheet{position:absolute;left:0;right:0;bottom:0;max-height:100%;overflow-y:auto;background:var(--bg);border-top:2px solid var(--line);border-radius:14px 14px 0 0;padding:12px;display:grid;gap:8px;z-index:3}
+.csheet h3{font-size:16px;font-weight:800}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.infra{display:flex;justify-content:space-between;align-items:center;gap:8px;min-height:56px;width:100%;border:1px solid var(--line);background:var(--gray);color:var(--fg);border-radius:12px;padding:0 12px;font-size:13.5px;font-weight:700;text-align:left}
+.infra:hover{border-color:var(--primary-border)}
+.infra .sec{font-family:var(--font-num);font-variant-numeric:tabular-nums;font-weight:700;color:var(--down);white-space:nowrap}
+.calc{border:2px solid var(--down);border-radius:12px;padding:10px;display:grid;gap:4px;text-align:center}
+.calc .big-time{color:var(--down);font-size:26px}
+
+/* Wall Ball (cópia da tela aprovada, 1.97) */
+.wcount{font-family:var(--font-num);font-variant-numeric:tabular-nums;font-weight:700;font-size:112px;line-height:.95;letter-spacing:-.03em;text-align:center}
+.court.land .wcount{font-size:64px}
+.wof{font-size:15px;font-weight:700;color:var(--muted);text-align:center}
+.rep{flex:1;min-height:120px;width:100%;border:2px solid var(--primary-border);background:var(--primary);color:var(--ink);border-radius:18px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
+.rep .t{font-size:44px;font-weight:800;display:flex;align-items:center;gap:10px}
+.rep .s{font-size:12.5px;font-weight:700}
+.btn.norep{min-height:64px;border:2px solid var(--down);color:var(--down);font-size:18px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc-head">
+  <span class="eyebrow">Maquete · Story 1.103</span>
+  <h1>Meus cartões: até 2 atletas por judge</h1>
+  <p class="lead">O judge de uma estação confere até 2 atletas ou equipes ao mesmo tempo, cada um no seu cartão, com a sua fila no aparelho. O servidor recusa o terceiro. O Wall Ball e a estação final (a última do percurso, que fecha o tempo) são 1 atleta por judge, em tela de um atleta só, e não entram na tela de dois cartões (D31, D32, D39).</p>
+  <div class="pills">
+    <span class="pill">Aguardando aprovação do Luan</span>
+    <span class="pill">Equipe ou dupla = 1 cartão</span>
+    <span class="pill">Celular em pé: abas (proposta)</span>
+    <span class="pill">Deitado e tablet: lado a lado</span>
+    <span class="pill">Soltar e dispensar só nos 2 cartões</span>
+    <span class="pill">Estação final: 1 atleta (D39)</span>
+    <span class="pill">Wall Ball no meio: 1 por judge, a confirmar</span>
+    <span class="pill">Sem DQ (D27)</span>
+    <span class="pill">Valores de penalidade a conferir</span>
+    <span class="pill">Dados fictícios</span>
+  </div>
+</header>
+
+<div class="toolbar" role="group" aria-label="Controles da maquete">
+  <div class="tgroup" role="tablist" aria-label="Estado da tela" id="stateTabs"><span>Estado</span></div>
+  <div class="tgroup" role="radiogroup" aria-label="Largura" id="widthGroup">
+    <span>Largura</span>
+    <button type="button" class="tbtn" role="radio" data-w="portrait" aria-checked="true">Celular em pé (abas, proposta)</button>
+    <button type="button" class="tbtn" role="radio" data-w="stack" aria-checked="false">Celular em pé (empilhados, comparação)</button>
+    <button type="button" class="tbtn" role="radio" data-w="land" aria-checked="false">Celular deitado</button>
+    <button type="button" class="tbtn" role="radio" data-w="tablet" aria-checked="false">Tablet</button>
+  </div>
+  <div class="tgroup" role="radiogroup" aria-label="Sincronização" id="syncGroup">
+    <span>Sincronização</span>
+    <button type="button" class="tbtn" role="radio" data-sync="ok" aria-checked="true">Salvo</button>
+    <button type="button" class="tbtn" role="radio" data-sync="wait" aria-checked="false">Pendente</button>
+    <button type="button" class="tbtn" role="radio" data-sync="off" aria-checked="false">Sem conexão</button>
+  </div>
+  <div class="tgroup"><span>Tema</span><button type="button" class="tbtn" id="themeBtn" aria-pressed="false">Escuro (comparação)</button></div>
+</div>
+
+<div class="stage" id="stage">
+  <div class="dev" id="phone" data-w="portrait" aria-label="Tela proposta do judge"></div>
+  <aside class="notes" id="notes" aria-live="polite"></aside>
+</div>
+
+<section class="decide" aria-labelledby="d-title">
+  <h2 id="d-title">Para o Luan aprovar</h2>
+  <ol>
+    <li><b>Celular em pé:</b> os dois cartões <b>alternam por abas</b> no topo (cada aba mostra nome, contagem e sincronização do cartão). Empilhados, cada cartão fica com menos da metade da tela e exige rolar; veja em "Largura". Deitado e tablet: lado a lado.</li>
+    <li><b>Infração da estação abre dentro do cartão</b> e cobre só ele, para nenhum toque atingir o outro. Ergômetro e Farmers (2 motivos) mostram os motivos no próprio cartão; trenó (7 motivos) usa a folha.</li>
+    <li><b>Soltar</b> confirma numa folha com dois botões (não é segurar), porque não apaga nada. <b>Dispensar</b> só aparece em cartão sem registro e usa botão vermelho. Os dois existem só nas estações de 2 cartões.</li>
+    <li><b>Cartão liberado</b> vira um resumo no lugar do cartão até "Próximo atleta" ou "Fechar"; a vaga já conta como livre no topo.</li>
+    <li><b>Estação final (D39):</b> é o mesmo cartão da estação em tela cheia, como o Wall Ball: nome do atleta no topo, sem "Meus cartões", sem vaga B, sem "Soltar" e sem "Dispensar". Liberado, mostra o tempo do atleta e "Próximo atleta". Tocar num segundo atleta mostra "Esta estação é de 1 atleta por judge".</li>
+    <li><b>Troca de judge na estação final:</b> sem "Soltar", a tentativa só fica sem judge quando o organizador a libera; aí outro judge assume pela lista. <b>A confirmar.</b></li>
+    <li><b>Wall Ball fora da última posição</b> segue 1 atleta por judge, com o mesmo aviso. Leitura assumida, <b>a confirmar</b>.</li>
+    <li><b>Judge com cartões abertos não abre a estação final</b>, com a mesma recusa do Wall Ball (estado "Wall Ball recusado"). Leitura assumida, <b>a confirmar</b>.</li>
+  </ol>
+</section>
+
+<section class="gallery" aria-labelledby="g-title">
+  <h2 id="g-title">Todos os estados lado a lado</h2>
+  <p class="sub">Cópias estáticas na largura escolhida acima. A tela do topo é interativa: +1 trecho, infrações, desfazer, abas, adicionar atleta, soltar, dispensar e segurar para liberar.</p>
+  <div class="ggrid" id="gallery"></div>
+</section>
+
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var ICONS = {
+    chevronLeft: '<path d="m15 18-6-6 6-6"/>',
+    logOut: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/>',
+    checkCircle: '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
+    check: '<path d="M20 6 9 17l-5-5"/>',
+    cloudOff: '<path d="m2 2 20 20"/><path d="M5.782 5.782A7 7 0 0 0 9 19h8.5a4.5 4.5 0 0 0 1.307-.193"/><path d="M21.532 16.5A4.5 4.5 0 0 0 17.5 10h-1.79A7.008 7.008 0 0 0 10 5.07"/>',
+    loader: '<path d="M21 12a9 9 0 1 1-6.219-8.56"/>',
+    x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+    undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11"/>',
+    alert: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+    door: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/>',
+    flag: '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/>',
+    users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+    plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
+    play: '<polygon points="6 3 20 12 6 21 6 3"/>',
+    hand: '<path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2"/><path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>',
+    trash: '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>',
+    refresh: '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
+    lock: '<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>'
+  };
+  function ic(n, c) { return '<svg class="i ' + (c || '') + '" viewBox="0 0 24 24" aria-hidden="true">' + ICONS[n] + '</svg>'; }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+
+  // Regulamento do evento (preset Fitness Race 2026/27, a conferir). Na
+  // implementação os motivos e valores vêm do snapshot do regulamento e o
+  // nome, a meta e a carga vêm do percurso montado pelo organizador (D6, D33).
+  var SLED = ['Começou além da linha', 'Invadiu a raia', 'Virou antes da linha', 'Pisou na linha do Racers Box', 'Puxou sentado ou ajoelhado', 'Corda na raia vizinha', 'De costas no Push'];
+  var GENERAL = [['Raia ou equipamento não atribuído', 120], ['Magnésio fora do lugar', 120], ['Arcos IN/OUT', 120], ['Lixo', 120], ['Cuspir', 120], ['Se molhar com a água', 120], ['Ajuda externa', 120], ['Estação fora de ordem', 180]];
+  var EVENT = 'Corrida Fictícia do Litoral';
+  var STN = {
+    push: { name: 'Sled Push', kind: 'sled', N: 4, unit: ['trecho', 'trechos'], meta: '4 trechos · 152 kg', reasons: SLED },
+    erg: { name: 'SkiErg', kind: 'ergometer', meta: '1.000 m', reasons: ['Pés fora da base', 'Pés fora do apoio'] },
+    farm: { name: 'Farmers Carry', kind: 'sections', N: 4, unit: ['volta', 'voltas'], meta: '4 voltas · 2 × 24 kg', load: true, reasons: ['KB avançou ao apoiar', 'Braços não estendidos'] },
+    gen: { name: 'Estação Extra', kind: 'generic', meta: 'Sem meta numérica', reasons: [] },
+    // Última estação do percurso: fecha o tempo e é de 1 atleta por judge (D34, D39).
+    fin: { name: 'Estação Final', kind: 'generic', meta: 'Sem meta numérica', reasons: [], closes: true }
+  };
+  var A = { name: 'Ana Fictícia', first: 'Ana', sub: 'Women Pro · Onda 3 · Box Exemplo Norte' };
+  var B = { name: 'Bruno Exemplo', first: 'Bruno', sub: 'Men Pro · Onda 3 · CT Modelo' };
+  var C = { name: 'Carla Teste', first: 'Carla', sub: 'Women Pro · Onda 3 · Box Amostra' };
+  var D = { name: 'Diego Modelo', first: 'Diego', sub: 'Men Pro · Onda 3 · Arena Protótipo' };
+  var E = { name: 'Elisa Amostra', first: 'Elisa', sub: 'Women Pro · Onda 3 · Box Exemplo Norte' };
+  var T = { name: 'Gabi Protótipo e Íris Rascunho', first: 'Gabi e Íris', sub: 'Doubles Women · Onda 4', team: true };
+
+  var STATES = [
+    { id: 'one', label: 'Um cartão e vaga livre', t: 'Trenó em andamento, vaga para mais 1' },
+    { id: 'list', label: 'Lista da onda', t: 'Adicionar atleta, busca por nome' },
+    { id: 'added', label: 'Cartão novo em foco', t: 'Voltou da lista com o cartão novo' },
+    { id: 'two', label: 'Dois cartões (vaga cheia)', t: '"Você já confere 2 atletas"' },
+    { id: 'third', label: 'Terceiro recusado', t: 'Servidor responde 409' },
+    { id: 'wbrefuse', label: 'Wall Ball recusado', t: 'Com cartão aberto, não abre Wall Ball' },
+    { id: 'team', label: 'Equipe', t: 'Dupla ocupa 1 vaga' },
+    { id: 'infra', label: 'Infração e advertência', t: 'Folha dentro do cartão' },
+    { id: 'erg', label: 'Ergômetro', t: 'Iniciar, 2 motivos, liberar' },
+    { id: 'sec', label: 'Seções com carga', t: 'Devolução incorreta, Roxzone' },
+    { id: 'redo', label: 'Seções: refazer', t: 'Carga errada' },
+    { id: 'gen', label: 'Genérica (no meio)', t: 'Iniciar, infrações gerais, liberar' },
+    { id: 'release', label: 'Pronto para liberar', t: '4 de 4 trechos' },
+    { id: 'done', label: 'Concluído, vaga livre', t: 'Resumo do cartão liberado' },
+    { id: 'exit', label: 'Atleta saiu', t: 'Mostra o que vai ser cobrado' },
+    { id: 'soltar', label: 'Soltar cartão', t: 'Nada é apagado' },
+    { id: 'dismiss', label: 'Dispensar cartão', t: 'Aberto por engano, sem registro' },
+    { id: 'takeover', label: 'Troca de judge: lista', t: 'Outro judge assume' },
+    { id: 'takeover2', label: 'Troca de judge: cartão', t: 'Histórico preservado' },
+    { id: 'conflict', label: 'Recusa em um cartão', t: 'O outro cartão segue' },
+    { id: 'final', label: 'Estação final: 1 atleta', t: 'Fecha o tempo · sem soltar e sem vaga B' },
+    { id: 'finaldone', label: 'Estação final: liberado', t: 'Tempo do atleta e "Próximo atleta"' },
+    { id: 'finalsecond', label: 'Estação final: 2º atleta', t: '"Esta estação é de 1 atleta por judge"' },
+    { id: 'finaltake', label: 'Estação final: outro judge assume', t: 'Histórico preservado · a confirmar' },
+    { id: 'wb', label: 'Wall Ball sozinho', t: 'Tela cheia da 1.97' },
+    { id: 'wbsecond', label: 'Wall Ball: 2º atleta', t: 'Mesmo aviso · Wall Ball no meio a confirmar' }
+  ];
+
+  var NOTES = {
+    one: ['Um cartão e uma vaga livre', [
+      'A tela mostra as tentativas ativas do judge, lidas do servidor: recarregar a página volta igual.',
+      'A vaga livre leva à lista da onda da estação (Story 1.102) e volta com o cartão novo em foco. "Outra estação" abre a escolha de estação.',
+      'No topo: quantos atletas você confere ("1 de 2") e o indicador geral de sincronização. Cada cartão tem o seu.',
+      'Celular em pé: cartões alternam por abas (proposta). Use "Largura" para ver lado a lado e empilhado.'
+    ], 'AC7, AC8 · D31'],
+    list: ['Lista da onda com busca', [
+      'Busca pelo nome, filtro no aparelho. Número de peito fica fora do nível 2 (D38).',
+      'Cada linha diz a situação: seu cartão, em corrida, sem judge (assumir), com outro judge (não abre), concluído.',
+      'Tocar em "Seu cartão" volta para ele: retomar a própria tentativa não conta como nova.',
+      'Tocar em um atleta em corrida abre o cartão e volta para "Meus cartões" com ele em foco.'
+    ], 'AC7 · Story 1.102 AC4 · D7, D38'],
+    added: ['Cartão novo em foco', [
+      'O cartão recém-aberto ganha borda amarela e o selo "Novo" até o primeiro registro.',
+      'Sem nenhum registro, o botão do canto é "Dispensar" (abriu o atleta errado). Com registro, vira "Soltar".',
+      'Abrir o cartão não inicia a estação: o início vai junto do primeiro registro.'
+    ], 'AC5, AC7 · Story 1.102'],
+    two: ['Dois cartões: vaga cheia', [
+      'Com 2 cartões a vaga some e o topo diz "Você já confere 2 atletas".',
+      'Cada cartão tem a sua fila: o "Desfazer último" de um nunca atinge o outro, e cada um mostra o próprio indicador de sincronização.',
+      'Lado a lado no celular deitado e no tablet; abas no celular em pé.'
+    ], 'AC7, AC8 · D31'],
+    third: ['Terceiro atleta recusado', [
+      'A tela não esconde a lista: quem recusa é o servidor (409), com a mensagem da story.',
+      'A folha lembra as três saídas: liberar, soltar ou dispensar um cartão.',
+      '"Ver meus cartões" volta à tela de dois cartões.'
+    ], 'AC2, AC7 · D31'],
+    wbrefuse: ['Wall Ball com cartão aberto', [
+      'Quem tem cartão de estação aberto não abre Wall Ball, e vice-versa: o Wall Ball é conferido sozinho.',
+      'Mensagem do servidor (409): "O Wall Ball é conferido sozinho: libere o cartão aberto antes."',
+      'Leitura assumida, a confirmar: a estação final também é de 1 atleta (D39) e recusaria do mesmo jeito.'
+    ], 'AC3 · D32, D39'],
+    team: ['Cartão de equipe', [
+      'Dupla é um cartão e ocupa uma vaga: o selo "Dupla · 1 cartão" deixa isso claro.',
+      'Os trechos são contados juntos, como no Wall Ball.'
+    ], 'AC8 · D31 · Story 1.97 AC12'],
+    infra: ['Infração e advertência', [
+      'A folha de infração abre dentro do cartão e cobre só ele: o outro cartão continua visível e tocável.',
+      'A 1ª infração da estação é advertência (0 s); a partir da 2ª, 15 s cada. O cartão mostra "Advertência usada" e o total.',
+      'Um toque registra, sem confirmação; "Desfazer último" corrige (D17).',
+      'Trenó tem 7 motivos e usa a folha. Ergômetro e Farmers têm 2 e ficam no próprio cartão.'
+    ], 'D13, D17 · Story 1.102 AC5 a AC8'],
+    erg: ['Ergômetro', [
+      '"Iniciar", os dois motivos da estação no próprio cartão (1 toque) e "Liberar" por segurar.',
+      'Sem meta numérica: o tempo na estação fica no topo do cartão.'
+    ], 'Story 1.102 AC5 · D17, D18'],
+    sec: ['Seções com carga (Farmers Carry)', [
+      'Contador "+1 volta" com "n de N" e os motivos da estação agrupados pelo nome (Farmers: 2 motivos).',
+      'Com carga informada no percurso aparecem "Devolução incorreta" e "Carga errada".',
+      'Depois de uma devolução incorreta: "Devolução corrigida" cancela os 30 s; "Saiu da Roxzone" (segurar) fecha a janela de correção.'
+    ], 'Story 1.102 AC7 · D33'],
+    redo: ['Carga errada: refazer', [
+      'O cartão entra em REFAZER: o contador para e sobram duas saídas, as duas por segurar.',
+      '"Não refez" cobra 3 min (180 s, valor a conferir).'
+    ], 'Story 1.102 AC7 · D18, D28'],
+    gen: ['Genérica no meio do percurso', [
+      '"Iniciar", infrações gerais e "Liberar". Sem meta numérica: o tempo na estação fica no topo do cartão.',
+      'No meio do percurso ela é um cartão comum: divide a tela, tem "Soltar" e "Dispensar", e o "Liberar" só libera a vaga.',
+      'Quando a genérica (ou qualquer outra) é a última estação, ela não entra nos 2 cartões: veja "Estação final".'
+    ], 'Story 1.102 AC5, AC8 · D33, D39'],
+    final: ['Estação final: 1 atleta por judge', [
+      'A última estação do percurso fecha o tempo e é conferida com 1 atleta por judge, seja o Wall Ball ou outro exercício do percurso (aqui, uma genérica).',
+      'É o mesmo cartão da estação em tela cheia, como o Wall Ball: nome do atleta no topo, sem "Meus cartões", sem vaga B, sem "Soltar" e sem "Dispensar".',
+      '"Liberar" (segurar) avisa que fecha o tempo da prova. Na tela interativa, toque em "Iniciar" e segure para ver o tempo.',
+      '"Voltar" leva à lista da onda da estação.'
+    ], 'D39 · D34 · Story 1.102 AC8'],
+    finaldone: ['Estação final: liberado', [
+      'Igual ao Wall Ball: o destaque é o tempo do atleta pelo relógio do aparelho; o oficial é do servidor (D21).',
+      '"Próximo atleta" volta à lista da onda. Não há "Fechar" nem vaga livre: o judge segue com um atleta por vez.'
+    ], 'D39 · D21 · Story 1.97 AC16'],
+    finalsecond: ['Segundo atleta na estação final', [
+      'Com um atleta aberto, tocar em outro da lista mostra o aviso e não abre nada.',
+      'Texto: "Esta estação é de 1 atleta por judge. Libere Ana antes de abrir outro atleta."',
+      '"Voltar para Ana" retorna à tela dela.'
+    ], 'D39 · Story 1.103 AC3'],
+    finaltake: ['Estação final: outro judge assume', [
+      'Visão do Judge Caio. Sem "Soltar", a tentativa só fica sem judge quando o organizador a libera (Story 1.94 AC7). Leitura assumida, a confirmar.',
+      'Na lista da onda ela aparece como "Sem judge · assumir"; assumir exige não ter outro atleta aberto.',
+      'Os registros anteriores mantêm o nome e o horário do Judge Rafa.'
+    ], 'D39 · D35 · Story 1.103 AC6'],
+    wbsecond: ['Segundo atleta no Wall Ball', [
+      'Mesmo aviso da estação final: "Esta estação é de 1 atleta por judge".',
+      'Vale para o Wall Ball em qualquer posição do percurso. Fora da última posição é leitura assumida, a confirmar (D39).'
+    ], 'D32, D39 · Story 1.103 AC3'],
+    release: ['Liberar com o contador completo', [
+      'Com 4 de 4 trechos o "Liberar" acende. Segure 700 ms, como no Wall Ball.',
+      'Na tela interativa, segure o botão para ver o cartão concluído.'
+    ], 'Story 1.102 AC6 · D18'],
+    done: ['Cartão concluído libera a vaga', [
+      'Liberado, o atleta deixa de contar na hora: o topo já diz "1 de 2".',
+      'O resumo fica no lugar até o judge tocar "Próximo atleta" (abre a lista da onda) ou "Fechar".',
+      'Correção depois da liberação é com o organizador.'
+    ], 'AC2, AC7'],
+    exit: ['Atleta saiu (trenó)', [
+      'Antes de confirmar, mostra o que vai ser cobrado: trechos faltantes × 180 s (valor a conferir).',
+      'Segurar para confirmar (D18). Encerra o cartão como saída incompleta e libera a vaga.'
+    ], 'Story 1.102 AC6 · D18, D28'],
+    soltar: ['Soltar cartão', [
+      'Para quando o judge precisa sair da estação: nada é apagado.',
+      'O atleta fica "Sem judge" na lista da onda e outro judge assume de onde parou.',
+      'Confirma numa folha com dois botões, sem segurar: soltar não perde registro.'
+    ], 'AC5 · D35'],
+    dismiss: ['Dispensar cartão', [
+      'Só aparece em cartão sem nenhum registro (aberto por engano). O cartão é cancelado.',
+      'Com registro, o servidor recusa (409) e a tela mostra "Soltar" no lugar.'
+    ], 'AC5'],
+    takeover: ['Troca de judge: assumir', [
+      'Visão do Judge Caio. Carla ficou sem judge quando o Judge Rafa soltou o cartão.',
+      'A linha mostra o ponto em que parou ("2 de 4 trechos") e "Sem judge · assumir".',
+      'Assumir só funciona se o judge ainda tiver vaga.'
+    ], 'AC5, AC6 · D35'],
+    takeover2: ['Troca de judge: depois de assumir', [
+      'O cartão continua do ponto em que estava: contador, advertência e penalidades.',
+      'O aviso diz quem fez os registros anteriores; eles mantêm o nome e o horário do Judge Rafa.'
+    ], 'AC6 · D35'],
+    conflict: ['Recusa em um cartão', [
+      'Um 409 em um cartão não para o outro: o cartão recusado fica com borda vermelha e "Recarregue para continuar".',
+      'O outro cartão segue registrando e salvando.'
+    ], 'AC7 · Story 1.102 AC9'],
+    wb: ['Wall Ball sozinho', [
+      'O atleta do Wall Ball abre a tela cheia da Story 1.97, sem mudança e sem vaga para um segundo cartão.',
+      'Sem "Propor DQ" (D27). A tela foi pensada em pé; deitado, ela rola.',
+      'Fora da última posição o Wall Ball não fecha o tempo e segue 1 atleta por judge: leitura assumida, a confirmar (D39).'
+    ], 'AC9 · D32, D27, D39']
+  };
+
+  function card(ath, stn, o) {
+    var c = { ath: ath, stn: stn, count: 0, started: false, warn: false, pens: [], last: '', sheet: null, ended: null, rox: false, redo: false, conflict: false, takeover: null, isNew: false, st: '2:14', race: '38:20', pending: 1, log: [] };
+    for (var k in o) c[k] = o[k];
+    if (c.count) c.started = true;
+    return c;
+  }
+  function A2() { return card(A, STN.push, { count: 2, last: '+1 trecho', pending: 2 }); }
+  function B1() { return card(B, STN.push, { count: 1, last: '+1 trecho', st: '0:48', race: '31:53' }); }
+
+  function preset(id) {
+    var s = { view: 'cards', cards: [], focus: 0, sheet: null, list: null, judge: 'Judge Paula', flash: '' };
+    switch (id) {
+      case 'one': s.cards = [A2()]; break;
+      case 'list': s.cards = [A2()]; s.view = 'list'; s.list = { stn: STN.push, mode: 'add', q: '' }; break;
+      case 'added': s.cards = [A2(), card(B, STN.push, { isNew: true, st: '0:00', race: '31:05', pending: 0 })]; s.focus = 1; break;
+      case 'two': s.cards = [A2(), B1()]; break;
+      case 'third': s.cards = [A2(), B1()]; s.view = 'list'; s.list = { stn: STN.push, mode: 'add', q: '' }; s.sheet = 'third'; break;
+      case 'wbrefuse': s.cards = [A2(), B1()]; s.view = 'list'; s.list = { stn: 'wb', mode: 'add', q: '' }; s.sheet = 'wbrefuse'; break;
+      case 'team': s.cards = [card(T, STN.push, { count: 3, last: '+1 trecho', race: '41:02' })]; break;
+      case 'infra': s.cards = [card(A, STN.push, { count: 2, warn: true, last: 'Invadiu a raia · advertência (0 s)', sheet: 'station' }), card(B, STN.push, { count: 1, warn: true, pens: [['Virou antes da linha', 15]], last: 'Virou antes da linha · +15 s', st: '0:48', race: '31:53' })]; break;
+      case 'erg': s.cards = [card(A, STN.erg, { started: true, warn: true, last: 'Pés fora da base · advertência (0 s)', st: '3:05', race: '12:40' })]; break;
+      case 'sec': s.cards = [card(A, STN.farm, { count: 2, rox: true, pens: [['Devolução incorreta', 30]], last: 'Devolução incorreta · +30 s', race: '58:12' })]; break;
+      case 'redo': s.cards = [card(A, STN.farm, { count: 1, redo: true, last: 'Carga errada · refazer', race: '57:30' })]; break;
+      case 'gen': s.cards = [card(A, STN.gen, { started: true, last: 'Iniciou', st: '1:40', race: '52:10' })]; break;
+      case 'final': s.view = 'solo'; s.cards = [card(A, STN.fin, { started: true, last: 'Iniciou', st: '1:40', race: '1:10:58' })]; break;
+      case 'finaldone': s.view = 'solo'; s.cards = [card(A, STN.fin, { started: true, ended: 'released', st: '3:22' })]; break;
+      case 'finalsecond': s.cards = [card(A, STN.fin, { started: true, last: 'Iniciou', st: '1:40', race: '1:10:58' })]; s.view = 'list'; s.list = { stn: STN.fin, mode: 'add', q: '' }; s.sheet = 'onlyone'; break;
+      case 'finaltake': s.judge = 'Judge Caio'; s.view = 'solo'; s.cards = [card(C, STN.fin, { started: true, takeover: { from: 'Judge Rafa' }, pens: [['Ajuda externa', 120]], last: 'Ajuda externa · +2 min · por Judge Rafa', st: '2:05', race: '1:12:31' })]; break;
+      case 'wbsecond': s.view = 'list'; s.list = { stn: 'wb', mode: 'add', q: '' }; s.wbActive = A; s.sheet = 'onlyone'; break;
+      case 'release': s.cards = [card(A, STN.push, { count: 4, last: '+1 trecho · 4 de 4', st: '3:42' }), B1()]; break;
+      case 'done': s.cards = [card(A, STN.push, { count: 4, ended: 'released', pens: [['Virou antes da linha', 15]], warn: true, st: '3:42' }), B1()]; break;
+      case 'exit': s.cards = [card(A, STN.push, { count: 2, last: '+1 trecho', sheet: 'exit' }), B1()]; break;
+      case 'soltar': s.cards = [card(A, STN.push, { count: 2, last: '+1 trecho', sheet: 'soltar' }), B1()]; break;
+      case 'dismiss': s.cards = [A2(), card(B, STN.push, { isNew: true, st: '0:00', race: '31:05', pending: 0, sheet: 'dismiss' })]; s.focus = 1; break;
+      case 'takeover': s.judge = 'Judge Caio'; s.view = 'list'; s.list = { stn: STN.push, mode: 'takeover', q: '' }; break;
+      case 'takeover2': s.judge = 'Judge Caio'; s.cards = [card(C, STN.push, { count: 2, warn: true, takeover: { from: 'Judge Rafa' }, last: 'Invadiu a raia · advertência (0 s) · por Judge Rafa', st: '4:10', race: '40:05' })]; break;
+      case 'conflict': s.cards = [card(A, STN.push, { count: 2, conflict: true, last: '+1 trecho' }), B1()]; break;
+      case 'wb': s.view = 'wb'; break;
+    }
+    s.cards.forEach(function (c) {
+      c.log = [];
+      for (var i = 0; i < c.count; i++) c.log.push({ t: 'sec' });
+      if (c.warn) c.log.push({ t: 'warn' });
+      c.pens.forEach(function () { c.log.push({ t: 'pen' }); });
+    });
+    return s;
+  }
+
+  // ---------- peças ----------
+  function fmtPen(sec) {
+    if (!sec) return 'Sem penalidade';
+    var m = Math.floor(sec / 60), r = sec % 60;
+    return '+' + (m ? m + ' min' : '') + (m && r ? ' ' : '') + (r ? r + ' s' : '');
+  }
+  function penTotal(c) { return c.pens.reduce(function (a, p) { return a + p[1]; }, 0); }
+  function hasRecords(c) { return c.started || c.count > 0 || c.warn || c.pens.length > 0; }
+  function unit(c, n) { return n === 1 ? c.stn.unit[0] : c.stn.unit[1]; }
+  function activeCount(s) { return s.cards.filter(function (c) { return !c.ended; }).length; }
+  function syncOf(c, mode) { return c.conflict ? 'bad' : c.ended ? 'ok' : mode; }
+  function pendingOf(c, mode) { return mode === 'ok' ? 0 : Math.max(1, c.pending); }
+
+  function syncBar(mode, n, inHead) {
+    n = Math.max(1, n);
+    var items = n + ' ' + (n === 1 ? 'registro' : 'registros');
+    var st = inHead ? ' style="margin:0"' : '';
+    if (mode === 'wait') return '<div class="sync wait" role="status"' + st + '>' + ic('loader', 'spin') + '<span>Salvando ' + items + '…</span></div>';
+    if (mode === 'off') return '<div class="sync off" role="status"' + st + '>' + ic('cloudOff') + '<span>Sem conexão: ' + items + ' guardados no aparelho</span></div>';
+    return '<div class="sync ok" role="status"' + st + '>' + ic('checkCircle') + '<span>Salvo</span></div>';
+  }
+  function tag(mode, n) {
+    if (mode === 'bad') return '<span class="ktag bad">' + ic('alert') + 'Recusado</span>';
+    if (mode === 'wait') return '<span class="ktag wait">' + ic('loader', 'spin') + 'Salvando ' + n + '</span>';
+    if (mode === 'off') return '<span class="ktag off">' + ic('cloudOff') + n + ' no aparelho</span>';
+    return '<span class="ktag ok">' + ic('checkCircle') + 'Salvo</span>';
+  }
+
+  function header(eyebrow, title, sub, back, right) {
+    return '<header class="c-head"><div class="l"><button type="button" class="ibtn" data-act="back" aria-label="' + back + '">' + ic('chevronLeft') + '</button>' +
+      '<div style="min-width:0"><p class="c-eyebrow">' + eyebrow + '</p><h1 class="c-title">' + title + '</h1><p class="c-sub">' + sub + '</p></div></div>' +
+      '<div class="r">' + (right || '') + '<button type="button" class="ibtn" aria-label="Sair da conta">' + ic('logOut') + 'Sair</button></div></header>';
+  }
+
+  function holdBtn(kind, i, label, sub, cls, disabled, interactive, aria) {
+    return '<button type="button" class="hold ' + (cls || '') + '"' + (interactive && !disabled ? ' data-hold="' + kind + ':' + i + '"' : '') + (disabled ? ' disabled' : '') +
+      ' aria-label="' + esc(aria || label) + '"><span class="fill" aria-hidden="true"></span><span class="lbl"><span data-hold-label>' + label + '</span></span>' + (sub ? '<span class="sm">' + sub + '</span>' : '') + '</button>';
+  }
+
+  // ---------- cartão (StationCard) ----------
+  // solo = estação final em tela cheia (D39): sem nome repetido, sem Soltar/Dispensar.
+  function cardHtml(c, i, s, mode, interactive, focus, solo) {
+    var stn = c.stn, sm = syncOf(c, mode), counter = stn.kind === 'sled' || stn.kind === 'sections';
+    var full = counter ? c.count >= stn.N : c.started;
+    var pen = penTotal(c);
+    var cls = 'card' + (solo ? ' solo' : '') + (c.conflict ? ' bad' : (!solo && (c.isNew || focus)) ? ' focus' : '');
+    var h = '<section class="' + cls + '" aria-label="' + (solo ? 'Estação de ' : 'Cartão de ') + esc(c.ath.name) + '"><div class="k-body">';
+    if (!solo) h += '<div class="k-h"><div class="k-who"><b>' + esc(c.ath.name) + '</b><span class="meta">' + c.ath.sub + '</span></div>' + tag(sm, pendingOf(c, mode)) + '</div>';
+    h += '<div class="chips"><span class="chip fg k-st">' + stn.name + '</span><span class="chip k-st">' + stn.meta + '</span>' +
+      (c.ath.team ? '<span class="chip fg">' + ic('users') + (solo ? 'Dupla' : 'Dupla · 1 cartão') + '</span>' : '') +
+      (stn.closes ? '<span class="chip run">' + ic('flag') + 'Fecha o tempo</span>' : '') +
+      (solo ? '<span class="chip fg">1 atleta por judge</span>' : '') +
+      (c.isNew ? '<span class="chip run">Novo</span>' : '') +
+      (c.warn ? '<span class="chip fg">Advertência usada</span>' : '') +
+      '<span class="chip' + (pen ? ' down' : '') + '">' + fmtPen(pen) + '</span></div>';
+
+    if (c.ended) return h + doneHtml(c, i, interactive, solo) + '</div></section>';
+
+    if (c.conflict) h += '<div class="alert down" role="alert"><b>Recarregue para continuar</b><p>O servidor recusou o último registro deste cartão. O outro cartão segue normal.</p><button type="button" class="btn" data-act="reload" data-i="' + i + '">' + ic('refresh') + 'Recarregar este cartão</button></div>';
+    if (c.takeover) {
+      var prev = [];
+      if (c.count) prev.push(c.count + ' ' + unit(c, c.count));
+      else if (c.started) prev.push('O início');
+      if (c.warn) prev.push('1 advertência');
+      if (c.pens.length) prev.push(c.pens.length + (c.pens.length === 1 ? ' infração' : ' infrações'));
+      var what = prev.length > 1 ? prev.slice(0, -1).join(', ') + ' e ' + prev[prev.length - 1] : prev[0];
+      h += '<div class="alert info" role="status"><b>Você assumiu ' + (solo ? 'este atleta' : 'este cartão') + '</b><p>' + what + ' registrados pelo ' + c.takeover.from + ' seguem no histórico, com o nome e o horário dele.</p></div>';
+    }
+    h += '<p class="ktimes">' + (hasRecords(c) ? 'Na estação <b>' + c.st + '</b> · ' : 'Ainda não iniciou · ') + 'Desde a largada <b>' + c.race + '</b> (provisório)</p>';
+
+    if (counter) {
+      if (c.redo) {
+        h += '<div class="alert info" role="status"><b>REFAZER com a carga certa</b><p>O atleta volta e refaz a volta com a carga certa. Se não refizer: +3 min.</p></div>';
+        h += '<div class="row2">' + holdBtn('redook', i, 'Refez', 'Segure', 'alt', false, interactive, 'Refez com a carga certa: segure') + holdBtn('redono', i, 'Não refez', '+3 min · segure', 'red', false, interactive, 'Não refez: segure. Cobra 3 minutos.') + '</div>';
+      } else {
+        h += '<div class="kctr"><div class="kcount"><span class="n' + (full ? ' full' : '') + '">' + c.count + '</span><span class="of">de ' + stn.N + ' ' + stn.unit[1] + '</span></div>' +
+          '<button type="button" class="plus" data-act="plus" data-i="' + i + '"' + (full ? ' disabled' : '') + ' aria-label="Mais 1 ' + stn.unit[0] + '. ' + c.count + ' de ' + stn.N + '">' + ic('plus', 'lg') + '1 ' + stn.unit[0] + '</button></div>';
+        h += '<div class="bar' + (full ? ' up' : '') + '" role="progressbar" aria-label="' + stn.unit[1] + '" aria-valuemin="0" aria-valuemax="' + stn.N + '" aria-valuenow="' + c.count + '"><i style="width:' + (c.count / stn.N * 100) + '%"></i></div>';
+      }
+    } else if (!c.started) {
+      h += '<button type="button" class="btn pri big" data-act="start" data-i="' + i + '">' + ic('play') + 'Iniciar</button>';
+    }
+    h += '<p class="lastline" aria-live="polite">' + (c.last ? 'Último: ' + esc(c.last) : '<span class="m">Nenhum registro ainda</span>') + '</p>';
+
+    if (!c.redo && stn.reasons.length) {
+      if (stn.reasons.length <= 2) h += '<div class="row2">' + stn.reasons.map(function (r) { return '<button type="button" class="reason" data-act="sreason" data-i="' + i + '" data-r="' + r + '"' + (c.started || c.count ? '' : ' disabled') + '>' + r + '</button>'; }).join('') + '</div>';
+      else h += '<button type="button" class="btn warn ssheet-row" data-act="ssheet" data-i="' + i + '">' + ic('alert') + 'Infração da estação</button>';
+    }
+    if (stn.load && !c.redo) {
+      if (c.rox) {
+        h += '<div class="alert info" role="status"><b>Devolução incorreta: +30 s</b><p>Cancela se corrigir antes de sair da Roxzone.</p></div>';
+        h += '<div class="row2"><button type="button" class="btn" data-act="fix" data-i="' + i + '">' + ic('check') + 'Devolução corrigida</button>' + holdBtn('rox', i, 'Saiu da Roxzone', 'Segure · mantém os 30 s', 'alt', false, interactive) + '</div>';
+      } else {
+        h += '<div class="row2"><button type="button" class="btn" data-act="retwrong" data-i="' + i + '">Devolução incorreta</button><button type="button" class="btn" data-act="wrongload" data-i="' + i + '">Carga errada</button></div>';
+      }
+    }
+    if (!c.redo) {
+      var missing = counter ? stn.N - c.count : 0;
+      var relSub = stn.closes ? 'Fecha o tempo da prova · sem desfazer' : 'Libera a vaga · sem desfazer';
+      var rel = holdBtn('release', i, full ? 'Segure para liberar' : (counter ? 'Faltam ' + missing + ' ' + unit(c, missing) : 'Inicie para liberar'), full ? relSub : '', '', !full, interactive, 'Liberar o atleta: segure. ' + relSub);
+      if (counter) h += '<div class="row2">' + rel + '<button type="button" class="btn sm" data-act="exitask" data-i="' + i + '"' + (full ? ' disabled' : '') + '>' + ic('door') + 'Atleta saiu</button></div>';
+      else h += rel;
+    }
+    var undoable = c.log.some(function (e) { return e.t !== 'start'; });
+    var many = !c.redo && stn.reasons.length > 2;
+    if (solo) {
+      h += '<div style="flex:1"></div><div class="row2">' +
+        '<button type="button" class="btn sm" data-act="gsheet" data-i="' + i + '">' + ic('alert') + 'Infração geral</button>' +
+        '<button type="button" class="btn sm" data-act="undo" data-i="' + i + '"' + (undoable ? '' : ' disabled') + '>' + ic('undo') + 'Desfazer último</button></div>';
+      return h + '</div>' + cardSheet(c, i, interactive) + '</section>';
+    }
+    h += '<div class="row3' + (many ? ' k4' : '') + '">' +
+      (many ? '<button type="button" class="btn sm warn land-only" data-act="ssheet" data-i="' + i + '">' + ic('alert') + 'Infração da estação</button>' : '') +
+      '<button type="button" class="btn sm" data-act="gsheet" data-i="' + i + '">' + ic('alert') + 'Infração geral</button>' +
+      '<button type="button" class="btn sm" data-act="undo" data-i="' + i + '"' + (undoable ? '' : ' disabled') + '>' + ic('undo') + 'Desfazer último</button>' +
+      (hasRecords(c) ? '<button type="button" class="btn sm" data-act="soltarask" data-i="' + i + '">' + ic('hand') + 'Soltar</button>'
+        : '<button type="button" class="btn sm" data-act="dismissask" data-i="' + i + '">' + ic('trash') + 'Dispensar</button>') + '</div>';
+    h += '</div>' + cardSheet(c, i, interactive) + '</section>';
+    return h;
+  }
+
+  function doneHtml(c, i, interactive, solo) {
+    var h = '';
+    if (c.ended === 'exited') {
+      var miss = c.stn.N - c.count;
+      h += '<div class="alert info" role="status"><span class="k">Saída registrada</span><b>Faltaram ' + miss + ' ' + unit(c, miss) + ': ' + fmtPen(miss * 180) + '</b><p>Cartão encerrado. Sua vaga está livre.</p></div>';
+    } else if (c.stn.closes) {
+      h += '<div class="alert up" role="status"><span class="k" style="color:var(--up)">Tempo do atleta</span><span class="big-time">1:12:40</span><p>Largada da onda <span class="num">08:40:02</span> → liberação <span class="num">09:52:42</span>, pelo relógio deste aparelho.</p><p><b>O tempo oficial é calculado pelo servidor</b>, com as penalidades vigentes.</p></div>';
+    } else {
+      h += '<div class="alert up" role="status"><span class="k" style="color:var(--up)">Liberado às <span class="num">09:16:40</span></span><b>Tempo na estação <span class="num">' + c.st + '</span></b><p>' + c.count + ' de ' + c.stn.N + ' ' + c.stn.unit[1] + ' · penalidades: ' + (penTotal(c) ? fmtPen(penTotal(c)).replace('+', '') : 'nenhuma') + '. Sua vaga está livre.</p></div>';
+    }
+    if (solo) {
+      h += '<p class="hint">A tentativa foi encerrada. Correção de tempo ou de penalidade é com o organizador.</p><div style="flex:1"></div>';
+      return h + '<button type="button" class="btn pri big" data-act="next" data-i="' + i + '">Próximo atleta</button>';
+    }
+    h += '<p class="hint">Cartão encerrado. Correção é com o organizador.</p><div style="flex:1"></div>';
+    h += '<div class="row2"><button type="button" class="btn" data-act="closecard" data-i="' + i + '">Fechar</button><button type="button" class="btn pri" data-act="next" data-i="' + i + '">Próximo atleta</button></div>';
+    return h;
+  }
+
+  function cardSheet(c, i, interactive) {
+    if (!c.sheet) return '';
+    var h = '<div class="cscrim" data-act="csclose" data-i="' + i + '"></div><div class="csheet" role="dialog" aria-modal="true" aria-label="Folha do cartão de ' + esc(c.ath.name) + '">';
+    if (c.sheet === 'station') {
+      h += '<h3>Infração · ' + c.stn.name + '</h3><p class="hint">' + (c.warn ? 'Advertência já usada nesta estação: esta vale 15 s.' : 'A 1ª nesta estação é advertência (0 s). Depois, 15 s cada.') + ' Vale na hora.</p>' +
+        '<div class="grid2">' + c.stn.reasons.map(function (r) { return '<button type="button" class="reason" data-act="sreason" data-i="' + i + '" data-r="' + r + '">' + r + '</button>'; }).join('') + '</div>' +
+        '<button type="button" class="btn" data-act="csclose" data-i="' + i + '">Cancelar</button>';
+    } else if (c.sheet === 'general') {
+      h += '<h3>Infração geral</h3><p class="hint">Vale na hora e soma ao tempo. Errou? Use "Desfazer último".</p>' +
+        GENERAL.map(function (g, k) { return '<button type="button" class="infra" data-act="gpen" data-i="' + i + '" data-g="' + k + '"><span>' + g[0] + '</span><span class="sec">' + fmtPen(g[1]) + '</span></button>'; }).join('') +
+        '<button type="button" class="btn" data-act="csclose" data-i="' + i + '">Cancelar</button>';
+    } else if (c.sheet === 'exit') {
+      var miss = c.stn.N - c.count;
+      h += '<h3>' + c.ath.first + ' saiu do ' + c.stn.name + '</h3>' +
+        '<div class="calc"><span class="k">' + c.count + ' de ' + c.stn.N + ' ' + c.stn.unit[1] + ' · faltam ' + miss + '</span><span class="big-time">' + fmtPen(miss * 180) + '</span><span class="hint">' + miss + ' × 180 s (a conferir)</span></div>' +
+        '<p style="font-size:13px;font-weight:700">Encerra o cartão e cobra ' + (miss === 1 ? 'o ' + c.stn.unit[0] + ' que falta' : 'os ' + c.stn.unit[1] + ' que faltam') + '. Sua vaga fica livre.</p>' +
+        holdBtn('exit', i, 'Segure para registrar a saída', 'Cobra ' + fmtPen(miss * 180).replace('+', ''), 'red', false, interactive) +
+        '<button type="button" class="btn" data-act="csclose" data-i="' + i + '">Voltar</button>';
+    } else if (c.sheet === 'soltar') {
+      h += '<h3>Soltar o cartão de ' + c.ath.first + '?</h3>' +
+        '<p style="font-size:13.5px">Nada é apagado: ' + c.count + ' ' + unit(c, c.count) + ' e o histórico ficam guardados. ' + c.ath.first + ' fica sem judge até outro judge assumir.</p>' +
+        '<p class="hint">Sua vaga fica livre.</p>' +
+        '<div class="row2"><button type="button" class="btn" data-act="csclose" data-i="' + i + '">Voltar</button><button type="button" class="btn pri" data-act="soltar" data-i="' + i + '">' + ic('hand') + 'Soltar cartão</button></div>';
+    } else if (c.sheet === 'dismiss') {
+      h += '<h3>Dispensar o cartão de ' + c.ath.first + '?</h3>' +
+        '<p style="font-size:13.5px">Use quando abriu o atleta errado. O cartão não tem nenhum registro e é cancelado.</p>' +
+        '<p class="hint">Sua vaga fica livre.</p>' +
+        '<div class="row2"><button type="button" class="btn" data-act="csclose" data-i="' + i + '">Voltar</button><button type="button" class="btn danger" data-act="dismiss" data-i="' + i + '">' + ic('trash') + 'Dispensar</button></div>';
+    }
+    return h + '</div>';
+  }
+
+  function slotHtml(s) {
+    var stn = s.cards.length ? s.cards[0].stn.name : 'da estação';
+    return '<div class="slot"><b>Vaga livre</b><p class="hint" style="font-size:13px">Você pode conferir mais 1 atleta ou equipe.</p>' +
+      '<button type="button" class="btn pri big" data-act="add">' + ic('plus') + 'Adicionar atleta</button>' +
+      '<p class="hint">Abre a lista da onda do ' + stn + '.</p>' +
+      '<button type="button" class="btn" data-act="other">Outra estação</button></div>';
+  }
+
+  function cardsScreen(s, w, mode, interactive) {
+    var act = activeCount(s);
+    var sub = act >= 2 ? '2 de 2 · Você já confere 2 atletas' : act + ' de 2 · ' + (2 - act) + (2 - act === 1 ? ' vaga livre' : ' vagas livres');
+    var total = s.cards.reduce(function (a, c) { return a + (c.ended ? 0 : pendingOf(c, mode)); }, 0);
+    var land = w === 'land';
+    var h = header('Fitness Race · Estações', 'Meus cartões', sub, 'Voltar às estações', land ? syncBar(mode, total, true) : '');
+    if (!land) h += syncBar(mode, total);
+    h += '<div class="kwrap">';
+    if (s.cards.some(function (c) { return c.conflict; })) h += '<p class="flash" role="status" style="border-color:var(--down);color:var(--down)">1 cartão precisa recarregar · o outro segue salvando</p>';
+    if (s.flash) h += '<p class="flash" role="status"><span>' + esc(s.flash) + '</span><button type="button" class="ibtn" data-act="noflash" aria-label="Fechar aviso">' + ic('x') + '</button></p>';
+    var items = s.cards.slice();
+    var showSlot = s.cards.length < 2;
+    if (w === 'portrait') {
+      var n = items.length + (showSlot ? 1 : 0);
+      if (s.focus >= n) s.focus = n - 1;
+      if (n > 1) {
+        h += '<div class="ktabs" role="tablist" aria-label="Meus cartões">';
+        items.forEach(function (c, i) {
+          var counter = c.stn.N ? c.count + '/' + c.stn.N : (c.started ? 'em andamento' : 'não iniciou');
+          var info = c.ended ? (c.ended === 'exited' ? 'Saída registrada' : 'Liberado') : c.stn.name + ' · ' + counter;
+          h += '<button type="button" role="tab" class="ktab' + (c.conflict ? ' bad' : '') + '" data-act="tab" data-t="' + i + '" aria-selected="' + (s.focus === i) + '"><b>' + esc(c.ath.first) + '</b><span class="s">' + info + '</span>' + tag(syncOf(c, mode), pendingOf(c, mode)) + '</button>';
+        });
+        if (showSlot) h += '<button type="button" role="tab" class="ktab slt" data-act="tab" data-t="' + items.length + '" aria-selected="' + (s.focus === items.length) + '"><b>' + ic('plus') + ' Vaga livre</b><span class="s">Adicionar atleta</span></button>';
+        h += '</div>';
+      }
+      h += '<div class="kgrid single">' + (s.focus < items.length ? cardHtml(items[s.focus], s.focus, s, mode, interactive, false) : slotHtml(s)) + '</div>';
+    } else {
+      h += '<div class="kgrid ' + (w === 'stack' ? 'stack' : (items.length + (showSlot ? 1 : 0) > 1 ? 'side' : 'single')) + '">';
+      items.forEach(function (c, i) { h += cardHtml(c, i, s, mode, interactive, false); });
+      if (showSlot) h += slotHtml(s);
+      h += '</div>';
+    }
+    return h + '</div>';
+  }
+
+  // ---------- lista da onda ----------
+  function rowsFor(s) {
+    var L = s.list;
+    if (L.stn === 'wb') return (s.wbActive ? [[s.wbActive, 'mine', 'Seu atleta', '37 de 100 reps']] : []).concat([
+      [E, 'run', 'Em corrida'], [D, 'run', 'Em corrida'], [T, 'team', 'Dupla'], [C, 'other', 'Com Judge Lia']
+    ]);
+    if (L.stn.closes) {
+      var fr = [];
+      s.cards.forEach(function (c) { if (!c.ended) fr.push([c.ath, 'mine', 'Seu atleta', 'em andamento']); });
+      return fr.concat([[E, 'run', 'Em corrida'], [C, 'free', 'Sem judge · assumir', 'em andamento'], [D, 'run', 'Em corrida'], [B, 'other', 'Com Judge Lia'], [T, 'team', 'Dupla']]);
+    }
+    if (L.mode === 'takeover') return [
+      [C, 'free', 'Sem judge · assumir', '2 de 4 trechos'], [A, 'other', 'Com Judge Paula'], [B, 'other', 'Com Judge Paula'], [D, 'other', 'Com Judge Rafa'], [T, 'team', 'Dupla']
+    ];
+    var r = [];
+    s.cards.forEach(function (c) { if (!c.ended) r.push([c.ath, 'mine', 'Seu cartão', c.count + ' de ' + c.stn.N + ' ' + c.stn.unit[1]]); });
+    if (!s.cards.some(function (c) { return c.ath === B; })) r.push([B, 'run', 'Em corrida']);
+    r.push([C, 'free', 'Sem judge · assumir', '2 de 4 trechos']);
+    r.push([D, 'other', 'Com Judge Rafa']);
+    r.push([T, 'team', 'Dupla']);
+    return r;
+  }
+
+  function listScreen(s, w, mode) {
+    var L = s.list, wb = L.stn === 'wb', fin = !wb && L.stn.closes, one = wb || fin, name = wb ? 'Wall Ball' : L.stn.name;
+    var act = activeCount(s), act2 = s.cards.filter(function (c) { return !c.ended && !c.stn.closes; }).length;
+    var mineOne = s.wbActive || (fin && act);
+    var h = header('Fitness Race · ' + name, name + ' · Ondas 3 e 4', EVENT + ' · ' + s.judge, one ? (mineOne ? 'Voltar ao seu atleta' : 'Voltar às estações') : 'Voltar aos meus cartões') + syncBar(mode, 1);
+    h += '<div class="c-body" style="gap:8px">';
+    h += '<div class="chips">' + (!one || act2 ? '<span class="chip ' + (act2 >= 2 ? 'run' : 'fg') + '">Você confere <span class="num">' + act2 + '</span> de 2</span>' : '') +
+      (one ? '<span class="chip fg">' + (wb ? 'Wall Ball' : 'Estação final') + ': 1 atleta por judge</span>' : '') +
+      (fin ? '<span class="chip run">' + ic('flag') + 'Fecha o tempo</span>' : '') + '</div>';
+    h += '<label class="sr" for="q-' + (s.gid || 'main') + '">Buscar atleta pelo nome</label><input id="q-' + (s.gid || 'main') + '" class="search" type="search" data-q placeholder="Buscar pelo nome" value="' + esc(L.q) + '" autocomplete="off">';
+    h += '<p class="hint">Toque no atleta que chegou à estação.</p>';
+    var q = L.q.trim().toLowerCase();
+    var rows = rowsFor(s).filter(function (r) { return !q || r[0].name.toLowerCase().indexOf(q) >= 0; });
+    rows.forEach(function (r) {
+      var a = r[0], k = r[1];
+      var chipCls = k === 'mine' ? 'run' : k === 'free' ? 'run' : k === 'other' ? '' : 'run';
+      var chip = '<span class="chip ' + chipCls + '">' + (k === 'team' ? ic('users') : '') + r[2] + '</span>';
+      var meta = a.sub + (r[3] ? ' · <span class="num">' + r[3] + '</span>' : '');
+      var dis = k === 'other';
+      h += '<button type="button" class="ath' + (k === 'free' && L.mode === 'takeover' ? ' hl' : '') + '"' + (dis ? ' disabled' : ' data-act="pick" data-a="' + a.first + '" data-k="' + k + '"') + '><div style="min-width:0"><b>' + esc(a.name) + '</b><span class="meta">' + meta + '</span></div>' + chip + '</button>';
+    });
+    if (!rows.length) h += '<p class="hint">Nenhum atleta com "' + esc(L.q) + '" nesta onda.</p>';
+    h += '<p class="sec-t">Concluídos</p>';
+    h += '<button type="button" class="ath done" disabled><div style="min-width:0"><b>Hugo Ensaio</b><span class="meta">Men Pro · Onda 3 · CT Modelo</span></div><span class="chip ok">Liberado</span></button>';
+    h += '</div>';
+    if (s.sheet === 'third') {
+      h += '<div class="scrim" data-act="gclose"></div><div class="sheet" role="alertdialog" aria-modal="true" aria-labelledby="sh-t"><h2 id="sh-t">Você já confere 2 atletas</h2>' +
+        '<p style="font-size:14px;font-weight:700">Libere um antes de abrir outro.</p>' +
+        '<p class="hint">Para abrir vaga: libere um atleta, solte o cartão (outro judge assume) ou dispense um cartão aberto por engano.</p>' +
+        '<div class="row2"><button type="button" class="btn big" data-act="gclose">Fechar</button><button type="button" class="btn pri big" data-act="mycards">Ver meus cartões</button></div></div>';
+    } else if (s.sheet === 'wbrefuse') {
+      h += '<div class="scrim" data-act="gclose"></div><div class="sheet" role="alertdialog" aria-modal="true" aria-labelledby="sh-t"><h2 id="sh-t">O Wall Ball é conferido sozinho</h2>' +
+        '<p style="font-size:14px;font-weight:700">Libere o cartão aberto antes.</p>' +
+        '<p class="hint">Você confere 2 atletas no Sled Push. O Wall Ball pede atenção contínua: 1 atleta por judge.</p>' +
+        '<div class="row2"><button type="button" class="btn big" data-act="gclose">Fechar</button><button type="button" class="btn pri big" data-act="mycards">Ver meus cartões</button></div></div>';
+    } else if (s.sheet === 'onlyone') {
+      var cur = s.wbActive || (s.cards.filter(function (c) { return !c.ended; })[0] || {}).ath;
+      var who = cur ? cur.first : 'o atleta aberto';
+      h += '<div class="scrim" data-act="gclose"></div><div class="sheet" role="alertdialog" aria-modal="true" aria-labelledby="sh-t"><h2 id="sh-t">Esta estação é de 1 atleta por judge</h2>' +
+        '<p style="font-size:14px;font-weight:700">Libere ' + esc(who) + ' antes de abrir outro atleta.</p>' +
+        '<p class="hint">' + (wb ? 'No Wall Ball a contagem pede atenção contínua.' : 'Esta estação fecha o tempo: você acompanha um atleta até a liberação.') + '</p>' +
+        '<div class="row2"><button type="button" class="btn big" data-act="gclose">Fechar</button><button type="button" class="btn pri big" data-act="mysolo">Voltar para ' + esc(who) + '</button></div></div>';
+    }
+    return h;
+  }
+
+  // ---------- estação final: 1 atleta em tela cheia (D39) ----------
+  function soloScreen(s, w, mode, interactive) {
+    var c = s.cards[0], land = w === 'land';
+    var n = c.ended ? 0 : pendingOf(c, mode);
+    var h = header('Fitness Race · ' + c.stn.name, esc(c.ath.name), c.ath.sub, 'Voltar à lista da onda', land ? syncBar(c.conflict ? mode : (c.ended ? 'ok' : mode), n, true) : '');
+    if (!land) h += syncBar(c.ended ? 'ok' : mode, n);
+    h += '<div class="kwrap"><div class="kgrid single">' + cardHtml(c, 0, s, mode, interactive, false, true) + '</div></div>';
+    return h;
+  }
+
+  // ---------- Wall Ball (tela da 1.97, sem mudança) ----------
+  function wbScreen(s, w, mode) {
+    var h = header('Fitness Race · Wall Ball', 'Ana Fictícia', 'Women Pro · Onda 3 · Box Exemplo Norte', 'Voltar à lista da onda');
+    h += syncBar(mode, 2);
+    h += '<div class="c-body">';
+    h += '<div class="chips" style="justify-content:space-between"><span class="chips"><span class="chip fg">6 kg</span><span class="chip fg">alvo 2,70 m</span></span><span class="chip">Sem penalidade</span></div>';
+    h += '<div><div class="wcount" aria-hidden="true">37</div><p class="wof">de 100 reps válidas</p></div>';
+    h += '<div class="bar" role="progressbar" aria-label="Reps válidas" aria-valuemin="0" aria-valuemax="100" aria-valuenow="37"><i style="width:37%"></i></div>';
+    h += '<p class="lastline" style="text-align:center">Último: REP <span class="m">· 1 no-rep</span></p>';
+    h += '<button type="button" class="rep" aria-label="REP válida. 37 de 100"><span class="t">REP ' + ic('check', 'lg') + '</span><span class="s">Toque a cada repetição válida</span></button>';
+    h += '<div class="row2"><button type="button" class="btn norep">' + ic('x') + 'NO REP</button><button type="button" class="btn big">' + ic('undo') + 'Desfazer último</button></div>';
+    h += '<div class="row2"><button type="button" class="btn sm">' + ic('alert') + 'Infração geral</button><button type="button" class="btn sm">' + ic('door') + 'Atleta saiu</button></div>';
+    h += '</div>';
+    return h;
+  }
+
+  function screen(s, w, mode, interactive) {
+    if (s.view === 'wb') return wbScreen(s, w, mode);
+    if (s.view === 'solo') return soloScreen(s, w, mode, interactive);
+    if (s.view === 'list') return listScreen(s, w, mode);
+    return cardsScreen(s, w, mode, interactive);
+  }
+
+  // ---------- render ----------
+  var ui = { state: 'one', sync: 'ok', theme: 'light', w: 'portrait' };
+  var st;
+  var phone = document.getElementById('phone');
+  var notesEl = document.getElementById('notes');
+  var tabs = document.getElementById('stateTabs');
+  STATES.forEach(function (s) {
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'tbtn'; b.setAttribute('role', 'tab'); b.dataset.state = s.id; b.textContent = s.label;
+    tabs.appendChild(b);
+  });
+
+  function courtCls() { return 'court' + (ui.w === 'land' ? ' land' : ''); }
+
+  function render(focusSel) {
+    phone.dataset.w = ui.w;
+    document.getElementById('stage').classList.toggle('wide', ui.w === 'land' || ui.w === 'tablet');
+    phone.innerHTML = '<div class="' + courtCls() + '" data-theme="' + ui.theme + '">' + screen(st, ui.w, ui.sync, true) + '</div>';
+    var n = NOTES[ui.state];
+    notesEl.innerHTML = '<h2>' + n[0] + '</h2><ul>' + n[1].map(function (x) { return '<li>' + x + '</li>'; }).join('') + '</ul><p class="src">Rastreio: ' + n[2] + '</p>';
+    tabs.querySelectorAll('[role=tab]').forEach(function (b) {
+      var on = b.dataset.state === ui.state;
+      b.setAttribute('aria-selected', on ? 'true' : 'false'); b.tabIndex = on ? 0 : -1;
+    });
+    bindHolds();
+    var q = phone.querySelector('[data-q]');
+    if (q) q.addEventListener('input', function () {
+      st.list.q = q.value; render();
+      var n2 = phone.querySelector('[data-q]'); n2.focus(); n2.setSelectionRange(n2.value.length, n2.value.length);
+    });
+    if (focusSel) { var f = phone.querySelector(focusSel); if (f) f.focus(); }
+  }
+
+  function renderGallery() {
+    var g = document.getElementById('gallery');
+    g.classList.toggle('wide', ui.w === 'land' || ui.w === 'tablet');
+    g.innerHTML = STATES.map(function (s) {
+      var p = preset(s.id); p.gid = 'g-' + s.id;
+      return '<figure><div class="dev" data-w="' + ui.w + '" inert><div class="' + courtCls() + '" data-theme="' + ui.theme + '">' + screen(p, ui.w, 'ok', false) + '</div></div>' +
+        '<figcaption>' + s.label + '<span>' + s.t + '</span></figcaption></figure>';
+    }).join('');
+  }
+
+  function go(id) { ui.state = id; st = preset(id); render(); }
+  function touch(c) { if (ui.sync !== 'ok') c.pending += 1; }
+  function athByFirst(f) { return [A, B, C, D, E, T].filter(function (a) { return a.first === f; })[0]; }
+  function focusCard(i) { st.focus = i; }
+
+  var lastTap = 0;
+  phone.addEventListener('click', function (e) {
+    var el = e.target.closest('[data-act]'); if (!el || el.disabled) return;
+    var a = el.dataset.act, i = +el.dataset.i, c = st.cards[i];
+    if (c) { c.isNew = false; }
+    if (a === 'plus') {
+      var now = Date.now(); if (now - lastTap < 120) return; lastTap = now;
+      if (c.count >= c.stn.N) return;
+      c.count += 1; c.started = true; c.log.push({ t: 'sec' }); c.last = '+1 ' + c.stn.unit[0] + (c.count >= c.stn.N ? ' · ' + c.count + ' de ' + c.stn.N : ''); touch(c);
+      if (navigator.vibrate) navigator.vibrate(15);
+      render();
+    } else if (a === 'start') { c.started = true; c.log.push({ t: 'start' }); c.last = 'Iniciou'; touch(c); render(); }
+    else if (a === 'sreason') {
+      if (!c.warn) { c.warn = true; c.log.push({ t: 'warn' }); c.last = el.dataset.r + ' · advertência (0 s)'; }
+      else { c.pens.push([el.dataset.r, 15]); c.log.push({ t: 'pen' }); c.last = el.dataset.r + ' · +15 s'; }
+      c.started = true; c.sheet = null; touch(c); render();
+    }
+    else if (a === 'ssheet') { c.sheet = 'station'; render(); }
+    else if (a === 'gsheet') { c.sheet = 'general'; render(); }
+    else if (a === 'gpen') { var g = GENERAL[+el.dataset.g]; c.pens.push(g); c.log.push({ t: 'pen' }); c.last = g[0] + ' · ' + fmtPen(g[1]); c.started = true; c.sheet = null; touch(c); render(); }
+    else if (a === 'csclose') { c.sheet = null; render(); }
+    else if (a === 'undo') {
+      var ev = c.log.pop(); if (!ev) return;
+      if (ev.t === 'sec') c.count -= 1;
+      if (ev.t === 'warn') c.warn = false;
+      if (ev.t === 'pen') c.pens.pop();
+      if (ev.t === 'rox') { c.rox = false; c.pens.pop(); }
+      c.last = 'desfeito. O registro continua no histórico'; touch(c); render();
+    }
+    else if (a === 'retwrong') { c.rox = true; c.pens.push(['Devolução incorreta', 30]); c.log.push({ t: 'rox' }); c.last = 'Devolução incorreta · +30 s'; touch(c); render(); }
+    else if (a === 'fix') { c.rox = false; c.pens = c.pens.filter(function (p) { return p[0] !== 'Devolução incorreta'; }); c.log.push({ t: 'fix' }); c.last = 'Devolução corrigida · 30 s cancelados'; touch(c); render(); }
+    else if (a === 'wrongload') { c.redo = true; c.log.push({ t: 'load' }); c.last = 'Carga errada · refazer'; touch(c); render(); }
+    else if (a === 'exitask') { c.sheet = 'exit'; render(); }
+    else if (a === 'soltarask') { c.sheet = 'soltar'; render(); }
+    else if (a === 'dismissask') { c.sheet = 'dismiss'; render(); }
+    else if (a === 'soltar') { st.cards.splice(i, 1); st.flash = 'Cartão de ' + c.ath.first + ' solto. Outro judge pode assumir.'; focusCard(st.cards.length); render(); }
+    else if (a === 'dismiss') { st.cards.splice(i, 1); st.flash = 'Cartão de ' + c.ath.first + ' dispensado.'; focusCard(st.cards.length); render(); }
+    else if (a === 'closecard') { st.cards.splice(i, 1); focusCard(st.cards.length); render(); }
+    else if (a === 'next') { var nstn = c.stn.closes ? c.stn : STN.push; st.cards.splice(i, 1); st.view = 'list'; st.list = { stn: nstn, mode: 'add', q: '' }; render(); }
+    else if (a === 'mysolo') { st.sheet = null; st.view = st.wbActive ? 'wb' : 'solo'; render(); }
+    else if (a === 'reload') { c.conflict = false; c.pending = 0; render(); }
+    else if (a === 'tab') { st.focus = +el.dataset.t; render(); }
+    else if (a === 'noflash') { st.flash = ''; render(); }
+    else if (a === 'add') { st.view = 'list'; st.list = { stn: st.cards.length ? st.cards[0].stn : STN.push, mode: 'add', q: '' }; st.flash = ''; render('[data-q]'); }
+    else if (a === 'other') { st.flash = '"Outra estação" abre a escolha de estação da Story 1.102.'; render(); }
+    else if (a === 'pick') {
+      var ath = athByFirst(el.dataset.a), k = el.dataset.k;
+      if (st.list.stn === 'wb' && st.wbActive) { if (k === 'mine') st.view = 'wb'; else st.sheet = 'onlyone'; render(); return; }
+      if (st.list.stn !== 'wb' && st.list.stn.closes) {
+        if (k === 'mine') { st.view = 'solo'; render(); return; }
+        if (activeCount(st)) { st.sheet = 'onlyone'; render('.sheet [data-act="mysolo"]'); return; }
+        st.cards = [k === 'free'
+          ? card(ath, st.list.stn, { started: true, takeover: { from: 'Judge Rafa' }, pens: [['Ajuda externa', 120]], last: 'Ajuda externa · +2 min · por Judge Rafa', st: '2:05', race: '1:12:31', log: [{ t: 'pen' }] })
+          : card(ath, st.list.stn, { isNew: true, st: '0:00', race: '1:09:40', pending: 0 })];
+        st.view = 'solo'; render(); return;
+      }
+      if (k === 'mine') { st.view = 'cards'; st.cards.forEach(function (x, j) { if (x.ath === ath) st.focus = j; }); render(); return; }
+      if (st.list.stn === 'wb') { st.sheet = activeCount(st) ? 'wbrefuse' : null; if (!st.sheet) { st.view = 'wb'; } render(); return; }
+      if (activeCount(st) >= 2) { st.sheet = 'third'; render('.sheet [data-act="mycards"]'); return; }
+      var nc = k === 'free'
+        ? card(ath, STN.push, { count: 2, warn: true, takeover: { from: 'Judge Rafa' }, last: 'Invadiu a raia · advertência (0 s) · por Judge Rafa', st: '4:10', race: '40:05', log: [{ t: 'sec' }, { t: 'sec' }, { t: 'warn' }] })
+        : card(ath, st.list.stn, { isNew: true, st: '0:00', race: '31:05', pending: 0 });
+      st.cards = st.cards.filter(function (x) { return !x.ended; });
+      st.cards.push(nc); st.view = 'cards'; st.focus = st.cards.length - 1; render();
+    }
+    else if (a === 'gclose') { st.sheet = null; render(); }
+    else if (a === 'mycards') { st.sheet = null; st.view = 'cards'; render(); }
+    else if (a === 'back') {
+      if (st.view === 'wb') { st.wbActive = A; st.view = 'list'; st.list = { stn: 'wb', mode: 'add', q: '' }; render(); }
+      else if (st.view === 'solo') { var ls = st.cards[0].stn; if (st.cards[0].ended) st.cards = []; st.view = 'list'; st.list = { stn: ls, mode: 'add', q: '' }; render(); }
+      else if (st.view === 'list' && st.list.stn === 'wb' && st.wbActive) { st.sheet = null; st.view = 'wb'; render(); }
+      else if (st.view === 'list' && st.list.stn !== 'wb' && st.list.stn.closes) { st.sheet = null; if (activeCount(st)) st.view = 'solo'; render(); }
+      else if (st.view !== 'cards') { st.view = 'cards'; st.sheet = null; render(); }
+      else { st.flash = '"Voltar" leva à escolha de estação (Story 1.102).'; render(); }
+    }
+  });
+  phone.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    if (st.sheet) { st.sheet = null; render(); return; }
+    st.cards.forEach(function (c) { c.sheet = null; }); render();
+  });
+
+  var HOLD_MS = 700;
+  function bindHolds() {
+    phone.querySelectorAll('[data-hold]').forEach(function (btn) {
+      var label = btn.querySelector('[data-hold-label]');
+      var parts = btn.dataset.hold.split(':'), kind = parts[0], i = +parts[1], idle = label.textContent;
+      var timer = null;
+      function done() {
+        timer = null; if (navigator.vibrate) navigator.vibrate(60);
+        var c = st.cards[i]; if (!c) return;
+        if (kind === 'release') { c.ended = 'released'; }
+        else if (kind === 'exit') { c.ended = 'exited'; c.sheet = null; }
+        else if (kind === 'rox') { c.rox = false; c.last = 'Saiu da Roxzone · devolução incorreta mantida (+30 s)'; }
+        else if (kind === 'redook') { c.redo = false; c.last = 'Refez com a carga certa'; }
+        else if (kind === 'redono') { c.redo = false; c.pens.push(['Não refez com a carga certa', 180]); c.last = 'Não refez com a carga certa · +3 min'; }
+        touch(c); render();
+      }
+      function begin() { if (timer) return; void btn.offsetWidth; btn.classList.add('holding'); label.textContent = 'Continue segurando…'; timer = setTimeout(done, HOLD_MS); }
+      function cancel() { if (!timer) return; clearTimeout(timer); timer = null; btn.classList.remove('holding'); label.textContent = idle; }
+      btn.addEventListener('pointerdown', function (e) { e.preventDefault(); begin(); });
+      ['pointerup', 'pointerleave', 'pointercancel'].forEach(function (t) { btn.addEventListener(t, cancel); });
+      btn.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+      btn.addEventListener('keydown', function (e) { if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); begin(); } });
+      btn.addEventListener('keyup', function (e) { if (e.key === ' ' || e.key === 'Enter') cancel(); });
+    });
+  }
+
+  tabs.addEventListener('click', function (e) { var b = e.target.closest('[role=tab]'); if (b) go(b.dataset.state); });
+  tabs.addEventListener('keydown', function (e) {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    var ids = STATES.map(function (s) { return s.id; });
+    var i = ids.indexOf(ui.state) + (e.key === 'ArrowRight' ? 1 : -1);
+    go(ids[(i + ids.length) % ids.length]); tabs.querySelector('[aria-selected=true]').focus();
+  });
+  document.getElementById('syncGroup').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-sync]'); if (!b) return;
+    ui.sync = b.dataset.sync;
+    st.cards.forEach(function (c) { c.pending = ui.sync === 'ok' ? 0 : Math.max(1, c.pending); });
+    this.querySelectorAll('[data-sync]').forEach(function (x) { x.setAttribute('aria-checked', x === b ? 'true' : 'false'); });
+    render();
+  });
+  document.getElementById('widthGroup').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-w]'); if (!b) return;
+    ui.w = b.dataset.w;
+    this.querySelectorAll('[data-w]').forEach(function (x) { x.setAttribute('aria-checked', x === b ? 'true' : 'false'); });
+    render(); renderGallery();
+  });
+  document.getElementById('themeBtn').addEventListener('click', function () {
+    ui.theme = ui.theme === 'light' ? 'dark' : 'light';
+    this.setAttribute('aria-pressed', ui.theme === 'dark' ? 'true' : 'false');
+    render(); renderGallery();
+  });
+
+  // Atalho para abrir direto num estado e numa largura: #s=two&w=land
+  var hp = {}; location.hash.replace(/^#/, '').split('&').forEach(function (kv) { var p = kv.split('='); if (p[0]) hp[p[0]] = decodeURIComponent(p[1] || ''); });
+  if (hp.w && /^(portrait|stack|land|tablet)$/.test(hp.w)) {
+    ui.w = hp.w;
+    document.querySelectorAll('#widthGroup [data-w]').forEach(function (x) { x.setAttribute('aria-checked', x.dataset.w === ui.w ? 'true' : 'false'); });
+  }
+  go(NOTES[hp.s] ? hp.s : 'one');
+  renderGallery();
+})();
+</script>
+</body>
+</html>

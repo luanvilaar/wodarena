@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maquete · Largada da onda · Súmula Fitness Race (Story 1.96)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@500;600;700&family=Inter:wght@400;500;600;700;800&display=swap">
+<style>
+/* Maquete estática da Story 1.96. Tokens copiados de src/app/globals.css:
+   página no tema escuro do app; a tela do árbitro usa a casca clara de alto
+   contraste da quadra (.court-light, decisão 9 da E3), com o escuro do app como
+   alternativa só para comparação. Sem sombra, sem gradiente, sem transition: all. */
+:root{
+  --font-body:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --font-num:"IBM Plex Sans","JetBrains Mono",ui-monospace,Menlo,monospace;
+  --p-bg:#0b0e11; --p-card:#1e2329; --p-line:#2b3139; --p-fg:#eaecef; --p-muted:#929aa5; --p-accent:#fcd535; --p-gray:#181a20;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{background:var(--p-bg)}
+body{margin:0;background:var(--p-bg);color:var(--p-fg);font-family:var(--font-body);font-size:15px;line-height:1.5}
+h1,h2,h3{margin:0;line-height:1.2;text-wrap:balance}
+p{margin:0}
+button{font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+:focus-visible{outline:2px solid #3b82f6;outline-offset:3px}
+.num{font-family:var(--font-num);font-variant-numeric:tabular-nums}
+.wrap{max-width:1240px;margin:0 auto;padding:32px 16px 72px;display:grid;gap:36px}
+.eyebrow{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--p-accent)}
+.doc-head{display:grid;gap:12px}
+.doc-head h1{font-size:clamp(26px,4.5vw,38px);font-weight:800;letter-spacing:-.02em}
+.lead{max-width:78ch;color:var(--p-muted)}
+.pills{display:flex;flex-wrap:wrap;gap:8px}
+.pill{font-size:12px;font-weight:600;border:1px solid var(--p-line);background:var(--p-card);border-radius:999px;padding:6px 12px}
+
+/* Barra de controles da maquete (não faz parte da tela proposta) */
+.toolbar{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;border:1px solid var(--p-line);background:var(--p-card);border-radius:12px;padding:12px}
+.tgroup{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.tgroup > span{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--p-muted);margin-right:4px}
+.tbtn{min-height:36px;border:1px solid var(--p-line);background:var(--p-gray);color:var(--p-fg);border-radius:8px;padding:0 12px;font-size:13px;font-weight:600;transition:border-color .15s,background-color .15s}
+.tbtn:hover{border-color:var(--p-accent)}
+.tbtn[aria-selected="true"],.tbtn[aria-pressed="true"],.tbtn[aria-checked="true"]{background:var(--p-accent);border-color:var(--p-accent);color:#181a20}
+
+.stage{display:grid;grid-template-columns:minmax(0,390px) minmax(0,1fr);gap:28px;align-items:start}
+@media (max-width:860px){.stage{grid-template-columns:1fr}}
+.notes{display:grid;gap:14px;border:1px solid var(--p-line);background:var(--p-card);border-radius:12px;padding:18px}
+.notes h2{font-size:18px;font-weight:800}
+.notes ul{margin:0;padding-left:18px;display:grid;gap:6px;color:var(--p-fg)}
+.notes .src{font-size:12.5px;color:var(--p-muted)}
+.notes code{font-family:var(--font-num);font-size:12px;background:var(--p-gray);border:1px solid var(--p-line);border-radius:4px;padding:2px 6px}
+
+.gallery{display:grid;gap:16px}
+.gallery h2{font-size:20px;font-weight:800}
+.gallery .sub{color:var(--p-muted);max-width:78ch}
+.ggrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:20px}
+.ggrid figure{margin:0;display:grid;gap:8px}
+.ggrid figcaption{font-size:13px;font-weight:700}
+.ggrid figcaption span{display:block;font-weight:500;color:var(--p-muted)}
+.ggrid .phone{height:640px;width:100%}
+
+/* ===== Tela do árbitro ===== */
+.phone{width:100%;max-width:390px;height:800px;border:1px solid var(--p-line);border-radius:28px;overflow:hidden;position:relative}
+.court{
+  --bg:#ffffff; --fg:#0b0e11; --card:#f3f4f6; --line:#b9c0cb; --gray:#ffffff; --elev:#dde1e7; --muted:#3f4652;
+  --primary:#f5c518; --primary-h:#e0b100; --primary-text:#7a5c00; --primary-border:#b88f00; --ink:#0b0e11;
+  --up:#0a7d52; --on-up:#ffffff; --down:#b8243a; --on-down:#ffffff; --info:#1f5fd1;
+  background:var(--bg); color:var(--fg); color-scheme:light;
+  height:100%; display:flex; flex-direction:column; font-size:14px;
+}
+.court[data-theme="dark"]{
+  --bg:#0b0e11; --fg:#eaecef; --card:#1e2329; --line:#2b3139; --gray:#181a20; --elev:#2b3139; --muted:#929aa5;
+  --primary:#fcd535; --primary-h:#f0b90b; --primary-text:#fcd535; --primary-border:#fcd535; --ink:#181a20;
+  --up:#0ecb81; --on-up:#181a20; --down:#f6465d; --on-down:#181a20; --info:#3b82f6;
+  color-scheme:dark;
+}
+.court :focus-visible{outline:2px solid var(--info);outline-offset:3px}
+.c-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line);background:var(--bg)}
+.c-head .l{display:flex;align-items:center;gap:8px;min-width:0}
+.c-eyebrow{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--primary-text)}
+.c-title{font-size:17px;font-weight:800;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.c-sub{font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ibtn{display:flex;align-items:center;justify-content:center;gap:6px;min-height:44px;min-width:44px;border:1px solid var(--line);background:var(--gray);color:var(--fg);border-radius:8px;padding:0 10px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;flex-shrink:0}
+.ibtn:hover{border-color:var(--primary-border)}
+svg.i{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+svg.i.lg{width:24px;height:24px}
+
+.sync{display:flex;align-items:center;gap:8px;margin:10px 14px 0;border:1px solid;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:700}
+.sync.ok{border-color:var(--up);color:var(--up)}
+.sync.wait{border-color:var(--primary-border);color:var(--fg)}
+.sync.off{border-color:var(--down);color:var(--down)}
+.sync .spin{animation:none}
+@media (prefers-reduced-motion:no-preference){.sync .spin{animation:spin 1s linear infinite}}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.c-body{flex:1;overflow-y:auto;padding:12px 14px 16px;display:grid;gap:12px;align-content:start}
+.c-foot{border-top:1px solid var(--line);padding:12px 14px calc(14px + env(safe-area-inset-bottom));display:grid;gap:8px;background:var(--bg)}
+
+.card{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:12px}
+.kv{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.k{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.big-time{font-family:var(--font-num);font-variant-numeric:tabular-nums;font-size:34px;font-weight:700;line-height:1.05}
+.hint{font-size:12px;color:var(--muted);font-weight:600}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border:1px solid var(--line);color:var(--muted);border-radius:999px;padding:4px 10px;white-space:nowrap}
+.chip.run{border-color:var(--primary-border);color:var(--primary-text)}
+.chip.ok{border-color:var(--up);color:var(--up)}
+.chip.down{border-color:var(--down);color:var(--down)}
+.chip.cat{color:var(--fg)}
+
+.wave{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:68px;width:100%;text-align:left;border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:12px;padding:10px 12px}
+.wave:hover{border-color:var(--primary-border)}
+.wave b{font-size:15px}
+.wave .meta{font-size:12px;color:var(--muted);font-weight:600}
+.wave.next{border:2px solid var(--primary-border)}
+
+.list{display:grid;gap:0;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.ath{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:52px;padding:8px 12px;border-bottom:1px solid var(--line);background:var(--bg)}
+.ath:last-child{border-bottom:0}
+.ath b{font-size:14px;display:block}
+.ath .meta{font-size:12px;color:var(--muted)}
+.sec-t{display:flex;justify-content:space-between;align-items:baseline}
+.sec-t h2{font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase}
+
+/* Botão de segurar (useTapHold, HOLD_MS 700) */
+.hold{position:relative;overflow:hidden;width:100%;min-height:76px;border:2px solid var(--primary-border);background:var(--primary);color:var(--ink);border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-weight:800;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.hold .fill{position:absolute;inset:0;background:var(--primary-h);transform:scaleX(0);transform-origin:left center}
+.hold.holding .fill{transform:scaleX(1);transition:transform 700ms linear}
+.hold[data-static-progress] .fill{transform:scaleX(.62)}
+.hold .lbl{position:relative;display:flex;align-items:center;gap:8px;font-size:19px;letter-spacing:.01em}
+.hold .sm{position:relative;font-size:12px;font-weight:600}
+@media (prefers-reduced-motion:reduce){.hold.holding .fill{transition:none;transform:scaleX(1)}}
+.done-box{min-height:76px;border:2px solid var(--up);border-radius:14px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:16px;font-weight:800;color:var(--up)}
+.sbtn{display:flex;align-items:center;justify-content:center;gap:8px;min-height:56px;width:100%;border:1px solid var(--line);background:var(--gray);color:var(--fg);border-radius:10px;font-size:14px;font-weight:700}
+.sbtn:hover{border-color:var(--primary-border)}
+.toast{border:1px solid var(--primary-border);background:color-mix(in srgb,var(--primary) 18%,var(--bg));color:var(--fg);border-radius:10px;padding:10px 12px;font-size:13px;font-weight:700;text-align:center}
+.alert{border:2px solid;border-radius:12px;padding:12px;display:grid;gap:4px}
+.alert.info{border-color:var(--primary-border);background:color-mix(in srgb,var(--primary) 12%,var(--bg))}
+.alert.up{border-color:var(--up);background:color-mix(in srgb,var(--up) 10%,var(--bg))}
+.alert.down{border-color:var(--down);background:color-mix(in srgb,var(--down) 8%,var(--bg))}
+.alert b{font-size:15px}
+.alert p{font-size:13px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc-head">
+  <span class="eyebrow">Maquete · Story 1.96</span>
+  <h1>Tela de largada da onda</h1>
+  <p class="lead">O árbitro (ou o organizador) registra a largada de uma onda inteira. O tempo de cada atleta começa aqui e termina na liberação do Wall Ball (D1). Não há tela de chegada. A tela é a casca clara de alto contraste da quadra, a mesma de <code style="font-family:var(--font-num);font-size:13px">CourtShell</code>.</p>
+  <div class="pills">
+    <span class="pill">Aguardando aprovação do Luan</span>
+    <span class="pill">Celular, uma mão</span>
+    <span class="pill">Segurar para largar (700 ms, como useTapHold)</span>
+    <span class="pill">Uma largada por onda</span>
+    <span class="pill">Dados fictícios</span>
+  </div>
+</header>
+
+<div class="toolbar" role="group" aria-label="Controles da maquete">
+  <div class="tgroup" role="tablist" aria-label="Estado da tela" id="stateTabs">
+    <span>Estado</span>
+  </div>
+  <div class="tgroup" role="radiogroup" aria-label="Sincronização" id="syncGroup">
+    <span>Sincronização</span>
+    <button type="button" class="tbtn" role="radio" data-sync="ok" aria-checked="true">Salvo</button>
+    <button type="button" class="tbtn" role="radio" data-sync="wait" aria-checked="false">Pendente</button>
+    <button type="button" class="tbtn" role="radio" data-sync="off" aria-checked="false">Sem conexão</button>
+  </div>
+  <div class="tgroup">
+    <span>Tema</span>
+    <button type="button" class="tbtn" id="themeBtn" aria-pressed="false">Escuro (comparação)</button>
+  </div>
+</div>
+
+<div class="stage">
+  <div class="phone" id="phone" aria-label="Tela proposta do árbitro"></div>
+  <aside class="notes" id="notes" aria-live="polite"></aside>
+</div>
+
+<section class="gallery" aria-labelledby="g-title">
+  <h2 id="g-title">Todos os estados lado a lado</h2>
+  <p class="sub">Cópias estáticas dos estados acima, para comparar sem clicar. A tela interativa fica no topo: segure o botão amarelo para largar e toque rápido para ver o aviso.</p>
+  <div class="ggrid" id="gallery"></div>
+</section>
+
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // Ícones lucide (mesmo pacote do app: lucide-react), desenhados inline.
+  var ICONS = {
+    chevronLeft: '<path d="m15 18-6-6 6-6"/>',
+    logOut: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/>',
+    check: '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
+    cloudOff: '<path d="m2 2 20 20"/><path d="M5.782 5.782A7 7 0 0 0 9 19h8.5a4.5 4.5 0 0 0 1.307-.193"/><path d="M21.532 16.5A4.5 4.5 0 0 0 17.5 10h-1.79A7.008 7.008 0 0 0 10 5.07"/>',
+    loader: '<path d="M21 12a9 9 0 1 1-6.219-8.56"/>',
+    alert: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+    flag: '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/>',
+    clock: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+    target: '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>'
+  };
+  function ic(name, cls) { return '<svg class="i ' + (cls || '') + '" viewBox="0 0 24 24" aria-hidden="true">' + ICONS[name] + '</svg>'; }
+
+  var EVENT = 'Corrida Fictícia do Litoral';
+  var ATHLETES = [
+    ['Ana Fictícia', 'Box Exemplo Norte', 'Women Pro'],
+    ['Bruno Exemplo', 'CT Modelo', 'Men Pro'],
+    ['Carla Teste', 'Box Amostra', 'Women Pro'],
+    ['Diego Modelo', 'Arena Protótipo', 'Men Pro'],
+    ['Elisa Amostra', 'Box Exemplo Norte', 'Women Pro'],
+    ['Fábio Simulado', 'CT Modelo', 'Men Pro'],
+    ['Gabi Protótipo', 'Box Ensaio', 'Women Pro'],
+    ['Hugo Ensaio', 'Arena Protótipo', 'Men Pro'],
+    ['Íris Rascunho', 'Box Amostra', 'Women Pro'],
+    ['Júlio Maquete', 'Box Ensaio', 'Men Pro']
+  ];
+  var START = '08:40:02';
+
+  var STATES = [
+    { id: 'waves', label: 'Lista de ondas' },
+    { id: 'before', label: 'Antes da largada' },
+    { id: 'tap', label: 'Toque rápido' },
+    { id: 'holding', label: 'Segurando' },
+    { id: 'queued', label: 'Largada guardada' },
+    { id: 'after', label: 'Depois da largada' },
+    { id: 'conflict', label: 'Segundo toque (409)' }
+  ];
+
+  var NOTES = {
+    waves: {
+      t: 'Lista de ondas do evento',
+      li: [
+        'Só entram ondas do Cronograma (itens <code>kind: \'heat\'</code>) com ao menos um atleta. A tela não fixa categorias (D5).',
+        'Cada linha mostra o horário previsto, o título, as categorias, a quantidade de atletas e o estado: "Aguardando largada" ou "Largou às HH:MM:SS".',
+        'A próxima onda a largar ganha borda grossa, para o árbitro achar sem ler a lista inteira.',
+        'Linhas com 68 px de altura: toque com o polegar sem errar a vizinha.'
+      ],
+      s: 'AC1, AC9 · D5'
+    },
+    before: {
+      t: 'Onda aberta, antes da largada',
+      li: [
+        'O horário do Cronograma aparece como <b>previsto</b>, com o aviso de que a largada vale a partir do gesto. Evita confundir previsto com largada (armadilha da story).',
+        'Lista dos atletas da onda com box e categoria. Posições vazias do cronograma não aparecem.',
+        'O botão de largar fica no rodapé, na zona do polegar, sempre visível mesmo com a lista rolando.',
+        'Sem diálogo de confirmação: o gesto de segurar já é a confirmação (AC5).'
+      ],
+      s: 'AC1, AC5, AC9'
+    },
+    tap: {
+      t: 'Toque rápido: só avisa',
+      li: [
+        'Um toque curto não larga. Aparece "Segure para largar" acima do botão e some sozinho.',
+        'Mesmo comportamento do toque rápido no fim de segmento da súmula de FF (padrão do app).'
+      ],
+      s: 'AC5'
+    },
+    holding: {
+      t: 'Segurando o botão',
+      li: [
+        'O preenchimento atravessa o botão em 700 ms (o mesmo <code>HOLD_MS</code> do <code>useTapHold</code>). Soltar antes cancela sem registrar nada.',
+        'Com movimento reduzido ligado, o preenchimento não anima: o botão escurece de uma vez e o texto muda para "Continue segurando…".',
+        'No Android o aparelho vibra ao completar; no iPhone não há vibração e o retorno visual basta.',
+        'No teclado: segurar Espaço ou Enter faz o mesmo.'
+      ],
+      s: 'AC5'
+    },
+    queued: {
+      t: 'Largada guardada no aparelho (sem conexão)',
+      li: [
+        'Se a rede cai no momento do gesto, a largada fica no celular <b>com o horário do toque</b>, e o indicador diz "Largada guardada no aparelho" até o servidor confirmar.',
+        'O aviso pede para não fechar a tela: o MVP só cobre queda com a tela aberta (D9).',
+        'Os atletas aparecem como "aguardando confirmação", porque as corridas só existem depois que o servidor grava.'
+      ],
+      s: 'AC6 · D9'
+    },
+    after: {
+      t: 'Depois da largada',
+      li: [
+        'O horário gravado vira o destaque da tela, com quantas corridas começaram.',
+        'O botão some e no lugar fica "Largada registrada", sem ação: o árbitro não desfaz uma largada. Quem corrige é o organizador, no painel (AC7, aprovado em D14a).',
+        'Atalho para o Wall Ball desta onda, para o árbitro que também conta reps.'
+      ],
+      s: 'AC3, AC4, AC7 · D1, D14'
+    },
+    conflict: {
+      t: 'Segundo toque: largada já registrada',
+      li: [
+        'Outro aparelho largou primeiro. O servidor responde 409 com o horário que vale, e a tela explica sem tom de erro: nada foi alterado.',
+        'A tela passa sozinha para o estado "depois da largada" com o horário do servidor.',
+        'O mesmo aviso aparece se o próprio aparelho tentar largar de novo (por exemplo, após recarregar com a fila cheia).'
+      ],
+      s: 'AC4'
+    }
+  };
+
+  var ui = { state: 'before', sync: 'ok', theme: 'light' };
+
+  function syncBar(state, mode) {
+    if (state === 'queued') {
+      return '<div class="sync off" role="status">' + ic('cloudOff') + '<span>Largada guardada no aparelho · envio quando a conexão voltar</span></div>';
+    }
+    if (mode === 'wait') return '<div class="sync wait" role="status">' + ic('loader', 'spin') + '<span>Salvando 1 registro…</span></div>';
+    if (mode === 'off') return '<div class="sync off" role="status">' + ic('cloudOff') + '<span>Sem conexão</span></div>';
+    return '<div class="sync ok" role="status">' + ic('check') + '<span>Salvo</span></div>';
+  }
+
+  function header(title, sub, back) {
+    return '<header class="c-head"><div class="l">' +
+      (back ? '<button type="button" class="ibtn" aria-label="' + back + '">' + ic('chevronLeft') + '</button>' : '') +
+      '<div style="min-width:0"><p class="c-eyebrow">Fitness Race · Largada</p><h1 class="c-title">' + title + '</h1><p class="c-sub">' + sub + '</p></div></div>' +
+      '<button type="button" class="ibtn" aria-label="Sair da conta">' + ic('logOut') + 'Sair</button></header>';
+  }
+
+  function athleteList(chipHtml) {
+    return '<div class="list" role="list">' + ATHLETES.map(function (a) {
+      return '<div class="ath" role="listitem"><div style="min-width:0"><b>' + a[0] + '</b><span class="meta">' + a[1] + ' · ' + a[2] + '</span></div>' + (chipHtml || '') + '</div>';
+    }).join('') + '</div>';
+  }
+
+  function screen(state, mode, interactive) {
+    var h = '';
+    if (state === 'waves') {
+      h += header(EVENT, 'Fitness Race · 4 ondas', 'Voltar aos eventos');
+      h += syncBar(state, mode);
+      h += '<div class="c-body">';
+      h += '<p class="hint">Escolha a onda para largar. O horário é o previsto no Cronograma.</p>';
+      h += wave('Onda 1 · Women', '08:00', 'Women', '12 atletas', '<span class="chip ok">Largou às <span class="num">08:00:07</span></span>');
+      h += wave('Onda 2 · Men', '08:20', 'Men', '14 atletas', '<span class="chip ok">Largou às <span class="num">08:20:03</span></span>');
+      h += wave('Onda 3 · Pro', '08:40', 'Women Pro · Men Pro', '10 atletas', '<span class="chip run">Próxima</span>', true);
+      h += wave('Onda 4 · Doubles', '09:00', 'Doubles Women · Doubles Mixed', '8 duplas', '<span class="chip">Aguardando largada</span>');
+      h += '</div>';
+      return h;
+    }
+
+    h += header('Onda 3 · Pro', EVENT, 'Voltar às ondas');
+    h += syncBar(state, mode);
+    h += '<div class="c-body">';
+
+    if (state === 'conflict') {
+      h += '<div class="alert info" role="alert"><b>Largada já registrada às <span class="num">' + START + '</span></b><p>Outro aparelho largou esta onda antes. Nada foi alterado: vale o horário acima.</p></div>';
+    }
+
+    if (state === 'after' || state === 'conflict') {
+      h += '<div class="alert up"><span class="k" style="color:var(--up)">Largou às</span><span class="big-time">' + START + '</span><p>10 corridas iniciadas · há 12 min</p></div>';
+    } else if (state === 'queued') {
+      h += '<div class="alert down"><span class="k" style="color:var(--down)">Guardada no aparelho</span><span class="big-time">' + START + '</span><p>Horário do toque. Será enviada quando a conexão voltar. Não feche esta tela.</p></div>';
+    } else {
+      h += '<div class="card" style="display:grid;gap:8px"><div class="kv"><span class="k">Horário previsto</span><span class="chip">Aguardando largada</span></div>' +
+        '<span class="big-time">08:40</span><p class="hint">Previsto no Cronograma. O tempo dos atletas começa no gesto de largar.</p>' +
+        '<div class="chips"><span class="chip cat">Women Pro</span><span class="chip cat">Men Pro</span></div></div>';
+    }
+
+    var chip = '';
+    if (state === 'after' || state === 'conflict') chip = '<span class="chip ok">Em corrida</span>';
+    if (state === 'queued') chip = '<span class="chip">Aguardando confirmação</span>';
+    h += '<div class="sec-t"><h2>Atletas da onda</h2><span class="hint num">10</span></div>';
+    h += athleteList(chip);
+    h += '</div>';
+
+    h += '<div class="c-foot">';
+    if (state === 'after' || state === 'conflict') {
+      h += '<div class="done-box">' + ic('check', 'lg') + 'Largada registrada</div>';
+      h += '<button type="button" class="sbtn">' + ic('target') + 'Ir para o Wall Ball da onda</button>';
+    } else if (state === 'queued') {
+      h += '<div class="done-box" style="border-color:var(--down);color:var(--down)">' + ic('cloudOff', 'lg') + 'Largada guardada no aparelho</div>';
+    } else {
+      if (state === 'tap') h += '<p class="toast" role="status">Segure para largar</p>';
+      else h += '<p class="toast" role="status" data-hint hidden>Segure para largar</p>';
+      h += '<button type="button" class="hold"' +
+        (state === 'holding' ? ' data-static-progress' : '') +
+        (interactive ? ' data-hold' : '') +
+        ' aria-label="Largar a onda 3: segure o botão por quase um segundo. Sem desfazer.">' +
+        '<span class="fill" aria-hidden="true"></span>' +
+        '<span class="lbl">' + ic('flag', 'lg') + '<span data-hold-label>' + (state === 'holding' ? 'Continue segurando…' : 'Segure para largar') + '</span></span>' +
+        '<span class="sm">Onda 3 · 10 atletas · sem desfazer</span></button>';
+    }
+    h += '</div>';
+    return h;
+  }
+
+  function wave(title, time, cats, count, chip, next) {
+    return '<button type="button" class="wave' + (next ? ' next' : '') + '"><div style="min-width:0"><b>' + title + '</b>' +
+      '<div class="meta"><span class="num">' + time + '</span> previsto · ' + cats + ' · ' + count + '</div></div>' + chip + '</button>';
+  }
+
+  function notes(state) {
+    var n = NOTES[state];
+    return '<h2>' + n.t + '</h2><ul>' + n.li.map(function (x) { return '<li>' + x + '</li>'; }).join('') + '</ul><p class="src">Rastreio: ' + n.s + '</p>';
+  }
+
+  var phone = document.getElementById('phone');
+  var notesEl = document.getElementById('notes');
+  var tabs = document.getElementById('stateTabs');
+
+  STATES.forEach(function (s) {
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'tbtn'; b.setAttribute('role', 'tab');
+    b.dataset.state = s.id; b.textContent = s.label;
+    tabs.appendChild(b);
+  });
+
+  function render() {
+    phone.innerHTML = '<div class="court" data-theme="' + ui.theme + '">' + screen(ui.state, ui.sync, true) + '</div>';
+    notesEl.innerHTML = notes(ui.state);
+    tabs.querySelectorAll('[role=tab]').forEach(function (b) {
+      var on = b.dataset.state === ui.state;
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+      b.tabIndex = on ? 0 : -1;
+    });
+    bindHold();
+  }
+
+  function renderGallery() {
+    var g = document.getElementById('gallery');
+    g.innerHTML = STATES.map(function (s) {
+      return '<figure><div class="phone" inert><div class="court" data-theme="' + ui.theme + '">' + screen(s.id, 'ok', false) + '</div></div>' +
+        '<figcaption>' + s.label + '<span>' + NOTES[s.id].t + '</span></figcaption></figure>';
+    }).join('');
+  }
+
+  tabs.addEventListener('click', function (e) {
+    var b = e.target.closest('[role=tab]'); if (!b) return;
+    ui.state = b.dataset.state; render();
+  });
+  tabs.addEventListener('keydown', function (e) {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    var ids = STATES.map(function (s) { return s.id; });
+    var i = ids.indexOf(ui.state) + (e.key === 'ArrowRight' ? 1 : -1);
+    ui.state = ids[(i + ids.length) % ids.length]; render();
+    tabs.querySelector('[aria-selected=true]').focus();
+  });
+  document.getElementById('syncGroup').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-sync]'); if (!b) return;
+    ui.sync = b.dataset.sync;
+    this.querySelectorAll('[data-sync]').forEach(function (x) { x.setAttribute('aria-checked', x === b ? 'true' : 'false'); });
+    render();
+  });
+  document.getElementById('themeBtn').addEventListener('click', function () {
+    ui.theme = ui.theme === 'light' ? 'dark' : 'light';
+    this.setAttribute('aria-pressed', ui.theme === 'dark' ? 'true' : 'false');
+    render(); renderGallery();
+  });
+  // Clique na lista de ondas abre a onda 3 (navegação da maquete).
+  phone.addEventListener('click', function (e) {
+    if (ui.state === 'waves' && e.target.closest('.wave')) { ui.state = 'before'; render(); }
+    else if (e.target.closest('[aria-label="Voltar às ondas"]')) { ui.state = 'waves'; render(); }
+  });
+
+  // Gesto de segurar: 700 ms, como useTapHold. Toque curto só avisa.
+  var HOLD_MS = 700;
+  function bindHold() {
+    var btn = phone.querySelector('[data-hold]'); if (!btn) return;
+    var hint = phone.querySelector('[data-hint]');
+    var label = btn.querySelector('[data-hold-label]');
+    var timer = null, t0 = 0, hintTimer = null;
+    function begin() {
+      if (timer) return;
+      t0 = Date.now();
+      btn.removeAttribute('data-static-progress');
+      void btn.offsetWidth;
+      btn.classList.add('holding');
+      label.textContent = 'Continue segurando…';
+      timer = setTimeout(function () {
+        timer = null;
+        if (navigator.vibrate) navigator.vibrate(60);
+        ui.state = ui.sync === 'off' ? 'queued' : 'after';
+        render();
+      }, HOLD_MS);
+    }
+    function cancel() {
+      if (!timer) return;
+      clearTimeout(timer); timer = null;
+      btn.classList.remove('holding');
+      label.textContent = 'Segure para largar';
+      if (Date.now() - t0 < HOLD_MS && hint) {
+        hint.hidden = false;
+        clearTimeout(hintTimer);
+        hintTimer = setTimeout(function () { hint.hidden = true; }, 2200);
+      }
+    }
+    btn.addEventListener('pointerdown', function (e) { e.preventDefault(); begin(); });
+    btn.addEventListener('pointerup', cancel);
+    btn.addEventListener('pointerleave', cancel);
+    btn.addEventListener('pointercancel', cancel);
+    btn.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+    btn.addEventListener('keydown', function (e) {
+      if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); begin(); }
+    });
+    btn.addEventListener('keyup', function (e) { if (e.key === ' ' || e.key === 'Enter') cancel(); });
+  }
+
+  render();
+  renderGallery();
+})();
+</script>
+</body>
+</html>

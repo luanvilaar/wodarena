@@ -10,6 +10,7 @@ import { sendQualifierWorkoutDeletedEmails } from '@/lib/resend';
 import { checkRegistrationShirtEdit, validateShirtConfig } from '@/lib/shirtPricing';
 import { deriveLegacyWorkoutFields, validateWorkoutStructure, type LegacyWorkoutFields } from '@/lib/workoutStructure';
 import { countActiveSheets, reconcileManualScores, recalculateRankingForPairs } from '@/lib/serverScoresheets';
+import { RACE_MANUAL_LOCK_MESSAGE, filterRaceLockedManualScores, recalculateRaceRanking } from '@/lib/serverRacePublication';
 import {
   getQualifierWorkoutLockViolations,
   hasQualifierWorkoutSubmissions,
@@ -306,6 +307,25 @@ const validateQualifierWorkoutWindow = (eventType: unknown, workout: Record<stri
 
 const createJudgeId = () => `judge-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
+type JudgeFunctions = { createAndAssign: string; assign: string; remove: string };
+
+// Funções do banco que criam, atribuem e removem judges, por tipo de evento:
+// Qualifier (qualifier_*), presencial (sheet_*, Story 1.49) e Fitness Race
+// (race_*, Story 1.95). Cada família só aceita o próprio tipo de evento.
+const QUALIFIER_JUDGE_FUNCTIONS: JudgeFunctions = { createAndAssign: 'qualifier_create_and_assign_judge', assign: 'qualifier_assign_judge', remove: 'qualifier_remove_judge' };
+const PRESENTIAL_JUDGE_FUNCTIONS: JudgeFunctions = { createAndAssign: 'sheet_create_and_assign_judge', assign: 'sheet_assign_judge', remove: 'sheet_remove_judge' };
+const RACE_JUDGE_FUNCTIONS: JudgeFunctions = { createAndAssign: 'race_create_and_assign_judge', assign: 'race_assign_judge', remove: 'race_remove_judge' };
+
+const UNSUPPORTED_JUDGE_EVENT_MESSAGE = 'Este tipo de evento não aceita judges.';
+
+/** Funções de judges do tipo do evento; null quando o tipo não tem judges. */
+const judgeFunctionsForEventType = (eventType: unknown): JudgeFunctions | null => {
+  if (isQualifierEvent(eventType)) return QUALIFIER_JUDGE_FUNCTIONS;
+  if (isFunctionalFitnessEvent(eventType)) return PRESENTIAL_JUDGE_FUNCTIONS;
+  if (eventType === 'fitness_racing') return RACE_JUDGE_FUNCTIONS;
+  return null;
+};
+
 const judgeCreationErrorResponse = (error: unknown) => {
   const details = error && typeof error === 'object' ? error as { code?: unknown; message?: unknown } : null;
   const code = typeof details?.code === 'string' ? details.code : '';
@@ -331,6 +351,26 @@ const judgeCreationErrorResponse = (error: unknown) => {
     }, { status: 503 });
   }
   return null;
+};
+
+// Só evento Fitness Race (Story 1.95): as exceções de atribuir/remover das
+// funções race_* viram mensagens claras. Functional Fitness e Qualifier
+// continuam com o tratamento de antes (judgeCreationErrorResponse só ao criar).
+const RACE_JUDGE_ERRORS: Record<string, { error: string; status: number }> = {
+  race_event_required: { error: 'Esta operação é exclusiva de eventos Fitness Race.', status: 400 },
+  qualifier_judge_assignment_not_allowed: { error: 'Você não tem permissão para gerenciar judges neste evento.', status: 403 },
+  qualifier_judge_manager_mismatch: { error: 'Este judge pertence a outro gestor. Atribua só judges criados pelo gestor do evento.', status: 409 },
+  qualifier_judge_conflict_of_interest: { error: 'Este judge está inscrito como atleta no evento e não pode arbitrá-lo.', status: 409 }
+};
+
+/** Erros das funções race_*: as exceções novas e, depois, as de criar judge (inclusive o 503). */
+const raceJudgeErrorResponse = (error: unknown) => {
+  const message = error && typeof error === 'object' ? (error as { message?: unknown }).message : null;
+  if (typeof message === 'string' && Object.hasOwn(RACE_JUDGE_ERRORS, message)) {
+    const { error: text, status } = RACE_JUDGE_ERRORS[message];
+    return NextResponse.json({ error: text }, { status });
+  }
+  return judgeCreationErrorResponse(error);
 };
 
 const qualifierDeleteErrorResponse = (error: unknown) => {
@@ -1071,9 +1111,7 @@ export async function POST(request: Request) {
 
       case 'listJudges': {
         const event = await ensureEventOwner(supabaseAdmin, actor, payload.eventId);
-        if (!isQualifierEvent(event.event_type) && !isFunctionalFitnessEvent(event.event_type)) {
-          return NextResponse.json({ error: 'Judges são exclusivos de eventos Functional Fitness (presenciais ou Qualifier).' }, { status: 400 });
-        }
+        if (!judgeFunctionsForEventType(event.event_type)) return NextResponse.json({ error: UNSUPPORTED_JUDGE_EVENT_MESSAGE }, { status: 400 });
         const { data: assignments, error: assignmentsError } = await supabaseAdmin
           .from('event_judges')
           .select('judge_user_id, created_at')
@@ -1094,9 +1132,8 @@ export async function POST(request: Request) {
 
       case 'createJudge': {
         const event = await ensureEventOwner(supabaseAdmin, actor, payload.eventId);
-        if (!isQualifierEvent(event.event_type) && !isFunctionalFitnessEvent(event.event_type)) {
-          return NextResponse.json({ error: 'Judges são exclusivos de eventos Functional Fitness (presenciais ou Qualifier).' }, { status: 400 });
-        }
+        const judgeFunctions = judgeFunctionsForEventType(event.event_type);
+        if (!judgeFunctions) return NextResponse.json({ error: UNSUPPORTED_JUDGE_EVENT_MESSAGE }, { status: 400 });
         const name = asTrimmed(payload.name);
         const email = asTrimmed(payload.email).toLowerCase();
         const password = asTrimmed(payload.password);
@@ -1104,8 +1141,8 @@ export async function POST(request: Request) {
           return NextResponse.json({ error: 'Informe nome, e-mail válido e senha com ao menos 8 caracteres para o judge.' }, { status: 400 });
         }
         const judgeId = createJudgeId();
-        // Presencial (Story 1.49): as funções do Qualifier exigem evento Qualifier.
-        const { data: judge, error: judgeError } = await supabaseAdmin.rpc(isQualifierEvent(event.event_type) ? 'qualifier_create_and_assign_judge' : 'sheet_create_and_assign_judge', {
+        // Cada tipo de evento tem as suas funções (presencial, Story 1.49; Fitness Race, Story 1.95).
+        const { data: judge, error: judgeError } = await supabaseAdmin.rpc(judgeFunctions.createAndAssign, {
           p_actor_id: actor.id,
           p_parent_manager_id: event.organizer_id,
           p_event_id: payload.eventId,
@@ -1115,6 +1152,10 @@ export async function POST(request: Request) {
           p_password_hash: hashPassword(password)
         });
         if (judgeError) {
+          if (judgeFunctions === RACE_JUDGE_FUNCTIONS) {
+            const raceResponse = raceJudgeErrorResponse(judgeError);
+            if (raceResponse) return raceResponse;
+          }
           const response = judgeCreationErrorResponse(judgeError);
           if (response) return response;
           throw judgeError;
@@ -1124,29 +1165,35 @@ export async function POST(request: Request) {
 
       case 'assignJudgeToEvent': {
         const event = await ensureEventOwner(supabaseAdmin, actor, payload.eventId);
-        if (!isQualifierEvent(event.event_type) && !isFunctionalFitnessEvent(event.event_type)) {
-          return NextResponse.json({ error: 'Judges são exclusivos de eventos Functional Fitness (presenciais ou Qualifier).' }, { status: 400 });
-        }
-        const { error } = await supabaseAdmin.rpc(isQualifierEvent(event.event_type) ? 'qualifier_assign_judge' : 'sheet_assign_judge', {
+        const judgeFunctions = judgeFunctionsForEventType(event.event_type);
+        if (!judgeFunctions) return NextResponse.json({ error: UNSUPPORTED_JUDGE_EVENT_MESSAGE }, { status: 400 });
+        const { error } = await supabaseAdmin.rpc(judgeFunctions.assign, {
           p_actor_id: actor.id,
           p_event_id: payload.eventId,
           p_judge_id: asTrimmed(payload.judgeId)
         });
-        if (error) throw error;
+        if (error) {
+          const response = judgeFunctions === RACE_JUDGE_FUNCTIONS ? raceJudgeErrorResponse(error) : null;
+          if (response) return response;
+          throw error;
+        }
         return NextResponse.json({ success: true });
       }
 
       case 'removeJudgeFromEvent': {
         const event = await ensureEventOwner(supabaseAdmin, actor, payload.eventId);
-        if (!isQualifierEvent(event.event_type) && !isFunctionalFitnessEvent(event.event_type)) {
-          return NextResponse.json({ error: 'Judges são exclusivos de eventos Functional Fitness (presenciais ou Qualifier).' }, { status: 400 });
-        }
-        const { error } = await supabaseAdmin.rpc(isQualifierEvent(event.event_type) ? 'qualifier_remove_judge' : 'sheet_remove_judge', {
+        const judgeFunctions = judgeFunctionsForEventType(event.event_type);
+        if (!judgeFunctions) return NextResponse.json({ error: UNSUPPORTED_JUDGE_EVENT_MESSAGE }, { status: 400 });
+        const { error } = await supabaseAdmin.rpc(judgeFunctions.remove, {
           p_actor_id: actor.id,
           p_event_id: payload.eventId,
           p_judge_id: asTrimmed(payload.judgeId)
         });
-        if (error) throw error;
+        if (error) {
+          const response = judgeFunctions === RACE_JUDGE_FUNCTIONS ? raceJudgeErrorResponse(error) : null;
+          if (response) return response;
+          throw error;
+        }
         return NextResponse.json({ success: true });
       }
 
@@ -1665,9 +1712,17 @@ export async function POST(request: Request) {
           return NextResponse.json({ error: 'Scores de Qualifier devem ser definidos exclusivamente pela revisão de submissões.' }, { status: 409 });
         }
 
+        // Story 1.99 (AC7): resultado publicado pela súmula Fitness Race (race_run_id) não é
+        // sobrescrito à mão (409, ajuste no painel da súmula); a linha igual ao publicado sai do lote.
+        const raceLock = await filterRaceLockedManualScores(supabaseAdmin, scores);
+        if (raceLock.locked.length > 0) {
+          return NextResponse.json({ error: RACE_MANUAL_LOCK_MESSAGE }, { status: 409 });
+        }
+        if (raceLock.rows.length === 0) return NextResponse.json({ success: true });
+
         // Lançamento manual por cima de resultado de súmula (Story 1.51): o que muda
         // deixa de apontar para a súmula e entra no histórico; sem súmula, nada muda.
-        const reconciled = await reconcileManualScores(supabaseAdmin, actor, scores);
+        const reconciled = await reconcileManualScores(supabaseAdmin, actor, raceLock.rows);
         const { error } = await supabaseAdmin
           .from('scores')
           .upsert(reconciled.rows, { onConflict: 'athlete_id,workout_id' });
@@ -1675,6 +1730,8 @@ export async function POST(request: Request) {
         // Com súmula na prova, posição e pontos saem do que está gravado (o painel pode
         // não ter os resultados que os judges publicaram depois que ele abriu).
         if (reconciled.touchedPairs.length > 0) await recalculateRankingForPairs(supabaseAdmin, reconciled.touchedPairs);
+        // Prova TOTAL com resultado da súmula Race: posição só por tempo, do que está gravado.
+        for (const workoutId of raceLock.raceWorkoutIds) await recalculateRaceRanking(supabaseAdmin, workoutId);
         return NextResponse.json({ success: true });
       }
 

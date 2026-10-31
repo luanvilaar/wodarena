@@ -1,0 +1,578 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maquete · Cobertura ao vivo · Súmula Fitness Race (Story 1.105)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@500;600;700&family=Inter:wght@400;500;600;700;800&display=swap">
+<style>
+/* Maquete estática da Story 1.105. Mesma linguagem de painel-organizador.html
+   (aprovada, D23): tema escuro do admin, cartões bg-card com borda card-border,
+   rótulos em caixa alta com o amarelo do app. Cartões altos, sem tabela com
+   rolagem lateral (D20). Sem sombra, sem gradiente, sem transition: all. */
+:root{
+  --font-body:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --font-num:"IBM Plex Sans","JetBrains Mono",ui-monospace,Menlo,monospace;
+  --background:#0b0e11; --foreground:#eaecef; --card:#1e2329; --card-border:#2b3139; --primary:#fcd535; --primary-hover:#f0b90b;
+  --muted:#929aa5; --muted-soft:#707a8a; --dark-gray:#181a20; --elevated:#2b3139; --ink:#181a20; --white:#ffffff;
+  --up:#0ecb81; --down:#f6465d; --info:#3b82f6;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{background:var(--background)}
+body{margin:0;background:var(--background);color:var(--foreground);font-family:var(--font-body);font-size:14px;line-height:1.5}
+h1,h2,h3,h4{margin:0;line-height:1.2;text-wrap:balance}
+p{margin:0}
+button{font:inherit;color:inherit;cursor:pointer}
+button:disabled{cursor:not-allowed;opacity:.5}
+:focus-visible{outline:2px solid var(--info);outline-offset:3px}
+.num{font-family:var(--font-num);font-variant-numeric:tabular-nums}
+.wrap{max-width:1320px;margin:0 auto;padding:32px 16px 72px;display:grid;gap:28px}
+.eyebrow{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--primary)}
+.doc-head{display:grid;gap:12px}
+.doc-head h1{font-size:clamp(26px,4.5vw,38px);font-weight:800;letter-spacing:-.02em}
+.lead{max-width:80ch;color:var(--muted);font-size:15px}
+.pills{display:flex;flex-wrap:wrap;gap:8px}
+.pill{font-size:12px;font-weight:600;border:1px solid var(--card-border);background:var(--card);border-radius:999px;padding:6px 12px}
+.toolbar{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;border:1px dashed var(--card-border);border-radius:12px;padding:12px}
+.tgroup{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.tgroup > span{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-right:4px}
+.tbtn{min-height:36px;border:1px solid var(--card-border);background:var(--dark-gray);border-radius:8px;padding:0 12px;font-size:13px;font-weight:600;transition:border-color .15s,background-color .15s}
+.tbtn:hover{border-color:var(--primary)}
+.tbtn[aria-pressed="true"],.tbtn[aria-checked="true"]{background:var(--primary);border-color:var(--primary);color:var(--ink)}
+
+/* Moldura do admin (igual a painel-organizador.html) */
+.frame{margin:0 auto;width:100%;border:1px solid var(--card-border);border-radius:16px;padding:8px;background:var(--dark-gray)}
+.frame[data-size="tablet"]{max-width:838px}
+.app{border-radius:10px;overflow:hidden;background:var(--background);container-type:inline-size}
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--card-border)}
+.topbar b{font-size:15px}
+.topbar span{color:var(--muted);font-size:12px}
+.tabs{display:flex;gap:8px;overflow-x:auto;border-bottom:1px solid var(--card-border);padding:0 20px;scrollbar-width:none}
+.tab{border:0;border-bottom:2px solid transparent;background:none;padding:10px 14px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);white-space:nowrap}
+.tab[aria-current="page"]{border-bottom-color:var(--primary);color:var(--white)}
+.content{padding:20px;display:grid;gap:20px}
+
+.panel{border:1px solid var(--card-border);background:var(--card);border-radius:12px;padding:20px;display:grid;gap:16px;min-width:0}
+.ph{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:10px}
+.ph .eb{font-size:12px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--primary)}
+.ph h3{margin-top:4px;font-size:18px;font-weight:700;text-transform:uppercase}
+.ph .aside{font-size:12.5px;color:var(--muted);max-width:56ch}
+.muted{color:var(--muted)}
+.small{font-size:12px}
+.sbtn{display:inline-flex;align-items:center;gap:6px;min-height:36px;border:1px solid var(--card-border);background:var(--dark-gray);border-radius:6px;padding:0 12px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--white);transition:border-color .15s;white-space:nowrap;text-decoration:none}
+.sbtn:hover:not(:disabled){border-color:var(--primary)}
+.sbtn.pri{background:var(--primary);border-color:var(--primary);color:var(--ink)}
+.sbtn.pri:hover:not(:disabled){background:var(--primary-hover)}
+@container (max-width:900px){.sbtn{min-height:44px}}
+svg.i{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.chip{display:inline-flex;align-items:center;gap:4px;border:1px solid;border-radius:999px;padding:4px 10px;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;white-space:nowrap}
+.c-up{border-color:color-mix(in srgb,var(--up) 60%,transparent);color:var(--up)}
+.c-pri{border-color:color-mix(in srgb,var(--primary) 60%,transparent);color:var(--primary)}
+.c-down{border-color:color-mix(in srgb,var(--down) 60%,transparent);color:var(--down)}
+.c-mut{border-color:var(--card-border);color:var(--muted)}
+.c-fg{border-color:var(--muted-soft);color:var(--foreground)}
+.notice{border:1px solid var(--card-border);background:var(--dark-gray);border-radius:8px;padding:10px 12px;font-size:12.5px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.notice.warn{border-color:var(--down)}
+.notice.warn b{color:var(--down)}
+.notice.guide{border-color:var(--primary)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* Barra de ondas e atualização */
+.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.seg{display:flex;flex-wrap:wrap;border:1px solid var(--card-border);border-radius:8px;overflow:hidden}
+.seg button{border:0;border-right:1px solid var(--card-border);border-bottom:2px solid transparent;background:var(--dark-gray);min-height:44px;padding:4px 12px;font-size:12px;font-weight:700;color:var(--muted);text-align:left;display:grid;gap:1px}
+.seg button:last-child{border-right:0}
+.seg button .s{font-size:11px;font-weight:600}
+.seg button[aria-pressed="true"]{background:var(--elevated);color:var(--white);border-bottom-color:var(--primary)}
+.seg .n{font-family:var(--font-num);color:var(--primary)}
+.upd{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--muted);flex-wrap:wrap}
+.wavehead{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:13px}
+.wavehead b{color:var(--white);font-size:14px}
+
+/* Alertas */
+.alerts{display:grid;gap:10px}
+.al{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:start;border:1px solid var(--primary);border-left-width:4px;background:var(--dark-gray);border-radius:10px;padding:12px 14px}
+.al svg.i{width:18px;height:18px;color:var(--primary);margin-top:2px}
+.al .k{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--primary)}
+.al .t{font-size:14px;font-weight:600;color:var(--white)}
+.al .d{font-size:12.5px;color:var(--muted)}
+.al .acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+@container (max-width:900px){.al{grid-template-columns:auto minmax(0,1fr)}.al .acts{grid-column:1 / -1;justify-content:flex-start}}
+
+/* Resumo */
+.summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+@container (max-width:900px){.summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.stat{border:1px solid var(--card-border);background:var(--dark-gray);border-radius:12px;padding:14px;display:grid;gap:2px}
+.stat .v{font-family:var(--font-num);font-variant-numeric:tabular-nums;font-size:26px;font-weight:700;line-height:1.1}
+.stat .l{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.stat .d{font-size:12px;color:var(--muted)}
+.stat.attn{border-color:var(--primary)}
+.stat.attn .v{color:var(--primary)}
+
+/* Estações: cartões altos (D20) */
+.sgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.stn{border:1px solid var(--card-border);background:var(--dark-gray);border-radius:12px;padding:14px;display:grid;gap:10px;align-content:start;scroll-margin-top:16px}
+.stn.attn{border-color:var(--primary)}
+.stn .top{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.stn .ord{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:28px;border:1px solid var(--card-border);border-radius:6px;font-family:var(--font-num);font-weight:700;font-size:13px;margin-right:8px;color:var(--white)}
+.stn .nm{display:flex;align-items:center}
+.stn .nm b{font-size:15px;color:var(--white)}
+.stn .tp{font-size:12px;color:var(--muted);margin-top:2px}
+.kv{display:flex;justify-content:space-between;align-items:baseline;gap:10px;border-top:1px solid var(--card-border);padding-top:8px}
+.kv span{font-size:12px;color:var(--muted)}
+.kv b{font-family:var(--font-num);font-size:18px;color:var(--white)}
+.kv b.attn{color:var(--primary)}
+.lab{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.list{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.list li{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:13px;border:1px solid var(--card-border);border-radius:8px;padding:6px 10px;min-height:36px}
+.list li .who{font-weight:700;color:var(--white)}
+.list li .sub{display:block;font-size:12px;color:var(--muted)}
+.list li.hot{border-color:var(--primary)}
+.list li .jl{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;min-width:0}
+.summary.s3{grid-template-columns:repeat(3,minmax(0,1fr))}
+@container (max-width:900px){.summary.s3{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.empty{font-size:13px;color:var(--muted)}
+.foot{font-size:12.5px;color:var(--muted);border-top:1px solid var(--card-border);padding-top:12px;max-width:100ch}
+
+/* Carregando */
+.sk{background:var(--elevated);border-radius:8px}
+@media (prefers-reduced-motion:no-preference){.sk{animation:pulse 1.4s ease-in-out infinite}}
+@keyframes pulse{50%{opacity:.55}}
+
+.legend{display:grid;gap:12px;border:1px solid var(--card-border);background:var(--card);border-radius:12px;padding:18px}
+.legend h2{font-size:18px;font-weight:800}
+.legend table{border-collapse:collapse;width:100%}
+.legend th,.legend td{text-align:left;vertical-align:top;padding:8px 10px;border-bottom:1px solid var(--card-border);font-size:13.5px}
+.legend th{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.legend code{font-family:var(--font-num);font-size:12px;background:var(--dark-gray);border:1px solid var(--card-border);border-radius:4px;padding:1px 5px}
+.legend ol,.legend ul{margin:0;padding-left:20px;display:grid;gap:6px}
+.decide{border-color:var(--primary)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc-head">
+  <span class="eyebrow">Maquete · Story 1.105</span>
+  <h1>Cobertura ao vivo</h1>
+  <p class="lead">Seção nova da aba "Súmula Fitness Race". O organizador vê, por onda, quais estações têm judge, quem está com quantos cartões e onde falta gente. <b>O painel só avisa</b>: nada aqui bloqueia a súmula, a abertura de cartões ou a largada (D3).</p>
+  <div class="pills">
+    <span class="pill">Aguardando aprovação do Luan</span>
+    <span class="pill">Atualiza a cada 15 s com a aba aberta</span>
+    <span class="pill">Sem tempo real</span>
+    <span class="pill">Atletas esperando = estimativa</span>
+    <span class="pill">Escala por onda (1.104)</span>
+    <span class="pill">Cartões altos, sem tabela (D20)</span>
+    <span class="pill">Sem escala: sem avisos (D40)</span>
+    <span class="pill">Judge fora da escala aparece (D41)</span>
+    <span class="pill">Dados fictícios</span>
+  </div>
+</header>
+
+<div class="toolbar" role="group" aria-label="Controles da maquete">
+  <div class="tgroup" role="radiogroup" aria-label="Estado" id="stateGroup"><span>Estado</span></div>
+  <div class="tgroup"><span>Largura</span>
+    <button type="button" class="tbtn" data-size="desktop" aria-pressed="true">Desktop</button>
+    <button type="button" class="tbtn" data-size="tablet" aria-pressed="false">Tablet (820 px)</button>
+  </div>
+</div>
+
+<div class="frame" id="frame" data-size="desktop">
+  <div class="app">
+    <div class="topbar"><b>Corrida Fictícia do Litoral</b><span>Fitness Race · 30/10/2026 · Gestor Exemplo</span></div>
+    <nav class="tabs" aria-label="Abas do evento">
+      <button type="button" class="tab">Informações Gerais</button>
+      <button type="button" class="tab">Categorias</button>
+      <button type="button" class="tab">Configuração do Percurso</button>
+      <button type="button" class="tab">Cronograma</button>
+      <button type="button" class="tab">Inscrições</button>
+      <button type="button" class="tab">Lançar Resultados</button>
+      <button type="button" class="tab">Leaderboard</button>
+      <button type="button" class="tab" aria-current="page">Súmula Fitness Race</button>
+    </nav>
+    <main class="content" id="content"></main>
+  </div>
+</div>
+
+<section class="legend" aria-labelledby="tx">
+  <h2 id="tx">Textos finais dos alertas</h2>
+  <p class="muted">Todos são avisos e nenhum bloqueia gravação, abertura de cartão ou largada (D3). Cada um nomeia a onda, a estação e o que fazer. Ordem na tela: a de baixo da tabela.</p>
+  <table>
+    <thead><tr><th>Alerta</th><th>Quando aparece</th><th>Texto</th><th>O que fazer (botão)</th></tr></thead>
+    <tbody id="legendRows"></tbody>
+  </table>
+  <p class="muted">Não é aviso: o selo neutro <b>"Fora da escala"</b> ao lado do judge que abriu cartão numa estação em que não foi escalado (D41). Sem escala, a lista da estação se chama "Judges com cartão aberto" e o selo não se repete.</p>
+  <p class="muted small">Entre chaves, o que vem dos dados: <code>{onda}</code> é o título da onda no Cronograma, <code>{estação}</code> o nome no percurso, <code>{n}</code> a estimativa de atletas esperando.</p>
+</section>
+
+<section class="legend decide" aria-labelledby="dc">
+  <h2 id="dc">Para o Luan aprovar</h2>
+  <ol>
+    <li><b>Posição:</b> "Cobertura ao vivo" é a primeira seção da aba, acima de Penalidades e Corridas, porque é a que se olha durante a prova.</li>
+    <li><b>Mesma estação, dois avisos:</b> com atletas esperando e sem judge, aparece só "Atletas sem judge" (ele já diz que falta judge); "Sem judge escalado" fica para quando ninguém espera.</li>
+    <li><b>Ordem dos alertas:</b> Atletas sem judge, Judges lotados, Cartão sem judge, Judge acima do limite, Sem judge escalado.</li>
+    <li><b>Leitura do pedido "mais de 2 atletas por judge":</b> virou "Judges lotados" (capacidade) e "Judge acima do limite" (dado inconsistente), como propõe a story.</li>
+    <li><b>"n de 2" do judge</b> conta os cartões abertos dele em qualquer onda (o limite da 1.103 é por pessoa), por isso o mesmo judge aparece lotado na onda 3 e na 4. Antes da largada a estação mostra só "Escalado".</li>
+    <li><b>Selos da estação:</b> só "Coberta" (verde) e "Atenção" (amarelo). Vermelho fica para falha de atualização.</li>
+    <li><b>Evento sem escala (D40):</b> somem todos os avisos, inclusive "Cartão sem judge" e "Judge acima do limite", e também os selos Coberta/Atenção e a estimativa de atletas esperando. Fica a orientação "Montar a escala" e o resumo do que já foi aberto: cartões, judges com cartão e estações com cartão. Cada estação leva o selo cinza "Sem escala". Um cartão solto aparece como dado ("sem judge desde…"), sem destaque.</li>
+    <li><b>Judge fora da escala (D41):</b> com escala, ele aparece na lista da estação com o selo neutro "Fora da escala" ao lado da contagem; não é aviso, não acende "Atenção" e não entra na contagem de "Judges escalados" (vai na linha de baixo, "+1 fora da escala"). Sem escala, todos estariam fora, então o selo não se repete em cada linha: a lista se chama "Judges com cartão aberto" e a orientação do topo explica uma vez. Assim nada vira alarme, porque a escala só orienta (D3).</li>
+  </ol>
+</section>
+
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var ICONS = {
+    alert: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+    refresh: '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
+    clock: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+    users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+    check: '<path d="M20 6 9 17l-5-5"/>',
+    cloudOff: '<path d="m2 2 20 20"/><path d="M5.782 5.782A7 7 0 0 0 9 19h8.5a4.5 4.5 0 0 0 1.307-.193"/><path d="M21.532 16.5A4.5 4.5 0 0 0 17.5 10h-1.79A7.008 7.008 0 0 0 10 5.07"/>',
+    arrow: '<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>',
+    list: '<path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/>'
+  };
+  function ic(n) { return '<svg class="i" viewBox="0 0 24 24" aria-hidden="true">' + ICONS[n] + '</svg>'; }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+
+  // Percurso da onda 3 (Women Pro e Men Pro). Sandbag Lunges só existe no
+  // percurso de Men Pro: percurso por categoria (D33). Dados fictícios.
+  var STATIONS = [
+    { k: 'skierg', n: 'SkiErg', tp: 'Ergômetro · 1.000 m' },
+    { k: 'sled-push', n: 'Sled Push', tp: 'Trenó · 4 trechos' },
+    { k: 'sled-pull', n: 'Sled Pull', tp: 'Trenó · 4 trechos' },
+    { k: 'burpee-broad-jump', n: 'Burpee Broad Jump', tp: 'Seções · 80 m' },
+    { k: 'rowing', n: 'Rowing', tp: 'Ergômetro · 1.000 m' },
+    { k: 'farmers-carry', n: 'Farmers Carry', tp: 'Seções · 4 voltas' },
+    { k: 'sandbag-lunges', n: 'Sandbag Lunges', tp: 'Seções · 4 voltas', only: 'Men Pro' },
+    { k: 'wall-ball', n: 'Wall Ball', tp: 'Contagem de reps · 100 reps', reps: true }
+  ];
+
+  // j: [nome, cartões ativos, (opcional) 'misto' = Wall Ball junto de outro]
+  // c: [atleta, situação, judge ou null, desde]
+  function W(o) { return o; }
+  var SCEN = {
+    live: {
+      waves: [
+        { id: 3, title: 'Onda 3 · Pro', planned: '08:40', start: '08:40:02', cats: 'Women Pro, Men Pro', escala: 'padrão', st: {
+          'skierg': { j: [['Judge Bia', 2]], c: [['Hugo Ensaio', 'em andamento · 2:10', 'Judge Bia']], w: 1 },
+          'sled-push': { j: [['Judge Paula', 2], ['Judge Caio', 2]], c: [['Ana Fictícia', '2 de 4 trechos', 'Judge Paula'], ['Bruno Exemplo', '1 de 4 trechos', 'Judge Paula'], ['Júlio Maquete', '3 de 4 trechos', 'Judge Caio'], ['Lia Exemplar', '1 de 4 trechos', 'Judge Caio'], ['Carla Teste', '2 de 4 trechos', null, '10:41']], w: 3 },
+          'sled-pull': { j: [], c: [], w: 4 },
+          'burpee-broad-jump': { j: [['Judge Rafa', 3]], c: [['Diego Modelo', 'em andamento', 'Judge Rafa'], ['Fábio Simulado', 'em andamento', 'Judge Rafa'], ['Igor Rascunho', 'em andamento', 'Judge Rafa']], w: 0 },
+          'rowing': { j: [], c: [], w: 0 },
+          'farmers-carry': { j: [['Judge Duda', 1], ['Judge Tito', 1, 'fora']], c: [['Elisa Amostra', '2 de 4 voltas', 'Judge Duda'], ['Kauã Exemplo', '1 de 4 voltas', 'Judge Tito']], w: 0 },
+          'sandbag-lunges': { j: [['Judge Enzo', 0]], c: [], w: 0 },
+          'wall-ball': { j: [['Judge Lia', 1], ['Judge Gil', 1]], c: [['Nina Teste', '64 de 100 reps', 'Judge Lia'], ['Otto Exemplo', '22 de 100 reps', 'Judge Gil']], w: 2 }
+        } },
+        { id: 4, title: 'Onda 4 · Doubles', planned: '09:00', start: '09:00:11', cats: 'Doubles Women', escala: 'padrão', st: {
+          'skierg': { j: [['Judge Bia', 2]], c: [['Gabi Protótipo e Íris Rascunho', 'em andamento', 'Judge Bia']], w: 0 },
+          'sled-push': { j: [['Judge Paula', 2], ['Judge Caio', 2]], c: [], w: 1 },
+          'sled-pull': { j: [], c: [], w: 0 },
+          'burpee-broad-jump': { j: [['Judge Rafa', 3]], c: [], w: 0 },
+          'rowing': { j: [], c: [], w: 0 },
+          'farmers-carry': { j: [['Judge Duda', 1]], c: [], w: 0 },
+          'wall-ball': { j: [['Judge Lia', 1], ['Judge Gil', 1]], c: [], w: 0 }
+        } },
+        { id: 5, title: 'Onda 5 · Women', planned: '09:20', start: null, cats: 'Women', escala: 'ajustada', st: {
+          'skierg': { j: [['Judge Bia', 0]], c: [], w: 0 },
+          'sled-push': { j: [['Judge Paula', 0], ['Judge Caio', 0]], c: [], w: 0 },
+          'sled-pull': { j: [], c: [], w: 0 },
+          'burpee-broad-jump': { j: [['Judge Rafa', 0]], c: [], w: 0 },
+          'rowing': { j: [['Judge Enzo', 0]], c: [], w: 0 },
+          'farmers-carry': { j: [['Judge Duda', 0]], c: [], w: 0 },
+          'wall-ball': { j: [['Judge Lia', 0], ['Judge Gil', 0]], c: [], w: 0 }
+        } }
+      ]
+    }
+  };
+  // Tudo coberto: mesma onda 3, com judge em toda estação e folga.
+  SCEN.ok = { waves: [
+    { id: 3, title: 'Onda 3 · Pro', planned: '08:40', start: '08:40:02', cats: 'Women Pro, Men Pro', escala: 'padrão', st: {
+      'skierg': { j: [['Judge Bia', 1]], c: [['Hugo Ensaio', 'em andamento · 2:10', 'Judge Bia']], w: 0 },
+      'sled-push': { j: [['Judge Paula', 2], ['Judge Caio', 1]], c: [['Ana Fictícia', '2 de 4 trechos', 'Judge Paula'], ['Bruno Exemplo', '1 de 4 trechos', 'Judge Paula'], ['Júlio Maquete', '3 de 4 trechos', 'Judge Caio']], w: 0 },
+      'sled-pull': { j: [['Judge Hana', 1]], c: [['Carla Teste', '1 de 4 trechos', 'Judge Hana']], w: 0 },
+      'burpee-broad-jump': { j: [['Judge Rafa', 2]], c: [['Diego Modelo', 'em andamento', 'Judge Rafa'], ['Fábio Simulado', 'em andamento', 'Judge Rafa']], w: 0 },
+      'rowing': { j: [['Judge Ivo', 0]], c: [], w: 0 },
+      'farmers-carry': { j: [['Judge Duda', 1], ['Judge Tito', 1, 'fora']], c: [['Elisa Amostra', '2 de 4 voltas', 'Judge Duda'], ['Kauã Exemplo', '1 de 4 voltas', 'Judge Tito']], w: 0 },
+      'sandbag-lunges': { j: [['Judge Enzo', 0]], c: [], w: 0 },
+      'wall-ball': { j: [['Judge Lia', 1], ['Judge Gil', 0], ['Judge Kim', 0]], c: [['Nina Teste', '64 de 100 reps', 'Judge Lia']], w: 1 }
+    } },
+    SCEN.live.waves[1], SCEN.live.waves[2]
+  ] };
+  SCEN.ok.waves[1] = JSON.parse(JSON.stringify(SCEN.live.waves[1]));
+  SCEN.ok.waves[1].st['sled-pull'].j = [['Judge Hana', 0]];
+  SCEN.ok.waves[1].st['rowing'].j = [['Judge Ivo', 0]];
+  SCEN.ok.waves[1].st['burpee-broad-jump'].j = [['Judge Rafa', 0]];
+  SCEN.ok.waves[2] = JSON.parse(JSON.stringify(SCEN.live.waves[2]));
+  SCEN.ok.waves[2].st['sled-pull'].j = [['Judge Hana', 0]];
+  // Evento sem escala: ninguém escalado; judges abriram cartões mesmo assim (D3).
+  SCEN.none = { waves: SCEN.live.waves.map(function (w) {
+    var c = JSON.parse(JSON.stringify(w));
+    Object.keys(c.st).forEach(function (k) { c.st[k].j = []; });
+    c.escala = 'nenhuma';
+    return c;
+  }) };
+  SCEN.none.waves[0].st['burpee-broad-jump'].c = SCEN.none.waves[0].st['burpee-broad-jump'].c.slice(0, 2);
+
+  var STATES = [
+    ['ok', 'Tudo coberto', 'ok', 3],
+    ['live', 'Alertas ao vivo', 'live', 3],
+    ['prep', 'Onda que não largou', 'live', 5],
+    ['other', 'Outra onda (Doubles)', 'live', 4],
+    ['none', 'Evento sem escala', 'none', 3],
+    ['loading', 'Carregando', 'live', 3],
+    ['fail', 'Falha ao atualizar', 'live', 3]
+  ];
+
+  var ui = { state: 'live', scen: 'live', wave: 3, size: 'desktop', time: '10:44:12' };
+
+  function limitOf(stn) { return stn.reps ? 1 : 2; }
+  function stationsOf(w) { return STATIONS.filter(function (s) { return w.st[s.k]; }); }
+
+  // Mesma regra que a função pura buildRaceCoverage vai aplicar (AC3, AC4).
+  // Judges que abriram cartão na estação, lidos dos cartões (evento sem escala: todos fora dela, D41).
+  function judgesFromCards(cs) {
+    var m = {}, order = [];
+    cs.forEach(function (c) { if (!c[2]) return; if (!(c[2] in m)) { m[c[2]] = 0; order.push(c[2]); } m[c[2]] += 1; });
+    return order.map(function (n) { return [n, m[n], 'fora']; });
+  }
+  function isFora(j) { return j[2] === 'fora'; }
+
+  function analyse(w, scenId) {
+    var started = !!w.start, alerts = [], stn = [], none = scenId === 'none';
+    stationsOf(w).forEach(function (s, idx) {
+      var d = w.st[s.k], lim = limitOf(s);
+      var escalados = d.j.filter(function (j) { return !isFora(j); }), noJudge = !escalados.length;
+      var wait = started && !none ? d.w : 0;
+      var flags = [];
+      // Sem escala, nenhum aviso: nem os que dependem dela, nem cartão sem judge, nem acima do limite (D40).
+      if (!none) {
+        if (started && wait > 0 && noJudge && !d.c.some(function (c) { return c[2]; })) flags.push('semJudgeAtletas');
+        else if (noJudge) flags.push('semEscala');
+        if (wait > 0 && escalados.length && escalados.every(function (j) { return j[1] >= lim; })) flags.push('lotados');
+        d.c.forEach(function (c) { if (!c[2]) flags.push('cartaoSem:' + c[0] + ':' + c[3]); });
+        if (started) d.j.forEach(function (j) { if (j[1] > lim) flags.push('acima:' + j[0] + ':' + j[1]); });
+      }
+      stn.push({ s: s, d: d, ord: idx + 1, wait: wait, flags: flags, lim: lim, judges: none ? judgesFromCards(d.c) : d.j });
+      flags.forEach(function (f) { alerts.push({ f: f, s: s, d: d, wait: wait, lim: lim }); });
+    });
+    return { stn: stn, alerts: alerts };
+  }
+
+  var ORDER = ['semJudgeAtletas', 'lotados', 'cartaoSem', 'acima', 'semEscala'];
+  function kindOf(f) { return f.split(':')[0]; }
+
+  function waitTxt(n) { return 'cerca de ' + n + (n === 1 ? ' atleta esperando' : ' atletas esperando'); }
+  function alertHtml(a, w) {
+    var kind = kindOf(a.f), parts = a.f.split(':'), onda = w.title.split(' · ')[0];
+    var k, t, d, btn = '<a class="sbtn" href="#" data-act="escala">' + ic('list') + 'Abrir a escala da ' + onda.toLowerCase() + '</a>';
+    var see = '<a class="sbtn" href="#stn-' + a.s.k + '">' + ic('arrow') + 'Ver a estação</a>';
+    if (kind === 'semJudgeAtletas') {
+      k = 'Atletas sem judge';
+      t = onda + ' · ' + a.s.n + ': ' + waitTxt(a.wait) + ', sem judge escalado e sem cartão aberto.';
+      d = 'Escale um judge nesta estação ou peça a um judge livre que abra a estação.';
+    } else if (kind === 'semEscala') {
+      k = 'Sem judge escalado';
+      t = onda + ' · ' + a.s.n + ': nenhum judge na escala desta onda.';
+      d = 'Sem judge, a estação fica sem registro e sem split. Escale alguém se quiser conferir esta estação.';
+    } else if (kind === 'lotados') {
+      k = 'Judges lotados';
+      t = onda + ' · ' + a.s.n + ': ' + waitTxt(a.wait) + ' e ' + (a.d.j.length === 1 ? 'o judge escalado está' : 'os ' + a.d.j.length + ' judges escalados estão') + ' no limite (' + a.lim + ' de ' + a.lim + (a.s.reps ? ': o Wall Ball é 1 atleta por judge' : '') + ').';
+      d = 'Escale mais um judge nesta estação.';
+    } else if (kind === 'cartaoSem') {
+      k = 'Cartão sem judge';
+      t = onda + ' · ' + a.s.n + ': o cartão de ' + parts[1] + ' está sem judge desde ' + parts[2] + ':' + parts[3] + '. Os registros seguem guardados.';
+      d = 'Peça a um judge da estação que assuma o cartão.';
+      btn = '';
+    } else if (kind === 'acima') {
+      k = 'Judge acima do limite';
+      t = onda + ' · ' + a.s.n + ': ' + parts[1] + ' está com ' + parts[2] + ' cartões abertos; o limite é 2.';
+      d = 'Peça ao judge que libere, solte ou dispense um cartão.';
+      btn = '';
+    }
+    return '<article class="al" role="listitem">' + ic('alert') + '<div><p class="k">' + k + '</p><p class="t">' + esc(t) + '</p><p class="d">' + esc(d) + '</p></div><div class="acts">' + btn + see + '</div></article>';
+  }
+
+  function judgeLi(j, lim, started, none) {
+    if (!started) return '<li><span class="who">' + esc(j[0]) + '</span><span class="chip c-mut">Escalado</span></li>';
+    var n = j[1];
+    // Sem escala: contagem neutra, sem cor de limite e sem selo repetido (D40, D41).
+    if (none) return '<li><span class="who">' + esc(j[0]) + '</span><span class="chip c-mut"><span class="num">' + n + '</span>' + (n === 1 ? ' cartão' : ' cartões') + '</span></li>';
+    var cls = n > lim ? 'c-down' : n >= lim ? 'c-pri' : 'c-up';
+    var lbl = n > lim ? 'acima do limite' : n >= lim ? 'no limite' : 'com vaga';
+    return '<li><span class="jl"><span class="who">' + esc(j[0]) + '</span>' + (isFora(j) ? '<span class="chip c-fg">Fora da escala</span>' : '') + '</span>' +
+      '<span class="chip ' + cls + '"><span class="num">' + n + ' de ' + lim + '</span>· ' + lbl + '</span></li>';
+  }
+  function cardLi(c, none) {
+    if (!c[2] && none) return '<li><span><span class="who">' + esc(c[0]) + '</span><span class="sub">' + esc(c[1]) + ' · sem judge desde <span class="num">' + c[3] + '</span></span></span><span class="small muted">Sem judge</span></li>';
+    if (!c[2]) return '<li class="hot"><span><span class="who">' + esc(c[0]) + '</span><span class="sub">' + esc(c[1]) + ' · solto às <span class="num">' + c[3] + '</span></span></span><span class="chip c-pri">Sem judge</span></li>';
+    return '<li><span><span class="who">' + esc(c[0]) + '</span><span class="sub">' + esc(c[1]) + '</span></span><span class="small muted">' + esc(c[2]) + '</span></li>';
+  }
+
+  function stationHtml(x, w, scenId) {
+    var s = x.s, d = x.d, attn = x.flags.length > 0, none = scenId === 'none';
+    var h = '<article class="stn' + (attn ? ' attn' : '') + '" id="stn-' + s.k + '" aria-labelledby="stn-h-' + s.k + '">';
+    h += '<div class="top"><div><div class="nm"><span class="ord">' + x.ord + '</span><b id="stn-h-' + s.k + '">' + s.n + '</b></div><p class="tp">' + s.tp + '</p></div>' +
+      (none ? '<span class="chip c-mut">Sem escala</span>' : attn ? '<span class="chip c-pri">Atenção</span>' : '<span class="chip c-up">Coberta</span>') + '</div>';
+    if (s.only) h += '<p><span class="chip c-fg">' + ic('users') + 'Só no percurso de ' + s.only + '</span></p>';
+    if (w.start && !none) h += '<div class="kv"><span>Atletas esperando (estimativa)</span><b class="' + (x.wait ? 'attn' : '') + '">' + (x.wait ? '≈ ' + x.wait : '0') + '</b></div>';
+    if (none) {
+      if (w.start) {
+        h += '<p class="lab">Judges com cartão aberto</p>';
+        h += x.judges.length ? '<ul class="list">' + x.judges.map(function (j) { return judgeLi(j, x.lim, true, true); }).join('') + '</ul>' : '<p class="empty">Nenhum judge abriu esta estação.</p>';
+      }
+    } else {
+      h += '<p class="lab">' + (w.start ? 'Judges · cartões abertos de ' + x.lim : 'Judges escalados') + '</p>';
+      h += x.judges.length ? '<ul class="list">' + x.judges.map(function (j) { return judgeLi(j, x.lim, !!w.start, false); }).join('') + '</ul>' : '<p class="empty">Nenhum judge escalado nesta onda.</p>';
+    }
+    if (w.start) {
+      h += '<p class="lab">Cartões abertos · ' + d.c.length + '</p>';
+      h += d.c.length ? '<ul class="list">' + d.c.map(function (c) { return cardLi(c, none); }).join('') + '</ul>' : '<p class="empty">Nenhum cartão aberto.</p>';
+    } else if (none) {
+      h += '<p class="empty">A onda ainda não largou.</p>';
+    }
+    if (!none) h += '<div><a class="sbtn" href="#" data-act="escala">' + ic('list') + 'Escala desta onda</a></div>';
+    return h + '</article>';
+  }
+
+  function waveSeg(scen, scenId) {
+    return '<div class="seg" role="group" aria-label="Filtrar por onda">' + scen.waves.map(function (w) {
+      var n = analyse(w, scenId).alerts.length;
+      var sub = (w.start ? 'largou às ' + w.start.slice(0, 5) : 'largada ' + w.planned + ' · não largou') + (scenId === 'none' ? '' : n ? ' · <span class="n">' + n + ' ' + (n === 1 ? 'aviso' : 'avisos') + '</span>' : ' · sem aviso');
+      return '<button type="button" data-wave="' + w.id + '" aria-pressed="' + (ui.wave === w.id) + '"><span>' + w.title + '</span><span class="s">' + sub + '</span></button>';
+    }).join('') + '</div>';
+  }
+
+  function render() {
+    var content = document.getElementById('content');
+    var scenId = ui.scen, scen = SCEN[scenId];
+    var w = scen.waves.filter(function (x) { return x.id === ui.wave; })[0] || scen.waves[0];
+    var h = '<section class="panel" aria-labelledby="h-cov"><div class="ph"><div><p class="eb">Súmula Fitness Race</p><h3 id="h-cov">Cobertura ao vivo</h3></div><p class="aside">Só avisa: nada aqui bloqueia a súmula, a abertura de cartões ou a largada. A escala orienta; um judge fora dela ainda abre a estação em que estiver.</p></div>';
+
+    if (ui.state === 'loading') {
+      h += '<p class="notice" role="status" aria-live="polite">' + ic('refresh') + 'Carregando a cobertura…</p>';
+      h += '<div class="sk" style="height:44px;max-width:520px"></div><div class="summary">' + [1, 2, 3, 4].map(function () { return '<div class="sk" style="height:84px"></div>'; }).join('') + '</div>';
+      h += '<div class="sgrid">' + [1, 2, 3, 4, 5, 6].map(function () { return '<div class="sk" style="height:220px"></div>'; }).join('') + '</div></section>';
+      content.innerHTML = h + othersHtml(); bind(); return;
+    }
+
+    h += '<div class="bar">' + waveSeg(scen, scenId) + '<div class="upd"><span>' + ic('clock') + ' Atualizado às <span class="num" id="updTime">' + ui.time + '</span> · atualiza a cada 15 s com a aba aberta</span><button type="button" class="sbtn" data-act="refresh">' + ic('refresh') + 'Atualizar</button></div></div>';
+    if (ui.state === 'fail') h += '<p class="notice warn" role="alert">' + ic('cloudOff') + '<b>Não foi possível atualizar a cobertura.</b><span>Mostrando a leitura das <span class="num">' + ui.time + '</span>. Nova tentativa em 15 s.</span><button type="button" class="sbtn" data-act="refresh">' + ic('refresh') + 'Tentar de novo</button></p>';
+
+    var an = analyse(w, scenId);
+    h += '<p class="wavehead"><b>' + w.title + '</b><span class="muted">·</span>' +
+      (w.start ? '<span class="chip c-up">Largou às <span class="num">' + w.start + '</span></span>' : '<span class="chip c-mut">Aguardando largada · previsto ' + w.planned + '</span>') +
+      '<span class="muted">Categorias: ' + w.cats + '</span>' +
+      (w.escala === 'ajustada' ? '<span class="chip c-pri">Escala ajustada nesta onda</span>' : w.escala === 'padrão' ? '<span class="chip c-mut">Escala: segue o padrão</span>' : '') + '</p>';
+    if (!w.start && scenId !== 'none') h += '<p class="notice guide" role="note">' + ic('clock') + '<span><b>Visão de preparação.</b> A onda ainda não largou: confira a escala antes da largada. Atletas esperando e cartões aparecem depois da largada.</span></p>';
+
+    if (scenId === 'none') {
+      h += '<p class="notice guide" role="note">' + ic('list') + '<span><b>Este evento ainda não tem escala de judges.</b> Sem escala, o painel não dá avisos de cobertura: abaixo fica só o que os judges já abriram, e quem abriu cartão está fora da escala. Monte a escala para ver a cobertura de cada onda.</span><a class="sbtn pri" href="#" data-act="escala">' + ic('list') + 'Montar a escala</a></p>';
+    } else {
+      var al = an.alerts.slice().sort(function (a, b) { return ORDER.indexOf(kindOf(a.f)) - ORDER.indexOf(kindOf(b.f)); });
+      if (al.length) h += '<div class="alerts" role="list" aria-label="Avisos da ' + w.title + '">' + al.map(function (a) { return alertHtml(a, w); }).join('') + '</div>';
+      else h += '<p class="notice" role="status">' + ic('check') + '<span><b>Tudo coberto na ' + w.title.split(' · ')[0].toLowerCase() + '.</b> Toda estação tem judge escalado e ninguém espera judge lotado.</span></p>';
+    }
+
+    var all = an.stn, covered = all.filter(function (x) { return !x.flags.length; }).length;
+    var cards = all.reduce(function (a, x) { return a + x.d.c.length; }, 0);
+    if (scenId === 'none') {
+      // Só o resumo do que já foi aberto (D40): nada que dependa da escala.
+      var opened = {}; all.forEach(function (x) { x.judges.forEach(function (j) { opened[j[0]] = 1; }); });
+      var on = Object.keys(opened).length, withCard = all.filter(function (x) { return x.d.c.length; }).length;
+      h += '<div class="summary s3">' +
+        '<div class="stat"><span class="l">Cartões abertos</span><span class="v">' + (w.start ? cards : '—') + '</span><span class="d">' + (w.start ? 'nesta onda' : 'onda não largou') + '</span></div>' +
+        '<div class="stat"><span class="l">Judges com cartão</span><span class="v">' + (w.start ? on : '—') + '</span><span class="d">sem escala, todos fora dela</span></div>' +
+        '<div class="stat"><span class="l">Estações com cartão</span><span class="v">' + (w.start ? withCard + ' de ' + all.length : '—') + '</span><span class="d">na ordem do percurso</span></div>' +
+        '</div>';
+      h += '<div class="sgrid">' + all.map(function (x) { return stationHtml(x, w, scenId); }).join('') + '</div>';
+      h += '<p class="foot"><b>Sem escala:</b> o painel não estima atletas esperando nem dá avisos (D40). A lista de cada estação mostra quem abriu cartão nela, com quantos cartões. Quando a escala existir, quem abrir cartão sem estar nela aparece com o selo "Fora da escala" (D41).</p>';
+      h += '</section>';
+      content.innerHTML = h + othersHtml();
+      bind();
+      return;
+    }
+    var judges = {}, fora = {};
+    all.forEach(function (x) { x.d.j.forEach(function (j) { if (isFora(j)) { fora[j[0]] = 1; return; } judges[j[0]] = Math.max(judges[j[0]] || 0, j[1] >= x.lim ? 1 : 0); }); });
+    var jn = Object.keys(judges).length, jfull = Object.keys(judges).filter(function (k) { return judges[k]; }).length, fn = Object.keys(fora).length;
+    var loose = all.reduce(function (a, x) { return a + x.d.c.filter(function (c) { return !c[2]; }).length; }, 0);
+    var wait = all.reduce(function (a, x) { return a + x.wait; }, 0);
+    h += '<div class="summary">' +
+      '<div class="stat' + (covered < all.length ? ' attn' : '') + '"><span class="l">Estações cobertas</span><span class="v">' + covered + ' de ' + all.length + '</span><span class="d">' + (covered < all.length ? (all.length - covered) + ' com atenção' : 'todas cobertas') + '</span></div>' +
+      '<div class="stat"><span class="l">Judges escalados</span><span class="v">' + jn + '</span><span class="d">' + (!jn ? 'sem escala' : !w.start ? 'escalados para esta onda' : jfull + ' no limite') + (fn ? ' · +' + fn + ' fora da escala' : '') + '</span></div>' +
+      '<div class="stat' + (loose ? ' attn' : '') + '"><span class="l">Cartões abertos</span><span class="v">' + (w.start ? cards : '—') + '</span><span class="d">' + (w.start ? (loose ? loose + ' sem judge' : 'todos com judge') : 'onda não largou') + '</span></div>' +
+      '<div class="stat' + (wait ? ' attn' : '') + '"><span class="l">Atletas esperando</span><span class="v">' + (w.start ? '≈ ' + wait : '—') + '</span><span class="d">estimativa pelo que a súmula sabe</span></div>' +
+      '</div>';
+
+    h += '<div class="sgrid">' + all.map(function (x) { return stationHtml(x, w, scenId); }).join('') + '</div>';
+    h += '<p class="foot"><b>Sobre a estimativa:</b> o atleta conta como esperando a estação seguinte à última em que teve cartão; sem cartão nenhum, espera a primeira. Quem passou por uma estação sem judge só volta a aparecer na próxima estação com cartão, por isso o número é aproximado. Estações em ordem do percurso; a que só existe numa categoria diz qual. O "n de 2" do judge conta todos os cartões abertos dele, de qualquer onda (no Wall Ball, "n de 1"). Judge que abriu cartão sem estar na escala aparece com o selo "Fora da escala": é informação, não aviso (D41).</p>';
+    h += '</section>';
+    content.innerHTML = h + othersHtml();
+    bind();
+  }
+
+  function othersHtml() {
+    return '<p class="notice">' + ic('list') + '<span>Abaixo seguem, sem mudança, as seções já aprovadas: Sem tempo fechado, Penalidades, Corridas, Ondas, Escala de judges (1.104) e Judges do evento.</span></p>';
+  }
+
+  function bind() {
+    document.querySelectorAll('[data-wave]').forEach(function (b) {
+      b.addEventListener('click', function () { ui.wave = +b.dataset.wave; render(); var n = document.querySelector('[data-wave="' + ui.wave + '"]'); if (n) n.focus(); });
+    });
+    document.querySelectorAll('[data-act="refresh"]').forEach(function (b) { b.addEventListener('click', function () { tick(); }); });
+    document.querySelectorAll('[data-act="escala"]').forEach(function (b) { b.addEventListener('click', function (e) { e.preventDefault(); b.textContent = 'Abre a escala (Story 1.104)'; }); });
+  }
+
+  function tick() {
+    if (ui.state === 'fail' || ui.state === 'loading') return;
+    var p = ui.time.split(':').map(Number), s = p[0] * 3600 + p[1] * 60 + p[2] + 15;
+    ui.time = [Math.floor(s / 3600), Math.floor(s % 3600 / 60), s % 60].map(function (n) { return String(n).padStart(2, '0'); }).join(':');
+    var el = document.getElementById('updTime'); if (el) el.textContent = ui.time;
+  }
+  // Na maquete, como no AC5: a cada 15 s, só com a aba visível.
+  setInterval(function () { if (document.visibilityState === 'visible') tick(); }, 15000);
+
+  // Estados
+  var sg = document.getElementById('stateGroup');
+  STATES.forEach(function (s) {
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'tbtn'; b.setAttribute('role', 'radio'); b.dataset.state = s[0]; b.textContent = s[1];
+    sg.appendChild(b);
+  });
+  function go(id) {
+    var s = STATES.filter(function (x) { return x[0] === id; })[0];
+    ui.state = s[0]; ui.scen = s[2]; ui.wave = s[3]; ui.time = '10:44:12';
+    sg.querySelectorAll('[data-state]').forEach(function (b) { b.setAttribute('aria-checked', b.dataset.state === id ? 'true' : 'false'); });
+    render();
+  }
+  sg.addEventListener('click', function (e) { var b = e.target.closest('[data-state]'); if (b) go(b.dataset.state); });
+  document.querySelectorAll('[data-size]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.getElementById('frame').dataset.size = b.dataset.size;
+      document.querySelectorAll('[data-size]').forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+    });
+  });
+
+  // Tabela dos textos finais
+  var LEG = [
+    ['Atletas sem judge', 'A onda largou, há atletas esperando a estação e ela não tem judge escalado nem cartão aberto.', '{onda} · {estação}: cerca de {n} atletas esperando, sem judge escalado e sem cartão aberto.<br><span class="muted">Escale um judge nesta estação ou peça a um judge livre que abra a estação.</span>', 'Abrir a escala da onda · Ver a estação'],
+    ['Judges lotados', 'Há atletas esperando e todos os judges escalados da estação estão no limite (2 cartões; 1 no Wall Ball).', '{onda} · {estação}: cerca de {n} atletas esperando e os {j} judges escalados estão no limite (2 de 2).<br>No Wall Ball: "(1 de 1: o Wall Ball é 1 atleta por judge)".<br><span class="muted">Escale mais um judge nesta estação.</span>', 'Abrir a escala da onda · Ver a estação'],
+    ['Cartão sem judge', 'Tentativa ativa sem árbitro: solta pelo judge ou liberada pelo gestor.', '{onda} · {estação}: o cartão de {atleta} está sem judge desde {HH:MM}. Os registros seguem guardados.<br><span class="muted">Peça a um judge da estação que assuma o cartão.</span>', 'Ver a estação'],
+    ['Judge acima do limite', 'Judge com mais de 2 tentativas ativas, ou com Wall Ball aberto junto de outro cartão (dado antigo, liberação forçada ou dois aparelhos).', '{onda} · {estação}: {judge} está com {n} cartões abertos; o limite é 2.<br>Wall Ball misturado: "{onda} · Wall Ball: {judge} está com o Wall Ball aberto junto de outro cartão; o Wall Ball é conferido sozinho."<br><span class="muted">Peça ao judge que libere, solte ou dispense um cartão.</span>', 'Ver a estação'],
+    ['Sem judge escalado', 'Estação do percurso da onda sem judge na escala efetiva e sem ninguém esperando (também antes da largada).', '{onda} · {estação}: nenhum judge na escala desta onda.<br><span class="muted">Sem judge, a estação fica sem registro e sem split. Escale alguém se quiser conferir esta estação.</span>', 'Abrir a escala da onda · Ver a estação'],
+    ['Evento sem escala (orientação única)', 'Nenhuma linha de escala no evento. Substitui todos os avisos acima, inclusive Cartão sem judge e Judge acima do limite (D40). Fica o resumo do que já foi aberto.', 'Este evento ainda não tem escala de judges. Sem escala, o painel não dá avisos de cobertura: abaixo fica só o que os judges já abriram, e quem abriu cartão está fora da escala. Monte a escala para ver a cobertura de cada onda.', 'Montar a escala'],
+    ['Falha ao atualizar', 'A leitura periódica falhou. O último dado fica na tela.', 'Não foi possível atualizar a cobertura. Mostrando a leitura das {HH:MM:SS}. Nova tentativa em 15 s.', 'Tentar de novo']
+  ];
+  document.getElementById('legendRows').innerHTML = LEG.map(function (r) { return '<tr><td><b>' + r[0] + '</b></td><td>' + r[1] + '</td><td>' + r[2] + '</td><td>' + r[3] + '</td></tr>'; }).join('');
+
+  var hp = location.hash.replace(/^#/, '');
+  go(STATES.some(function (s) { return s[0] === hp; }) ? hp : 'live');
+})();
+</script>
+</body>
+</html>

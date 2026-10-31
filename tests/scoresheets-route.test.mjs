@@ -479,9 +479,11 @@ test('judges: o painel cria, atribui e remove judge em evento presencial pelas f
 
   await persist(MANAGER, 'createJudge', { eventId: 'ev-qualifier', name: 'Judge Q', email: 'q@example.com', password: 'senha-forte-1' });
   assert.equal(database.rpcCalls.at(-1).name, 'qualifier_create_and_assign_judge');
+  // Story 1.95 (ajuste deliberado): evento Fitness Race passou a aceitar judges (D3),
+  // pelas funções race_*; antes, aqui, era 400 "Judges são exclusivos de eventos Functional Fitness".
   const race = await persist(MANAGER, 'createJudge', { eventId: 'ev-race', name: 'Judge R', email: 'r@example.com', password: 'senha-forte-1' });
-  assert.equal(race.status, 400);
-  assert.match(race.body.error, /Judges são exclusivos de eventos Functional Fitness/);
+  assert.equal(race.status, 200, race.body.error);
+  assert.equal(database.rpcCalls.at(-1).name, 'race_create_and_assign_judge');
 });
 
 // ---------------------------------------------------------------------------

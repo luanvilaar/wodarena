@@ -1,0 +1,525 @@
+<title>Súmula Digital Fitness Race</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: coluna única de leitura, tabelas e diagrama em contêineres rolantes, fases em lista vertical com trilho */
+:root {
+  --bg: #F2F4F7;
+  --surface: #FFFFFF;
+  --ink: #14202E;
+  --muted: #556273;
+  --line: #D8DEE6;
+  --accent: #2457D6;
+  --accent-soft: #E3EBFB;
+  --ok: #17724A;
+  --ok-soft: #E0F2E9;
+  --warn: #8A5A00;
+  --warn-soft: #FBEFD2;
+  --off: #5B6675;
+  --off-soft: #E8EBEF;
+  --stop: #B3261E;
+  --stop-soft: #FBE4E2;
+  --font-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --font-body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0E141B;
+    --surface: #16202A;
+    --ink: #E6EBF1;
+    --muted: #9AA7B6;
+    --line: #2A3745;
+    --accent: #8FADFF;
+    --accent-soft: #1C2A47;
+    --ok: #5FD39A;
+    --ok-soft: #153A2A;
+    --warn: #F0C265;
+    --warn-soft: #3A2E12;
+    --off: #A3AEBB;
+    --off-soft: #222D38;
+    --stop: #FF8F86;
+    --stop-soft: #3E1D1B;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0E141B;
+  --surface: #16202A;
+  --ink: #E6EBF1;
+  --muted: #9AA7B6;
+  --line: #2A3745;
+  --accent: #8FADFF;
+  --accent-soft: #1C2A47;
+  --ok: #5FD39A;
+  --ok-soft: #153A2A;
+  --warn: #F0C265;
+  --warn-soft: #3A2E12;
+  --off: #A3AEBB;
+  --off-soft: #222D38;
+  --stop: #FF8F86;
+  --stop-soft: #3E1D1B;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.55;
+  padding-block: 32px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 960px; margin: 0 auto; display: flex; flex-direction: column; gap: 48px; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; line-height: 1.1; }
+h1 { font-size: clamp(40px, 7vw, 64px); font-weight: 700; letter-spacing: 0.005em; }
+h2 { font-size: 32px; font-weight: 700; }
+h3 { font-size: 21px; font-weight: 600; letter-spacing: 0.01em; }
+p { margin: 0; }
+a { color: var(--accent); }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 3px; }
+code, .mono { font-family: var(--font-mono); font-size: 0.85em; }
+code { background: var(--off-soft); padding: 1px 6px; border-radius: 4px; overflow-wrap: anywhere; }
+.kicker { font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.lead { font-size: 18px; max-width: 65ch; color: var(--ink); }
+.muted { color: var(--muted); }
+section { display: flex; flex-direction: column; gap: 20px; scroll-margin-top: 16px; }
+section > p { max-width: 70ch; }
+
+/* cabeçalho */
+header { display: flex; flex-direction: column; gap: 16px; }
+.banner {
+  display: flex; gap: 12px; align-items: flex-start;
+  border: 1px solid var(--warn); background: var(--warn-soft); color: var(--ink);
+  padding: 14px 16px; border-radius: 6px; max-width: 70ch;
+}
+.banner b { color: var(--warn); }
+.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: 15px; padding-top: 4px; }
+
+/* tabelas */
+.scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 620px; font-size: 15px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+th { font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); font-weight: 600; background: var(--bg); position: static; }
+tr:last-child td { border-bottom: 0; }
+td.num, th.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* chips */
+.chip {
+  display: inline-block; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 2px 8px; border-radius: 999px; white-space: nowrap; border: 1px solid transparent;
+}
+.chip.ok { background: var(--ok-soft); color: var(--ok); }
+.chip.adapt { background: var(--accent-soft); color: var(--accent); }
+.chip.later { background: var(--warn-soft); color: var(--warn); }
+.chip.off { background: var(--off-soft); color: var(--off); }
+.chip.stop { background: var(--stop-soft); color: var(--stop); }
+
+/* painéis */
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 20px; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 16px; }
+.grid2 > * { min-width: 0; }
+.diagram { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 16px; }
+.diagram pre { margin: 0; min-width: 640px; }
+
+/* fluxo de estados */
+.states { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.state { font-family: var(--font-mono); font-size: 12.5px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); }
+.state.dev { border-color: var(--stop); color: var(--stop); background: var(--stop-soft); }
+.arrow { color: var(--muted); }
+
+dl.tables { display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; margin: 0; }
+dl.tables dt { font-family: var(--font-mono); font-size: 13px; padding-top: 2px; }
+dl.tables dd { margin: 0; }
+@media (max-width: 560px) { dl.tables { grid-template-columns: 1fr; gap: 0; } dl.tables dd { margin-bottom: 10px; } }
+
+/* fases */
+.phases { display: flex; flex-direction: column; gap: 16px; list-style: none; margin: 0; padding: 0; }
+.phase { display: grid; grid-template-columns: 56px 1fr; gap: 16px; }
+.phase .tag {
+  font-family: var(--font-display); font-weight: 700; font-size: 26px; text-align: center;
+  background: var(--ink); color: var(--bg); border-radius: 6px; height: 48px; display: flex; align-items: center; justify-content: center;
+}
+.phase.mvp .tag { background: var(--accent); color: var(--surface); }
+.phase .body { min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.phase .head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.done { font-size: 15px; border-left: 3px solid var(--line); padding-left: 12px; }
+.done b { color: var(--muted); font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; display: block; }
+.stories { font-size: 15px; padding-left: 20px; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.stories li { padding-left: 2px; }
+.size { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+
+/* decisões */
+.decisions { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 16px; list-style: none; margin: 0; padding: 0; }
+.decisions li { min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.decisions .q { font-weight: 600; }
+.decisions .rec { font-size: 15px; border-top: 1px solid var(--line); padding-top: 10px; }
+.decisions .rec b { color: var(--accent); }
+.flag { border-color: var(--warn) !important; }
+
+ul.plain { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+ul.plain li { max-width: 72ch; }
+footer { font-size: 14px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 16px; }
+@media (max-width: 560px) { .phase { grid-template-columns: 44px 1fr; gap: 12px; } .phase .tag { font-size: 22px; height: 40px; } h2 { font-size: 28px; } }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<div class="wrap">
+
+<header>
+  <div class="kicker">WODArena · Proposta para aprovação · 30/10/2026</div>
+  <h1>Súmula Digital Fitness Race</h1>
+  <p class="lead">Árbitros registram a corrida de cada atleta estação por estação, o sistema aplica o regulamento sozinho e o resultado vai direto para o leaderboard. Tudo em cima da súmula digital que já existe para Functional Fitness.</p>
+  <div class="banner" role="note"><span><b>Nada foi implementado.</b> Este documento reúne o que os agentes @architect e @dev levantaram lendo o código. A implementação só começa depois da sua aprovação, nas fases abaixo.</span></div>
+  <nav class="toc" aria-label="Seções">
+    <a href="#como">Como funciona</a>
+    <a href="#reuso">O que já existe</a>
+    <a href="#referencia">Plano de referência</a>
+    <a href="#regras">Regulamento</a>
+    <a href="#fases">Fases</a>
+    <a href="#aceite">Critérios de aceite</a>
+    <a href="#decisoes">Decisões para você</a>
+    <a href="#riscos">Riscos</a>
+  </nav>
+</header>
+
+<section id="resumo">
+  <h2>Resumo</h2>
+  <div class="grid2">
+    <div class="panel">
+      <h3>O que será feito</h3>
+      <ul class="plain" style="margin-top:10px">
+        <li>Um regulamento versionado por evento (2025/26 e 2026/27), com os valores de penalidade configuráveis sem mexer em código.</li>
+        <li>Telas de árbitro para largada, chegada, Wall Ball e, depois, as estações 1 a 7 com duas raias por árbitro.</li>
+        <li>Penalidades calculadas pelo servidor, com decisão do organizador e DQ só por ele.</li>
+        <li>Tempo final igual ao tempo bruto mais as penalidades confirmadas, publicado na prova <code>TOTAL</code> que o leaderboard já lê.</li>
+      </ul>
+    </div>
+    <div class="panel">
+      <h3>O que muda no que existe</h3>
+      <ul class="plain" style="margin-top:10px">
+        <li>Functional Fitness não é tocado. A súmula nova usa rota e tabelas próprias.</li>
+        <li>O lançamento manual de tempo no painel continua valendo para quem não usar a súmula.</li>
+        <li>Quatro testes estáticos que hoje barram árbitros no Fitness Race precisam ser atualizados de propósito.</li>
+        <li>Nenhuma migration existente é editada.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="como">
+  <h2>Como funciona</h2>
+  <p>A unidade de registro é a <b>tentativa do atleta em uma estação</b>. Cada tentativa tem um árbitro escrevendo por vez, como acontece hoje com a súmula de Functional Fitness. Uma corrida inteira com vários árbitros escrevendo no mesmo log geraria conflito o tempo todo.</p>
+  <div class="diagram">
+<pre class="mermaid">
+flowchart LR
+  A["Árbitro no celular"] -->|"cada toque vira um evento com id do aparelho"| B["Fila local"]
+  B -->|"lote em ordem"| C["POST /api/race-sheets"]
+  C --> D[("Log da tentativa")]
+  C -->|"motor de regras recalcula"| E["Advertências e penalidades"]
+  E --> F{"Organizador confirma ou revoga"}
+  F --> G[("Prova TOTAL")]
+  G --> H["Leaderboard e splits"]
+</pre>
+  </div>
+  <h3>Estados de uma estação</h3>
+  <div class="states" aria-label="Estados da tentativa">
+    <span class="state">AGUARDANDO</span><span class="arrow">→</span>
+    <span class="state">EM_EXECUÇÃO</span><span class="arrow">→</span>
+    <span class="state">CONCLUÍDA_AGUARDANDO_CONFIRMAÇÃO</span><span class="arrow">→</span>
+    <span class="state">LIBERADO</span>
+  </div>
+  <div class="states" aria-label="Desvios">
+    <span class="muted" style="font-size:14px">Desvios:</span>
+    <span class="state dev">SAIU_INCOMPLETO</span>
+    <span class="state dev">REFAZER</span>
+    <span class="state dev">DQ_PROPOSTO</span><span class="arrow">→</span>
+    <span class="state dev">DQ_CONFIRMADO (só organizador)</span>
+    <span class="state dev">DNF</span>
+  </div>
+
+  <h3>Tabelas novas</h3>
+  <p class="muted">Todas seguem o padrão das súmulas atuais: RLS ligada, sem policy, acesso só pelo servidor com service role.</p>
+  <div class="panel">
+    <dl class="tables">
+      <dt>race_rulesets</dt><dd>Regulamento do evento, versionado. Trava no primeiro uso; mudar cria versão nova.</dd>
+      <dt>race_runs</dt><dd>A corrida do atleta: onda, largada, chegada, tempo bruto, penalidades, tempo oficial, origem do tempo.</dd>
+      <dt>race_attempts</dt><dd>Atleta × estação: raia, árbitro, estado, progresso calculado pelo servidor.</dd>
+      <dt>race_attempt_events</dt><dd>Log só de inclusão, com <code>seq</code> e <code>client_event_id</code> únicos. Reenviar um lote não duplica nada. Desfazer cria um evento de reversão.</dd>
+      <dt>race_infractions</dt><dd>Advertência, penalidade, proposta de DQ ou refazer, com status pendente, confirmada, revogada ou cancelada.</dd>
+      <dt>race_decisions</dt><dd>Trilha de auditoria das decisões do organizador, com valores antes e depois.</dd>
+      <dt>race_heat_marks</dt><dd>Largada oficial de cada onda.</dd>
+      <dt>race_judge_assignments</dt><dd>Fase 2. Árbitro × estação × raias × janela de tempo, para validar a escala e permitir rodízio.</dd>
+      <dt>race_bibs</dt><dd>Fase 2. Número de peito por evento, sem alterar a tabela de atletas.</dd>
+    </dl>
+  </div>
+</section>
+
+<section id="reuso">
+  <h2>O que já existe e será reaproveitado</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>Peça</th><th>Onde está</th><th>Uso no Fitness Race</th></tr></thead>
+    <tbody>
+      <tr><td>Log só de inclusão com id gerado no aparelho</td><td><code>20261017120000_scoresheets.sql</code>, <code>serverScoresheets.ts</code></td><td><span class="chip adapt">Adaptar</span> mesmo algoritmo de <code>fromSeq</code> e reenvio, em tabelas por estação</td></tr>
+      <tr><td>Fila local e texto de sincronização</td><td><code>sheetSync.ts</code>, <code>useSheetSync.ts</code></td><td><span class="chip ok">Reutilizar</span> uma fila por cartão</td></tr>
+      <tr><td>Toque, segurar, vibração, debounce</td><td><code>useTapHold.ts</code></td><td><span class="chip ok">Reutilizar</span> contador de trechos e botão REP</td></tr>
+      <tr><td>Casca da quadra, tela acesa, botões grandes</td><td><code>CourtShell.tsx</code>, <code>CourtSheet.tsx</code></td><td><span class="chip ok">Reutilizar</span></td></tr>
+      <tr><td>Acesso do árbitro e gestor válido</td><td><code>serverSheetAccess.ts</code></td><td><span class="chip adapt">Adaptar</span> arquivo novo, sem afrouxar a trava de Functional Fitness</td></tr>
+      <tr><td>Ondas</td><td><code>event_schedule</code>, itens <code>kind: 'heat'</code></td><td><span class="chip ok">Reutilizar</span> a onda já é uma bateria</td></tr>
+      <tr><td>Percurso por categoria</td><td><code>fitnessRacing.ts</code>, <code>divisions.course_layout</code></td><td><span class="chip ok">Reutilizar</span> como catálogo de estações; vira gerador de preset</td></tr>
+      <tr><td>Ranking e splits públicos</td><td><code>leaderboardStandings.ts</code>, <code>Leaderboard.tsx</code></td><td><span class="chip ok">Reutilizar</span> basta publicar o tempo oficial na prova <code>TOTAL</code></td></tr>
+      <tr><td>Harness de testes de rota com banco falso</td><td><code>tests/support/</code></td><td><span class="chip ok">Reutilizar</span></td></tr>
+    </tbody>
+  </table></div>
+  <p class="muted">Não há Supabase Realtime nem WebSocket no projeto. As telas ao vivo usam consulta periódica, como o telão e o quadro de baterias já fazem.</p>
+</section>
+
+<section id="referencia">
+  <h2>O plano de referência: o que entra e o que fica de fora</h2>
+  <p>O <code>planonovo.md</code> descreve uma operação de grande porte. Para eventos locais, com um organizador, poucos árbitros e internet instável, foi feita esta triagem.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>Ideia do plano</th><th>Decisão</th><th>Por quê</th></tr></thead>
+    <tbody>
+      <tr><td>Registro só de inclusão, desfazer como reversão</td><td><span class="chip ok">Entra</span></td><td>Já é o modelo das súmulas atuais, testado e em produção.</td></tr>
+      <tr><td>Motor de regras versionado, advertência e 15 s</td><td><span class="chip ok">Entra</span></td><td>Núcleo do módulo. Não existe nada parecido hoje.</td></tr>
+      <tr><td>Contador de Wall Ball com trava em 100 e motivos de no-rep</td><td><span class="chip adapt">Adaptar</span></td><td>O gesto de REP e desfazer já existe. Faltam motivos e trava.</td></tr>
+      <tr><td>Estação por tipo: ergômetro, sled, seções, reps</td><td><span class="chip adapt">Adaptar</span></td><td>Contadores simples sobre o que a súmula já faz.</td></tr>
+      <tr><td>Duas raias por árbitro e validação da escala</td><td><span class="chip adapt">Fase 2</span></td><td>Exige a tabela de escala. Validação no servidor e no banco.</td></tr>
+      <tr><td>Doubles em um cartão só</td><td><span class="chip adapt">Fase 2</span></td><td>A dupla já é um único atleta com membros. Falta marcar qual parceiro trabalha.</td></tr>
+      <tr><td>Head Judge com tela de despacho</td><td><span class="chip later">Fase 3</span></td><td>Com um organizador e poucos árbitros, o próprio organizador despacha.</td></tr>
+      <tr><td>Painel ao vivo, splits públicos, telão</td><td><span class="chip later">Fase 3</span></td><td>Depois que o registro estiver estável em evento real.</td></tr>
+      <tr><td>Revezamento e Adaptive</td><td><span class="chip later">Fase 4</span></td><td>Revezamento mexe em equipe e categoria. Adaptive não tem regra definida no plano.</td></tr>
+      <tr><td>Offline completo e exportação com hash</td><td><span class="chip later">Fase 4</span></td><td>Maior custo e maior risco. Precisa de teste em aparelho real.</td></tr>
+      <tr><td>Integração com chip</td><td><span class="chip later">Fase 4</span></td><td>Importação por CSV, sem integração ao vivo.</td></tr>
+      <tr><td>WebSocket em tempo real</td><td><span class="chip off">Fora</span></td><td>A autenticação é própria e as tabelas são fechadas ao anon. Consulta periódica basta.</td></tr>
+      <tr><td>Event sourcing completo</td><td><span class="chip off">Fora</span></td><td>Log mais estado calculado pelo servidor já resolve e deixa a leitura barata.</td></tr>
+      <tr><td>Resolução de conflito por papel</td><td><span class="chip off">Fora</span></td><td>Cada tentativa tem um único árbitro escrevendo, então o conflito não ocorre.</td></tr>
+      <tr><td>NFC e sensor de alvo digital</td><td><span class="chip off">Fora</span></td><td>Fora da realidade de evento local. QR de número de peito fica opcional na fase 3.</td></tr>
+      <tr><td>Gerador automático de escala e mapa ao vivo</td><td><span class="chip off">Fora</span></td><td>No começo, só calcular quantos árbitros são necessários e validar a escala.</td></tr>
+      <tr><td>PDF assinado</td><td><span class="chip off">Reduzido</span></td><td>CSV e PDF com hash SHA-256, nome e data de fechamento. Sem certificado digital.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="regras">
+  <h2>Regulamento e penalidades</h2>
+  <p>O motor é uma função pura, coberta por testes. O regulamento define, por estação, quantas advertências valem, o catálogo de motivos e os segundos de cada um. Trocar de 2025/26 para 2026/27 muda os valores sem mudar código.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>Situação</th><th>2025/26</th><th>2026/27</th></tr></thead>
+    <tbody>
+      <tr><td>Estações 1 a 7</td><td colspan="2">1 advertência por estação. A partir da 2ª infração, de qualquer tipo, 15 s cada. Alguns motivos são penalidade imediata, configurável.</td></tr>
+      <tr><td>Wall Ball</td><td colspan="2">Sem advertência. 15 s por rep faltante ao sair. Magnésio: 2 min.</td></tr>
+      <tr><td>Sandbag fora dos ombros</td><td>15 s sem advertência; 2ª ocorrência é DQ</td><td>15 s por ocorrência</td></tr>
+      <tr><td>Trecho ou volta faltando</td><td>3 min por unidade</td><td>DQ por estação incompleta</td></tr>
+      <tr><td>Devolução incorreta de Farmers ou Sandbag</td><td colspan="2">30 s. Cancelada se o atleta corrigir antes de sair da Roxzone.</td></tr>
+      <tr><td>Carga errada em Farmers ou Lunges</td><td colspan="2">Estado REFAZER. Se não refizer, o árbitro propõe DQ.</td></tr>
+      <tr><td>Infrações gerais</td><td colspan="2">2 min. Ajuda externa: 2 ou 3 min. Estação fora de ordem: 3 min na 1ª e DQ na 2ª.</td></tr>
+      <tr><td>Doubles separados</td><td>1 min por trecho, máximo 3</td><td>Limite de 10 s entre parceiros nos tapetes</td></tr>
+    </tbody>
+  </table></div>
+  <p class="muted">Os valores vêm do plano de referência e precisam ser conferidos com o regulamento oficial antes de virarem preset.</p>
+</section>
+
+<section id="fases">
+  <h2>Fases</h2>
+  <p>Cada fase termina com algo que o organizador consegue usar. As stories seguem o ciclo normal do projeto e a numeração continua a partir da 1.93, já que a 1.92 está em andamento.</p>
+  <ol class="phases">
+    <li class="phase">
+      <div class="tag">F0</div>
+      <div class="body">
+        <div class="head"><h3>Fundação, sem tela</h3><span class="size">1 story · M</span></div>
+        <ul class="stories"><li>1.93 Regulamento versionado, motor de regras puro, presets 2025/26 e 2026/27 e percurso por evento</li></ul>
+        <div class="done"><b>Pronto quando</b>Os testes unitários cobrem advertência e 15 s, Wall Ball 94 de 100 igual a 90 s, devolução corrigida e troca de regulamento. Lint, typecheck e testes passam.</div>
+      </div>
+    </li>
+    <li class="phase mvp">
+      <div class="tag">F1</div>
+      <div class="body">
+        <div class="head"><h3>MVP operável</h3><span class="size">6 stories · 1 G, 4 M, 1 P</span> <span class="chip adapt">Primeiro uso em evento</span></div>
+        <ul class="stories">
+          <li>1.94 Migration, serviço do servidor, acesso do árbitro e rota <code>/api/race-sheets</code> <span class="size">G</span></li>
+          <li>1.95 Árbitros no evento Fitness Race: criar e atribuir <span class="size">P</span></li>
+          <li>1.96 Tela de largada da onda e de chegada <span class="size">M</span></li>
+          <li>1.97 Tela de Wall Ball em tela cheia, com trava em 100 e reps faltantes <span class="size">M</span></li>
+          <li>1.98 Painel do organizador: confirmar, revogar, decidir DQ <span class="size">M</span></li>
+          <li>1.99 Publicação na prova <code>TOTAL</code>, splits, ranking próprio do Race e trava contra sobrescrever pelo lançamento manual <span class="size">M</span></li>
+        </ul>
+        <div class="done"><b>Pronto quando</b>Uma onda é registrada, o árbitro recebe erro 403 ao tentar confirmar DQ, reenviar um lote não duplica nada, o tempo oficial é o bruto mais as penalidades confirmadas e o leaderboard recalcula. Os 1238 testes atuais seguem passando.</div>
+      </div>
+    </li>
+    <li class="phase">
+      <div class="tag">F2</div>
+      <div class="body">
+        <div class="head"><h3>Estações 1 a 7 e escala</h3><span class="size">cerca de 5 stories</span></div>
+        <ul class="stories">
+          <li>Cartão duplo em paisagem, com ergômetro, sled e seções <span class="size">G</span></li>
+          <li>Advertência, infrações por estação e REFAZER <span class="size">M</span></li>
+          <li>Escala de árbitros com validação e cálculo de quantos são necessários <span class="size">M</span></li>
+          <li>Transferência de atleta e rodízio no meio da onda, com histórico <span class="size">M</span></li>
+          <li>Parceiro em atividade no Doubles <span class="size">P</span></li>
+        </ul>
+        <div class="done"><b>Pronto quando</b>Uma 3ª raia por árbitro, ou uma 2ª no Wall Ball, é recusada. A devolução corrigida cancela os 30 s. O rodízio preserva o log.</div>
+      </div>
+    </li>
+    <li class="phase">
+      <div class="tag">F3</div>
+      <div class="body">
+        <div class="head"><h3>Operação ao vivo</h3><span class="size">cerca de 4 stories</span></div>
+        <ul class="stories">
+          <li>Despacho do head judge, como papel por evento <span class="size">G</span></li>
+          <li>Painel ao vivo do organizador, com consulta periódica <span class="size">M</span></li>
+          <li>Splits públicos e leaderboard atualizando sozinho, sem dados pessoais <span class="size">P</span></li>
+          <li>Telão em modo corrida <span class="size">G</span></li>
+        </ul>
+        <div class="done"><b>Pronto quando</b>O telão mostra a onda ao vivo e o bootstrap público passa nos testes de dados pessoais.</div>
+      </div>
+    </li>
+    <li class="phase">
+      <div class="tag">F4</div>
+      <div class="body">
+        <div class="head"><h3>Completo</h3><span class="size">cerca de 6 stories</span></div>
+        <ul class="stories">
+          <li>Offline real: service worker, IndexedDB e ids de tentativa gerados no aparelho <span class="size">G</span></li>
+          <li>Revezamento <span class="size">G</span></li>
+          <li>Adaptive, importação de chip por CSV e janela de ajuste de 48 h</li>
+          <li>Exportação CSV e PDF com hash e fechamento da súmula pelo organizador</li>
+        </ul>
+        <div class="done"><b>Pronto quando</b>Uma onda inteira passa em modo avião sem duplicar nada, a exportação é reproduzível e o chip substitui o tempo com registro de decisão.</div>
+      </div>
+    </li>
+  </ol>
+</section>
+
+<section id="aceite">
+  <h2>Critérios de aceite do plano de referência</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>Critério</th><th>Fase</th><th>Como se prova</th></tr></thead>
+    <tbody>
+      <tr><td>Nenhum árbitro com 3 raias nas estações 1 a 7, nem 2 no Wall Ball</td><td class="num">F2</td><td>Teste de rota com erro 400</td></tr>
+      <tr><td>1ª infração é advertência, 2ª vira 15 s mesmo com outro motivo</td><td class="num">F0</td><td>Teste unitário do motor</td></tr>
+      <tr><td>100 reps travam o contador; sair com 94 gera 90 s</td><td class="num">F0 e F1</td><td>Teste do motor e da tela</td></tr>
+      <tr><td>Devolução de KB corrigida cancela os 30 s</td><td class="num">F0 e F2</td><td>Teste unitário do motor</td></tr>
+      <tr><td>Árbitro só propõe DQ; organizador confirma</td><td class="num">F1</td><td>Teste de rota com erro 403</td></tr>
+      <tr><td>Onda inteira em modo avião sincroniza sem duplicar</td><td class="num">F1 parcial, F4 completo</td><td>Teste de rota para o reenvio; aparelho real para o modo avião</td></tr>
+      <tr><td>Tempo final igual a tempo mais penalidades confirmadas, ranking em tempo real</td><td class="num">F1</td><td>Teste do motor e da publicação</td></tr>
+      <tr><td>Trocar 2025/26 por 2026/27 muda os valores sem mudar código</td><td class="num">F0</td><td>Teste unitário com os dois presets</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="decisoes">
+  <h2>Decisões para você</h2>
+  <p>Cada item traz o padrão que os agentes recomendam. Responder “ok em todas” aceita todos os padrões. Os dois primeiros e o sexto mudam o desenho, então vale olhar com atenção.</p>
+  <ol class="decisions">
+    <li>
+      <span class="kicker">1 · Tempo oficial sem chip</span>
+      <span class="q">Como medir o tempo total da corrida?</span>
+      <span class="rec"><b>Padrão:</b> largada da onda mais um operador na linha de chegada que toca no número do atleta. Os horários das estações servem para splits e auditoria. O organizador pode ajustar o tempo, com registro.</span>
+    </li>
+    <li>
+      <span class="kicker">2 · Confirmação de penalidades</span>
+      <span class="q">O organizador confirma cada penalidade, ou as de tempo valem na hora?</span>
+      <span class="rec"><b>Padrão:</b> penalidades de tempo nascem confirmadas e o organizador pode revogar por 48 h. DQ e as faixas “10 s até DQ” sempre exigem decisão manual. Confirmar uma a uma trava o ranking quando só há um organizador.</span>
+    </li>
+    <li>
+      <span class="kicker">3 · Cobertura de árbitros</span>
+      <span class="q">E se faltar árbitro em alguma estação?</span>
+      <span class="rec"><b>Padrão:</b> a súmula funciona só onde houver árbitro. Chegada e Wall Ball têm prioridade. As estações 1 a 7 são opcionais e geram infrações e splits.</span>
+    </li>
+    <li>
+      <span class="kicker">4 · Quem é o diretor de prova</span>
+      <span class="q">Existe Race Director e Head Judge separados do organizador?</span>
+      <span class="rec"><b>Padrão:</b> o diretor é o gestor dono do evento. Head judge entra na fase 3, como papel por evento, sem criar papel global.</span>
+    </li>
+    <li>
+      <span class="kicker">5 · Categorias no MVP</span>
+      <span class="q">Quais categorias entram primeiro?</span>
+      <span class="rec"><b>Padrão:</b> individuais e duplas. Revezamento e Adaptive na fase 4.</span>
+    </li>
+    <li class="flag">
+      <span class="kicker">6 · Cargas do Wall Ball feminino</span>
+      <span class="q">O código usa 6 kg no Open feminino e 9 kg no Pro feminino. O plano de referência diz 4 kg e 6 kg a 2,70 m. Qual vale?</span>
+      <span class="rec"><b>Padrão:</b> o preset 2026/27 segue o regulamento oficial que você confirmar. As cargas ficam gravadas por evento, e os eventos já criados não são alterados.</span>
+    </li>
+    <li>
+      <span class="kicker">7 · Identificação do atleta</span>
+      <span class="q">Como o árbitro escolhe o atleta na raia?</span>
+      <span class="rec"><b>Padrão:</b> lista da onda ou número de peito digitado, com número gerado por evento. QR na fase 3. NFC fica fora.</span>
+    </li>
+    <li>
+      <span class="kicker">8 · Cronometragem por chip</span>
+      <span class="q">Algum evento previsto usa chip?</span>
+      <span class="rec"><b>Padrão:</b> importação por CSV na fase 4, gravando a origem do tempo. Sem integração ao vivo.</span>
+    </li>
+    <li class="flag">
+      <span class="kicker">9 · Offline no MVP</span>
+      <span class="q">Aceita que o MVP suporte queda de internet só com a tela já aberta?</span>
+      <span class="rec"><b>Padrão:</b> sim. Hoje a súmula cria o id no servidor e não há service worker, então abrir a tela sem internet não funciona. Onda inteira em modo avião fica para a fase 4 e precisa de teste em aparelho real.</span>
+    </li>
+    <li>
+      <span class="kicker">10 · Nome nos presets</span>
+      <span class="q">Usar “HYROX” no produto?</span>
+      <span class="rec"><b>Padrão:</b> usar “Fitness Race” nos presets, porque HYROX é marca registrada. O painel hoje mostra “Fitness Racing (HYROX)”.</span>
+    </li>
+  </ol>
+</section>
+
+<section id="riscos">
+  <h2>Riscos e cuidados</h2>
+  <div class="grid2">
+    <div class="panel">
+      <h3>Segurança e dados</h3>
+      <ul class="plain" style="margin-top:10px">
+        <li>Tabelas novas com RLS ligada, sem policy e sem acesso para anon ou authenticated. Leitura e escrita só pelo servidor.</li>
+        <li>O público vê penalidade confirmada, motivo e tempo. Nome do árbitro, observações e quem lançou ficam fora do bootstrap público.</li>
+        <li>O limite de requisições fica em memória. Cartões de duas raias dobram o volume, então os envios serão agrupados em lotes curtos.</li>
+        <li>A sessão dura 12 h. Um dia longo de prova pode expirar no meio, e o caminho de entrar de novo sem perder registros será testado.</li>
+      </ul>
+    </div>
+    <div class="panel">
+      <h3>Compatibilidade</h3>
+      <ul class="plain" style="margin-top:10px">
+        <li>Testes que mudam de propósito: <code>scoresheets-route.test.mjs</code> (criar árbitro em evento Race) e os que fixam trechos de <code>admin/page.tsx</code>.</li>
+        <li>Testes que não podem mudar: os de telão e súmula de Functional Fitness. Por isso a trava atual não é afrouxada.</li>
+        <li><code>admin/page.tsx</code> tem quase 12 mil linhas. Telas novas entram em componentes próprios, e o admin recebe só a aba.</li>
+        <li>O lançamento manual de tempo pode sobrescrever um resultado publicado pela súmula. Entra uma trava, como já existe para Functional Fitness.</li>
+        <li>O ranking do Race usa só o tempo, sem pontos. A publicação terá recálculo próprio para o <code>rank</code> gravado não divergir da tela.</li>
+      </ul>
+    </div>
+    <div class="panel">
+      <h3>Aparelhos</h3>
+      <ul class="plain" style="margin-top:10px">
+        <li>No iPhone não há vibração no REP e o travamento de tela só existe em versões recentes.</li>
+        <li>Aba em segundo plano congela as novas tentativas de envio. A fila enviará ao voltar para a aba, e o indicador de sincronização fica sempre visível.</li>
+        <li>Teste em aparelho real antes do primeiro evento.</li>
+      </ul>
+    </div>
+    <div class="panel">
+      <h3>Tempo dos eventos</h3>
+      <ul class="plain" style="margin-top:10px">
+        <li>Hoje a súmula guarda segundos relativos ao relógio dela. O Race guardará também o horário do aparelho e o desvio para o servidor em cada lote, porque a hora de chegada do registro sai errada offline.</li>
+        <li>Splits de corrida e Roxzone saem da diferença entre estações. Separar os dois exige tapete ou chip.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="depois">
+  <h2>Depois da sua aprovação</h2>
+  <ol class="plain">
+    <li>Copio este plano para <code>docs/design/</code>, para ele ser citado nos critérios de aceite das stories.</li>
+    <li>@sm cria as stories da F0 e da F1, @po valida, @dev implementa e @qa faz o gate.</li>
+    <li>Você recebe o que foi feito e como testar ao fim de cada story, antes de seguir para a próxima.</li>
+    <li>O push continua exclusivo do @devops.</li>
+  </ol>
+</section>
+
+<footer>
+  Levantamento do @architect (Aria) e do @dev (Dex), somente leitura sobre o código. Linha de base: 1238 de 1238 testes passando.
+</footer>
+
+</div>

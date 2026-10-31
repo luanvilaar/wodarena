@@ -14,14 +14,22 @@ import { useApp } from '@/context/AppContext';
 
 const ALLOWED = new Set(['judge', 'manager', 'owner']);
 
+/** Texto da faixa acima do título (D26): o padrão é o de Functional Fitness. */
+export const COURT_DEFAULT_EYEBROW = 'Arbitragem na quadra';
+
 type CourtShellProps = {
   title: string;
   subtitle?: string;
   back?: { href: string; label: string };
+  /** Faixa acima do título (D26). As telas de Fitness Race passam a delas; Functional Fitness usa o padrão. */
+  eyebrow?: string;
+  /** Largura de tablet (Story 1.103): a tela de dois cartões põe os cartões lado a lado. */
+  wide?: boolean;
   children: ReactNode;
 };
 
-export function CourtShell({ title, subtitle, back, children }: CourtShellProps) {
+export function CourtShell({ title, subtitle, back, eyebrow = COURT_DEFAULT_EYEBROW, wide = false, children }: CourtShellProps) {
+  const width = wide ? 'max-w-6xl' : 'max-w-3xl';
   const { currentUser, isSessionHydrated, logout } = useApp();
   const router = useRouter();
 
@@ -48,7 +56,7 @@ export function CourtShell({ title, subtitle, back, children }: CourtShellProps)
   return (
     <div className="court-light min-h-screen">
       <header className="sticky top-0 z-30 border-b border-card-border bg-background/95 pt-[env(safe-area-inset-top)] backdrop-blur">
-        <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-3 px-4 py-3">
+        <div className={`mx-auto flex w-full ${width} items-center justify-between gap-3 px-4 py-3`}>
           <div className="flex min-w-0 items-center gap-2">
             {back && (
               <Link
@@ -60,7 +68,7 @@ export function CourtShell({ title, subtitle, back, children }: CourtShellProps)
               </Link>
             )}
             <div className="min-w-0">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-primary">Arbitragem na quadra</p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-primary">{eyebrow}</p>
               <h1 className="truncate text-lg font-extrabold leading-tight">{title}</h1>
               {subtitle && <p className="truncate text-xs font-semibold text-muted">{subtitle}</p>}
             </div>
@@ -78,7 +86,7 @@ export function CourtShell({ title, subtitle, back, children }: CourtShellProps)
           )}
         </div>
       </header>
-      <main className="mx-auto w-full max-w-3xl px-4 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">{content}</main>
+      <main className={`mx-auto w-full ${width} px-4 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]`}>{content}</main>
     </div>
   );
 }

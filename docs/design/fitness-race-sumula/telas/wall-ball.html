@@ -1,0 +1,623 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maquete · Wall Ball em tela cheia · Súmula Fitness Race (Story 1.97)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@500;600;700&family=Inter:wght@400;500;600;700;800&display=swap">
+<style>
+/* Maquete estática da Story 1.97. Tokens de src/app/globals.css: página no
+   escuro do app, tela do árbitro na casca clara de alto contraste da quadra
+   (.court-light, decisão 9 da E3); escuro só para comparação. Sem sombra, sem
+   gradiente, sem transition: all, animação só com prefers-reduced-motion livre. */
+:root{
+  --font-body:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --font-num:"IBM Plex Sans","JetBrains Mono",ui-monospace,Menlo,monospace;
+  --p-bg:#0b0e11; --p-card:#1e2329; --p-line:#2b3139; --p-fg:#eaecef; --p-muted:#929aa5; --p-accent:#fcd535; --p-gray:#181a20;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{background:var(--p-bg)}
+body{margin:0;background:var(--p-bg);color:var(--p-fg);font-family:var(--font-body);font-size:15px;line-height:1.5}
+h1,h2,h3{margin:0;line-height:1.2;text-wrap:balance}
+p{margin:0}
+button,textarea{font:inherit}
+button{cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+button:disabled{cursor:not-allowed}
+:focus-visible{outline:2px solid #3b82f6;outline-offset:3px}
+.num{font-family:var(--font-num);font-variant-numeric:tabular-nums}
+.wrap{max-width:1240px;margin:0 auto;padding:32px 16px 72px;display:grid;gap:36px}
+.eyebrow{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--p-accent)}
+.doc-head{display:grid;gap:12px}
+.doc-head h1{font-size:clamp(26px,4.5vw,38px);font-weight:800;letter-spacing:-.02em}
+.lead{max-width:78ch;color:var(--p-muted)}
+.pills{display:flex;flex-wrap:wrap;gap:8px}
+.pill{font-size:12px;font-weight:600;border:1px solid var(--p-line);background:var(--p-card);border-radius:999px;padding:6px 12px}
+.toolbar{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;border:1px solid var(--p-line);background:var(--p-card);border-radius:12px;padding:12px}
+.tgroup{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.tgroup > span{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--p-muted);margin-right:4px}
+.tbtn{min-height:36px;border:1px solid var(--p-line);background:var(--p-gray);color:var(--p-fg);border-radius:8px;padding:0 12px;font-size:13px;font-weight:600;transition:border-color .15s,background-color .15s}
+.tbtn:hover{border-color:var(--p-accent)}
+.tbtn[aria-selected="true"],.tbtn[aria-pressed="true"],.tbtn[aria-checked="true"]{background:var(--p-accent);border-color:var(--p-accent);color:#181a20}
+.stage{display:grid;grid-template-columns:minmax(0,390px) minmax(0,1fr);gap:28px;align-items:start}
+@media (max-width:860px){.stage{grid-template-columns:1fr}}
+.notes{display:grid;gap:14px;border:1px solid var(--p-line);background:var(--p-card);border-radius:12px;padding:18px}
+.notes h2{font-size:18px;font-weight:800}
+.notes ul{margin:0;padding-left:18px;display:grid;gap:6px}
+.notes .src{font-size:12.5px;color:var(--p-muted)}
+.notes code{font-family:var(--font-num);font-size:12px;background:var(--p-gray);border:1px solid var(--p-line);border-radius:4px;padding:2px 6px}
+.gallery{display:grid;gap:16px}
+.gallery h2{font-size:20px;font-weight:800}
+.gallery .sub{color:var(--p-muted);max-width:78ch}
+.ggrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:20px}
+.ggrid figure{margin:0;display:grid;gap:8px}
+.ggrid figcaption{font-size:13px;font-weight:700}
+.ggrid figcaption span{display:block;font-weight:500;color:var(--p-muted)}
+.ggrid .phone{height:780px}
+
+/* ===== Tela do árbitro ===== */
+.phone{width:100%;max-width:390px;height:800px;border:1px solid var(--p-line);border-radius:28px;overflow:hidden;position:relative}
+.court{
+  --bg:#ffffff; --fg:#0b0e11; --card:#f3f4f6; --line:#b9c0cb; --gray:#ffffff; --elev:#dde1e7; --muted:#3f4652;
+  --primary:#f5c518; --primary-h:#e0b100; --primary-text:#7a5c00; --primary-border:#b88f00; --ink:#0b0e11;
+  --up:#0a7d52; --on-up:#ffffff; --down:#b8243a; --on-down:#ffffff; --info:#1f5fd1;
+  background:var(--bg); color:var(--fg); color-scheme:light;
+  height:100%; display:flex; flex-direction:column; font-size:14px; position:relative;
+}
+.court[data-theme="dark"]{
+  --bg:#0b0e11; --fg:#eaecef; --card:#1e2329; --line:#2b3139; --gray:#181a20; --elev:#2b3139; --muted:#929aa5;
+  --primary:#fcd535; --primary-h:#f0b90b; --primary-text:#fcd535; --primary-border:#fcd535; --ink:#181a20;
+  --up:#0ecb81; --on-up:#181a20; --down:#f6465d; --on-down:#181a20; --info:#3b82f6;
+  color-scheme:dark;
+}
+.court :focus-visible{outline:2px solid var(--info);outline-offset:3px}
+.c-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.c-head .l{display:flex;align-items:center;gap:8px;min-width:0}
+.c-eyebrow{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--primary-text)}
+.c-title{font-size:17px;font-weight:800;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.c-sub{font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ibtn{display:flex;align-items:center;justify-content:center;gap:6px;min-height:44px;min-width:44px;border:1px solid var(--line);background:var(--gray);color:var(--fg);border-radius:8px;padding:0 10px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;flex-shrink:0}
+svg.i{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+svg.i.lg{width:26px;height:26px}
+.sync{display:flex;align-items:center;gap:8px;margin:8px 14px 0;border:1px solid;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:700}
+.sync.ok{border-color:var(--up);color:var(--up)}
+.sync.wait{border-color:var(--primary-border);color:var(--fg)}
+.sync.off{border-color:var(--down);color:var(--down)}
+@media (prefers-reduced-motion:no-preference){.sync .spin{animation:spin 1s linear infinite}}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.c-body{flex:1;min-height:0;overflow-y:auto;padding:10px 14px calc(12px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:10px}
+.strip{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border:1px solid var(--line);color:var(--muted);border-radius:999px;padding:4px 10px;white-space:nowrap}
+.chip.run{border-color:var(--primary-border);color:var(--primary-text)}
+.chip.ok{border-color:var(--up);color:var(--up)}
+.chip.down{border-color:var(--down);color:var(--down)}
+.chip.fg{color:var(--fg)}
+.counter{display:grid;justify-items:center;gap:2px;padding:4px 0 2px}
+.count{font-family:var(--font-num);font-variant-numeric:tabular-nums;font-weight:700;font-size:112px;line-height:.95;letter-spacing:-.03em}
+.count.locked{color:var(--up)}
+.of{font-size:15px;font-weight:700;color:var(--muted)}
+.bar{width:100%;height:8px;border-radius:999px;background:var(--elev);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--primary)}
+.bar.up i{background:var(--up)}
+@media (prefers-reduced-motion:no-preference){.bar i{transition:width .2s}}
+.lastline{min-height:20px;font-size:12.5px;font-weight:700;text-align:center;color:var(--fg)}
+.lastline .m{color:var(--muted);font-weight:600}
+
+.rep{flex:1;min-height:150px;width:100%;border:2px solid var(--primary-border);background:var(--primary);color:var(--ink);border-radius:18px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.rep .t{font-size:44px;font-weight:800;letter-spacing:.02em;display:flex;align-items:center;gap:10px}
+.rep .s{font-size:12.5px;font-weight:700}
+.rep.flash{background:var(--primary-h)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.row3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.btn{display:flex;align-items:center;justify-content:center;gap:6px;min-height:56px;border:1px solid var(--line);background:var(--gray);color:var(--fg);border-radius:12px;font-size:13.5px;font-weight:800;padding:0 8px;text-align:center;line-height:1.15}
+.btn:hover:not(:disabled){border-color:var(--primary-border)}
+.btn:disabled{opacity:.4}
+.btn.norep{min-height:64px;border:2px solid var(--down);color:var(--down);font-size:18px}
+.btn.big{min-height:64px;font-size:15px}
+.btn.sm{font-size:12.5px;flex-direction:column;gap:3px}
+.btn.danger{background:var(--down);border-color:var(--down);color:var(--on-down)}
+.btn.pri{background:var(--primary);border-color:var(--primary-border);color:var(--ink)}
+.hold{position:relative;overflow:hidden;flex:1;min-height:120px;width:100%;border:2px solid var(--up);background:var(--up);color:var(--on-up);border-radius:18px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-weight:800;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.hold .fill{position:absolute;inset:0;background:var(--fg);opacity:.22;transform:scaleX(0);transform-origin:left center}
+.hold.holding .fill{transform:scaleX(1);transition:transform 700ms linear}
+.hold .lbl{position:relative;display:flex;align-items:center;gap:8px;font-size:24px}
+.hold .sm{position:relative;font-size:12.5px;font-weight:700}
+@media (prefers-reduced-motion:reduce){.hold.holding .fill{transition:none}}
+.hold.exit{flex:none;min-height:76px;border:2px solid var(--primary-border);background:var(--gray);color:var(--fg)}
+.hold.exit .fill{background:var(--primary);opacity:1}
+.hold.exit .lbl{font-size:19px}
+.big-time.xl{font-size:48px}
+.locknote{display:flex;align-items:center;justify-content:center;gap:6px;font-size:12.5px;font-weight:800;color:var(--up)}
+.alert{border:2px solid;border-radius:12px;padding:10px 12px;display:grid;gap:3px}
+.alert.info{border-color:var(--primary-border);background:color-mix(in srgb,var(--primary) 12%,var(--bg))}
+.alert.up{border-color:var(--up);background:color-mix(in srgb,var(--up) 10%,var(--bg))}
+.alert.down{border-color:var(--down);background:color-mix(in srgb,var(--down) 8%,var(--bg))}
+.alert b{font-size:15px}
+.alert p{font-size:13px}
+.k{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.hint{font-size:12px;color:var(--muted);font-weight:600}
+.big-time{font-family:var(--font-num);font-variant-numeric:tabular-nums;font-size:32px;font-weight:700;line-height:1.05}
+
+/* Lista da onda */
+.ath{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:64px;width:100%;text-align:left;border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:12px;padding:10px 12px}
+.ath:hover:not(:disabled){border-color:var(--primary-border)}
+.ath:disabled{opacity:.75}
+.ath b{font-size:15px;display:block}
+.ath .meta{font-size:12px;color:var(--muted);font-weight:600}
+.ath.done{background:var(--bg)}
+.sec-t{font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;margin-top:6px}
+
+/* Folha inferior (NO REP, infração, saída, DQ) */
+.scrim{position:absolute;inset:0;background:color-mix(in srgb,var(--fg) 45%,transparent);z-index:5}
+.sheet{position:absolute;left:0;right:0;bottom:0;z-index:6;background:var(--bg);border-top:2px solid var(--line);border-radius:18px 18px 0 0;padding:14px 14px calc(14px + env(safe-area-inset-bottom));display:grid;gap:10px;max-height:82%;overflow-y:auto}
+.sheet h2{font-size:18px;font-weight:800}
+.sheet .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.reason{min-height:60px;border:2px solid var(--down);background:var(--gray);color:var(--fg);border-radius:12px;font-size:14px;font-weight:800;padding:8px 12px;line-height:1.2}
+.reason:hover{background:color-mix(in srgb,var(--down) 8%,var(--bg))}
+.infra{display:flex;justify-content:space-between;align-items:center;gap:8px;min-height:56px;width:100%;border:1px solid var(--line);background:var(--gray);color:var(--fg);border-radius:12px;padding:0 12px;font-size:14px;font-weight:700;text-align:left}
+.infra:hover{border-color:var(--primary-border)}
+.infra.first{border:2px solid var(--primary-border)}
+.infra .sec{font-family:var(--font-num);font-variant-numeric:tabular-nums;font-weight:700;color:var(--down);white-space:nowrap}
+.calc{border:2px solid var(--down);border-radius:12px;padding:12px;display:grid;gap:4px;text-align:center}
+.calc .big-time{color:var(--down)}
+label.lab{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+textarea{width:100%;min-height:96px;border:1px solid var(--line);background:var(--gray);color:var(--fg);border-radius:10px;padding:10px;font-size:15px;resize:vertical}
+textarea:focus-visible{outline:2px solid var(--info);outline-offset:1px}
+.quote{border-left:3px solid var(--down);padding:8px 12px;font-size:14px;font-weight:600}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc-head">
+  <span class="eyebrow">Maquete · Story 1.97</span>
+  <h1>Wall Ball em tela cheia</h1>
+  <p class="lead">Um árbitro por atleta, celular na mão, ginásio barulhento. É a tela que mais recebe toques na súmula e é ela que fecha o tempo da corrida: liberar o atleta no Wall Ball encerra o tempo (D1). A corrida final é só protocolo.</p>
+  <div class="pills">
+    <span class="pill">Aguardando aprovação do Luan</span>
+    <span class="pill">Número gigante de reps válidas</span>
+    <span class="pill">REP no polegar, NO REP com motivo</span>
+    <span class="pill">Trava em 100 · segurar para liberar</span>
+    <span class="pill">Sair antes das 100 não fecha o tempo (D22)</span>
+    <span class="pill">Propor DQ (D12)</span>
+    <span class="pill">Valores de penalidade a conferir</span>
+    <span class="pill">Dados fictícios</span>
+  </div>
+</header>
+
+<div class="toolbar" role="group" aria-label="Controles da maquete">
+  <div class="tgroup" role="tablist" aria-label="Estado da tela" id="stateTabs"><span>Estado</span></div>
+  <div class="tgroup" role="radiogroup" aria-label="Sincronização" id="syncGroup">
+    <span>Sincronização</span>
+    <button type="button" class="tbtn" role="radio" data-sync="ok" aria-checked="true">Salvo</button>
+    <button type="button" class="tbtn" role="radio" data-sync="wait" aria-checked="false">Pendente</button>
+    <button type="button" class="tbtn" role="radio" data-sync="off" aria-checked="false">Sem conexão</button>
+  </div>
+  <div class="tgroup"><span>Tema</span><button type="button" class="tbtn" id="themeBtn" aria-pressed="false">Escuro (comparação)</button></div>
+</div>
+
+<div class="stage">
+  <div class="phone" id="phone" aria-label="Tela proposta do árbitro do Wall Ball"></div>
+  <aside class="notes" id="notes" aria-live="polite"></aside>
+</div>
+
+<section class="gallery" aria-labelledby="g-title">
+  <h2 id="g-title">Todos os estados lado a lado</h2>
+  <p class="sub">Cópias estáticas para comparar. A tela do topo é interativa: toque REP, abra NO REP, desfaça, chegue a 100 e segure para liberar.</p>
+  <div class="ggrid" id="gallery"></div>
+</section>
+
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var ICONS = {
+    chevronLeft: '<path d="m15 18-6-6 6-6"/>',
+    logOut: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/>',
+    checkCircle: '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
+    check: '<path d="M20 6 9 17l-5-5"/>',
+    cloudOff: '<path d="m2 2 20 20"/><path d="M5.782 5.782A7 7 0 0 0 9 19h8.5a4.5 4.5 0 0 0 1.307-.193"/><path d="M21.532 16.5A4.5 4.5 0 0 0 17.5 10h-1.79A7.008 7.008 0 0 0 10 5.07"/>',
+    loader: '<path d="M21 12a9 9 0 1 1-6.219-8.56"/>',
+    x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+    undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11"/>',
+    alert: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+    door: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/>',
+    ban: '<circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/>',
+    lock: '<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+    flag: '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/>',
+    users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>'
+  };
+  function ic(n, c) { return '<svg class="i ' + (c || '') + '" viewBox="0 0 24 24" aria-hidden="true">' + ICONS[n] + '</svg>'; }
+
+  // Regulamento do evento (preset Fitness Race 2026/27, a conferir com o
+  // regulamento oficial). Na implementação estes dados vêm do snapshot.
+  var TOTAL = 100;
+  var NOREP_REASONS = ['Agachamento raso', 'Errou o alvo', 'Alvo errado', 'Não iniciou em pé', 'Pegou após quicar', 'Lançou com uma mão'];
+  var GENERAL = [
+    ['Magnésio no Wall Ball', 120],
+    ['Ajuda externa', 120],
+    ['Raia ou equipamento não atribuído', 120],
+    ['Magnésio fora do lugar', 120],
+    ['Arcos IN/OUT', 120],
+    ['Lixo no percurso', 120],
+    ['Cuspir', 120],
+    ['Se molhar com a água', 120]
+  ];
+  var EVENT = 'Corrida Fictícia do Litoral';
+  var SOLO = { name: 'Ana Fictícia', sub: 'Women Pro · Onda 3 · Box Exemplo Norte', load: '6 kg', target: 'alvo 2,70 m' };
+  var TEAM = { name: 'Gabi Protótipo e Íris Rascunho', sub: 'Doubles Women · Onda 4', load: '4 kg', target: 'alvo 2,70 m' };
+
+  var STATES = [
+    { id: 'list', label: 'Lista da onda', t: 'Escolher o atleta pela lista da onda' },
+    { id: 'count', label: 'Em andamento', t: '37 de 100, contando' },
+    { id: 'norep', label: 'NO REP aberto', t: 'Chips de motivo, 1 toque' },
+    { id: 'infra', label: 'Infração geral', t: 'Menu do regulamento, vale na hora' },
+    { id: 'locked', label: 'Trava em 100', t: 'Contador travado, segurar para liberar' },
+    { id: 'exit', label: 'Saída com 94', t: 'Orientar a completar; segurar para registrar' },
+    { id: 'exited', label: 'Saída registrada', t: 'Tempo segue correndo, faltam 6' },
+    { id: 'dq', label: 'Propor DQ', t: 'Motivo obrigatório' },
+    { id: 'dq2', label: 'Confirmar DQ', t: 'Confirmação antes de enviar' },
+    { id: 'team', label: 'Dupla', t: 'Um cartão por equipe' },
+    { id: 'released', label: 'Liberado', t: 'Tempo do atleta em destaque (D21)' }
+  ];
+
+  var NOTES = {
+    list: ['Lista da onda', [
+      'O árbitro escolhe o atleta que chegou à raia dele pela lista da onda (D7: número de peito só na F2, QR na F3). Cada linha tem nome, box e categoria.',
+      'Quem está com outro árbitro aparece com o nome dele e não abre, no padrão da súmula de FF ("Esta súmula está com…").',
+      'Concluídos ficam embaixo, separados: só quem foi liberado. Quem saiu antes das 100 continua na lista, com "Saiu · faltam N" (D22).',
+      'A dupla é uma linha só, com o selo "Dupla".'
+    ], 'AC1, AC12 · D7'],
+    count: ['Contando reps', [
+      'O número de reps válidas domina a tela (112 px, fonte numérica tabular) e mostra o total do percurso do evento: "de 100" vem do snapshot (D6). Carga e alvo também.',
+      'A área REP ocupa o espaço que sobra, na zona do polegar: toque registra na hora, sem esperar a rede, e vibra no Android.',
+      'NO REP e Desfazer último ficam logo abaixo, com 64 px. A última ação aparece em texto acima do REP para o árbitro conferir sem desviar o olho.',
+      'Infração geral, Atleta saiu e Propor DQ ficam na última linha, longe do REP, para não serem tocados por engano.',
+      'A tela pede para ficar acesa quando o aparelho permite (Wake Lock).'
+    ], 'AC2, AC3, AC5 · D6'],
+    norep: ['NO REP: motivo em 1 toque', [
+      'Os seis motivos vêm do regulamento do evento, não de uma lista fixa na tela. Um toque registra e fecha a folha.',
+      'O no-rep não conta rep e fica no log com o motivo. Wall Ball não tem advertência.',
+      'Cancelar fecha sem registrar nada.'
+    ], 'AC4 · D2'],
+    infra: ['Infração geral', [
+      'Lista das infrações gerais do regulamento; Magnésio no Wall Ball (2 min) vem primeiro, com borda destacada.',
+      'Um toque lança e a penalidade vale na hora (D2). O total aparece no topo ("Penalidades +2 min").',
+      'Sem diálogo de confirmação (D17): errou, "Desfazer último" reverte com registro.'
+    ], 'AC9 · D2'],
+    locked: ['Trava em 100', [
+      'Ao chegar no total do percurso o número fica verde com cadeado, REP e NO REP saem e o botão "Segure para liberar" ocupa o lugar do REP.',
+      'Liberar fecha o tempo da corrida e não tem desfazer para o árbitro, por isso é segurar (700 ms), como na largada.',
+      'Desfazer último continua disponível: se a última rep foi engano, o contador volta a 99 e destrava.',
+      '"Atleta saiu" fica desativado porque não faltam reps.'
+    ], 'AC6, AC7 · D1'],
+    exit: ['Atleta saiu antes das 100 reps', [
+      'Sair <b>não fecha o tempo</b> (D22). A folha mostra quantas reps faltam e pede ao árbitro que oriente o atleta a voltar e completar.',
+      'O tempo segue correndo: ele só fecha na liberação, com 100 válidas.',
+      'Registrar a saída exige segurar, como o Liberar (D18). Voltar fecha a folha sem registrar nada.',
+      'O destino do registro (guardar a saída sem fechar o tempo) ainda depende de confirmação do Luan; ver README.'
+    ], 'D18, D22 · substitui a AUTO-DECISION da 1.97 AC8'],
+    exited: ['Saída registrada, tempo correndo', [
+      'Um aviso fixo acima do contador lembra que faltam 6 reps e que o tempo segue correndo.',
+      'O contador continua aceitando REP e NO REP: quando o atleta volta, o árbitro segue contando até 100 e libera.',
+      '"Desfazer último" retira o registro da saída, se foi engano.'
+    ], 'D22'],
+    dq: ['Propor DQ: motivo obrigatório', [
+      'O árbitro só propõe; quem decide é o organizador no painel (D12, D2).',
+      'O campo de motivo é obrigatório: o botão "Revisar proposta" só libera com pelo menos 3 caracteres.',
+      'O texto deixa claro que o atleta segue na prova e o árbitro continua contando até a decisão.'
+    ], 'D12 · 1.98 AC5'],
+    dq2: ['Confirmar a proposta', [
+      'Segundo passo com o motivo citado e o botão vermelho "Enviar proposta". Voltar devolve ao texto sem perder o que foi escrito.',
+      'Enviada, a tela mostra um aviso fixo "DQ proposto · aguardando o organizador" acima do contador.'
+    ], 'D12'],
+    team: ['Dupla: um cartão por equipe', [
+      'O título é a dupla ("Gabi Protótipo e Íris Rascunho") e um selo avisa que as reps são contadas juntas.',
+      'Mesma tela e mesmos controles do individual. Marcar qual parceiro está arremessando é da F2.'
+    ], 'AC12'],
+    released: ['Liberado: tempo do atleta', [
+      'Depois de segurar, o destaque é o tempo do atleta no momento da liberação: largada da onda até a liberação, pelo relógio do aparelho (D21).',
+      'O texto avisa que o tempo oficial é calculado pelo servidor, que corrige o desvio do relógio e soma as penalidades vigentes.',
+      'A tentativa não aceita mais toques. Se outro aparelho tentar registrar, recebe "Esta tentativa já foi encerrada" e a correção fica com o organizador.',
+      '"Próximo atleta" volta à lista da onda.'
+    ], 'AC7, AC10 · D1']
+  };
+
+  var ui = { state: 'count', sync: 'ok', theme: 'light' };
+  var st;
+
+  function preset(id) {
+    var s = { view: 'count', team: false, reps: 37, noreps: 1, pens: [], log: [], sheet: null, dqReason: '', dqSent: false, ended: null, last: 'REP', pending: 0 };
+    if (id === 'list') s.view = 'list';
+    if (id === 'norep') s.sheet = 'norep';
+    if (id === 'infra') s.sheet = 'infra';
+    if (id === 'locked' || id === 'released') { s.reps = TOTAL; s.noreps = 3; s.last = 'REP · contador travado em 100'; s.pens = [['Magnésio no Wall Ball', 120]]; }
+    if (id === 'released') { s.ended = 'released'; }
+    if (id === 'exit' || id === 'exited') { s.reps = 94; s.noreps = 2; s.last = 'REP'; }
+    if (id === 'exit') s.sheet = 'exit';
+    if (id === 'exited') { s.exitAt = '09:51:10'; s.exitReps = 94; s.last = 'saída registrada com 94'; }
+    if (id === 'dq' || id === 'dq2') { s.sheet = id; s.dqReason = id === 'dq2' ? 'Recebeu ajuda externa para pegar a bola duas vezes' : 'Recebeu ajuda externa'; }
+    if (id === 'team') { s.team = true; s.reps = 58; s.noreps = 4; s.last = 'NO REP · Errou o alvo'; }
+    if (id === 'count') { s.last = 'REP'; }
+    s.log = [];
+    for (var j = 0; j < s.reps; j++) s.log.push({ t: 'rep' });
+    for (var k = 0; k < s.noreps; k++) s.log.splice(Math.floor(s.log.length * (k + 1) / (s.noreps + 1)), 0, { t: 'norep', r: 'Agachamento raso' });
+    s.pens.forEach(function () { s.log.push({ t: 'pen' }); });
+    if (s.exitAt) s.log.push({ t: 'exit' });
+    return s;
+  }
+
+  function fmtPen(sec) {
+    if (!sec) return 'Sem penalidade';
+    var m = Math.floor(sec / 60), r = sec % 60;
+    return '+' + (m ? m + ' min' : '') + (m && r ? ' ' : '') + (r ? r + ' s' : '');
+  }
+  function penTotal(s) { return s.pens.reduce(function (a, p) { return a + p[1]; }, 0); }
+
+  function syncBar(mode, pending) {
+    var n = Math.max(1, pending);
+    var items = n + ' ' + (n === 1 ? 'registro' : 'registros');
+    if (mode === 'wait') return '<div class="sync wait" role="status">' + ic('loader', 'spin') + '<span>Salvando ' + items + '…</span></div>';
+    if (mode === 'off') return '<div class="sync off" role="status">' + ic('cloudOff') + '<span>Sem conexão: ' + items + ' guardados no aparelho</span></div>';
+    return '<div class="sync ok" role="status">' + ic('checkCircle') + '<span>Salvo</span></div>';
+  }
+
+  function header(title, sub, back) {
+    return '<header class="c-head"><div class="l"><button type="button" class="ibtn" data-act="back" aria-label="' + back + '">' + ic('chevronLeft') + '</button>' +
+      '<div style="min-width:0"><p class="c-eyebrow">Fitness Race · Wall Ball</p><h1 class="c-title">' + title + '</h1><p class="c-sub">' + sub + '</p></div></div>' +
+      '<button type="button" class="ibtn" aria-label="Sair da conta">' + ic('logOut') + 'Sair</button></header>';
+  }
+
+  function athRow(name, meta, chip, opts) {
+    opts = opts || {};
+    return '<button type="button" class="ath' + (opts.done ? ' done' : '') + '"' + (opts.disabled ? ' disabled' : ' data-act="open"' + (opts.team ? ' data-team="1"' : '')) + '>' +
+      '<div style="min-width:0"><b>' + name + '</b><span class="meta">' + meta + '</span></div>' + chip + '</button>';
+  }
+
+  function listScreen(mode, s) {
+    var h = header('Wall Ball · Ondas 3 e 4', EVENT, 'Voltar ao evento') + syncBar(mode, s.pending);
+    h += '<div class="c-body" style="gap:8px">';
+    h += '<p class="hint">Toque no atleta que chegou à sua raia.</p>';
+    h += athRow('Ana Fictícia', 'Box Exemplo Norte · Women Pro', '<span class="chip run">Em corrida</span>');
+    h += athRow('Carla Teste', 'Box Amostra · Women Pro', '<span class="chip run">Em corrida</span>');
+    h += athRow('Elisa Amostra', 'Box Exemplo Norte · Women Pro', '<span class="chip run">Saiu · faltam <span class="num">6</span></span>');
+    h += athRow('Gabi Protótipo e Íris Rascunho', 'Dupla · Doubles Women', '<span class="chip run">' + ic('users') + 'Dupla</span>', { team: true });
+    h += athRow('Bruno Exemplo', 'CT Modelo · Men Pro', '<span class="chip">Com Judge Rafa</span>', { disabled: true });
+    h += '<p class="sec-t">Concluídos</p>';
+    h += athRow('Diego Modelo', 'Arena Protótipo · Men Pro', '<span class="chip ok">Liberado</span>', { done: true, disabled: true });
+    h += '</div>';
+    return h;
+  }
+
+  function countScreen(mode, s, interactive) {
+    var who = s.team ? TEAM : SOLO;
+    var locked = s.reps >= TOTAL;
+    var pen = penTotal(s);
+    var h = header(who.name, who.sub, 'Voltar à lista da onda') + syncBar(mode, s.pending);
+    h += '<div class="c-body">';
+    h += '<div class="strip"><div class="chips">' + (s.team ? '<span class="chip fg">' + ic('users') + 'Dupla · reps juntas</span>' : '') +
+      '<span class="chip fg">' + who.load + '</span><span class="chip fg">' + who.target + '</span></div>' +
+      '<span class="chip ' + (pen ? 'down' : '') + '">' + fmtPen(pen) + '</span></div>';
+    if (s.dqSent) h += '<div class="alert info" role="status"><b>DQ proposto · aguardando o organizador</b><p>Continue contando até a decisão.</p></div>';
+    if (s.exitAt && !s.ended && s.reps < TOTAL) h += '<div class="alert info" role="status"><b>Saída registrada às <span class="num">' + s.exitAt + '</span> · faltam ' + (TOTAL - s.reps) + ' reps</b><p>Oriente o atleta a voltar e completar. O tempo segue correndo.</p></div>';
+
+    if (s.ended) {
+      h += '<div class="alert up" role="status"><span class="k" style="color:var(--up)">Tempo do atleta</span>' +
+        '<span class="big-time xl">1:12:40</span>' +
+        '<p>Largada da onda <span class="num">08:40:02</span> → liberação <span class="num">09:52:42</span>, pelo relógio deste aparelho.</p>' +
+        '<p><b>O tempo oficial é calculado pelo servidor</b>, com as penalidades vigentes.</p></div>';
+      h += '<div class="counter"><span class="count locked" style="font-size:64px">' + s.reps + '</span><span class="of">de ' + TOTAL + ' reps válidas · penalidades: ' + (penTotal(s) ? fmtPen(penTotal(s)).replace('+', '') : 'nenhuma') + '</span></div>';
+      h += '<p class="hint" style="text-align:center">A tentativa foi encerrada. Correção de tempo ou de penalidade é com o organizador.</p>';
+      h += '<div style="flex:1"></div><button type="button" class="btn pri big" data-act="back">Próximo atleta</button>';
+      h += '</div>';
+      return h;
+    }
+
+    h += '<div class="counter"><span class="count' + (locked ? ' locked' : '') + '" aria-hidden="true">' + s.reps + '</span>' +
+      '<span class="of">' + (locked ? ic('lock') + ' ' : '') + 'de ' + TOTAL + ' reps válidas</span></div>';
+    h += '<div class="bar' + (locked ? ' up' : '') + '" role="progressbar" aria-label="Reps válidas" aria-valuemin="0" aria-valuemax="' + TOTAL + '" aria-valuenow="' + s.reps + '"><i style="width:' + Math.min(100, s.reps / TOTAL * 100) + '%"></i></div>';
+    h += '<p class="lastline" aria-live="polite">' + (s.last ? 'Último: ' + s.last : '') + ' <span class="m">· ' + s.noreps + ' no-rep' + (s.noreps === 1 ? '' : 's') + '</span></p>';
+    h += '<span class="sr" aria-live="polite">' + s.reps + ' de ' + TOTAL + '</span>';
+
+    if (locked) {
+      h += '<p class="locknote">' + ic('lock') + 'Contador travado em ' + TOTAL + '</p>';
+      h += '<button type="button" class="hold"' + (interactive ? ' data-hold="release"' : '') + ' aria-label="Liberar o atleta: segure o botão. Fecha o tempo da corrida, sem desfazer.">' +
+        '<span class="fill" aria-hidden="true"></span><span class="lbl">' + ic('flag', 'lg') + '<span data-hold-label>Segure para liberar</span></span>' +
+        '<span class="sm">Fecha o tempo da corrida · sem desfazer</span></button>';
+      h += '<p class="hint" data-hint hidden style="text-align:center">Segure para liberar</p>';
+    } else {
+      h += '<button type="button" class="rep" data-act="rep" aria-label="REP válida. ' + s.reps + ' de ' + TOTAL + '"><span class="t">REP ' + ic('check', 'lg') + '</span><span class="s">Toque a cada repetição válida</span></button>';
+    }
+    h += '<div class="row2">' +
+      '<button type="button" class="btn norep" data-act="norep"' + (locked ? ' disabled' : '') + '>' + ic('x') + 'NO REP</button>' +
+      '<button type="button" class="btn big" data-act="undo"' + (s.log.length ? '' : ' disabled') + '>' + ic('undo') + 'Desfazer último</button></div>';
+    h += '<div class="row3">' +
+      '<button type="button" class="btn sm" data-act="infra">' + ic('alert') + 'Infração geral</button>' +
+      '<button type="button" class="btn sm" data-act="exit"' + (locked || s.exitAt ? ' disabled' : '') + '>' + ic('door') + (s.exitAt ? 'Saída registrada' : 'Atleta saiu') + '</button>' +
+      '<button type="button" class="btn sm" data-act="dq"' + (s.dqSent ? ' disabled' : '') + '>' + ic('ban') + (s.dqSent ? 'DQ proposto' : 'Propor DQ') + '</button></div>';
+    h += '</div>';
+    s.interactive = interactive;
+    h += sheet(s, who);
+    return h;
+  }
+
+  function sheet(s, who) {
+    if (!s.sheet) return '';
+    var h = '<div class="scrim" data-act="close"></div><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-t">';
+    if (s.sheet === 'norep') {
+      h += '<h2 id="sheet-t">Motivo do NO REP</h2><p class="hint">Um toque registra. Não conta rep.</p><div class="grid2">' +
+        NOREP_REASONS.map(function (r) { return '<button type="button" class="reason" data-act="reason" data-r="' + r + '">' + r + '</button>'; }).join('') +
+        '</div><button type="button" class="btn" data-act="close">Cancelar</button>';
+    } else if (s.sheet === 'infra') {
+      h += '<h2 id="sheet-t">Infração geral</h2><p class="hint">Vale na hora e soma ao tempo. Errou? Use "Desfazer último".</p>' +
+        GENERAL.map(function (g, i) { return '<button type="button" class="infra' + (i === 0 ? ' first' : '') + '" data-act="pen" data-i="' + i + '"><span>' + g[0] + '</span><span class="sec">' + fmtPen(g[1]) + '</span></button>'; }).join('') +
+        '<button type="button" class="btn" data-act="close">Cancelar</button>';
+    } else if (s.sheet === 'exit') {
+      var miss = TOTAL - s.reps;
+      h += '<h2 id="sheet-t">' + who.name.split(' ')[0] + ' saiu antes das ' + TOTAL + ' reps</h2>' +
+        '<div class="calc" style="border-color:var(--primary-border)"><span class="k">' + s.reps + ' de ' + TOTAL + ' reps válidas</span><span class="big-time" style="color:var(--fg)">Faltam ' + miss + ' reps</span></div>' +
+        '<p style="font-size:14px;font-weight:700">Oriente o atleta a voltar e completar as ' + miss + ' reps.</p>' +
+        '<p style="font-size:13.5px">O tempo segue correndo: ele só fecha na liberação, com ' + TOTAL + ' válidas.</p>' +
+        '<button type="button" class="hold exit"' + (s.interactive ? ' data-hold="exit"' : '') + ' aria-label="Registrar a saída: segure o botão. Não fecha o tempo.">' +
+        '<span class="fill" aria-hidden="true"></span><span class="lbl">' + ic('door', 'lg') + '<span data-hold-label>Segure para registrar a saída</span></span>' +
+        '<span class="sm">Não fecha o tempo</span></button>' +
+        '<p class="hint" data-hint hidden style="text-align:center">Segure para registrar a saída</p>' +
+        '<button type="button" class="btn big" data-act="close">Voltar</button>';
+    } else if (s.sheet === 'dq') {
+      var ok = s.dqReason.trim().length >= 3;
+      h += '<h2 id="sheet-t">Propor desclassificação</h2>' +
+        '<p style="font-size:13.5px">Você propõe; só o organizador confirma. O atleta segue na prova e você continua contando até a decisão.</p>' +
+        '<label class="lab" for="dq-reason">Motivo (obrigatório)</label>' +
+        '<textarea id="dq-reason" data-dq maxlength="500" required aria-required="true" placeholder="O que aconteceu, com o máximo de detalhe">' + s.dqReason + '</textarea>' +
+        '<div class="row2"><button type="button" class="btn big" data-act="close">Cancelar</button><button type="button" class="btn big danger" data-act="dq-next"' + (ok ? '' : ' disabled') + '>Revisar proposta</button></div>';
+    } else if (s.sheet === 'dq2') {
+      h += '<h2 id="sheet-t">Enviar a proposta de DQ de ' + who.name + '?</h2>' +
+        '<p class="quote">' + s.dqReason + '</p>' +
+        '<p class="hint">Vai para o painel do organizador. A decisão dele fica registrada.</p>' +
+        '<div class="row2"><button type="button" class="btn big" data-act="dq-back">Voltar</button><button type="button" class="btn big danger" data-act="dq-send">Enviar proposta</button></div>';
+    }
+    return h + '</div>';
+  }
+
+  function screen(s, mode, interactive) {
+    return s.view === 'list' ? listScreen(mode, s) : countScreen(mode, s, interactive);
+  }
+
+  // ---------- render ----------
+  var phone = document.getElementById('phone');
+  var notesEl = document.getElementById('notes');
+  var tabs = document.getElementById('stateTabs');
+  STATES.forEach(function (s) {
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'tbtn'; b.setAttribute('role', 'tab'); b.dataset.state = s.id; b.textContent = s.label;
+    tabs.appendChild(b);
+  });
+
+  function render(focusSel) {
+    phone.innerHTML = '<div class="court" data-theme="' + ui.theme + '">' + screen(st, ui.sync, true) + '</div>';
+    var n = NOTES[ui.state];
+    notesEl.innerHTML = '<h2>' + n[0] + '</h2><ul>' + n[1].map(function (x) { return '<li>' + x + '</li>'; }).join('') + '</ul><p class="src">Rastreio: ' + n[2] + '</p>';
+    tabs.querySelectorAll('[role=tab]').forEach(function (b) {
+      var on = b.dataset.state === ui.state;
+      b.setAttribute('aria-selected', on ? 'true' : 'false'); b.tabIndex = on ? 0 : -1;
+    });
+    bindHold();
+    var ta = phone.querySelector('[data-dq]');
+    if (ta) ta.addEventListener('input', function () {
+      st.dqReason = ta.value;
+      phone.querySelector('[data-act="dq-next"]').disabled = ta.value.trim().length < 3;
+    });
+    if (focusSel) { var f = phone.querySelector(focusSel); if (f) f.focus(); }
+  }
+
+  function renderGallery() {
+    document.getElementById('gallery').innerHTML = STATES.map(function (s) {
+      return '<figure><div class="phone" inert><div class="court" data-theme="' + ui.theme + '">' + screen(preset(s.id), 'ok', false) + '</div></div>' +
+        '<figcaption>' + s.label + '<span>' + s.t + '</span></figcaption></figure>';
+    }).join('');
+  }
+
+  function go(id) { ui.state = id; st = preset(id); render(); }
+
+  function touch() { if (ui.sync !== 'ok') st.pending += 1; }
+
+  var lastTap = 0;
+  phone.addEventListener('click', function (e) {
+    var el = e.target.closest('[data-act]'); if (!el) return;
+    var a = el.dataset.act;
+    if (a === 'rep') {
+      var now = Date.now(); if (now - lastTap < 120) return; lastTap = now; // MIN_TAP_GAP_MS
+      if (st.reps >= TOTAL) return;
+      st.reps += 1; st.log.push({ t: 'rep' }); st.last = st.reps >= TOTAL ? 'REP · contador travado em ' + TOTAL : 'REP'; touch();
+      if (navigator.vibrate) navigator.vibrate(15);
+      render(st.reps >= TOTAL ? '[data-hold]' : '[data-act="rep"]');
+      var rep = phone.querySelector('.rep');
+      if (rep) { rep.classList.add('flash'); setTimeout(function () { rep.classList.remove('flash'); }, 110); }
+    } else if (a === 'norep') { st.sheet = 'norep'; render('.sheet button'); }
+    else if (a === 'reason') { st.noreps += 1; st.log.push({ t: 'norep', r: el.dataset.r }); st.last = 'NO REP · ' + el.dataset.r; st.sheet = null; touch(); render('[data-act="norep"]'); }
+    else if (a === 'undo') {
+      var ev = st.log.pop(); if (!ev) return;
+      if (ev.t === 'rep') st.reps -= 1;
+      if (ev.t === 'norep') st.noreps -= 1;
+      if (ev.t === 'pen') st.pens.pop();
+      if (ev.t === 'exit') { st.exitAt = null; }
+      st.last = 'desfeito (' + (ev.t === 'rep' ? 'REP' : ev.t === 'norep' ? 'NO REP' : ev.t === 'exit' ? 'saída' : 'infração') + '). O registro continua no histórico';
+      touch(); render('[data-act="undo"]');
+    }
+    else if (a === 'infra') { st.sheet = 'infra'; render('.sheet button'); }
+    else if (a === 'pen') { var g = GENERAL[+el.dataset.i]; st.pens.push(g); st.log.push({ t: 'pen' }); st.last = g[0] + ' · ' + fmtPen(g[1]); st.sheet = null; touch(); render('[data-act="infra"]'); }
+    else if (a === 'exit') { st.sheet = 'exit'; render('.sheet [data-act="close"]'); }
+    else if (a === 'dq') { st.sheet = 'dq'; render('[data-dq]'); }
+    else if (a === 'dq-next') { st.sheet = 'dq2'; render('[data-act="dq-back"]'); }
+    else if (a === 'dq-back') { st.sheet = 'dq'; render('[data-dq]'); }
+    else if (a === 'dq-send') { st.sheet = null; st.dqSent = true; touch(); render('[data-act="rep"]'); }
+    else if (a === 'close') { var was = st.sheet; st.sheet = null; render('[data-act="' + (was === 'dq2' ? 'dq' : was) + '"]'); }
+    else if (a === 'open') { st = preset(el.dataset.team ? 'team' : 'count'); if (!el.dataset.team) { st.reps = 0; st.noreps = 0; st.log = []; st.last = ''; } ui.state = el.dataset.team ? 'team' : 'count'; render('[data-act="rep"]'); }
+    else if (a === 'back') { st = preset('list'); ui.state = 'list'; render(); }
+  });
+  phone.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && st.sheet) { var was = st.sheet; st.sheet = null; render('[data-act="' + (was === 'dq2' ? 'dq' : was) + '"]'); }
+  });
+
+  var HOLD_MS = 700;
+  function bindHold() {
+    var btn = phone.querySelector('[data-hold]'); if (!btn) return;
+    var hint = phone.querySelector('[data-hint]');
+    var label = btn.querySelector('[data-hold-label]');
+    var kind = btn.dataset.hold, idle = label.textContent;
+    var timer = null, t0 = 0, ht = null;
+    function done() {
+      timer = null; if (navigator.vibrate) navigator.vibrate(60);
+      if (kind === 'exit') {
+        st.sheet = null; st.exitAt = '09:51:10'; st.log.push({ t: 'exit' }); st.last = 'saída registrada com ' + st.reps; ui.state = 'exited'; touch(); render('[data-act="rep"]');
+      } else {
+        st.ended = 'released'; ui.state = 'released'; touch(); render('[data-act="back"]');
+      }
+    }
+    function begin() {
+      if (timer) return; t0 = Date.now(); void btn.offsetWidth; btn.classList.add('holding'); label.textContent = 'Continue segurando…';
+      timer = setTimeout(done, HOLD_MS);
+    }
+    function cancel() {
+      if (!timer) return; clearTimeout(timer); timer = null; btn.classList.remove('holding'); label.textContent = idle;
+      if (hint) { hint.hidden = false; clearTimeout(ht); ht = setTimeout(function () { hint.hidden = true; }, 2200); }
+    }
+    btn.addEventListener('pointerdown', function (e) { e.preventDefault(); begin(); });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach(function (t) { btn.addEventListener(t, cancel); });
+    btn.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+    btn.addEventListener('keydown', function (e) { if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); begin(); } });
+    btn.addEventListener('keyup', function (e) { if (e.key === ' ' || e.key === 'Enter') cancel(); });
+  }
+
+  tabs.addEventListener('click', function (e) { var b = e.target.closest('[role=tab]'); if (b) go(b.dataset.state); });
+  tabs.addEventListener('keydown', function (e) {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    var ids = STATES.map(function (s) { return s.id; });
+    var i = ids.indexOf(ui.state) + (e.key === 'ArrowRight' ? 1 : -1);
+    go(ids[(i + ids.length) % ids.length]); tabs.querySelector('[aria-selected=true]').focus();
+  });
+  document.getElementById('syncGroup').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-sync]'); if (!b) return;
+    ui.sync = b.dataset.sync; st.pending = ui.sync === 'ok' ? 0 : 3;
+    this.querySelectorAll('[data-sync]').forEach(function (x) { x.setAttribute('aria-checked', x === b ? 'true' : 'false'); });
+    render();
+  });
+  document.getElementById('themeBtn').addEventListener('click', function () {
+    ui.theme = ui.theme === 'light' ? 'dark' : 'light';
+    this.setAttribute('aria-pressed', ui.theme === 'dark' ? 'true' : 'false');
+    render(); renderGallery();
+  });
+
+  go('count');
+  renderGallery();
+})();
+</script>
+</body>
+</html>

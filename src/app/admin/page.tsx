@@ -15,6 +15,7 @@ import { QualifierAthleteSubmissions } from '@/components/QualifierAthleteSubmis
 import { QualifierAthleteContestation } from '@/components/QualifierAthleteContestation';
 import { QualifierManagerPanel } from '@/components/QualifierManagerPanel';
 import { ScoresheetsPanel } from '@/components/admin/ScoresheetsPanel';
+import { RaceSheetPanel } from '@/components/admin/RaceSheetPanel';
 import { BroadcastPanel } from '@/components/admin/BroadcastPanel';
 import { QualifierResultsManager } from '@/components/QualifierResultsManager';
 import { DashboardOverview } from '@/components/admin/DashboardOverview';
@@ -27,12 +28,24 @@ import {
 import { ShirtSummaryCard } from '@/components/admin/ShirtSummaryCard';
 import { EventLocationPicker, toCoordinatesInput } from '@/components/admin/EventLocationPicker';
 import { parseCoordinatesInput } from '@/lib/eventMap';
+import { AdminLoginScreen } from '@/components/admin/AdminLoginScreen';
+import { loginDisplayFont } from '@/components/admin/loginFont';
+import {
+  getRememberedEmailServerSnapshot,
+  getRememberedEmailSnapshot,
+  getResetTokenServerSnapshot,
+  getResetTokenSnapshot,
+  saveBrowserRememberedEmail,
+  subscribeToLoginPreferences
+} from '@/lib/loginPreferences';
 import { WorkoutStageList } from '@/components/admin/WorkoutStageList';
+import { CourseStageConferenceFields } from '@/components/admin/CourseStageConferenceFields';
+import { describeRaceStageConference, suggestRaceConferenceKind, validateRaceStageConference, withRaceStageConference } from '@/lib/raceCourseStructure';
 import { WorkoutStructureEditor } from '@/components/admin/WorkoutStructureEditor';
 import { deriveLegacyWorkoutFields, parseTonnageKgInput, validateWorkoutStructure, type WorkoutStructure } from '@/lib/workoutStructure';
 import {
   LayoutDashboard, Calendar, Trophy,
-  ClipboardCheck, LogIn, LogOut, Ticket, Settings,
+  ClipboardCheck, LogOut, Ticket, Settings,
   Upload, X, Trash2, Plus, ShieldAlert, Pencil, Copy, GripVertical, ArrowDown, ArrowUp, Library, ReceiptText, Mail, CreditCard,
   Lock, QrCode, FileSpreadsheet, ChevronDown, ChevronRight, Loader2, UserRound
 } from 'lucide-react';
@@ -63,7 +76,7 @@ const RegDetail = ({ label, value, accent = false }: { label: string; value: str
     </p>
   </div>
 );
-import { WorkoutType, CategoryType, EventStatus, Event, EventCurrency, Athlete, Division, CourseStage, EventScheduleItemKind, EventScheduleMode, Score, EventScheduleItem, Registration, Contestation, Workout } from '@/types';
+import { WorkoutType, CategoryType, EventStatus, Event, EventCurrency, Athlete, Division, CourseStage, RaceConferenceKind, EventScheduleItemKind, EventScheduleMode, Score, EventScheduleItem, Registration, Contestation, Workout } from '@/types';
 import { formatMoney } from '@/lib/intl/format';
 import {
   SHIRT_NONE,
@@ -166,7 +179,6 @@ const WORKOUT_TIE_BREAKER_OPTIONS = [
 ];
 const getWorkoutScoreTypeLabel = (type: WorkoutType) => WORKOUT_SCORE_TYPE_OPTIONS.find(option => option.value === type)?.label || 'Pontos';
 
-const transactionalLabelClassName = 'mb-1 block text-xs font-bold uppercase tracking-wider text-muted-soft';
 // Mantido para o teste de design system que valida a superfície transacional clara do admin.
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const transactionalCardClassName = 'transactional-surface bg-canvas-light p-6 text-ink text-primary-on-light sm:p-8 lg:p-10';
@@ -174,7 +186,9 @@ const primaryActionClassName = 'flex min-h-11 items-center justify-center rounde
 // Área do Atleta: quanto do início da seção precisa aparecer acima da barra
 // inferior (ou do fim da tela) para a troca de aba ser percebida sem rolar.
 const ATHLETE_SECTION_MIN_VISIBLE_PX = 160;
-const darkLoginInputClassName = 'h-12 w-full rounded-md border border-card-border bg-background px-4 text-base text-white placeholder:text-muted-soft transition-colors focus:border-info focus:outline-none';
+// Avisos de sucesso da tela de login (o resto é mostrado como erro).
+const FORGOT_PASSWORD_SENT_NOTICE = 'Se o e-mail estiver cadastrado como atleta ou gestor, enviaremos um link de recuperação em alguns instantes.';
+const RESET_PASSWORD_DONE_NOTICE = 'Senha redefinida com sucesso. Você já pode entrar com a nova senha.';
 
 // Converte HH:MM para minutos desde o início do dia
 const hhmmToMinutes = (timeStr: string): number => {
@@ -224,11 +238,20 @@ export default function AdminPage() {
     ? (currentUser.managerAccessStatus || getManagerAccessStatus(currentUser.serviceValidUntil))
     : null;
   const isManagerAccessExpired = managerAccessStatus === 'expired';
-  const [email, setEmail] = useState('');
+  // E-mail lembrado vem do localStorage depois de hidratar (loginPreferences.ts).
+  // O rascunho só existe depois que a pessoa digita ou marca a caixa.
+  const rememberedEmail = useSyncExternalStore(
+    subscribeToLoginPreferences,
+    getRememberedEmailSnapshot,
+    getRememberedEmailServerSnapshot
+  );
+  const [emailDraft, setEmailDraft] = useState<string | null>(null);
+  const [rememberDraft, setRememberDraft] = useState<boolean | null>(null);
+  const email = emailDraft ?? rememberedEmail;
+  const rememberLogin = rememberDraft ?? Boolean(rememberedEmail);
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
-  const [selectedLoginProfile, setSelectedLoginProfile] = useState<'athlete' | 'organizer'>('athlete');
-  const [rememberLogin, setRememberLogin] = useState(false);
+  const [loginSubmitting, setLoginSubmitting] = useState(false);
 
   useEffect(() => {
     if (currentUser?.role === 'judge') window.location.replace('/judge');
@@ -266,11 +289,17 @@ export default function AdminPage() {
 
     return { text: msg, tone: 'error' };
   });
-  const initialPasswordResetToken = typeof window !== 'undefined'
-    ? new URLSearchParams(window.location.search).get('reset_token') || ''
-    : '';
-  const [authMode, setAuthMode] = useState<'login' | 'forgot' | 'reset'>(initialPasswordResetToken ? 'reset' : 'login');
-  const [passwordResetToken, setPasswordResetToken] = useState(initialPasswordResetToken);
+  // O servidor renderiza o login; com ?reset_token= o cliente passa para a
+  // redefinição depois de hidratar, sem divergir do HTML do servidor.
+  const urlResetToken = useSyncExternalStore(
+    subscribeToLoginPreferences,
+    getResetTokenSnapshot,
+    getResetTokenServerSnapshot
+  );
+  const [resetTokenUsed, setResetTokenUsed] = useState(false);
+  const passwordResetToken = resetTokenUsed ? '' : urlResetToken;
+  const [authModeChoice, setAuthModeChoice] = useState<'login' | 'forgot' | 'reset' | null>(null);
+  const authMode = authModeChoice ?? (urlResetToken ? 'reset' : 'login');
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
   const [forgotPasswordNotice, setForgotPasswordNotice] = useState('');
   const [forgotPasswordSubmitting, setForgotPasswordSubmitting] = useState(false);
@@ -741,7 +770,7 @@ export default function AdminPage() {
 
   // Estado do evento sendo gerenciado internamente
   const [selectedEventToManage, setSelectedEventToManage] = useState<Event | null>(null);
-  const [activeEventTab, setActiveEventTab] = useState<'info' | 'categories' | 'wods' | 'schedule' | 'registrations' | 'scores' | 'leaderboard' | 'contestations' | 'submissions' | 'sheets' | 'broadcast'>('info');
+  const [activeEventTab, setActiveEventTab] = useState<'info' | 'categories' | 'wods' | 'schedule' | 'registrations' | 'scores' | 'leaderboard' | 'contestations' | 'submissions' | 'sheets' | 'broadcast' | 'race'>('info');
 
   // Área do Atleta: a seção ativa vem do hash da URL (#inscricoes, #resultados,
   // #contestar, #perfil). O servidor sempre renderiza "events"; o cliente lê o
@@ -900,6 +929,9 @@ export default function AdminPage() {
   const [stageMaleWeight, setStageMaleWeight] = useState('');
   const [stageFemaleWeight, setStageFemaleWeight] = useState('');
   const [editingStageId, setEditingStageId] = useState('');
+  // Story 1.100: null = o tipo de conferência acompanha a sugestão do nome.
+  const [stageConferenceKind, setStageConferenceKind] = useState<RaceConferenceKind | null>(null);
+  const [stageUnits, setStageUnits] = useState<number | undefined>(undefined);
   const [draggedStageId, setDraggedStageId] = useState('');
   // Reordenação das categorias cadastradas (arrastar e soltar / botões de mover)
   const [draggedDivisionId, setDraggedDivisionId] = useState('');
@@ -1352,14 +1384,18 @@ export default function AdminPage() {
   // Lógica de Login
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const result = await login(email, password);
-    if (result.success) {
-      if (rememberLogin && typeof window !== 'undefined') {
-        window.localStorage.setItem('wodarena_login_email', email);
+    if (loginSubmitting) return;
+    setLoginSubmitting(true);
+    try {
+      const result = await login(email, password);
+      if (result.success) {
+        saveBrowserRememberedEmail(email, rememberLogin);
+        setLoginError('');
+      } else {
+        setLoginError(result.error);
       }
-      setLoginError('');
-    } else {
-      setLoginError(result.error);
+    } finally {
+      setLoginSubmitting(false);
     }
   };
 
@@ -1381,7 +1417,7 @@ export default function AdminPage() {
         throw new Error(data.detail?.message || data.error || 'Não foi possível solicitar recuperação de senha.');
       }
 
-      setForgotPasswordNotice('Se o e-mail estiver cadastrado como atleta ou gestor, enviaremos um link de recuperação em alguns instantes.');
+      setForgotPasswordNotice(FORGOT_PASSWORD_SENT_NOTICE);
     } catch (err) {
       setForgotPasswordNotice(err instanceof Error ? err.message : 'Erro ao solicitar recuperação de senha.');
     } finally {
@@ -1420,14 +1456,15 @@ export default function AdminPage() {
         throw new Error(data.error || 'Não foi possível redefinir a senha.');
       }
 
-      setResetPasswordNotice('Senha redefinida com sucesso. Você já pode entrar com a nova senha.');
-      setPasswordResetToken('');
+      setResetPasswordNotice(RESET_PASSWORD_DONE_NOTICE);
+      setResetTokenUsed(true);
+      setAuthModeChoice('reset');
       setResetPasswordNew('');
       setResetPasswordConfirm('');
       if (typeof window !== 'undefined') {
         window.history.replaceState(null, '', window.location.pathname);
       }
-      setTimeout(() => setAuthMode('login'), 1200);
+      setTimeout(() => setAuthModeChoice('login'), 1200);
     } catch (err) {
       setResetPasswordNotice(err instanceof Error ? err.message : 'Erro ao redefinir senha.');
     } finally {
@@ -3363,324 +3400,56 @@ export default function AdminPage() {
   }
 
   if (!isLoggedIn) {
-    const loginBenefits = [
-      'Inscrições Online',
-      'Rankings Atualizados',
-      'Leaderboard em Tempo Real',
-      'Gestão Completa de Eventos',
-      'Cronograma de Baterias',
-      'Resultados Instantâneos'
-    ];
-
-    const profileOptions = [
-      {
-        id: 'athlete',
-        label: 'Atleta',
-        items: ['Minhas inscrições', 'Resultados', 'Rankings', 'Histórico']
-      },
-      {
-        id: 'organizer',
-        label: 'Organizador',
-        items: ['Criar eventos', 'Gerenciar categorias', 'Lançar resultados', 'Controle financeiro']
-      }
-    ] as const;
-
-    const selectedProfileItems = profileOptions.find(profile => profile.id === selectedLoginProfile)?.items || profileOptions[0].items;
+    const authNoticeText = loginError || forgotPasswordNotice || resetPasswordNotice;
+    const authNotice = authNoticeText
+      ? {
+          text: authNoticeText,
+          tone: authNoticeText === FORGOT_PASSWORD_SENT_NOTICE || authNoticeText === RESET_PASSWORD_DONE_NOTICE
+            ? 'success' as const
+            : 'error' as const
+        }
+      : null;
 
     return (
-      <div className="min-h-screen bg-background text-foreground">
-        <main className="relative isolate min-h-[calc(100vh-64px)] overflow-hidden">
-          <div className="absolute inset-0 -z-20 lg:hidden" aria-hidden="true">
-            <video
-              className="h-full w-full object-cover"
-              src="/hero-vertical.mp4"
-              autoPlay
-              muted
-              loop
-              playsInline
-            />
-          </div>
-          <div className="absolute inset-0 -z-10 bg-background/80 lg:hidden" aria-hidden="true" />
-
-          <div className="grid min-h-[calc(100vh-64px)] lg:grid-cols-[minmax(0,3fr)_minmax(420px,2fr)]">
-            <section className="relative hidden min-h-[calc(100vh-64px)] overflow-hidden lg:block">
-              <video
-                className="absolute inset-0 h-full w-full object-cover"
-                src="/hero-vertical.mp4"
-                autoPlay
-                muted
-                loop
-                playsInline
-                aria-hidden="true"
-              />
-              <div className="absolute inset-0 bg-background/70" aria-hidden="true" />
-              <div className="relative z-10 flex h-full flex-col justify-between px-10 py-12 xl:px-14">
-                <div className="space-y-8">
-                  <BrandLogo variant="full" className="h-14 w-14 rounded-sm border border-card-border bg-card p-1" priority />
-                  <div className="max-w-3xl space-y-5">
-                    <span className="inline-flex rounded-full bg-primary px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest text-ink">
-                      Plataforma oficial de competições
-                    </span>
-                    <h1 className="text-balance text-5xl font-bold uppercase leading-none tracking-normal text-white xl:text-6xl">
-                      CONECTE.<br />
-                      COMPITA.<br />
-                      CONQUISTE.
-                    </h1>
-                    <p className="max-w-2xl text-base leading-7 text-foreground">
-                      Gerencie eventos, acompanhe rankings, publique resultados e participe das maiores competições do Functional Fitness e Fitness Race.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="space-y-7">
-                  <div className="grid max-w-3xl grid-cols-2 gap-3">
-                    {loginBenefits.map((benefit) => (
-                      <div key={benefit} className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                        <ClipboardCheck className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
-                        <span>{benefit}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            <section className="flex min-h-[calc(100vh-64px)] items-center justify-center px-4 py-8 sm:px-6 lg:bg-background lg:px-8">
-              <div className="w-full max-w-[460px] space-y-5">
-                <div className="space-y-5 lg:hidden">
-                  <span className="inline-flex rounded-full bg-primary px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest text-ink">
-                    Plataforma oficial de competições
-                  </span>
-                  <div className="space-y-3">
-                    <h1 className="text-4xl font-bold uppercase leading-none tracking-normal text-white">
-                      CONECTE.<br />
-                      COMPITA.<br />
-                      CONQUISTE.
-                    </h1>
-                    <p className="text-sm leading-6 text-foreground">
-                      Gerencie eventos, acompanhe rankings e participe das competições da WOD Arena.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="rounded-xl border border-card-border bg-card p-5 sm:p-6">
-                  <div className="space-y-2">
-                    <p className="text-xs font-bold uppercase tracking-widest text-primary">WOD Arena</p>
-                    <h2 className="text-3xl font-bold tracking-normal text-white">Entrar na Arena</h2>
-                    <p className="text-sm leading-6 text-muted">Acesse sua conta para competir ou organizar eventos.</p>
-                  </div>
-
-                  <div className="mt-6 grid grid-cols-2 gap-2" aria-label="Selecionar perfil de acesso">
-                    {profileOptions.map((profile) => {
-                      const isSelected = selectedLoginProfile === profile.id;
-                      return (
-                        <button
-                          key={profile.id}
-                          type="button"
-                          aria-pressed={isSelected}
-                          onClick={() => setSelectedLoginProfile(profile.id)}
-                          className={`h-11 rounded-md border px-3 text-xs font-bold uppercase tracking-wider transition-colors ${
-                            isSelected
-                              ? 'border-primary bg-primary text-ink'
-                              : 'border-card-border bg-background text-muted hover:border-primary hover:text-white'
-                          }`}
-                        >
-                          {profile.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  <div className="mt-4 grid grid-cols-2 gap-2 border-b border-card-border pb-5">
-                    {selectedProfileItems.map((item) => (
-                      <div key={item} className="flex items-center gap-2 text-xs font-semibold text-foreground">
-                        <span className="h-1.5 w-1.5 rounded-full bg-primary" aria-hidden="true" />
-                        <span>{item}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {(loginError || forgotPasswordNotice || resetPasswordNotice) && (
-                    <div role="alert" className="mt-5 rounded-lg border border-trading-down/35 bg-background px-4 py-3 text-sm font-semibold text-trading-down">
-                      {loginError || forgotPasswordNotice || resetPasswordNotice}
-                    </div>
-                  )}
-
-                  {authMode === 'login' && (
-                    <form onSubmit={handleLogin} className="mt-5 space-y-4">
-                      <div className="space-y-2">
-                        <label htmlFor="admin-email" className={transactionalLabelClassName}>Email</label>
-                        <input
-                          id="admin-email"
-                          name="email"
-                          autoComplete="email"
-                          type="email"
-                          required
-                          placeholder="voce@email.com"
-                          value={email}
-                          onChange={(e) => setEmail(e.target.value)}
-                          className={darkLoginInputClassName}
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <label htmlFor="admin-password" className={transactionalLabelClassName}>Senha</label>
-                        <input
-                          id="admin-password"
-                          name="password"
-                          autoComplete="current-password"
-                          type="password"
-                          required
-                          placeholder="Digite sua senha"
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          className={darkLoginInputClassName}
-                        />
-                      </div>
-
-                      <div className="flex flex-col gap-3 text-sm sm:flex-row sm:items-center sm:justify-between">
-                        <label className="flex min-h-11 items-center gap-2 text-muted">
-                          <input
-                            type="checkbox"
-                            checked={rememberLogin}
-                            onChange={(e) => setRememberLogin(e.target.checked)}
-                            className="h-4 w-4 rounded border-card-border bg-background accent-primary"
-                          />
-                          <span>Manter conectado</span>
-                        </label>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setAuthMode('forgot');
-                            setLoginError('');
-                            setForgotPasswordNotice('');
-                            setForgotPasswordEmail(email);
-                          }}
-                          className="min-h-11 text-left text-sm font-semibold text-primary transition-colors hover:text-primary-hover sm:text-right"
-                        >
-                          Esqueci minha senha
-                        </button>
-                      </div>
-
-                      <button
-                        type="submit"
-                        className={`${primaryActionClassName} h-12 w-full gap-2 uppercase tracking-wider`}
-                      >
-                        <span>Entrar na Arena</span>
-                        <LogIn className="h-4 w-4" aria-hidden="true" />
-                      </button>
-
-                      <Link
-                        href="/#eventos"
-                        className="flex h-12 w-full items-center justify-center rounded-md border border-card-border bg-card px-6 text-sm font-bold uppercase tracking-wider text-white transition-colors hover:border-primary hover:text-primary"
-                      >
-                        Criar conta gratuita
-                      </Link>
-                    </form>
-                  )}
-
-                  {authMode === 'forgot' && (
-                    <form onSubmit={handleRequestPasswordReset} className="mt-5 space-y-4">
-                      <div className="space-y-2">
-                        <label htmlFor="forgot-password-email" className={transactionalLabelClassName}>Email cadastrado</label>
-                        <input
-                          id="forgot-password-email"
-                          name="forgot-password-email"
-                          autoComplete="email"
-                          type="email"
-                          required
-                          placeholder="voce@email.com"
-                          value={forgotPasswordEmail}
-                          onChange={(e) => setForgotPasswordEmail(e.target.value)}
-                          className={darkLoginInputClassName}
-                        />
-                      </div>
-                      <button
-                        type="submit"
-                        disabled={forgotPasswordSubmitting}
-                        className={`${primaryActionClassName} h-12 w-full gap-2 uppercase tracking-wider disabled:opacity-60`}
-                      >
-                        <span>{forgotPasswordSubmitting ? 'Enviando...' : 'Enviar link de recuperação'}</span>
-                        <Mail className="h-4 w-4" aria-hidden="true" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAuthMode('login');
-                          setForgotPasswordNotice('');
-                        }}
-                        className="min-h-11 w-full text-sm font-semibold text-muted transition-colors hover:text-white"
-                      >
-                        Voltar para login
-                      </button>
-                    </form>
-                  )}
-
-                  {authMode === 'reset' && (
-                    <form onSubmit={handleResetPasswordSubmit} className="mt-5 space-y-4">
-                      <div className="space-y-2">
-                        <label htmlFor="reset-password-new" className={transactionalLabelClassName}>Nova senha</label>
-                        <input
-                          id="reset-password-new"
-                          name="reset-password-new"
-                          autoComplete="new-password"
-                          type="password"
-                          required
-                          minLength={6}
-                          placeholder="Mínimo 6 caracteres"
-                          value={resetPasswordNew}
-                          onChange={(e) => setResetPasswordNew(e.target.value)}
-                          className={darkLoginInputClassName}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label htmlFor="reset-password-confirm" className={transactionalLabelClassName}>Confirmar senha</label>
-                        <input
-                          id="reset-password-confirm"
-                          name="reset-password-confirm"
-                          autoComplete="new-password"
-                          type="password"
-                          required
-                          minLength={6}
-                          placeholder="Repita a nova senha"
-                          value={resetPasswordConfirm}
-                          onChange={(e) => setResetPasswordConfirm(e.target.value)}
-                          className={darkLoginInputClassName}
-                        />
-                      </div>
-                      <button
-                        type="submit"
-                        disabled={resetPasswordSubmitting}
-                        className={`${primaryActionClassName} h-12 w-full gap-2 uppercase tracking-wider disabled:opacity-60`}
-                      >
-                        <span>{resetPasswordSubmitting ? 'Redefinindo...' : 'Redefinir senha'}</span>
-                        <Lock className="h-4 w-4" aria-hidden="true" />
-                      </button>
-                    </form>
-                  )}
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-lg border border-card-border bg-card/95 p-4">
-                    <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-md bg-background text-primary">
-                      <Trophy className="h-4 w-4" aria-hidden="true" />
-                    </div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-primary">Para atletas</p>
-                    <p className="mt-2 text-sm leading-6 text-muted">Acompanhe inscrições, rankings e resultados.</p>
-                  </div>
-                  <div className="rounded-lg border border-card-border bg-card/95 p-4">
-                    <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-md bg-background text-primary">
-                      <LayoutDashboard className="h-4 w-4" aria-hidden="true" />
-                    </div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-primary">Para organizadores</p>
-                    <p className="mt-2 text-sm leading-6 text-muted">Crie eventos, categorias, provas e leaderboards em uma única plataforma.</p>
-                  </div>
-                </div>
-              </div>
-            </section>
-          </div>
-        </main>
+      <div className={`${loginDisplayFont.variable} min-h-screen bg-background text-foreground`}>
+        <AdminLoginScreen
+          mode={authMode}
+          notice={authNotice}
+          login={{
+            email,
+            password,
+            remember: rememberLogin,
+            submitting: loginSubmitting,
+            onEmailChange: setEmailDraft,
+            onPasswordChange: setPassword,
+            onRememberChange: setRememberDraft,
+            onSubmit: handleLogin,
+            onForgotPassword: () => {
+              setAuthModeChoice('forgot');
+              setLoginError('');
+              setForgotPasswordNotice('');
+              setForgotPasswordEmail(email);
+            }
+          }}
+          forgot={{
+            email: forgotPasswordEmail,
+            submitting: forgotPasswordSubmitting,
+            onEmailChange: setForgotPasswordEmail,
+            onSubmit: handleRequestPasswordReset,
+            onBack: () => {
+              setAuthModeChoice('login');
+              setForgotPasswordNotice('');
+            }
+          }}
+          reset={{
+            password: resetPasswordNew,
+            confirm: resetPasswordConfirm,
+            submitting: resetPasswordSubmitting,
+            onPasswordChange: setResetPasswordNew,
+            onConfirmChange: setResetPasswordConfirm,
+            onSubmit: handleResetPasswordSubmit
+          }}
+        />
       </div>
     );
   }
@@ -5332,6 +5101,8 @@ export default function AdminPage() {
     setStageReps(stage.reps);
     setStageMaleWeight(stage.maleWeight || '');
     setStageFemaleWeight(stage.femaleWeight || '');
+    setStageConferenceKind(stage.conferenceKind ?? null);
+    setStageUnits(stage.units);
     setIsStationLibraryOpen(true);
   };
 
@@ -5411,6 +5182,8 @@ export default function AdminPage() {
     setStageOrder(stage.orderIndex + 1);
     setStageDistance(stage.type === 'run' ? '' : '1000m');
     setStageReps(undefined);
+    setStageConferenceKind(null);
+    setStageUnits(undefined);
     setStageMaleWeight('');
     setStageFemaleWeight('');
     setIsStationLibraryOpen(true);
@@ -5453,9 +5226,19 @@ export default function AdminPage() {
     }
   };
 
+  // Tipo de conferência da estação no modal (Story 1.100): sugerido pelo nome até o organizador escolher à mão.
+  const stageSuggestedConferenceKind: RaceConferenceKind = suggestRaceConferenceKind({ id: editingStageId, name: stageName, type: 'station' }) ?? 'generic';
+  const stageEffectiveConferenceKind: RaceConferenceKind = stageConferenceKind ?? stageSuggestedConferenceKind;
+
   const handleSaveLibraryStage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedEventToManage || !stageName) return;
+
+    const conferenceError = validateRaceStageConference({ type: stageType, conferenceKind: stageEffectiveConferenceKind, units: stageUnits, reps: stageReps });
+    if (conferenceError) {
+      setAdminNotice({ text: conferenceError, tone: 'error' });
+      return;
+    }
 
     const targetId = editingStageId || `stage-course-${stageName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}`;
 
@@ -5468,7 +5251,7 @@ export default function AdminPage() {
       }
     }
 
-    const newStage: CourseStage = {
+    const newStage: CourseStage = withRaceStageConference({
       id: targetId,
       name: stageName,
       type: stageType,
@@ -5477,7 +5260,7 @@ export default function AdminPage() {
       reps: stageReps || undefined,
       maleWeight: stageMaleWeight || undefined,
       femaleWeight: stageFemaleWeight || undefined
-    };
+    }, { conferenceKind: stageEffectiveConferenceKind, units: stageUnits });
 
     let updatedLayout: CourseStage[] = [];
     if (editingStageId) {
@@ -5526,6 +5309,8 @@ export default function AdminPage() {
       setStageName('');
       setStageDistance('');
       setStageReps(undefined);
+      setStageConferenceKind(null);
+      setStageUnits(undefined);
       setStageMaleWeight('');
       setStageFemaleWeight('');
       setEditingStageId('');
@@ -5802,6 +5587,8 @@ export default function AdminPage() {
                     setStageType('station');
                     setStageDistance('');
                     setStageReps(undefined);
+                    setStageConferenceKind(null);
+                    setStageUnits(undefined);
                     setStageMaleWeight('');
                     setStageFemaleWeight('');
                     setIsStationLibraryOpen(true);
@@ -5850,6 +5637,8 @@ export default function AdminPage() {
                       setStageType('station');
                       setStageDistance('');
                       setStageReps(undefined);
+                      setStageConferenceKind(null);
+                      setStageUnits(undefined);
                       setStageMaleWeight('');
                       setStageFemaleWeight('');
                       setIsStationLibraryOpen(true);
@@ -5870,6 +5659,7 @@ export default function AdminPage() {
                   .sort((a, b) => a.orderIndex - b.orderIndex)
                   .map((stg, index) => {
                     const isRun = stg.type === 'run';
+                    const conferenceLabel = describeRaceStageConference(stg);
                     return (
                       <div key={stg.id} className="relative">
                         <div
@@ -5910,6 +5700,11 @@ export default function AdminPage() {
                               }`}>
                                 {isRun ? 'Corrida' : 'Estação'}
                               </span>
+                              {conferenceLabel && (
+                                <span className="inline-flex rounded border border-card-border bg-dark-gray px-1.5 py-0.5 text-[9px] font-bold text-white" title="Tipo de conferência e meta na súmula">
+                                  {conferenceLabel}
+                                </span>
+                              )}
                               <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted border-l border-card-border/60 pl-3">
                                 {stg.distance && (
                                   <span className="flex items-center gap-1">
@@ -6042,6 +5837,8 @@ export default function AdminPage() {
                           setStageType('run');
                           setStageDistance('1000m');
                           setStageReps(undefined);
+                          setStageConferenceKind(null);
+                          setStageUnits(undefined);
                           setStageMaleWeight('');
                           setStageFemaleWeight('');
                         }}
@@ -6062,6 +5859,8 @@ export default function AdminPage() {
                             setStageType(preset.type);
                             setStageDistance(preset.distance || '');
                             setStageReps(preset.reps);
+                            setStageConferenceKind(null);
+                            setStageUnits(undefined);
                             setStageMaleWeight(preset.maleWeight || '');
                             setStageFemaleWeight(preset.femaleWeight || '');
                           }}
@@ -6083,6 +5882,8 @@ export default function AdminPage() {
                           setStageType('station');
                           setStageDistance('');
                           setStageReps(undefined);
+                          setStageConferenceKind(null);
+                          setStageUnits(undefined);
                           setStageMaleWeight('');
                           setStageFemaleWeight('');
                         }}
@@ -6155,11 +5956,12 @@ export default function AdminPage() {
                       />
                     </div>
                     <div>
-                      <label htmlFor="library-stage-reps" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans">Repetições</label>
+                      <label htmlFor="library-stage-reps" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans">{stageType === 'station' && stageEffectiveConferenceKind === 'reps' ? 'Repetições *' : 'Repetições'}</label>
                       <input
                         id="library-stage-reps"
                         type="number"
                         min="1"
+                        required={stageType === 'station' && stageEffectiveConferenceKind === 'reps'}
                         placeholder="Ex: 100, 75"
                         value={stageReps || ''}
                         onChange={(e) => setStageReps(e.target.value ? Number(e.target.value) : undefined)}
@@ -6167,6 +5969,18 @@ export default function AdminPage() {
                       />
                     </div>
                   </div>
+
+                  {stageType === 'station' && (
+                    <CourseStageConferenceFields
+                      conferenceKind={stageEffectiveConferenceKind}
+                      suggestedKind={stageSuggestedConferenceKind}
+                      chosenByHand={stageConferenceKind !== null}
+                      units={stageUnits}
+                      reps={stageReps}
+                      onConferenceKindChange={setStageConferenceKind}
+                      onUnitsChange={setStageUnits}
+                    />
+                  )}
 
                   {stageType === 'station' && (
                     <div className="grid grid-cols-2 gap-4">
@@ -10088,7 +9902,7 @@ export default function AdminPage() {
                         value={activeEventTab}
                         onChange={(e) => {
                           const tabId = e.target.value;
-                          setActiveEventTab(tabId as 'info' | 'categories' | 'wods' | 'schedule' | 'registrations' | 'scores' | 'leaderboard' | 'contestations' | 'submissions' | 'sheets' | 'broadcast');
+                          setActiveEventTab(tabId as 'info' | 'categories' | 'wods' | 'schedule' | 'registrations' | 'scores' | 'leaderboard' | 'contestations' | 'submissions' | 'sheets' | 'broadcast' | 'race');
                           if (tabId === 'info') {
                             initEventEditForm(selectedEventToManage);
                           }
@@ -10109,6 +9923,7 @@ export default function AdminPage() {
                           ...((selectedEventToManage.eventType || 'functional_fitness') === 'functional_fitness'
                             ? [{ id: 'sheets', label: 'Súmulas e Judges' }, { id: 'broadcast', label: 'Telão' }]
                             : []),
+                          ...(selectedEventToManage.eventType === 'fitness_racing' ? [{ id: 'race', label: 'Súmula Fitness Race' }] : []),
                           ...((selectedEventToManage.eventType || 'functional_fitness') !== 'fitness_racing'
                             ? [{ id: 'contestations', label: 'Contestações' }]
                             : [])
@@ -10136,6 +9951,7 @@ export default function AdminPage() {
                           ...((selectedEventToManage.eventType || 'functional_fitness') === 'functional_fitness'
                             ? [{ id: 'sheets', label: 'Súmulas e Judges' }, { id: 'broadcast', label: 'Telão' }]
                             : []),
+                          ...(selectedEventToManage.eventType === 'fitness_racing' ? [{ id: 'race', label: 'Súmula Fitness Race' }] : []),
                         ...((selectedEventToManage.eventType || 'functional_fitness') !== 'fitness_racing'
                           ? [{ id: 'contestations', label: 'Contestações' }]
                           : [])
@@ -10143,7 +9959,7 @@ export default function AdminPage() {
                         <button
                           key={tab.id}
                           onClick={() => {
-                            setActiveEventTab(tab.id as 'info' | 'categories' | 'wods' | 'schedule' | 'registrations' | 'scores' | 'leaderboard' | 'contestations' | 'submissions' | 'sheets' | 'broadcast');
+                            setActiveEventTab(tab.id as 'info' | 'categories' | 'wods' | 'schedule' | 'registrations' | 'scores' | 'leaderboard' | 'contestations' | 'submissions' | 'sheets' | 'broadcast' | 'race');
                             if (tab.id === 'info') {
                               initEventEditForm(selectedEventToManage);
                             }
@@ -10180,6 +9996,7 @@ export default function AdminPage() {
                       {activeEventTab === 'leaderboard' && renderAbaLeaderboard()}
                       {activeEventTab === 'submissions' && selectedEventToManage.eventType === 'functional_fitness_qualifier' && <QualifierManagerPanel event={selectedEventToManage} />}
                       {activeEventTab === 'sheets' && (selectedEventToManage.eventType || 'functional_fitness') === 'functional_fitness' && <ScoresheetsPanel event={selectedEventToManage} />}
+                      {activeEventTab === 'race' && selectedEventToManage.eventType === 'fitness_racing' && <RaceSheetPanel event={selectedEventToManage} />}
                       {activeEventTab === 'broadcast' && (selectedEventToManage.eventType || 'functional_fitness') === 'functional_fitness' && <BroadcastPanel event={selectedEventToManage} />}
                       {activeEventTab === 'contestations' && renderAbaContestations()}
                     </div>

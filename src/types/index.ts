@@ -42,6 +42,13 @@ export type ContestationStatus = 'under_review' | 'approved' | 'rejected';
 export type CommercialLeadStatus = 'new' | 'contacted' | 'qualified' | 'discarded';
 export type CommercialLeadEmailNotificationStatus = 'pending' | 'sent' | 'failed' | 'skipped';
 
+/**
+ * Tipo de conferência da estação do percurso Fitness Race (Story 1.100, D33):
+ * como o árbitro confere a estação. `reps` é a contagem de repetições do motor
+ * (o mesmo modo do Wall Ball). Ver src/lib/raceCourseStructure.ts.
+ */
+export type RaceConferenceKind = 'ergometer' | 'sled' | 'sections' | 'reps' | 'generic';
+
 export interface CourseStage {
   id: string;
   name: string;
@@ -51,6 +58,10 @@ export interface CourseStage {
   reps?: number;
   maleWeight?: string;
   femaleWeight?: string;
+  /** Só em estação. Sem valor, vale o tipo sugerido pelo nome (percurso gravado antes da Story 1.100). */
+  conferenceKind?: RaceConferenceKind;
+  /** Trechos, voltas ou seções que o atleta precisa cumprir (inteiro de 1 a 200). Só vale para trenó e seções. */
+  units?: number;
 }
 
 export interface Division {
@@ -142,7 +153,7 @@ export interface Score {
   rank?: number;       // Colocação na prova
   points?: number;     // Pontos ganhos na prova (ex: 100, 95, 90...)
   splits?: Record<string, string>;
-  resultStatus?: 'validated' | 'penalized' | 'rejected' | 'manual' | 'absent';
+  resultStatus?: 'validated' | 'penalized' | 'rejected' | 'manual' | 'absent' | 'disqualified' | 'dnf';
   penaltyPercent?: number;
   /** Qualifier: envio feito e ainda sem revisão do judge (só nos scores sintéticos do ranking). */
   awaitingReview?: boolean;

@@ -1207,15 +1207,20 @@ export function Leaderboard({ event }: LeaderboardProps) {
                                 </div>
                               )}
 
-                              <div className="rounded-lg bg-dark-gray/30 border border-card-border/60 p-2.5">
-                                <p className="text-[9px] uppercase font-bold text-muted">{t('totalRun')}</p>
-                                <p className="font-mono font-bold text-white mt-1">{secondsToTimeStr(totalRunSecs)}</p>
-                              </div>
+                              {/* Súmula Fitness Race só registra estações (D37): sem split de corrida, sem os cartões de corrida. */}
+                              {runs.length > 0 && (
+                                <div className="rounded-lg bg-dark-gray/30 border border-card-border/60 p-2.5">
+                                  <p className="text-[9px] uppercase font-bold text-muted">{t('totalRun')}</p>
+                                  <p className="font-mono font-bold text-white mt-1">{secondsToTimeStr(totalRunSecs)}</p>
+                                </div>
+                              )}
 
-                              <div className="rounded-lg bg-dark-gray/30 border border-card-border/60 p-2.5">
-                                <p className="text-[9px] uppercase font-bold text-muted">{t('totalStations')}</p>
-                                <p className="font-mono font-bold text-white mt-1">{secondsToTimeStr(totalStationSecs)}</p>
-                              </div>
+                              {stations.length > 0 && (
+                                <div className="rounded-lg bg-dark-gray/30 border border-card-border/60 p-2.5">
+                                  <p className="text-[9px] uppercase font-bold text-muted">{t('totalStations')}</p>
+                                  <p className="font-mono font-bold text-white mt-1">{secondsToTimeStr(totalStationSecs)}</p>
+                                </div>
+                              )}
 
                               {runs.length > 0 && (
                                 <div className="rounded-lg bg-dark-gray/30 border border-card-border/60 p-2.5 col-span-2">
@@ -1229,8 +1234,8 @@ export function Leaderboard({ event }: LeaderboardProps) {
                             <div className="border-t border-card-border/30 pt-4 space-y-2">
                               <p className="text-[10px] uppercase font-bold text-muted tracking-wider">{t('splitsTimeline')}</p>
                               <div className="max-h-[220px] overflow-y-auto pr-1 space-y-1.5 scrollbar-thin">
-                                {stages.map(stg => {
-                                  const timeStr = score.splits?.[stg.id] || '-';
+                                {/* Só as etapas com split, na ordem do percurso: estação sem judge fica fora (D37). */}
+                                {splitsArray.map(({ stage: stg, timeStr }) => {
                                   return (
                                     <div key={stg.id} className="flex justify-between items-center text-xs py-1 border-b border-card-border/20 last:border-b-0">
                                       <span className="text-muted-soft flex items-center gap-1.5">
@@ -1472,15 +1477,20 @@ export function Leaderboard({ event }: LeaderboardProps) {
                                 </div>
                               )}
 
-                              <div className="rounded-lg bg-dark-gray/30 border border-card-border/60 p-2.5">
-                                <p className="text-[9px] uppercase font-bold text-muted">{t('totalRun')}</p>
-                                <p className="font-mono font-bold text-white mt-1">{secondsToTimeStr(totalRunSecs)}</p>
-                              </div>
+                              {/* Súmula Fitness Race só registra estações (D37): sem split de corrida, sem os cartões de corrida. */}
+                              {runs.length > 0 && (
+                                <div className="rounded-lg bg-dark-gray/30 border border-card-border/60 p-2.5">
+                                  <p className="text-[9px] uppercase font-bold text-muted">{t('totalRun')}</p>
+                                  <p className="font-mono font-bold text-white mt-1">{secondsToTimeStr(totalRunSecs)}</p>
+                                </div>
+                              )}
 
-                              <div className="rounded-lg bg-dark-gray/30 border border-card-border/60 p-2.5">
-                                <p className="text-[9px] uppercase font-bold text-muted">{t('totalStations')}</p>
-                                <p className="font-mono font-bold text-white mt-1">{secondsToTimeStr(totalStationSecs)}</p>
-                              </div>
+                              {stations.length > 0 && (
+                                <div className="rounded-lg bg-dark-gray/30 border border-card-border/60 p-2.5">
+                                  <p className="text-[9px] uppercase font-bold text-muted">{t('totalStations')}</p>
+                                  <p className="font-mono font-bold text-white mt-1">{secondsToTimeStr(totalStationSecs)}</p>
+                                </div>
+                              )}
 
                               {runs.length > 0 && (
                                 <div className="rounded-lg bg-dark-gray/30 border border-card-border/60 p-2.5 col-span-2">
@@ -1494,8 +1504,8 @@ export function Leaderboard({ event }: LeaderboardProps) {
                             <div className="border-t border-card-border/30 pt-4 space-y-2">
                               <p className="text-[10px] uppercase font-bold text-muted tracking-wider">{t('splitsTimeline')}</p>
                               <div className="max-h-[220px] overflow-y-auto pr-1 space-y-1.5 scrollbar-thin">
-                                {stages.map(stg => {
-                                  const timeStr = score.splits?.[stg.id] || '-';
+                                {/* Só as etapas com split, na ordem do percurso: estação sem judge fica fora (D37). */}
+                                {splitsArray.map(({ stage: stg, timeStr }) => {
                                   return (
                                     <div key={stg.id} className="flex justify-between items-center text-xs py-1 border-b border-card-border/20 last:border-b-0">
                                       <span className="text-muted-soft flex items-center gap-1.5">

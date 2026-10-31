@@ -32,6 +32,13 @@ export default function dynamic() {
   return function DynamicComponentStub() { return null; };
 }
 `,
+  // next/link: no servidor de teste vira um <a> simples (Story 1.92, tela de login).
+  'next/link': `
+import { createElement } from 'react';
+export default function Link({ href, children, ...props }) {
+  return createElement('a', { href, ...props }, children);
+}
+`,
   // next/og: o pacote só se resolve como CommonJS; o gerador real do pôster do comprovante
   // (Story 1.75) roda nos testes, sem rede.
   'next/og': `
