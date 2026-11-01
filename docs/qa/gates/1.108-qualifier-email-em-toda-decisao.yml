@@ -1,0 +1,73 @@
+schema: 1
+story: '1.108'
+story_title: 'Qualifier: E-mail ao Atleta em Toda Decisão sobre o Resultado'
+gate: PASS
+status_reason: 'Os 9 ACs estão no código e cobertos por teste: a primeira análise (judge, gestor ou owner) passa a avisar depois do RPC, edição/lançamento/novo envio usam o mesmo modelo, todo texto dinâmico é escapado, quem analisou aparece só como "a arbitragem"/"a organização" e a falha no Resend não muda a resposta. Ficam só itens low.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-11-01T08:40:00-03:00'
+expires: '2026-11-15T07:55:00-03:00'
+quality_score: 90
+
+top_issues:
+  - id: REQ-001
+    severity: low
+    finding: 'O CLI operacional aplica revisão, lançamento manual e novo envio pelos mesmos RPCs sem mandar e-mail. O AC1 fala em "toda decisão por judge, gestor ou owner"; a story limita o escopo às rotas, então a decisão tomada pelo CLI continua sem aviso.'
+    refs: ['bin/qualifier.mjs:231', 'bin/qualifier.mjs:246', 'bin/qualifier.mjs:272']
+    suggested_owner: po
+    suggested_action: 'Decidir se o CLI deve avisar (chamar o mesmo notificador) ou registrar no CLI que ele não avisa o atleta.'
+  - id: REL-001
+    severity: low
+    status: resolved
+    resolved_on: '2026-11-01'
+    resolution: 'Re-check: erro da leitura da submissão vai para o catch com log e submissão ausente é logada com o id. As leituras de inscrição/evento/prova/categoria seguem sem checar error, mas a falta de e-mail é logada.'
+    finding: 'O notificador descarta o erro da leitura da submissão: se a leitura falhar, retorna sem log. O AC7 pede que erro de leitura vá para o log; as leituras de inscrição, evento, prova e categoria também ignoram o campo error (só a ausência de e-mail é logada).'
+    refs: ['src/lib/qualifierNotifications.ts:37-42']
+    suggested_owner: dev
+    suggested_action: 'Logar error da leitura da submissão (e das demais) com o id do envio antes de retornar.'
+  - id: PERF-001
+    severity: low
+    status: resolved
+    resolved_on: '2026-11-01'
+    resolution: 'Re-check: fetch do Resend com AbortSignal.timeout(8000) (src/lib/resend.ts:1070, 1102); o abort cai no catch e só vai para o log. O envio continua aguardado antes da resposta, com teto de 8 s.'
+    finding: 'O envio ao Resend é aguardado antes da resposta da revisão, sem timeout no fetch. Antes só a edição esperava; agora toda análise do judge espera a API do Resend. Resposta não muda (AC7), mas uma lentidão do Resend atrasa a fila do judge.'
+    refs: ['src/app/api/judge/reviews/route.ts:119', 'src/lib/resend.ts:1093']
+    suggested_owner: dev
+    suggested_action: 'Opcional: AbortSignal.timeout no fetch do Resend ou disparo após a resposta (after() do Next). Mesmo padrão dos demais e-mails do app, por isso não bloqueia.'
+  - id: DOC-001
+    severity: low
+    status: resolved
+    resolved_on: '2026-11-01'
+    resolution: 'Re-check: D6 registrada em docs/design/qualifier-decision-email/DECISOES.md.'
+    finding: 'O assunto do ajuste mudou para "Resultado ajustado" / "Score adjusted" (o modelo aprovado diz "Resultado ajustado pela arbitragem"), porque o gestor também ajusta. Mudança correta, feita pelo coordenador durante o gate e coberta por 3 asserções novas, mas não registrada no DECISOES.md. O assunto do novo envio também difere levemente do modelo ("Envie de novo o resultado · 26.1" x "Envie de novo o resultado da 26.1").'
+    refs: ['src/lib/qualifierDecisionEmail.ts:124', 'src/lib/qualifierDecisionEmail.ts:221', 'src/lib/qualifierDecisionEmail.ts:288', 'docs/design/qualifier-decision-email/DECISOES.md']
+    suggested_owner: po
+    suggested_action: 'Anotar no DECISOES.md que o assunto do ajuste não cita quem ajustou.'
+  - id: TEST-001
+    severity: low
+    finding: 'Nada conferido em cliente de e-mail real (Gmail, Outlook, Apple Mail) nem com envio real pelo Resend; a conferência visual ficou num HTML local. HTML em tabelas e estilo inline reduz o risco.'
+    refs: ['docs/stories/1.108.story.md']
+    suggested_owner: dev
+    suggested_action: 'Mandar as 7 variantes para uma caixa de teste antes de anunciar; conferir o selo, o quadro e o botão no Gmail mobile.'
+  - id: MNT-001
+    severity: low
+    finding: 'Débito aceito pelo AC7 e registrado pelo @dev a partir do CodeRabbit: sem fila de reenvio quando o Resend falha; o e-mail perdido fica só no log [Resend Qualifier Decision].'
+    refs: ['src/lib/resend.ts:1108-1119']
+    suggested_owner: po
+    suggested_action: 'Story própria se o Luan quiser reenvio; o lote retroativo das 366 decisões (D3) também segue fora.'
+waiver: { active: false }
+
+evidence:
+  tests_reviewed: 14
+  risks_identified: 6
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    ac_gaps: []
+  gate_commands:
+    npm_test: '1531/1531, rodado pelo QA (depois da mudança do coordenador)'
+    node_test_decision_email: '14/14 em tests/qualifier-decision-email.test.mjs'
+    npm_run_typecheck: 'verde'
+    eslint_arquivos_alterados: '0 erros, 0 avisos nos 16 arquivos (src e tests)'
+    coderabbit: 'não rodado pelo QA (sessão no macOS, o skill aponta para WSL); rodada do @dev registrada na story'
+  independent_checks: 'Conferido no código: notify depois do RPC e fora do caminho de erro; previous (status e final_result) lido antes do RPC na edição e no novo envio; sendQualifierDecisionEmail substitui os dois e-mails antigos sem outro chamador restante (grep em src, tests, bin); escapeHtml em todo valor dinâmico do HTML (nome, evento, prova, categoria, resultados, justificativa, URL do botão, prévia); a cópia fixa com <strong> é interpolada só com valores já escapados; idioma via registrations.locale com resolveLocale e lang toBcp47; rota /[locale]/event/[id]/leaderboard existe; edição só pelo manager (owner bloqueado na rota, como antes).'
+  notes: 'Regressão: manual-result e request-resubmission mantêm a ordem RPC → e-mail e a resposta; o novo envio passou a usar o notificador único com o resultado anterior. Testes antigos ajustados sem afrouxar (trocam a asserção da regra antiga pela nova).'
+  recheck_2026_11_01: 'Re-check junto do re-gate da 1.109: REL-001, PERF-001 e DOC-001 resolvidos; nada piorou; PASS mantido. npm test 1532/1532 (ver TEST-003 no gate da 1.109), typecheck verde, eslint 0 erros.'

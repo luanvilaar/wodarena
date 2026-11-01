@@ -1,0 +1,72 @@
+schema: 1
+story: '1.109'
+story_title: 'Qualifier: Decisão da Análise na Área do Atleta'
+gate: PASS
+status_reason: 'Re-gate 2026-11-01: os 5 ACs atendidos. GET /api/submissions não devolve mais reviewedBy (conferido com a rota real e reviewed_by preenchido), latestDecision considera só a versão atual do envio e erro ao ler as revisões não derruba a lista. Ficam itens low.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-11-01T08:40:00-03:00'
+expires: '2026-11-15T08:40:00-03:00'
+quality_score: 90
+
+history:
+  - gate: FAIL
+    quality_score: 70
+    updated: '2026-11-01T07:55:00-03:00'
+    reason: 'AC1: reviewedBy (id de quem analisou) saía na rota do atleta; o teste não pegava porque o seed não tinha reviewed_by.'
+
+top_issues:
+  - id: SEC-001
+    severity: medium
+    status: resolved
+    resolved_on: '2026-11-01'
+    finding: 'GET /api/submissions devolvia reviewedBy (id de quem analisou, ex.: "judge-…").'
+    resolution: 'A rota monta cada envio com reviewedBy: undefined, que some do JSON. Teste avulso do QA (rota real, envio com reviewed_by = "judge-lx9-abc123") agora passa. O componente do atleta não usa o campo.'
+    refs: ['src/app/api/submissions/route.ts:30-32']
+  - id: TEST-001
+    severity: medium
+    status: resolved
+    resolved_on: '2026-11-01'
+    finding: 'O teste de "sem quem analisou" passava porque o seed e o RPC emulado não preenchiam reviewed_by.'
+    resolution: 'O RPC emulado grava reviewed_by e submission_version como o real; o teste afirma que reviewed_by está no banco e que nem "judge-q" nem a chave reviewedBy aparecem no JSON.'
+    refs: ['tests/qualifier-decision-email.test.mjs:68-70', 'tests/qualifier-decision-email.test.mjs:297-298']
+  - id: REQ-002
+    severity: low
+    status: resolved
+    resolved_on: '2026-11-01'
+    finding: 'Depois do novo envio o cartão mostrava "Em análise" com a observação da versão anterior.'
+    resolution: 'summarizeLatestDecisions só considera revisões com submission_version igual a currentVersion; a rota seleciona submission_version. Conferido nas migrations: revisão, novo envio pedido pela organização e reabertura gravam a versão corrente, e só o envio do atleta e o lançamento manual sobem a versão (o lançamento grava a revisão já com a versão nova). Teste novo cobre o caso.'
+    refs: ['src/lib/qualifierSubmissions.ts:38-60', 'tests/qualifier-decision-email.test.mjs:306-316']
+  - id: REL-001
+    severity: low
+    status: resolved
+    resolved_on: '2026-11-01'
+    finding: 'Erro ao ler score_submission_reviews derrubava a lista do atleta.'
+    resolution: 'O erro vai para console.error e a lista sai sem latestDecision. Sem teste dedicado (ver TEST-003).'
+    refs: ['src/app/api/submissions/route.ts:40-42']
+  - id: TEST-002
+    severity: low
+    finding: 'Área do atleta não conferida no navegador (declarado pelo @dev). Selo, resultado oficial e observação só cobertos por estáticos e pelo módulo puro.'
+    refs: ['docs/stories/1.109.story.md']
+    suggested_owner: dev
+    suggested_action: 'Abrir a área do atleta com um envio penalizado com observação e um lançado pela organização, em 375 px.'
+  - id: TEST-003
+    severity: low
+    finding: 'O caminho "erro ao ler as revisões" (REL-001) não tem teste. Numa das 9 rodadas do npm test feitas pelo QA no re-gate houve 1 falha (1531/1532), que não se repetiu nas 8 seguintes nem em 25 rodadas do arquivo da story; não deu para identificar o teste (a saída não foi guardada naquela rodada) e pode ter coincidido com edição no working tree.'
+    refs: ['src/app/api/submissions/route.ts:41', 'tests/qualifier-decision-email.test.mjs']
+    suggested_owner: dev
+    suggested_action: 'Opcional: caso de teste com o select das revisões devolvendo erro (lista 200, sem latestDecision). Se a falha intermitente voltar no CI, guardar a saída e abrir story.'
+waiver: { active: false }
+
+evidence:
+  tests_reviewed: 5
+  risks_identified: 6
+  trace:
+    ac_covered: [1, 2, 3, 4, 5]
+    ac_gaps: []
+  gate_commands:
+    npm_test: '1532/1532 em 8 rodadas seguidas; 1 rodada anterior com 1 falha não reproduzida (TEST-003)'
+    node_test_decision_email: '15/15, e 25 repetições sem falha'
+    npm_run_typecheck: 'verde'
+    eslint_arquivos_alterados: '0 erros, 0 avisos'
+  independent_checks: 'Teste avulso fora do repo (scratchpad) com a rota real GET /api/submissions e envio com reviewed_by preenchido: o JSON não tem mais reviewedBy. Semântica de submission_version conferida nas migrations 20260816120000, 20260922120000 e 20261006130000.'
+  notes: 'Rótulos em português e selo com texto + cor (AC2); oficial ao lado do enviado só quando difere e observação com o rótulo de quem decidiu (AC3); histórico com selo e oficial (AC4); em análise e lançado pela organização só com rótulo traduzido (AC5). Ajuste manual vira "Ajustado" só em envio do atleta. Observação renderizada como texto React. Depois de uma reabertura por contestação (decisão reopened, mesma versão), o cartão mostra "Em análise" com a observação da reabertura; aceitável, porque explica a reabertura ao atleta.'
