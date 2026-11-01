@@ -93,7 +93,7 @@ export async function POST(request: Request) {
 
     const submissionId = data && typeof data === 'object' && 'submissionId' in data ? String(data.submissionId) : '';
     if (submissionId) {
-      await notifyAthleteOfQualifierResult(supabaseAdmin, { submissionId, change: 'manager_entry', justification });
+      await notifyAthleteOfQualifierResult(supabaseAdmin, { submissionId, change: 'manager_entry', actorRole: auth.user.role, justification });
     }
 
     return NextResponse.json({ success: true, result: data });

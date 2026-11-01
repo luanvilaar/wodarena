@@ -3,6 +3,47 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Event, Registration, ScoreSubmission } from '@/types';
 import { getSubmissionWindowMessage, getSubmissionWindowState } from '@/lib/submissionWindow';
+import {
+  getQualifierAthleteNoteLabel,
+  getQualifierAthleteOfficialResult,
+  getQualifierAthleteSituation,
+  QUALIFIER_ATHLETE_SITUATION_CLASSES,
+  QUALIFIER_ATHLETE_SITUATION_LABELS
+} from '@/lib/qualifierAthleteDecision';
+
+// Resultado oficial só quando difere do enviado (penalidade, rejeição, ajuste).
+const changedOfficialResult = (submission: ScoreSubmission) => {
+  const official = getQualifierAthleteOfficialResult(submission);
+  return official && official !== submission.submittedResult ? official : undefined;
+};
+
+// Selo da situação do envio, com texto e cor (Story 1.109).
+function SituationBadge({ submission }: { submission: ScoreSubmission }) {
+  const situation = getQualifierAthleteSituation(submission);
+  return <span className={`inline-flex shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${QUALIFIER_ATHLETE_SITUATION_CLASSES[situation]}`}>{QUALIFIER_ATHLETE_SITUATION_LABELS[situation]}</span>;
+}
+
+// Decisão da análise: situação, resultado oficial e observação de quem decidiu,
+// sem o nome de quem analisou.
+function SubmissionDecision({ submission, canSubmit }: { submission: ScoreSubmission; canSubmit: boolean }) {
+  const official = changedOfficialResult(submission);
+  const note = submission.latestDecision?.note;
+  return (
+    <div role="status" className="space-y-2 rounded-md border border-card-border bg-dark-gray/40 p-3 text-xs text-muted">
+      <div className="flex flex-wrap items-center gap-2">
+        <SituationBadge submission={submission} />
+        {submission.entrySource === 'manager' && <span>Lançado pela organização</span>}
+        <span>versão {submission.currentVersion}</span>
+      </div>
+      <p>
+        {submission.entrySource === 'manager' ? 'Resultado' : 'Você enviou'}: <strong className="text-white">{submission.submittedResult}</strong>
+        {official && <> · Resultado oficial: <strong className="text-white">{official}</strong></>}
+      </p>
+      {note && <p><span className="font-bold uppercase tracking-wider text-white">{getQualifierAthleteNoteLabel(submission)}:</span> <span className="whitespace-pre-line">{note}</span></p>}
+      {!canSubmit && <p>Para nova análise após decisão, use a contestação.</p>}
+    </div>
+  );
+}
 
 export function QualifierAthleteSubmissions({ events, registrations }: { events: Event[]; registrations: Registration[] }) {
   const qualifierRegistrations = useMemo(() => registrations.filter(registration => (
@@ -86,7 +127,7 @@ export function QualifierAthleteSubmissions({ events, registrations }: { events:
         {workout && <p className={`rounded-md border p-3 text-xs ${windowState === 'open' ? 'border-primary/30 bg-primary/5 text-primary' : 'border-card-border bg-dark-gray/30 text-muted'}`}>
           {getSubmissionWindowMessage(windowState)} {workout.submissionClosesAt ? `Limite: ${new Date(workout.submissionClosesAt).toLocaleString('pt-BR', { timeZone: 'America/Fortaleza' })} (Fortaleza).` : ''}
         </p>}
-        {existing && <p className="text-xs text-muted">Status atual: <strong className="text-white">{existing.status}</strong>{existing.entrySource === 'manager' ? ' (lançado pela organização)' : ''} · versão {existing.currentVersion}. {!canSubmit ? 'Para nova análise após decisão, use a contestação.' : ''}</p>}
+        {existing && <SubmissionDecision submission={existing} canSubmit={canSubmit} />}
         {awaitingResubmission && <p role="status" className="rounded-md border border-primary/30 bg-primary/5 p-3 text-xs text-primary">O organizador removeu seu resultado anterior e solicitou um novo envio. Envie um novo vídeo e resultado para esta prova dentro do prazo.</p>}
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <input required disabled={formLocked} value={result} onChange={e => setResult(e.target.value)} placeholder={workout?.type === 'fortime' ? 'Score (MM:SS)' : 'Score numérico'} className="rounded-md border border-card-border bg-dark-gray px-3 py-2 text-sm text-white disabled:opacity-50" />
@@ -96,7 +137,7 @@ export function QualifierAthleteSubmissions({ events, registrations }: { events:
         <button disabled={saving || formLocked} className="rounded-md bg-primary px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-ink disabled:opacity-50">{saving ? 'Enviando...' : awaitingResubmission ? 'Reenviar resultado' : existing ? 'Atualizar submissão' : 'Enviar resultado'}</button>
         {notice && <p role="status" className="text-sm text-muted">{notice}</p>}
       </form>
-      <section className="space-y-2"><h4 className="text-sm font-bold uppercase text-white">Histórico de envios</h4>{submissions.length === 0 ? <p className="text-sm text-muted">Nenhum resultado enviado.</p> : submissions.map(item => <article key={item.id} className="rounded-lg border border-card-border bg-card p-3 text-sm text-white"><p className="font-bold">{events.find(eventItem => eventItem.id === item.eventId)?.workouts.find(workoutItem => workoutItem.id === item.workoutId)?.name || 'Prova'} · {item.submittedResult}</p><p className="mt-1 text-xs text-muted">{item.status} · {item.entrySource === 'manager' ? 'lançado pela organização em' : 'enviado em'} {new Date(item.submittedAt).toLocaleString('pt-BR')}</p></article>)}</section>
+      <section className="space-y-2"><h4 className="text-sm font-bold uppercase text-white">Histórico de envios</h4>{submissions.length === 0 ? <p className="text-sm text-muted">Nenhum resultado enviado.</p> : submissions.map(item => <article key={item.id} className="rounded-lg border border-card-border bg-card p-3 text-sm text-white"><div className="flex flex-wrap items-center justify-between gap-2"><p className="min-w-0 font-bold">{events.find(eventItem => eventItem.id === item.eventId)?.workouts.find(workoutItem => workoutItem.id === item.workoutId)?.name || 'Prova'} · {item.submittedResult}{changedOfficialResult(item) ? ` → oficial ${changedOfficialResult(item)}` : ''}</p><SituationBadge submission={item} /></div><p className="mt-1 text-xs text-muted">{item.entrySource === 'manager' ? 'Lançado pela organização em' : 'Enviado em'} {new Date(item.submittedAt).toLocaleString('pt-BR')}</p></article>)}</section>
     </div>
   );
 }

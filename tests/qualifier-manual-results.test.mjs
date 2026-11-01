@@ -212,21 +212,18 @@ test('only the organizer manager edits reviewed results, and the athlete is told
   const rpcIndex = reviewsRoute.indexOf("rpc('qualifier_apply_review'");
   const notifyIndex = reviewsRoute.indexOf('await notifyAthleteOfQualifierResult(');
   assert.ok(rpcIndex > 0 && notifyIndex > rpcIndex);
-  assert.match(reviewsRoute, /if \(isEdit\) \{\s*await notifyAthleteOfQualifierResult/);
+  // Story 1.108: a primeira análise também avisa; a edição leva o resultado anterior.
+  assert.doesNotMatch(reviewsRoute, /if \(isEdit\) \{\s*await notifyAthleteOfQualifierResult/);
+  assert.match(reviewsRoute, /change: 'organization_edit'/);
+  assert.match(reviewsRoute, /previous: \{ status: submission\.status, result: submission\.final_result \}/);
   assert.match(resubmissionRoute, /requireSession\(request, \['manager'\]\)/);
 });
 
-test('e-mail to the athlete is escaped, labelled and best-effort', () => {
-  assert.match(resend, /export async function sendQualifierResultUpdatedEmail\(params: \{/);
-  const emailBody = resend.slice(resend.indexOf('export async function sendQualifierResultUpdatedEmail'), resend.indexOf('export async function sendCommercialLeadOwnerEmail'));
-  for (const field of ['athleteName', 'eventName', 'workoutName', 'situationLabel', 'finalResult', 'justification']) {
-    assert.match(emailBody, new RegExp(`escapeHtml\\(params\\.${field}`));
-  }
-  assert.match(emailBody, /Resultado lançado pela organização/);
-  assert.match(notifications, /manager_entry: 'Lançado pela organização'/);
-  assert.match(notifications, /penalized: 'Penalizado \(-15%\)'/);
+test('e-mail to the athlete is labelled and best-effort', () => {
+  assert.match(resend, /export async function sendQualifierDecisionEmail\(params: \{/);
+  assert.doesNotMatch(resend, /sendQualifierResultUpdatedEmail|sendQualifierResubmissionRequestedEmail/);
   assert.match(notifications, /try \{[\s\S]*\} catch \(error\) \{\s*console\.error/);
-  assert.match(notifications, /launchedByOrganization: params\.change === 'manager_entry'/);
+  assert.match(notifications, /actor: getQualifierDecisionActor\(params\.actorRole\)/);
 });
 
 // ---------------------------------------------------------------------------
@@ -251,8 +248,8 @@ test('results screen lists every eligible athlete and exposes launch, edit and c
 });
 
 test('athlete sees when the result was entered by the organization', () => {
-  assert.match(athleteSubmissions, /existing\.entrySource === 'manager' \? ' \(lançado pela organização\)'/);
-  assert.match(athleteSubmissions, /item\.entrySource === 'manager' \? 'lançado pela organização em' : 'enviado em'/);
+  assert.match(athleteSubmissions, /submission\.entrySource === 'manager' && <span>Lançado pela organização<\/span>/);
+  assert.match(athleteSubmissions, /item\.entrySource === 'manager' \? 'Lançado pela organização em' : 'Enviado em'/);
 });
 
 test('CLI mirrors manual launch through the same RPC', () => {

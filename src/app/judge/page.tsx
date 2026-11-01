@@ -126,7 +126,7 @@ export default function JudgePage() {
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || 'Não foi possível aplicar a decisão.');
 
-      setNotice('Decisão registrada com sucesso.');
+      setNotice('Decisão registrada. O atleta será avisado por e-mail.');
       setJustification('');
       setManualResult('');
       await loadQueue();

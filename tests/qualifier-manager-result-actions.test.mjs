@@ -13,7 +13,6 @@ const resubmissionRoutePath = '../src/app/api/judge/submissions/request-resubmis
 const resubmissionRoute = read(resubmissionRoutePath);
 const judgeQueueRoute = read('../src/app/api/judge/queue/route.ts');
 const contestationsRoute = read('../src/app/api/contestations/route.ts');
-const resend = read('../src/lib/resend.ts');
 const resultsManagerPath = '../src/components/QualifierResultsManager.tsx';
 const resultsManager = read(resultsManagerPath);
 const adminPage = read('../src/app/admin/page.tsx');
@@ -136,13 +135,13 @@ test('reviewed_at concurrency token travels as the raw database string, never th
 });
 
 test('athlete is notified by e-mail only after the RPC succeeds, in best-effort mode', () => {
-  assert.match(resend, /export async function sendQualifierResubmissionRequestedEmail\(params: \{\s*to: string;\s*athleteName: string;\s*eventName: string;\s*workoutName: string;\s*justification: string;/);
-  assert.match(resend, /escapeHtml\(params\.justification/);
   const rpcIndex = resubmissionRoute.indexOf("rpc('qualifier_request_resubmission'");
-  const notifyIndex = resubmissionRoute.indexOf('await notifyAthlete(');
+  const notifyIndex = resubmissionRoute.indexOf('await notifyAthleteOfQualifierResult(');
   assert.ok(rpcIndex > 0 && notifyIndex > rpcIndex, 'o e-mail deve ser disparado depois do RPC');
-  assert.match(resubmissionRoute, /sendQualifierResubmissionRequestedEmail\(\{/);
-  assert.match(resubmissionRoute, /catch \(error\) \{\s*console\.error\('\[Qualifier Resubmission API\] Erro ao notificar atleta por e-mail:', error\);/);
+  // Story 1.108: modelo único; o resultado anterior é lido antes do RPC, que o limpa.
+  assert.match(resubmissionRoute, /change: 'resubmission_requested'/);
+  assert.match(resubmissionRoute, /\.select\('id, event_id, status, final_result'\)/);
+  assert.match(resubmissionRoute, /previous: \{ status: submission\.status, result: submission\.final_result \}/);
 });
 
 test('qualifierErrorStatus maps the new RPC error codes', () => {

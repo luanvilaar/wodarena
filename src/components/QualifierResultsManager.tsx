@@ -155,7 +155,7 @@ export function QualifierResultsManager({ event }: { event: Event }) {
         manualResult
       }, 'Não foi possível editar o resultado.');
       return isPending
-        ? `Resultado de ${row.athleteName} revisado.`
+        ? `Resultado de ${row.athleteName} revisado. O atleta será avisado por e-mail.`
         : `Resultado de ${row.athleteName} atualizado. O atleta será avisado por e-mail.`;
     }, 'Erro ao editar o resultado.');
   };

@@ -311,6 +311,15 @@ export interface ScoreSubmission {
   currentVersion: number;
   createdAt: string;
   updatedAt: string;
+  // Só na rota do atleta (GET /api/submissions): última decisão, sem quem analisou.
+  latestDecision?: ScoreSubmissionDecisionSummary;
+}
+
+export interface ScoreSubmissionDecisionSummary {
+  decision: ScoreSubmissionDecision;
+  decidedBy: 'judge' | 'organization';
+  note?: string;
+  decidedAt: string;
 }
 
 export interface ScoreSubmissionReview {

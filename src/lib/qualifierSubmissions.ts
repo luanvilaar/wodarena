@@ -1,4 +1,4 @@
-import { ScoreSubmission, ScoreSubmissionReview } from '@/types';
+import { ScoreSubmission, ScoreSubmissionDecisionSummary, ScoreSubmissionReview } from '@/types';
 
 type DbRow = Record<string, unknown>;
 
@@ -34,6 +34,32 @@ export const mapScoreSubmissionFromDb = (row: DbRow): ScoreSubmission => ({
   createdAt: String(row.created_at),
   updatedAt: String(row.updated_at)
 });
+
+// Última revisão de cada envio, para o atleta: sem nome nem id de quem
+// analisou (judge vira "arbitragem"; gestor e owner, "organização").
+// Só revisões da versão atual: depois de um novo envio a observação da versão
+// anterior não acompanha o envio que está em análise.
+export const summarizeLatestDecisions = (
+  rows: DbRow[],
+  submissions: Array<Pick<ScoreSubmission, 'id' | 'currentVersion'>>
+) => {
+  const currentVersion = new Map(submissions.map(submission => [submission.id, submission.currentVersion]));
+  const latest = new Map<string, ScoreSubmissionDecisionSummary>();
+  for (const row of rows) {
+    const submissionId = String(row.submission_id);
+    if (Number(row.submission_version) !== currentVersion.get(submissionId)) continue;
+    const decidedAt = String(row.reviewed_at);
+    const current = latest.get(submissionId);
+    if (current && Date.parse(current.decidedAt) >= Date.parse(decidedAt)) continue;
+    latest.set(submissionId, {
+      decision: String(row.decision) as ScoreSubmissionDecisionSummary['decision'],
+      decidedBy: row.judge_role === 'judge' ? 'judge' : 'organization',
+      note: optionalText(typeof row.justification === 'string' ? row.justification.trim() : undefined),
+      decidedAt
+    });
+  }
+  return latest;
+};
 
 export const mapScoreSubmissionReviewFromDb = (row: DbRow): ScoreSubmissionReview => ({
   id: String(row.id),

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { mapScoreSubmissionReviewFromDb, qualifierErrorStatus } from '@/lib/qualifierSubmissions';
 import { parseScoreForWorkout } from '@/lib/scoring';
 import { assertQualifierJudgeAccess, JudgeAccessError } from '@/lib/serverJudgeAccess';
-import { notifyAthleteOfQualifierResult, type QualifierResultChange } from '@/lib/qualifierNotifications';
+import { notifyAthleteOfQualifierResult, type QualifierReviewDecision } from '@/lib/qualifierNotifications';
 import { checkRateLimit, createSupabaseAdmin, requireSession, safeErrorMessage } from '@/lib/serverSecurity';
 
 const readError = (error: unknown) => error && typeof error === 'object' && 'message' in error
@@ -25,7 +25,7 @@ const getAuthorizedSubmission = async (
 ) => {
   const { data: submission, error } = await supabaseAdmin
     .from('score_submissions')
-    .select('id, event_id, workout_id, current_version, status')
+    .select('id, event_id, workout_id, current_version, status, final_result')
     .eq('id', submissionId)
     .maybeSingle();
   if (error) throw error;
@@ -113,14 +113,19 @@ export async function POST(request: Request) {
       const message = readError(error);
       return NextResponse.json({ error: reviewErrorMessage(message) }, { status: qualifierErrorStatus(message) });
     }
-    // Edição de um resultado já revisado: o atleta é avisado por e-mail.
-    if (isEdit) {
-      await notifyAthleteOfQualifierResult(supabaseAdmin, {
+    // Toda decisão avisa o atleta por e-mail (Story 1.108): a primeira análise
+    // com o tipo da decisão e a edição do gestor com o resultado de antes.
+    const justification = typeof body.justification === 'string' ? body.justification.trim() : '';
+    await notifyAthleteOfQualifierResult(supabaseAdmin, isEdit
+      ? {
         submissionId,
-        change: decision as QualifierResultChange,
-        justification: typeof body.justification === 'string' ? body.justification.trim() : ''
-      });
-    }
+        change: 'organization_edit',
+        actorRole: auth.user.role,
+        justification,
+        previous: { status: submission.status, result: submission.final_result },
+        editDecision: decision as QualifierReviewDecision
+      }
+      : { submissionId, change: decision as QualifierReviewDecision, actorRole: auth.user.role, justification });
     return NextResponse.json({ success: true, review: data });
   } catch (error) {
     if (error instanceof JudgeAccessError) return NextResponse.json({ error: error.message }, { status: error.status });

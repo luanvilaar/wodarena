@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { mapScoreSubmissionFromDb, qualifierErrorStatus } from '@/lib/qualifierSubmissions';
+import type { ScoreSubmissionDecisionSummary } from '@/types';
+import { mapScoreSubmissionFromDb, qualifierErrorStatus, summarizeLatestDecisions } from '@/lib/qualifierSubmissions';
 import { parseScoreForWorkout } from '@/lib/scoring';
 import { checkRateLimit, createSupabaseAdmin, requireSession, safeErrorMessage } from '@/lib/serverSecurity';
 import { normalizeYouTubeVideoUrl } from '@/lib/videoProof';
@@ -26,7 +27,23 @@ export async function GET(request: Request) {
     if (eventId) query = query.eq('event_id', eventId);
     const { data, error } = await query;
     if (error) throw error;
-    return NextResponse.json({ submissions: (data || []).map(mapScoreSubmissionFromDb) });
+    // Área do atleta (Story 1.109): sem o nome nem o id de quem analisou, então
+    // reviewedBy sai da resposta; a última decisão diz só "arbitragem" ou "organização".
+    const submissions = (data || []).map(row => ({ ...mapScoreSubmissionFromDb(row), reviewedBy: undefined }));
+    const ids = submissions.map(submission => submission.id);
+    let decisions = new Map<string, ScoreSubmissionDecisionSummary>();
+    if (ids.length > 0) {
+      const { data: reviews, error: reviewsError } = await supabaseAdmin
+        .from('score_submission_reviews')
+        .select('submission_id, submission_version, decision, judge_role, justification, reviewed_at')
+        .in('submission_id', ids);
+      // Sem a decisão a lista do atleta ainda é útil: registra e segue sem ela.
+      if (reviewsError) console.error('[Qualifier Submissions API] Erro ao ler decisões dos envios:', reviewsError);
+      else decisions = summarizeLatestDecisions(reviews || [], submissions);
+    }
+    return NextResponse.json({
+      submissions: submissions.map(submission => ({ ...submission, latestDecision: decisions.get(submission.id) }))
+    });
   } catch (error) {
     console.error('[Qualifier Submissions API] Erro ao listar submissões:', error);
     return NextResponse.json({ error: safeErrorMessage(error, 'Erro ao listar submissões.') }, { status: 500 });

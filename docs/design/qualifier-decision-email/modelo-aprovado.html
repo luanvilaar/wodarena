@@ -1,0 +1,412 @@
+<title>E-mail da Análise Qualifier</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: cabeçalho de aprovação → resumo do erro → seletor de variantes + prévia do e-mail ao lado da anatomia → cobertura → decisões. */
+:root {
+  --bg: #f4f4f1;
+  --surface: #ffffff;
+  --fg: #181a20;
+  --muted: #5e6673;
+  --line: #dfe1e4;
+  --accent: #fcd535;
+  --accent-ink: #6b5400;
+  --chip-bg: #fff6cc;
+  --ok: #0b7a4f; --ok-bg: #e3f5ec;
+  --warn: #9a5b00; --warn-bg: #fff1d6;
+  --bad: #b42323; --bad-bg: #fde6e6;
+  --info: #2a4fb8; --info-bg: #e5ecfc;
+  --neutral: #3c4350; --neutral-bg: #eceef1;
+  /* Prévia do e-mail: superfície fixa, igual em qualquer tema (o e-mail chega sempre claro) */
+  --mail-bg: #f2f3f5; --mail-card: #ffffff; --mail-ink: #181a20; --mail-muted: #5e6673; --mail-line: #e6e8eb; --mail-dark: #181a20;
+  --font-display: "Barlow Condensed", "Arial Narrow", Arial, sans-serif;
+  --font-body: "IBM Plex Sans", -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  --font-mail: Arial, Helvetica, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121317; --surface: #1b1d23; --fg: #eceef1; --muted: #9aa3b1; --line: #2c2f37;
+    --accent-ink: #fcd535; --chip-bg: #2e2a12;
+    --ok: #4fd39a; --ok-bg: #0f2a1f; --warn: #f2b45a; --warn-bg: #2d2210;
+    --bad: #f28b8b; --bad-bg: #331616; --info: #8fb0ff; --info-bg: #161f38;
+    --neutral: #c3c9d2; --neutral-bg: #262932;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121317; --surface: #1b1d23; --fg: #eceef1; --muted: #9aa3b1; --line: #2c2f37;
+  --accent-ink: #fcd535; --chip-bg: #2e2a12;
+  --ok: #4fd39a; --ok-bg: #0f2a1f; --warn: #f2b45a; --warn-bg: #2d2210;
+  --bad: #f28b8b; --bad-bg: #331616; --info: #8fb0ff; --info-bg: #161f38;
+  --neutral: #c3c9d2; --neutral-bg: #262932;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.55; }
+.page { max-width: 1180px; margin: 0 auto; padding-block: 28px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 28px; }
+h1, h2, h3 { font-family: var(--font-display); text-transform: uppercase; letter-spacing: 0.02em; text-wrap: balance; margin: 0; line-height: 1.05; }
+h1 { font-size: clamp(30px, 5vw, 46px); font-weight: 800; }
+h2 { font-size: 24px; font-weight: 800; }
+h3 { font-size: 18px; font-weight: 600; }
+p { margin: 0; }
+.eyebrow { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.top { display: grid; gap: 12px; }
+.top-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.pill { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 4px 12px; font-size: 12px; font-weight: 600; background: var(--chip-bg); color: var(--accent-ink); border: 1px solid color-mix(in srgb, var(--accent) 60%, transparent); }
+.lede { max-width: 68ch; color: var(--muted); }
+
+.diag { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 20px; display: grid; gap: 14px; }
+.diag-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.diag-grid > div { display: grid; gap: 4px; min-width: 0; }
+.diag code, .mono { font-family: var(--font-mono); font-size: 12.5px; }
+.diag code { background: var(--neutral-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+.k { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+
+.studio { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 24px; align-items: start; }
+@media (max-width: 960px) { .studio { grid-template-columns: minmax(0, 1fr); } }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.tab { font: inherit; font-size: 13px; font-weight: 600; border: 1px solid var(--line); background: var(--surface); color: var(--fg); border-radius: 6px; padding: 7px 12px; cursor: pointer; display: inline-flex; gap: 7px; align-items: center; min-height: 36px; }
+.tab .dot { width: 8px; height: 8px; border-radius: 50%; }
+.tab[aria-selected="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.tab:focus-visible, .seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tab .new { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em; padding: 1px 5px; border-radius: 3px; background: var(--chip-bg); color: var(--accent-ink); }
+.tab[aria-selected="true"] .new { background: var(--accent); color: #181a20; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg button { font: inherit; font-size: 12px; font-weight: 600; background: var(--surface); color: var(--muted); border: 0; padding: 7px 12px; cursor: pointer; min-height: 34px; }
+.seg button[aria-pressed="true"] { background: var(--neutral-bg); color: var(--fg); }
+
+.inbox { margin-top: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.inbox-head { padding: 14px 18px; border-bottom: 1px solid var(--line); display: grid; gap: 3px; }
+.inbox-head .subj { font-weight: 600; font-size: 15px; overflow-wrap: anywhere; }
+.inbox-head .pre { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+.inbox-head .from { font-size: 12px; color: var(--muted); }
+.stage { background: var(--mail-bg); padding: 24px 12px; overflow-x: auto; }
+
+/* ---------- E-mail (superfície fixa) ---------- */
+.mail { width: 100%; max-width: 600px; margin: 0 auto; background: var(--mail-card); color: var(--mail-ink); font-family: var(--font-mail); border: 1px solid var(--mail-line); border-radius: 12px; overflow: hidden; transition: max-width .25s ease; }
+.stage[data-width="mobile"] .mail { max-width: 375px; }
+.m-head { background: var(--mail-dark); border-bottom: 4px solid var(--accent); padding: 18px 24px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.m-brand { color: var(--accent); font-weight: 900; letter-spacing: 0.16em; font-size: 18px; }
+.m-tag { color: #c9ced6; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 700; }
+.m-body { padding: 28px 24px 8px; display: grid; gap: 18px; }
+.seal { justify-self: start; display: inline-block; border: 2px solid currentColor; border-radius: 4px; padding: 5px 10px; font-weight: 900; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; }
+.m-title { font-size: 24px; line-height: 1.15; font-weight: 800; margin: 0; color: var(--mail-ink); }
+.m-text { font-size: 14px; line-height: 1.6; color: var(--mail-muted); }
+.m-text strong { color: var(--mail-ink); }
+.ledger { border: 1px solid var(--mail-line); border-radius: 10px; overflow: hidden; }
+.ledger-top { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; padding: 16px; }
+.lcell { display: grid; gap: 3px; min-width: 0; }
+.lcell.right { text-align: right; }
+.llabel { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--mail-muted); }
+.lval { font-size: 22px; font-weight: 800; color: var(--mail-ink); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.lval.struck { color: var(--mail-muted); text-decoration: line-through; text-decoration-thickness: 2px; font-weight: 700; }
+.arrow { font-size: 18px; color: var(--mail-muted); }
+.ledger-rows { border-top: 1px solid var(--mail-line); }
+.lrow { display: grid; grid-template-columns: 38% 1fr; gap: 10px; padding: 9px 16px; font-size: 13px; }
+.lrow + .lrow { border-top: 1px solid var(--mail-line); }
+.lrow .llabel { padding-top: 2px; }
+.lrow .v { color: var(--mail-ink); font-weight: 700; overflow-wrap: anywhere; }
+.note { border-left: 4px solid var(--mail-line); background: #f7f8f9; padding: 12px 14px; border-radius: 0 8px 8px 0; display: grid; gap: 4px; }
+.note .llabel { color: var(--mail-ink); }
+.note p { font-size: 14px; line-height: 1.55; color: var(--mail-ink); }
+.note.optional { border-left-style: dashed; }
+.next { display: grid; gap: 6px; }
+.next .llabel { color: var(--mail-ink); }
+.cta { justify-self: start; display: inline-block; background: var(--accent); color: #181a20; text-decoration: none; font-weight: 800; font-size: 14px; padding: 13px 20px; border-radius: 6px; }
+.m-foot { margin-top: 18px; border-top: 1px solid var(--mail-line); background: #fafafa; padding: 16px 24px; font-size: 11px; line-height: 1.55; color: var(--mail-muted); }
+.stage[data-width="mobile"] .ledger-top { grid-template-columns: 1fr; text-align: left; }
+.stage[data-width="mobile"] .lcell.right { text-align: left; }
+.stage[data-width="mobile"] .arrow { transform: rotate(90deg); justify-self: start; }
+.stage[data-width="mobile"] .lrow { grid-template-columns: 1fr; gap: 2px; }
+.stage[data-width="mobile"] .cta { justify-self: stretch; text-align: center; }
+
+.anatomy { display: grid; gap: 14px; }
+.anatomy ol { margin: 0; padding-left: 20px; display: grid; gap: 10px; }
+.anatomy li { font-size: 14px; }
+.anatomy li b { display: block; font-size: 13px; }
+.anatomy li span { color: var(--muted); font-size: 13px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: grid; gap: 12px; }
+
+.tablewrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; min-width: 680px; font-size: 14px; }
+th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+tr:last-child td { border-bottom: 0; }
+.st { display: inline-block; font-size: 12px; font-weight: 600; border-radius: 4px; padding: 2px 8px; white-space: nowrap; }
+.st.no { background: var(--bad-bg); color: var(--bad); }
+.st.yes { background: var(--ok-bg); color: var(--ok); }
+
+.decisions { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+.decision { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 8px; align-content: start; }
+.decision .rec { font-size: 13px; color: var(--ok); font-weight: 600; }
+.decision p { font-size: 14px; color: var(--muted); }
+section > h2 + p { margin-top: 6px; }
+section { display: grid; gap: 14px; }
+@media (prefers-reduced-motion: reduce) { .mail { transition: none; } }
+</style>
+
+<main class="page">
+  <header class="top">
+    <div class="top-row">
+      <span class="eyebrow">WODArena · Qualifier online · 01/11/2026</span>
+      <span class="pill">Aguardando aprovação</span>
+    </div>
+    <h1>E-mail da análise de resultado</h1>
+    <p class="lede">Proposta de modelo para avisar o atleta sempre que a arbitragem ou a organização decidir sobre o resultado de uma prova do qualifier. Todos os exemplos usam dados fictícios. Nada foi alterado no código nem no banco.</p>
+  </header>
+
+  <section class="diag" aria-labelledby="diag-title">
+    <h2 id="diag-title">Por que o atleta não recebe nada hoje</h2>
+    <div class="diag-grid">
+      <div>
+        <span class="k">Onde</span>
+        <p><code>src/app/api/judge/reviews/route.ts</code>, linha 117: o envio só acontece dentro de <code>if (isEdit)</code>.</p>
+      </div>
+      <div>
+        <span class="k">Efeito</span>
+        <p>A primeira análise de um envio (status <code>pending_review</code>) grava a decisão e não dispara e-mail. É a análise feita pelo judge em praticamente todos os casos.</p>
+      </div>
+      <div>
+        <span class="k">Desde quando</span>
+        <p>Commit <code>450f052</code> (06/10/2026). O e-mail foi pensado só para ações do gestor; o teste <code>qualifier-manual-results.test.mjs</code> trava essa regra.</p>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="model-title">
+    <h2 id="model-title">Modelo proposto</h2>
+    <p class="lede">Uma estrutura só para todas as decisões. Muda o selo, o título, o quadro de resultado e o próximo passo.</p>
+    <div class="studio">
+      <div style="min-width:0">
+        <div class="controls">
+          <div class="tabs" role="tablist" aria-label="Variante do e-mail" id="tabs"></div>
+          <div class="seg" role="group" aria-label="Largura da prévia">
+            <button type="button" id="w-desktop" aria-pressed="true">Desktop</button>
+            <button type="button" id="w-mobile" aria-pressed="false">Celular</button>
+          </div>
+        </div>
+        <div class="inbox">
+          <div class="inbox-head">
+            <span class="from">De: WODArena &lt;noreply@wodarena.com.br&gt; · Para: marina.duarte@exemplo.com</span>
+            <span class="subj" id="subj"></span>
+            <span class="pre" id="pre"></span>
+          </div>
+          <div class="stage" id="stage" data-width="desktop">
+            <article class="mail" aria-live="polite">
+              <div class="m-head"><span class="m-brand">WODARENA</span><span class="m-tag">Qualifier online</span></div>
+              <div class="m-body">
+                <span class="seal" id="seal"></span>
+                <h3 class="m-title" id="title" style="font-family:var(--font-mail);text-transform:none;letter-spacing:0"></h3>
+                <p class="m-text" id="intro"></p>
+                <div class="ledger">
+                  <div class="ledger-top">
+                    <div class="lcell"><span class="llabel" id="fromLabel"></span><span class="lval" id="fromVal"></span></div>
+                    <span class="arrow" aria-hidden="true">→</span>
+                    <div class="lcell right"><span class="llabel">Resultado oficial</span><span class="lval" id="toVal"></span></div>
+                  </div>
+                  <div class="ledger-rows" id="rows"></div>
+                </div>
+                <div class="note" id="note"><span class="llabel" id="noteLabel"></span><p id="noteText"></p></div>
+                <div class="next"><span class="llabel">O que fazer agora</span><p class="m-text" id="next"></p></div>
+                <a class="cta" id="cta" href="#model-title"></a>
+              </div>
+              <div class="m-foot">Você recebeu esta mensagem porque tem inscrição no <strong>Qualifier Online 2026</strong>, organizado por Box Exemplo. A decisão completa também fica na sua área do atleta, em wodarena.com.br.</div>
+            </article>
+          </div>
+        </div>
+      </div>
+
+      <aside class="anatomy">
+        <div class="panel">
+          <h3>Anatomia</h3>
+          <ol>
+            <li><b>Assunto com a decisão na frente</b><span>O atleta sabe o resultado pela caixa de entrada, sem abrir.</span></li>
+            <li><b>Selo de situação</b><span>Mesmos nomes do painel do gestor: Validado, Penalizado, Rejeitado, Ajustado. Cor e texto juntos, nunca só cor.</span></li>
+            <li><b>Quadro enviado → oficial</b><span>Mostra o que mudou e a conta aplicada (ex.: 214 × 0,85 = 181).</span></li>
+            <li><b>Observação da arbitragem</b><span>Texto da justificativa, escapado. Em "Validado" só aparece se o judge escrever algo.</span></li>
+            <li><b>Próximo passo e botão</b><span>Leva à área do atleta, onde está a contestação. Botão com 44px de altura.</span></li>
+          </ol>
+        </div>
+        <div class="panel">
+          <h3>Regras visuais</h3>
+          <p class="m-text" style="color:var(--muted)">Largura 600px, tabelas com estilo inline, fonte Arial (o Gmail e o Outlook ignoram fontes da web), contraste AA em todos os selos, versão em texto puro junto do HTML e idioma pela inscrição (pt-BR, pt-PT, en-GB).</p>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <section aria-labelledby="cov-title">
+    <h2 id="cov-title">Quais ações passam a avisar o atleta</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Ação</th><th>Quem faz</th><th>Hoje</th><th>Com a correção</th></tr></thead>
+        <tbody>
+          <tr><td>Primeira análise: validar, penalizar, rejeitar ou ajustar</td><td>Judge, gestor ou owner</td><td><span class="st no">Sem e-mail</span></td><td><span class="st yes">E-mail da decisão</span></td></tr>
+          <tr><td>Editar um resultado já analisado</td><td>Gestor organizador</td><td><span class="st yes">"Resultado atualizado"</span></td><td><span class="st yes">Mesmo aviso, no modelo novo</span></td></tr>
+          <tr><td>Lançar resultado pela organização</td><td>Gestor organizador</td><td><span class="st yes">"Resultado lançado"</span></td><td><span class="st yes">Mesmo aviso, no modelo novo</span></td></tr>
+          <tr><td>Excluir resultado e pedir novo envio</td><td>Gestor organizador</td><td><span class="st yes">E-mail próprio</span></td><td><span class="st yes">Mesmo aviso, no modelo novo</span></td></tr>
+          <tr><td>Responder contestação</td><td>Gestor organizador</td><td><span class="st yes">E-mail próprio</span></td><td><span class="st yes">Sem mudança</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="dec-title">
+    <h2 id="dec-title">Decisões para aprovar</h2>
+    <div class="decisions">
+      <div class="decision"><h3>Avisar também quando valida</h3><p>Um e-mail curto confirmando que o resultado conta no ranking, mesmo sem observação.</p><span class="rec">Recomendo: sim</span></div>
+      <div class="decision"><h3>Nome de quem analisou</h3><p>Mostrar só "arbitragem" ou "organização", sem o nome do judge, para evitar pressão direta sobre o árbitro.</p><span class="rec">Recomendo: não mostrar o nome</span></div>
+      <div class="decision"><h3>Decisões já tomadas</h3><p>Envios analisados antes da correção ficaram sem aviso. Dá para mandar um lote único com a decisão atual de cada um, depois de conferir a lista.</p><span class="rec">Recomendo: decidir depois de ver a contagem no banco</span></div>
+      <div class="decision"><h3>Idioma</h3><p>Usar o idioma da inscrição (pt-BR, pt-PT, en-GB), como já faz o e-mail de confirmação de inscrição.</p><span class="rec">Recomendo: sim</span></div>
+    </div>
+  </section>
+</main>
+
+<script>
+(function () {
+  var tones = {
+    ok: ['var(--ok)', '#0b7a4f'], warn: ['var(--warn)', '#9a5b00'], bad: ['var(--bad)', '#b42323'],
+    info: ['var(--info)', '#2a4fb8'], neutral: ['var(--neutral)', '#3c4350']
+  };
+  var V = [
+    { id: 'validated', tab: 'Validado', isNew: true, tone: 'ok',
+      subject: 'Resultado validado · 26.1 · Qualifier Online 2026',
+      pre: 'Seus 214 reps foram conferidos e já contam no ranking da categoria.',
+      seal: 'Validado', title: 'Seu resultado foi validado',
+      intro: 'Olá, <strong>Marina</strong>. A arbitragem conferiu o vídeo da prova <strong>26.1</strong> e confirmou o resultado que você enviou.',
+      fromLabel: 'Você enviou', fromVal: '214 reps', toVal: '214 reps', struck: false,
+      rows: [['Prova', '26.1 · AMRAP 12 min'], ['Categoria', 'RX Feminino'], ['Decisão', 'Validado sem alteração']],
+      noteLabel: 'Observação da arbitragem (opcional)', note: 'Movimentos dentro do padrão do começo ao fim. Boa prova!', optional: true,
+      next: 'Nada a fazer. O ranking da categoria é atualizado automaticamente.', cta: 'Ver ranking da categoria' },
+    { id: 'penalized', tab: 'Penalizado', isNew: true, tone: 'warn',
+      subject: 'Resultado penalizado em 15% · 26.1 · Qualifier Online 2026',
+      pre: 'A arbitragem aplicou a penalidade do regulamento: 214 reps passam a 181.',
+      seal: 'Penalizado −15%', title: 'Seu resultado recebeu penalidade',
+      intro: 'Olá, <strong>Marina</strong>. A arbitragem encontrou repetições fora do padrão no vídeo da prova <strong>26.1</strong> e aplicou a penalidade de 15% prevista no regulamento.',
+      fromLabel: 'Você enviou', fromVal: '214 reps', toVal: '181 reps', struck: true,
+      rows: [['Prova', '26.1 · AMRAP 12 min'], ['Conta aplicada', '214 × 0,85 = 181 (arredondado para baixo)'], ['Decisão', 'Penalizado']],
+      noteLabel: 'Observação da arbitragem', note: 'Entre 6:10 e 7:40 do vídeo, 9 wall balls não atingiram a altura do alvo.',
+      next: 'Se discordar, abra uma contestação pela sua área do atleta. Cada contestação usa um crédito da sua inscrição.', cta: 'Ver detalhes e contestar' },
+    { id: 'rejected', tab: 'Rejeitado', isNew: true, tone: 'bad',
+      subject: 'Resultado rejeitado · 26.1 · Qualifier Online 2026',
+      pre: 'A arbitragem não conseguiu validar o seu envio. Veja o motivo e como contestar.',
+      seal: 'Rejeitado', title: 'Seu resultado não foi aceito',
+      intro: 'Olá, <strong>Marina</strong>. A arbitragem não conseguiu validar o resultado enviado na prova <strong>26.1</strong>, e ele foi rejeitado.',
+      fromLabel: 'Você enviou', fromVal: '214 reps', toVal: '0', struck: true,
+      rows: [['Prova', '26.1 · AMRAP 12 min'], ['No ranking', 'Conta como a última colocação da categoria'], ['Decisão', 'Rejeitado']],
+      noteLabel: 'Observação da arbitragem', note: 'O vídeo termina aos 7:12 e não mostra o fim do AMRAP de 12 minutos.',
+      next: 'Se discordar, abra uma contestação pela sua área do atleta. Cada contestação usa um crédito da sua inscrição.', cta: 'Ver detalhes e contestar' },
+    { id: 'manual', tab: 'Ajustado', isNew: true, tone: 'info',
+      subject: 'Resultado ajustado pela arbitragem · 26.2 · Qualifier Online 2026',
+      pre: 'O tempo oficial da prova 26.2 ficou em 09:10.',
+      seal: 'Ajustado', title: 'Seu resultado foi ajustado',
+      intro: 'Olá, <strong>Marina</strong>. A arbitragem conferiu o vídeo da prova <strong>26.2</strong> e registrou um resultado diferente do enviado.',
+      fromLabel: 'Você enviou', fromVal: '08:42', toVal: '09:10', struck: true,
+      rows: [['Prova', '26.2 · For Time'], ['Decisão', 'Ajuste da arbitragem']],
+      noteLabel: 'Observação da arbitragem', note: 'Tempo final conferido no relógio visível no vídeo: 09:10.',
+      next: 'Se discordar, abra uma contestação pela sua área do atleta. Cada contestação usa um crédito da sua inscrição.', cta: 'Ver detalhes e contestar' },
+    { id: 'edited', tab: 'Alterado pela organização', isNew: false, tone: 'neutral',
+      subject: 'A organização alterou seu resultado · 26.1 · Qualifier Online 2026',
+      pre: 'Seu resultado na 26.1 mudou de validado para penalizado. Veja o motivo.',
+      seal: 'Alterado', title: 'A organização alterou seu resultado',
+      intro: 'Olá, <strong>Marina</strong>. A organização do evento revisou a decisão anterior da prova <strong>26.1</strong>.',
+      fromLabel: 'Antes · Validado', fromVal: '214 reps', toVal: '181 reps', struck: true,
+      rows: [['Prova', '26.1 · AMRAP 12 min'], ['Situação nova', 'Penalizado (−15%)']],
+      noteLabel: 'Motivo informado pela organização', note: 'Após rever o vídeo em câmera lenta, a organização identificou 9 wall balls abaixo do alvo.',
+      next: 'Se discordar, abra uma contestação pela sua área do atleta. Cada contestação usa um crédito da sua inscrição.', cta: 'Ver detalhes e contestar' },
+    { id: 'entry', tab: 'Lançado pela organização', isNew: false, tone: 'neutral',
+      subject: 'A organização lançou seu resultado · 26.3 · Qualifier Online 2026',
+      pre: 'Seu resultado da 26.3 foi registrado pela organização: 198 reps.',
+      seal: 'Lançado pela organização', title: 'A organização lançou seu resultado',
+      intro: 'Olá, <strong>Marina</strong>. A organização do evento registrou o seu resultado da prova <strong>26.3</strong>.',
+      fromLabel: 'Envio do atleta', fromVal: 'Sem vídeo', toVal: '198 reps', struck: false,
+      rows: [['Prova', '26.3 · AMRAP 10 min'], ['Origem', 'Lançado pela organização']],
+      noteLabel: 'Motivo informado pela organização', note: 'Prova realizada no box com julgamento presencial da organização.',
+      next: 'Confira o resultado. Se houver erro, abra uma contestação pela sua área do atleta.', cta: 'Ver na área do atleta' },
+    { id: 'resubmit', tab: 'Novo envio solicitado', isNew: false, tone: 'warn',
+      subject: 'Envie de novo o resultado da 26.1 · Qualifier Online 2026',
+      pre: 'A organização removeu o seu envio e pediu um novo vídeo dentro do prazo.',
+      seal: 'Novo envio', title: 'Precisamos de um novo envio',
+      intro: 'Olá, <strong>Marina</strong>. A organização removeu o resultado da prova <strong>26.1</strong> e pediu que você envie de novo.',
+      fromLabel: 'Envio anterior', fromVal: '214 reps', toVal: 'Aguardando', struck: true,
+      rows: [['Prova', '26.1 · AMRAP 12 min'], ['Prazo de envio', 'Até 09/11/2026, 23:59']],
+      noteLabel: 'Motivo informado pela organização', note: 'O link do vídeo está privado. Envie um link público ou não listado.',
+      next: 'Envie o novo vídeo e o resultado pela sua área do atleta antes do fim do prazo.', cta: 'Enviar novo resultado' }
+  ];
+
+  var $ = function (id) { return document.getElementById(id); };
+  var tabs = $('tabs');
+  function render(v) {
+    var tone = tones[v.tone];
+    $('subj').textContent = v.subject;
+    $('pre').textContent = v.pre;
+    var seal = $('seal');
+    seal.textContent = v.seal;
+    seal.style.color = tone[1];
+    $('title').textContent = v.title;
+    $('intro').innerHTML = v.intro;
+    $('fromLabel').textContent = v.fromLabel;
+    var from = $('fromVal');
+    from.textContent = v.fromVal;
+    from.className = 'lval' + (v.struck ? ' struck' : '');
+    $('toVal').textContent = v.toVal;
+    $('toVal').style.color = v.struck ? tone[1] : '';
+    var rows = $('rows');
+    rows.innerHTML = '';
+    v.rows.forEach(function (r) {
+      var d = document.createElement('div');
+      d.className = 'lrow';
+      var a = document.createElement('span'); a.className = 'llabel'; a.textContent = r[0];
+      var b = document.createElement('span'); b.className = 'v'; b.textContent = r[1];
+      d.appendChild(a); d.appendChild(b); rows.appendChild(d);
+    });
+    var note = $('note');
+    note.className = 'note' + (v.optional ? ' optional' : '');
+    note.style.borderLeftColor = tone[1];
+    $('noteLabel').textContent = v.noteLabel;
+    $('noteText').textContent = v.note;
+    $('next').textContent = v.next;
+    $('cta').textContent = v.cta;
+  }
+  function select(i) {
+    Array.prototype.forEach.call(tabs.children, function (t, j) {
+      t.setAttribute('aria-selected', String(i === j));
+      t.tabIndex = i === j ? 0 : -1;
+    });
+    render(V[i]);
+    try { localStorage.setItem('qualifier-email-variant', V[i].id); } catch (e) {}
+  }
+  V.forEach(function (v, i) {
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'tab'; b.setAttribute('role', 'tab'); b.id = 'tab-' + v.id;
+    var dot = document.createElement('span'); dot.className = 'dot'; dot.style.background = tones[v.tone][0];
+    b.appendChild(dot);
+    b.appendChild(document.createTextNode(v.tab));
+    if (v.isNew) { var n = document.createElement('span'); n.className = 'new'; n.textContent = 'NOVO'; b.appendChild(n); }
+    b.addEventListener('click', function () { select(i); });
+    b.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+        var k = (i + (e.key === 'ArrowRight' ? 1 : V.length - 1)) % V.length;
+        select(k); tabs.children[k].focus(); e.preventDefault();
+      }
+    });
+    tabs.appendChild(b);
+  });
+  var start = 0;
+  try { var saved = localStorage.getItem('qualifier-email-variant'); V.forEach(function (v, i) { if (v.id === saved) start = i; }); } catch (e) {}
+  select(start);
+
+  var stage = $('stage');
+  function setWidth(w) {
+    stage.setAttribute('data-width', w);
+    $('w-desktop').setAttribute('aria-pressed', String(w === 'desktop'));
+    $('w-mobile').setAttribute('aria-pressed', String(w === 'mobile'));
+  }
+  $('w-desktop').addEventListener('click', function () { setWidth('desktop'); });
+  $('w-mobile').addEventListener('click', function () { setWidth('mobile'); });
+})();
+</script>

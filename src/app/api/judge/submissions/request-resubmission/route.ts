@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server';
+import type { ScoreSubmissionStatus } from '@/types';
+import { notifyAthleteOfQualifierResult } from '@/lib/qualifierNotifications';
 import { qualifierErrorStatus } from '@/lib/qualifierSubmissions';
-import { sendQualifierResubmissionRequestedEmail } from '@/lib/resend';
 import { assertQualifierEventOrganizerAccess, JudgeAccessError } from '@/lib/serverJudgeAccess';
 import { checkRateLimit, createSupabaseAdmin, requireSession, safeErrorMessage } from '@/lib/serverSecurity';
 
 type SubmissionRow = {
   id: string;
   event_id: string;
-  workout_id: string;
-  registration_id: string;
+  status: ScoreSubmissionStatus;
+  final_result: string | null;
 };
 
 const readError = (error: unknown) => error && typeof error === 'object' && 'message' in error
@@ -34,49 +35,6 @@ const RESUBMISSION_ERROR_MESSAGES: Record<string, string> = {
 const resubmissionErrorMessage = (message: string) => {
   const code = Object.keys(RESUBMISSION_ERROR_MESSAGES).find(key => message.includes(key));
   return code ? RESUBMISSION_ERROR_MESSAGES[code] : 'Não foi possível excluir o resultado.';
-};
-
-// Best-effort: a exclusão já foi confirmada pelo banco. Falha no e-mail só é
-// registrada em log e nunca desfaz nem falha a requisição.
-const notifyAthlete = async (
-  supabaseAdmin: ReturnType<typeof createSupabaseAdmin>,
-  submission: SubmissionRow,
-  justification: string
-) => {
-  try {
-    const [{ data: registration }, { data: event }, { data: workout }] = await Promise.all([
-      supabaseAdmin
-        .from('registrations')
-        .select('athlete_email, athlete_name')
-        .eq('id', submission.registration_id)
-        .maybeSingle(),
-      supabaseAdmin
-        .from('events')
-        .select('name')
-        .eq('id', submission.event_id)
-        .maybeSingle(),
-      supabaseAdmin
-        .from('workouts')
-        .select('name')
-        .eq('id', submission.workout_id)
-        .maybeSingle()
-    ]);
-
-    if (!registration?.athlete_email) {
-      console.error('[Qualifier Resubmission API] Inscrição sem e-mail do atleta; aviso de reenvio não enviado.', submission.id);
-      return;
-    }
-
-    await sendQualifierResubmissionRequestedEmail({
-      to: registration.athlete_email,
-      athleteName: registration.athlete_name || 'Atleta',
-      eventName: event?.name || 'Evento WODArena',
-      workoutName: workout?.name || 'Prova',
-      justification
-    });
-  } catch (error) {
-    console.error('[Qualifier Resubmission API] Erro ao notificar atleta por e-mail:', error);
-  }
 };
 
 export async function POST(request: Request) {
@@ -109,7 +67,7 @@ export async function POST(request: Request) {
     const supabaseAdmin = createSupabaseAdmin();
     const { data: submission, error: submissionError } = await supabaseAdmin
       .from('score_submissions')
-      .select('id, event_id, workout_id, registration_id')
+      .select('id, event_id, status, final_result')
       .eq('id', submissionId)
       .maybeSingle<SubmissionRow>();
     if (submissionError) throw submissionError;
@@ -127,7 +85,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: resubmissionErrorMessage(message) }, { status: qualifierErrorStatus(message) });
     }
 
-    await notifyAthlete(supabaseAdmin, submission, justification);
+    // Best-effort: a exclusão já foi confirmada pelo banco. O resultado anterior
+    // vem da leitura de antes do RPC, que limpa o resultado da submissão.
+    await notifyAthleteOfQualifierResult(supabaseAdmin, {
+      submissionId,
+      change: 'resubmission_requested',
+      actorRole: auth.user.role,
+      justification,
+      previous: { status: submission.status, result: submission.final_result }
+    });
 
     return NextResponse.json({ success: true, result: data });
   } catch (error) {
