@@ -1,0 +1,77 @@
+schema: 1
+story: '1.110'
+story_title: 'Súmula Fitness Race: Largada Só Pelo Gestor'
+gate: CONCERNS
+status_reason: 'A barreira do servidor está certa e bem testada: start_heat usa assertRaceManagerAccess, o judge atribuído recebe 403 sem marca, corrida, regulamento nem chamada a race_start_heat (teste com snapshot do banco e contagem de rpc; mutação de volta para assertRaceJudgeAccess derrubada), race_start_heat só executa por service_role e nenhum outro caminho grava race_heat_marks ou cria race_runs. A área do judge virou o hub, sem link quebrado. Ficam dois MEDIUM na parte de recuperação do AC3, no painel: o "Entrar de novo" aponta para /admin a partir do próprio /admin (não leva ao login sem recarregar) e o motivo de uma largada recusada só aparece dentro da folha aberta daquela onda. Nada disso perde o horário do toque, mas no dia da prova pode deixar o gestor sem saber que a onda não subiu.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-11-03T18:00:00-03:00'
+expires: '2026-11-17T18:00:00-03:00'
+quality_score: 85
+
+top_issues:
+  - id: REQ-001
+    severity: medium
+    finding: 'Sessão expirada: o "Entrar de novo" do painel é <Link href="/admin"> renderizado dentro do próprio /admin. Navegar para a mesma rota no App Router não remonta a página nem o AppProvider (layout raiz), então o bootstrap não roda de novo e o login não aparece; o gestor precisa recarregar a página. Na tela antiga do judge o mesmo link funcionava porque saía de /judge/corrida para /admin. Além disso, o link fica no painel, atrás do overlay da folha (fixed inset-0 z-50): com a folha aberta, o gestor vê só a mensagem RACE_SESSION_EXPIRED_MESSAGE, sem o botão. Conclusão por leitura do código, não conferida no navegador.'
+    refs: ['src/components/admin/RaceWavesPanel.tsx:97-99', 'src/components/admin/RaceHeatStartSheet.tsx:69', 'src/components/admin/RaceHeatStartSheet.tsx:104-106', 'src/context/AppContext.tsx:620-634', 'src/app/layout.tsx:74']
+    suggested_owner: dev
+    suggested_action: 'Trocar o Link por um botão que force a volta ao login (por exemplo, logout() do contexto ou window.location.assign("/admin") para recarregar) e mostrar o mesmo botão, com 56 px, dentro da folha quando syncStatus === "session". A fila já está no localStorage e sobe na carga das ondas depois do login.'
+  - id: REQ-002
+    severity: medium
+    finding: 'Largada recusada (400/403/404) e o 409 de "outro aparelho largou antes" só aparecem na folha aberta da mesma onda (waveNotice). O painel não mostra heatStart.notice em lugar nenhum, e fechar a folha limpa o aviso (clearNotice). Assim, (a) se a resposta chega depois de o gestor fechar a folha (por exemplo, sem rede e com a recusa no reenvio) e (b) no envio da fila guardada de uma sessão anterior (flush na carga das ondas, sem folha aberta), a largada sai da fila em silêncio: a onda volta a "Aguardando largada" sem motivo. O AC3 pede que a recusa saia da fila com o motivo.'
+    refs: ['src/components/admin/RaceWavesPanel.tsx:60-65', 'src/components/admin/RaceWavesPanel.tsx:153-164', 'src/components/admin/RaceHeatStartSheet.tsx:62', 'src/components/race/useHeatStart.ts:102-103']
+    suggested_owner: dev
+    suggested_action: 'Mostrar o aviso no painel quando a folha da onda do aviso não estiver aberta (role="alert", com o nome da onda), e limpar só quando o gestor dispensar ou largar de novo. Teste de renderização do painel ou do hook cobrindo recusa com a folha fechada.'
+  - id: A11Y-001
+    severity: low
+    finding: 'A folha (role="dialog", aria-modal) não leva o foco para dentro ao abrir, não prende o Tab nem devolve o foco ao "Largar" ao fechar; o fundo continua rolando. O RaceDecisionDialog do mesmo painel leva o foco ao primeiro campo. O gesto de segurar não tem equivalente de teclado (Enter só mostra a dica), igual à tela da 1.96. As classes focus-visible:* seguem sem efeito no app (ver nota de :focus-visible fora de @layer).'
+    refs: ['src/components/admin/RaceHeatStartSheet.tsx:42-51', 'src/components/admin/RaceHeatStartSheet.tsx:70-75', 'src/components/admin/RaceDecisionDialog.tsx:65-67']
+    suggested_owner: dev
+    suggested_action: 'Ao abrir, focar o botão Fechar (ou o título); devolver o foco ao botão "Largar" da onda ao fechar. Opcional: travar a rolagem do body enquanto a folha está aberta.'
+  - id: UX-001
+    severity: low
+    finding: 'Celular deitado (largura >= 768 px, altura perto de 375 px) recebe o layout md: botão de 128 px, cabeçalho de 3xl e max-h de 90dvh, o que deixa pouca altura para o estado e os atletas (a área do meio rola). O alvo da story é tablet; o celular deitado do gestor não foi pensado.'
+    refs: ['src/components/admin/RaceHeatStartSheet.tsx:74', 'src/components/admin/RaceHeatStartSheet.tsx:186']
+    suggested_owner: dev
+    suggested_action: 'Conferir no aparelho. Se apertar, condicionar o tamanho grande também à altura (por exemplo, variante [@media(min-height:640px)]).'
+  - id: REL-001
+    severity: low
+    finding: 'useHeatStart lê a fila do localStorage só na montagem; se o eventId mudasse sem remontar, a fila do evento anterior seria enviada e regravada na chave do novo evento. Hoje não acontece porque abrir outro evento volta para a aba "info" e desmonta o painel. Também mudou um detalhe da 1.96: a fila só é enviada na primeira carga das ondas; as recargas depois de corrigir ou zerar não disparam o envio (online e visibilidade continuam disparando).'
+    refs: ['src/components/race/useHeatStart.ts:36', 'src/components/admin/RaceWavesPanel.tsx:61-65', 'src/app/admin/page.tsx:2090-2092']
+    suggested_owner: dev
+    suggested_action: 'Opcional: key={event.id} no RaceWavesPanel ou recarregar a fila quando o eventId mudar.'
+  - id: TEST-001
+    severity: low
+    finding: 'A fila e o painel são conferidos por regex no fonte; não há teste de comportamento do useHeatStart (401 guarda, 5xx reagenda, recusa sai da fila com aviso) nem do painel com a folha fechada. Os dois MEDIUM acima passariam pelos testes atuais.'
+    refs: ['tests/race-heat-start.test.mjs:345-357', 'tests/race-heat-start.test.mjs:444-452']
+    suggested_owner: dev
+    suggested_action: 'Extrair o laço de envio para uma função pura com fetch injetado e testar os desfechos; ou um teste de renderização do painel com o aviso.'
+  - id: DOC-001
+    severity: low
+    finding: 'Comentários e maquete ainda falam da "tela de largada" ou de "largar as ondas" na área do judge. Para o gestor ou o owner que abre o hub do judge, o texto "A largada é feita pelo organizador" não aponta para o painel.'
+    refs: ['src/app/judge/corrida/page.tsx:3', 'src/app/api/race-sheets/route.ts:119', 'src/lib/serverRaceSheets.ts:1280', 'src/lib/raceWaves.ts:6', 'src/lib/raceWaves.ts:79', 'src/lib/raceStartQueue.ts:1-2', 'docs/design/fitness-race-sumula/telas/painel-organizador.html:483']
+    suggested_owner: dev
+    suggested_action: 'Ajustar os comentários na próxima mexida; anotar na maquete que a D45 a substitui no ponto da largada.'
+waiver: { active: false }
+
+evidence:
+  tests_reviewed: 22
+  risks_identified: 7
+  trace:
+    ac_covered: [1, 2, 4, 5, 6, 7]
+    ac_partial: [3]
+    ac_gaps: []
+    ac_map:
+      AC1: 'race-heat-start: judge atribuído (JUDGE, JUDGE_2) 403 "Acesso negado para este evento.", snapshot do banco igual e zero chamadas a race_start_heat; gestor e owner 200/409; 400/404/503 e guarda da 1.107 (race-reset-heat) mantidos. Estático: bloco start_heat só com assertRaceManagerAccess. Mutação para assertRaceJudgeAccess derrubada (2 testes).'
+      AC2: 'Código: botão "Largar" só em onda sem startedAt, próxima onda com borda e selo "Próxima" (nextRaceWaveId); folha com horário previsto, categorias, atletas, useTapHold 700 ms, toque rápido só mostra a dica, sem desfazer. Renderização da folha nos estados aguardando, guardada, largou e conflito.'
+      AC3: 'Parcial. Fila com o horário do toque, reenvio com espera crescente, retomada em online e visibilidade e envio da fila guardada na carga das ondas estão no hook (extração fiel da 1.96). Sessão expirada guarda e mostra a mensagem, mas o "Entrar de novo" não leva ao login (REQ-001); o motivo da recusa e o aviso de 409 só aparecem com a folha aberta (REQ-002).'
+      AC4: 'Folha: md:grid-cols-2, md:max-w-4xl, lista de atletas com md:max-h-[46dvh] e rolagem própria, botão min-h-[96px]/md:min-h-[128px], Fechar min-h-14 min-w-14, rodapé fora da área que rola com env(safe-area-inset-bottom), max-h em dvh; nenhum min-h abaixo de 14 na folha (teste). Painel: linhas e botões com md:. Não conferido em tablet real.'
+      AC5: 'Hub com nome do evento, "A largada é feita pelo organizador." e os dois atalhos; página sem searchParams; HeatStartScreen e RaceWaveList removidos; faixa "Fitness Race · Arbitragem"; telas de cartão, estação e Wall Ball voltam a /judge/corrida/{evento}. grep sem referência a HeatStartScreen, RaceWaveList, ?onda= ou startHref em src/.'
+      AC6: 'Painel sem "Abrir a tela de largada" nem "Abrir" por onda; texto do Zerar diz "pelo botão Largar"; estático sem /judge/corrida no painel.'
+      AC7: 'git diff sem mudança em /api/sheets, ScoresheetsPanel ou telas de FF; admin/page.tsx intocado; testes de FF verdes.'
+  gate_commands:
+    npm_test: '1533/1533, rodado pelo QA no working tree atual'
+    npm_run_lint: '0 erros (207 avisos antigos); eslint nos 8 arquivos de src alterados: 0 erros e 0 avisos. Rodado pelo QA'
+    npm_run_typecheck: 'verde (next typegen + tsc --noEmit), rodado pelo QA'
+    npm_run_build: 'não rodado'
+  independent_checks: 'Mutação numa cópia no scratchpad (repo intocado, cópia apagada): start_heat de volta para assertRaceJudgeAccess derrubou o teste comportamental da 1.110 e o estático do bloco da rota. Varredura por race_start_heat, race_heat_marks e inserção em race_runs: só startRaceHeat (via rpc) e as decisões do organizador (corrigir e zerar, com assertRaceManagerAccess); a função race_start_heat tem REVOKE de PUBLIC, anon e authenticated. mark_heat do telão grava a marca do telão, não race_heat_marks. Judge que abre /admin é mandado para /judge (admin/page.tsx:257).'
+  notes: 'Sem migration. view=waves segue aberta ao judge só para leitura (fora do escopo, declarado). Uma largada pendente num aparelho de judge fica no localStorage dele e nunca é enviada, porque o painel não abre para judge; é inofensiva. Status mantido em InReview: o coordenador pediu só o gate e o QA Results, e falta a conferência em tablet.'

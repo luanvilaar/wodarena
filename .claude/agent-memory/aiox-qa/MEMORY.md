@@ -21,4 +21,5 @@
 - [Fitness Race 1.100–1.101 F2](project_fitness_race_1_100_1_101.md) — PASS 92/90 2026-10-31; LOWs (fila tardia só com tela aberta); mutação em cópia isolada
 - [Fitness Race 1.102–1.103 F2](project_fitness_race_1_102_1_103.md) — 1.102 PASS 91, 1.103 PASS 88 (2026-10-31); LOWs de concorrência/teste e o que conferir
 - [Fitness Race 1.106 + recheck F1](project_fitness_race_f2_recheck_1_106.md) — 1.106 PASS 92; 1.93–1.99 PASS mantidos 2026-10-31; D27–D30 sem story (DOC-002), REL-004 regulamento antigo
+- [Fitness Race 1.110 largada só do gestor](project_fitness_race_1_110.md) — CONCERNS 85 2026-11-03; REQ-001 Entrar de novo no-op, REQ-002 aviso só na folha
 - [Qualifier e-mail da decisão 1.108/1.109](project_qualifier_decision_email_1_108_1_109.md) — 2026-11-01: 1.108 PASS 90, 1.109 FAIL→PASS 90 (reviewedBy exposto); fixture sem reviewed_by
