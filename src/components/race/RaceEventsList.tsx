@@ -8,7 +8,7 @@ import { CourtShell } from '@/components/judge/CourtShell';
 import { useApp } from '@/context/AppContext';
 
 // Lista de eventos Fitness Race (Story 1.96, AC1): os eventos em que a pessoa
-// pode largar as ondas (judge atribuído, gestor dono ou owner), no padrão da
+// pode arbitrar (judge atribuído, gestor dono ou owner), no padrão da
 // lista da quadra (CourtEventsList), com a faixa de Fitness Race (D26).
 
 type RaceEvent = { id: string; name: string; date: string; location: string };
@@ -36,7 +36,7 @@ export function RaceEventsList() {
   }, [currentUser]);
 
   return (
-    <CourtShell eyebrow="Fitness Race · Largada" title="Eventos" subtitle={currentUser?.name} back={{ href: '/judge', label: 'Voltar ao painel do judge' }}>
+    <CourtShell eyebrow="Fitness Race · Arbitragem" title="Eventos" subtitle={currentUser?.name} back={{ href: '/judge', label: 'Voltar ao painel do judge' }}>
       {error ? (
         <p role="alert" className="rounded-md border border-trading-down bg-trading-down/10 px-4 py-3 text-sm font-semibold">{error}</p>
       ) : events === null ? (

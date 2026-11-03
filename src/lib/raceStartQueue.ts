@@ -1,9 +1,9 @@
-// Fila da largada no aparelho (Story 1.96, AC6; D9). Puro, sem rede: a tela
-// de largada guarda aqui a largada tocada com o horário do toque e a remove
+// Fila da largada no aparelho (Story 1.96, AC6; D9). Puro, sem rede: o painel
+// do organizador (Story 1.110) guarda aqui a largada tocada com o horário do toque e a remove
 // quando o servidor confirma (ou responde que a onda já largou). O MVP cobre
-// queda de conexão com a tela já aberta; abrir a tela sem internet fica para a
+// queda de conexão com o painel já aberto; abrir o painel sem internet fica para a
 // F4. O armazenamento local pode falhar (aba anônima, cota): a fila segue em
-// memória na tela.
+// memória no painel.
 
 export type QueuedHeatStart = { heatId: string; deviceAt: number };
 
@@ -46,6 +46,28 @@ export const saveHeatStartQueue = (eventId: string, queue: readonly QueuedHeatSt
     return false;
   }
 };
+
+/**
+ * Aviso de uma largada (Story 1.110, REQ-002): recusa do servidor, outro
+ * aparelho largou antes (409 com horário) ou sessão expirada. Um por onda; o
+ * painel mostra os avisos mesmo com a folha da onda fechada.
+ */
+export type HeatStartNotice = { kind: 'conflict' | 'error' | 'session'; heatId: string; text: string };
+
+/** Grava o aviso da onda, trocando o anterior dela. */
+export const upsertHeatStartNotice = (notices: readonly HeatStartNotice[], notice: HeatStartNotice): HeatStartNotice[] => (
+  [...notices.filter((item) => item.heatId !== notice.heatId), notice]
+);
+
+/** Tira o aviso da onda (o gestor dispensou ou largou de novo). */
+export const dismissHeatStartNotice = (notices: readonly HeatStartNotice[], heatId: string): HeatStartNotice[] => (
+  notices.filter((item) => item.heatId !== heatId)
+);
+
+/** Uma largada subiu: o aviso de sessão expirada deixa de valer; recusas e conflitos ficam até o gestor dispensar. */
+export const dropSessionHeatStartNotices = (notices: readonly HeatStartNotice[]): HeatStartNotice[] => (
+  notices.filter((item) => item.kind !== 'session')
+);
 
 export type HeatStartSyncStatus = 'saved' | 'saving' | 'offline' | 'session';
 

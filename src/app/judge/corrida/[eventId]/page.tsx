@@ -1,15 +1,8 @@
-import { HeatStartScreen } from '@/components/race/HeatStartScreen';
+import { RaceEventHubScreen } from '@/components/race/RaceEventHubScreen';
 
-// Fitness Race (Story 1.96): ondas do evento e largada da onda aberta (?onda=).
-export default async function HeatStartPage({
-  params,
-  searchParams
-}: {
-  params: Promise<{ eventId: string }>;
-  searchParams: Promise<{ onda?: string | string[] }>;
-}) {
+// Fitness Race: atalhos da arbitragem do evento (Wall Ball e estações). A largada
+// das ondas é do organizador, no painel do evento (Story 1.110).
+export default async function RaceEventHubPage({ params }: { params: Promise<{ eventId: string }> }) {
   const { eventId } = await params;
-  const { onda } = await searchParams;
-  const heatId = typeof onda === 'string' && onda ? onda : null;
-  return <HeatStartScreen eventId={decodeURIComponent(eventId)} heatId={heatId} />;
+  return <RaceEventHubScreen eventId={decodeURIComponent(eventId)} />;
 }

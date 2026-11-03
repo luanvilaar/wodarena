@@ -1277,7 +1277,7 @@ const alreadyStarted = (startedAt: string, timeZone?: string | null) => new Race
 );
 
 /**
- * Ondas do evento para a tela de largada e para a seção "Ondas" do painel
+ * Ondas do evento para a seção "Ondas" do painel (a largada é do organizador, Story 1.110)
  * (AC1, AC8): itens `kind: 'heat'` do cronograma com ao menos um atleta, com
  * as categorias, os atletas (nome, box e categoria; sem e-mail), o estado da
  * largada e quantas corridas a onda tem.

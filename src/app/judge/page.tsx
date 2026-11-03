@@ -177,7 +177,7 @@ export default function JudgePage() {
             >
               Quadra
             </Link>
-            {/* Fitness Race (Story 1.96): largada das ondas. */}
+            {/* Fitness Race (Story 1.96): arbitragem das estações; a largada é do organizador (Story 1.110). */}
             <Link
               href="/judge/corrida"
               className="inline-flex min-h-11 items-center rounded-md border border-primary/40 bg-primary/10 px-3 py-2 text-xs font-bold uppercase tracking-wider text-primary transition-colors hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"

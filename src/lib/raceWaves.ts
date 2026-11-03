@@ -1,9 +1,9 @@
 // Ondas da largada do Fitness Race (Story 1.96). Puro, sem rede nem banco: o
-// servidor (serverRaceSheets.ts) e as telas usam estas regras para montar a
+// servidor (serverRaceSheets.ts) e o painel do organizador usam estas regras para montar a
 // lista das ondas a partir do cronograma do evento. A onda é um item
 // `kind: 'heat'` do `event_schedule` (D5: o organizador define as ondas na aba
 // Cronograma; a súmula não fixa categorias). O horário do cronograma é o
-// previsto; a largada vale a partir do gesto do árbitro (race_heat_marks, D1).
+// previsto; a largada vale a partir do gesto do organizador (race_heat_marks, D1; D45).
 
 /** Fuso usado quando o evento não informa o dele (mesmo padrão de eventStatus.ts). */
 export const RACE_DEFAULT_TIME_ZONE = 'America/Fortaleza';
@@ -76,7 +76,7 @@ export const raceWaveTitle = (item: Pick<RaceHeatItem, 'title' | 'heatNumber'>) 
 );
 
 /**
- * Lista das ondas para a tela de largada (AC1): só as que têm ao menos um
+ * Lista das ondas para o painel de largada (AC1): só as que têm ao menos um
  * atleta do evento, em ordem de data, horário previsto e número; cada uma com
  * as categorias dos atletas (sem repetir) e o estado da largada.
  */

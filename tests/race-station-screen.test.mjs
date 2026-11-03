@@ -741,7 +741,7 @@ test('estático: faixa "Fitness Race · {estação}", segurar no Liberar e no At
   assert.match(list, /eyebrow=\{raceStationEyebrow\(station\?\.name\)\}/);
   assert.match(list, /type="search"/);
   assert.match(list, /Esta estação é de 1 atleta por judge/);
-  const heat = read('../src/components/race/HeatStartScreen.tsx');
+  const heat = read('../src/components/race/RaceEventHubScreen.tsx');
   assert.match(heat, /Abrir Wall Ball/);
   assert.match(heat, /Abrir estações/);
   assert.match(heat, /\$\{listHref\}\/estacao/);

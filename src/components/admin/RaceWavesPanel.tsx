@@ -1,16 +1,21 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
-import { Clock, ExternalLink, RotateCcw } from 'lucide-react';
+import { CloudOff, Clock, Flag, RotateCcw } from 'lucide-react';
 
 import { RaceDecisionDialog, postRaceDecision, raceButton, raceDangerButton, raceInput } from '@/components/admin/RaceDecisionDialog';
-import { describeWaveStart, formatRaceClock, type RaceWave } from '@/lib/raceWaves';
+import { RaceHeatStartNotices } from '@/components/admin/RaceHeatStartNotices';
+import { RaceHeatStartSheet } from '@/components/admin/RaceHeatStartSheet';
+import { useHeatStart } from '@/components/race/useHeatStart';
+import { describeHeatStartSync } from '@/lib/raceStartQueue';
+import { describeWaveStart, formatRaceClock, nextRaceWaveId, type RaceWave } from '@/lib/raceWaves';
 import type { Event } from '@/types';
 
 // Seção "Ondas" da aba Súmula Fitness Race (Story 1.96, AC8; maquete
 // telas/painel-organizador.html): as ondas do Cronograma com o estado da
-// largada, o link para a tela de largada e o botão "Corrigir largada" (AC7,
+// largada, o botão "Largar" (Story 1.110: a largada é só do organizador e
+// acontece aqui, na folha com o gesto de segurar, também no tablet) e o botão
+// "Corrigir largada" (AC7,
 // D14a, na leva da Story 1.98): muda a largada da onda inteira, com motivo, e
 // recalcula o bruto das corridas já fechadas pelo ponto único de republicação.
 // "Zerar largada" (Story 1.107): cancela as corridas da onda, tira os resultados
@@ -26,6 +31,7 @@ export function RaceWavesPanel({ event }: { event: Event }) {
   const [resetting, setResetting] = useState<RaceWave | null>(null);
   const [clock, setClock] = useState('');
   const [notice, setNotice] = useState('');
+  const [startingId, setStartingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -38,17 +44,39 @@ export function RaceWavesPanel({ event }: { event: Event }) {
     }
   }, [event.id]);
 
+  // Largada (Story 1.110): fila no aparelho com o horário do toque; o servidor confere o gestor dono.
+  const markStarted = useCallback((heatId: string, startedAt: string) => {
+    setPayload((previous) => (previous
+      ? { ...previous, waves: previous.waves.map((wave) => (wave.id === heatId ? { ...wave, startedAt } : wave)) }
+      : previous));
+  }, []);
+  const heatStart = useHeatStart({ eventId: event.id, onStarted: markStarted, onSettled: () => void load() });
+  const flushHeatStart = heatStart.flush;
+
   useEffect(() => {
     const first = window.setTimeout(() => void load(), 0);
     return () => window.clearTimeout(first);
   }, [load]);
+
+  // Largada guardada (de uma sessão anterior ou parada) sobe a cada carga das ondas (REL-001);
+  // sem nada na fila, ou com o envio em andamento, não faz nada.
+  useEffect(() => {
+    if (payload) flushHeatStart();
+  }, [payload, flushHeatStart]);
 
   const openFix = (wave: RaceWave) => {
     setClock(wave.startedAt ? formatRaceClock(wave.startedAt, payload?.event.timeZone) : '');
     setFixing(wave);
   };
 
-  const startHref = `/judge/corrida/${encodeURIComponent(event.id)}`;
+  const nextId = payload ? nextRaceWaveId(payload.waves) : null;
+  const startingWave = startingId && payload ? payload.waves.find((wave) => wave.id === startingId) ?? null : null;
+  const pendingStarts = heatStart.queue.length;
+  const syncStalled = heatStart.syncStatus === 'offline' || heatStart.syncStatus === 'session';
+  // /admin dentro de /admin não recarrega o contexto do app: a página inteira recarrega para o login aparecer
+  // (REQ-001). A largada continua guardada no aparelho e sobe quando as ondas carregam de novo.
+  const reloadPage = () => window.location.reload();
+  const startingNotice = startingWave ? heatStart.notices.find((item) => item.heatId === startingWave.id) ?? null : null;
 
   return (
     <section className="space-y-4 rounded-xl border border-card-border bg-card p-5" aria-labelledby="race-waves-title">
@@ -56,18 +84,33 @@ export function RaceWavesPanel({ event }: { event: Event }) {
         <div className="min-w-0 space-y-1">
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Largada</p>
           <h3 id="race-waves-title" className="text-lg font-bold uppercase">Ondas</h3>
-          <p className="text-xs text-muted">As ondas vêm da aba Cronograma. A largada é registrada na tela de largada, pelo árbitro ou por você.</p>
+          <p className="text-xs text-muted md:text-sm">As ondas vêm da aba Cronograma. A largada é só sua: toque em &quot;Largar&quot; e segure o botão. Os árbitros não largam ondas.</p>
         </div>
-        <Link
-          href={startHref}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex min-h-11 items-center gap-2 rounded-md border border-primary/40 bg-primary/10 px-3 text-xs font-bold uppercase tracking-wider text-primary hover:border-primary"
-        >
-          <ExternalLink className="h-4 w-4" aria-hidden="true" />
-          Abrir a tela de largada
-        </Link>
       </div>
+
+      {(pendingStarts > 0 || syncStalled) && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={`flex min-h-14 flex-wrap items-center justify-between gap-3 rounded-lg border px-4 py-2 text-sm font-bold ${syncStalled ? 'border-trading-down text-trading-down' : 'border-primary'}`}
+        >
+          <span className="flex items-center gap-2">
+            {syncStalled && <CloudOff className="h-5 w-5 shrink-0" aria-hidden="true" />}
+            {describeHeatStartSync(heatStart.syncStatus, pendingStarts)}
+          </span>
+          {heatStart.syncStatus === 'session' && (
+            <button type="button" onClick={reloadPage} className="inline-flex min-h-14 items-center rounded-lg border border-card-border px-4 text-xs font-bold uppercase tracking-wider hover:border-primary">Entrar de novo</button>
+          )}
+        </div>
+      )}
+
+      <RaceHeatStartNotices
+        notices={heatStart.notices}
+        waves={payload?.waves ?? []}
+        openHeatId={startingWave?.id ?? null}
+        onDismiss={heatStart.dismissNotice}
+        onReload={reloadPage}
+      />
 
       {error ? (
         <p role="alert" className="rounded-md border border-red-500/40 bg-red-950/20 px-3 py-2 text-sm">{error}</p>
@@ -78,35 +121,39 @@ export function RaceWavesPanel({ event }: { event: Event }) {
       ) : (
         <ul className="space-y-2" aria-label="Ondas do evento">
           {payload.waves.map((wave) => (
-            <li key={wave.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-card-border bg-dark-gray px-3 py-3">
+            <li key={wave.id} className={`flex flex-wrap items-center justify-between gap-3 rounded-lg bg-dark-gray px-3 py-3 md:gap-4 md:px-4 md:py-4 ${wave.id === nextId ? 'border-2 border-primary' : 'border border-card-border'}`}>
               <div className="min-w-0">
-                <p className="truncate font-bold">{wave.title}</p>
-                <p className="text-xs text-muted">
+                <p className="truncate font-bold md:text-lg">
+                  {wave.id === nextId && <span className="mr-2 text-[10px] font-bold uppercase tracking-widest text-primary">Próxima</span>}
+                  {wave.title}
+                </p>
+                <p className="text-xs text-muted md:text-sm">
                   <span className="tabular-nums">{wave.time || '—'}</span> previsto
                   {wave.categories.length > 0 && ` · ${wave.categories.join(' · ')}`}
                   {` · ${wave.athletes.length} ${wave.athletes.length === 1 ? 'atleta' : 'atletas'}`}
                 </p>
               </div>
-              <div className="flex items-center gap-2">
-                <span className={`rounded-full border px-2 py-1 text-[11px] font-bold tabular-nums ${wave.startedAt ? 'border-trading-up/60 text-trading-up' : 'border-card-border text-muted'}`}>
-                  {describeWaveStart(wave.startedAt, payload.event.timeZone)}
+              <div className="flex flex-wrap items-center gap-2 md:gap-3">
+                <span className={`rounded-full border px-2 py-1 text-[11px] font-bold tabular-nums md:text-xs ${wave.startedAt ? 'border-trading-up/60 text-trading-up' : heatStart.queue.some((item) => item.heatId === wave.id) ? 'border-trading-down text-trading-down' : 'border-card-border text-muted'}`}>
+                  {!wave.startedAt && heatStart.queue.some((item) => item.heatId === wave.id) ? 'Guardada no aparelho' : describeWaveStart(wave.startedAt, payload.event.timeZone)}
                 </span>
-                <Link
-                  href={`${startHref}?onda=${encodeURIComponent(wave.id)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex min-h-11 items-center rounded-md border border-card-border px-3 text-xs font-bold hover:border-primary"
-                  aria-label={`Abrir a largada da ${wave.title}`}
-                >
-                  Abrir
-                </Link>
+                {!wave.startedAt && (
+                  <button
+                    type="button"
+                    className={`${raceButton} md:min-h-14 md:px-6 md:text-sm ${wave.id === nextId ? 'border-primary bg-primary text-ink hover:bg-primary-hover' : ''}`}
+                    onClick={() => setStartingId(wave.id)}
+                    aria-label={`Largar a ${wave.title}`}
+                  >
+                    <Flag className="h-4 w-4 md:h-5 md:w-5" aria-hidden="true" /> Largar
+                  </button>
+                )}
                 {wave.startedAt && (
-                  <button type="button" className={raceButton} onClick={() => openFix(wave)} aria-label={`Corrigir a largada da ${wave.title}`}>
+                  <button type="button" className={`${raceButton} md:min-h-14 md:px-5`} onClick={() => openFix(wave)} aria-label={`Corrigir a largada da ${wave.title}`}>
                     <Clock className="h-4 w-4" aria-hidden="true" /> Corrigir largada
                   </button>
                 )}
                 {wave.startedAt && (
-                  <button type="button" className={raceDangerButton} onClick={() => setResetting(wave)} aria-label={`Zerar a largada da ${wave.title}`}>
+                  <button type="button" className={`${raceDangerButton} md:min-h-14 md:px-5`} onClick={() => setResetting(wave)} aria-label={`Zerar a largada da ${wave.title}`}>
                     <RotateCcw className="h-4 w-4" aria-hidden="true" /> Zerar largada
                   </button>
                 )}
@@ -114,6 +161,19 @@ export function RaceWavesPanel({ event }: { event: Event }) {
             </li>
           ))}
         </ul>
+      )}
+      {startingWave && payload && (
+        <RaceHeatStartSheet
+          wave={startingWave}
+          timeZone={payload.event.timeZone}
+          queued={heatStart.queue.find((item) => item.heatId === startingWave.id) ?? null}
+          syncStatus={heatStart.syncStatus}
+          pendingCount={pendingStarts}
+          notice={startingNotice}
+          onStart={() => heatStart.start(startingWave.id)}
+          onReload={reloadPage}
+          onClose={() => setStartingId(null)}
+        />
       )}
       {notice && <p role="status" className="rounded-md border border-amber-400/50 bg-amber-950/30 px-3 py-2 text-sm">{notice}</p>}
       {fixing && payload && (
@@ -153,7 +213,7 @@ export function RaceWavesPanel({ event }: { event: Event }) {
                 {`${resetting.runsCount} ${resetting.runsCount === 1 ? 'corrida será cancelada' : 'corridas serão canceladas'}`}
                 {` e ${resetting.resultsCount ?? 0} ${(resetting.resultsCount ?? 0) === 1 ? 'resultado sai' : 'resultados saem'} do leaderboard.`}
               </p>
-              <p>Os cartões abertos dos judges nesta onda param de aceitar registros. A onda volta a &quot;Não largou&quot; e pode largar de novo pela tela de largada.</p>
+              <p>Os cartões abertos dos judges nesta onda param de aceitar registros. A onda volta a &quot;Não largou&quot; e pode largar de novo pelo botão Largar.</p>
             </div>
           )}
           confirmText="Zerar largada"

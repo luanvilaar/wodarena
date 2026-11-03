@@ -81,6 +81,7 @@ Proposta e comparação de níveis em https://claude.ai/artifact/ASLBLDR4e1s6tvY
 | D42 | Maquetes aprovadas | O Luan **aprovou em 2026-10-31** as maquetes [`telas/dois-cartoes.html`](telas/dois-cartoes.html) e [`telas/cobertura.html`](telas/cobertura.html) (com os ajustes das D39 a D41). Libera as stories 1.103 e 1.105. |
 | D43 | Wall Ball fora da última posição | Confirmado: **1 atleta por judge** (D32), mesmo regime da estação final (D39). |
 | D44 | Saída incompleta na última estação | **O organizador age**: a súmula não fecha o tempo, a corrida fica em "Sem tempo fechado" e o organizador usa "Ajustar tempo" ou DNF. Os 180 s por trecho já gravados continuam registrados; o organizador decide o tempo final ao ajustar (D36). |
+| D45 | Largada só do gestor | Aprovado pelo Luan em 2026-11-03: **judge não larga onda**, mesmo atribuído ao evento (substitui, para a largada, o "judge atribuído" da D3/1.96). A largada é só do gestor dono do evento (com acesso válido) ou do owner, pela seção **Ondas** da aba Súmula Fitness Race, com o gesto de segurar em folha larga para tablet. O judge segue com Wall Ball e estações. Story 1.110. |
 
 ## Efeito nas stories
 

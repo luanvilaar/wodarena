@@ -116,7 +116,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ events: events.map((event) => ({ id: event.id, name: event.name, date: event.date ?? '', location: event.location ?? '', status: event.status ?? '' })) });
     }
 
-    // Ondas do cronograma com o estado da largada (Story 1.96): tela de largada e seção "Ondas" do painel.
+    // Ondas do cronograma com o estado da largada (Story 1.96): seção "Ondas" do painel (largada, Story 1.110) e nome do evento no hub do judge.
     if (view === 'waves') {
       const event = await assertRaceJudgeAccess(supabaseAdmin, actor, searchParams.get('eventId'));
       return NextResponse.json({ ...(await readRaceWaves(supabaseAdmin, event.id)), viewer: { id: actor.id, name: actor.name, role: actor.role } });
@@ -211,9 +211,10 @@ export async function POST(request: Request) {
       return NextResponse.json(await readRaceAttemptForActor(supabaseAdmin, row.id));
     }
 
-    // Largada da onda (Story 1.96): judge atribuído, gestor dono ou owner.
+    // Largada da onda (Story 1.96; só do organizador desde a Story 1.110): gestor dono do
+    // evento (com acesso válido) ou owner. Judge recebe 403, mesmo atribuído ao evento.
     if (action === 'start_heat') {
-      const event = await assertRaceJudgeAccess(supabaseAdmin, actor, body.eventId);
+      const event = await assertRaceManagerAccess(supabaseAdmin, actor, body.eventId);
       return NextResponse.json(await startRaceHeat(supabaseAdmin, actor, event.id, {
         heatId: body.heatId,
         deviceAt: body.deviceAt,

@@ -206,13 +206,13 @@ test('largada guardada no aparelho antes do zerar é recusada (409 sem startedAt
   await start('heat-1');
   const queuedAt = Date.now() - 1000;
   assert.equal((await reset(MANAGER, 'heat-1')).status, 200);
-  const stale = await post(JUDGE, { action: 'start_heat', heatId: 'heat-1', deviceAt: queuedAt, clientNow: Date.now() });
+  const stale = await post(MANAGER, { action: 'start_heat', heatId: 'heat-1', deviceAt: queuedAt, clientNow: Date.now() });
   assert.equal(stale.status, 409);
   assert.equal(stale.body.startedAt, undefined, 'sai da fila como recusa (classifyHeatStartResponse)');
   assert.match(stale.body.error, /antes de o organizador zerar/);
   assert.equal(markOf('heat-1'), undefined);
   await afterReset();
-  const fresh = await post(JUDGE, { action: 'start_heat', heatId: 'heat-1', clientNow: Date.now() });
+  const fresh = await post(MANAGER, { action: 'start_heat', heatId: 'heat-1', clientNow: Date.now() });
   assert.equal(fresh.status, 200, fresh.body.error);
 });
 
