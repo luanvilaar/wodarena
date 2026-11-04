@@ -228,13 +228,20 @@ test('AC3: o payload real da espera fixada na mesa: as próximas ondas do cronog
 // ---------------------------------------------------------------------------
 
 test('AC6: a prévia "No ar agora": o nome da tela, a onda e a categoria do passo e, ao vivo, a torre em lista', async () => {
-  database = createFakeSupabase(seedRaceDatabase({ seconds: 1440 }).seed);
+  // Onda fixada na mesa: a torre da onda (a do automático antes do ranking único, Story 1.116).
+  database = createFakeSupabase(seedRaceDatabase({ seconds: 1440, mode: 'pin_heat', pinnedHeat: 'w3' }).seed);
   const live = await builder.buildRaceBroadcastState(client, database.rows('events')[0], database.rows('event_broadcasts')[0], { nowMs: nowAt(1440) });
   const preview = screens.describeRacePanelPreview(live);
   assert.deepEqual([preview.screenLabel, preview.context, preview.rows.length, preview.hiddenCount], ['Ao vivo', 'Onda 3 · Open Masculino', 10, 0]);
   assert.deepEqual(preview.rows[0], { key: preview.rows[0].key, position: '1', name: 'Rafael Tavares', where: 'Na pista · após Sled Pull · 0:24' }, 'Rafael saiu do Sled Pull aos 1416 s; a prévia conta pela hora do servidor, 1440 s');
   assert.deepEqual(preview.rows[2].where, 'Sled Pull 2/4 · na estação');
   assert.ok(preview.rows.every((row) => !JSON.stringify(row).match(/@|rafael\.segredo|85988887777/i)), 'nada pessoal na prévia');
+
+  // Automático (ranking único, Story 1.117): a torre da categoria, com as ondas já largadas.
+  database = createFakeSupabase(seedRaceDatabase({ seconds: 1440 }).seed);
+  const auto = screens.describeRacePanelPreview(await builder.buildRaceBroadcastState(client, database.rows('events')[0], database.rows('event_broadcasts')[0], { nowMs: nowAt(1440) }));
+  assert.deepEqual([auto.screenLabel, auto.context, auto.rows.length, auto.hiddenCount], ['Ao vivo', 'Open Masculino · ranking da prova', 10, 5]);
+  assert.equal(auto.rows.find((row) => row.name === 'Rafael Tavares').where, 'Na pista · após Sled Pull · 0:24');
 });
 
 test('AC6: a prévia de grid, classificação e espera; a torre longa mostra 10 e conta os que ficaram de fora', async () => {
@@ -250,7 +257,7 @@ test('AC6: a prévia de grid, classificação e espera; a torre longa mostra 10 
   const noTime = screens.describeRacePanelPreview({ ...standby, serverTime: 'inválida' });
   assert.equal(noTime.screenLabel, 'Espera', 'hora inválida não derruba a prévia');
 
-  database = createFakeSupabase(seedRaceDatabase({ seconds: 1440 }).seed);
+  database = createFakeSupabase(seedRaceDatabase({ seconds: 1440, mode: 'pin_heat', pinnedHeat: 'w3' }).seed);
   const live = await builder.buildRaceBroadcastState(client, database.rows('events')[0], database.rows('event_broadcasts')[0], { nowMs: nowAt(1440) });
   const long = { ...live, live: { ...live.live, boards: live.live.boards.map((board) => ({ ...board, rows: [...board.rows, ...board.rows.map((row, index) => ({ ...row, athleteKey: `x${index}` })), ...board.rows.slice(0, 3).map((row, index) => ({ ...row, athleteKey: `y${index}` }))] })) } };
   const preview = screens.describeRacePanelPreview(long);
@@ -492,7 +499,7 @@ test('AC6: o painel do Telão do Race: link, quatro modos, aviso da largada, pr�
   assert.doesNotMatch(panel, />\s*Largada\s*</);
   const source = read('../src/components/admin/RaceBroadcastPanel.tsx');
   assert.match(source, /A largada é feita na seção Ondas da aba Súmula Fitness Race/);
-  for (const title of ['Automático', 'Fixar uma onda', 'Fixar a classificação de uma categoria', 'Espera']) assert.match(source, new RegExp(`title: '${title}'`));
+  for (const title of ['Automático', 'Fixar uma onda', 'Fixar uma categoria', 'Espera']) assert.match(source, new RegExp(`title: '${title}'`));
   assert.match(source, /A espera só aparece sem próxima onda e sem resultado/, 'o Automático descreve a regra e não promete espera antes da primeira onda');
   assert.doesNotMatch(source, /espera antes da primeira onda|antes da primeira onda, a espera/i);
   assert.match(source, /aria-label="Onda fixada"/);

@@ -5,6 +5,7 @@ import type {
   RaceClassStep,
   RaceFinalist,
   RaceLiveStep,
+  RacePointRef,
   RaceStationBest,
   RaceStationRecord
 } from '@/lib/raceBroadcast';
@@ -68,12 +69,19 @@ export type RaceLiveWaveView = {
 };
 
 export type RaceLiveBoardView = {
-  waveKey: string;
-  waveTitle: string;
+  /** `division`: a torre da categoria com todas as ondas largadas (ranking único, Story 1.116); `wave`: a torre de uma onda (mesa). */
+  scope: 'division' | 'wave';
+  /** Só na torre de uma onda. */
+  waveKey: string | null;
+  waveTitle: string | null;
   divisionKey: string;
   divisionName: string;
   startedAt: string | null;
   stages: RaceStageView[];
+  /**
+   * Linhas da torre. Na diferença "contando" (`gapCounting`), `gapSeconds` vem nulo: a tela conta com
+   * `startedAt`, `penaltySeconds` e `gapBaseSeconds`, para a `version` não mudar a cada segundo.
+   */
   rows: RaceBoardRow[];
   battle: RaceBattle | null;
   finalists: RaceFinalist[];
@@ -101,16 +109,21 @@ export type RaceArrivalView = {
   holds: { stationName: string; seconds: number }[];
 };
 
-/** Faixa da direção de prova: largada, penalidade (só segundos), DNF e chegada. */
+/** Faixa da direção de prova: largada, entrada no ranking, penalidade (só segundos), DNF e chegada. */
 export type RaceTickerEvent = {
-  kind: 'start' | 'penalty' | 'dnf' | 'finish';
+  kind: 'start' | 'enter' | 'penalty' | 'dnf' | 'finish';
   at: string;
   /** Hora do dia no fuso do evento ("10:26:29"). */
   clock: string;
-  /** Onda do evento: a faixa mostra o último evento da onda que está no ar. */
+  /** Onda do evento: na torre de uma onda, a faixa mostra o último evento dela. */
   waveKey: string | null;
   waveTitle: string;
+  /** Categorias do evento: na torre da categoria, a faixa mostra o último evento dela (a largada vale para as categorias da onda). */
+  divisionKeys: string[];
   name: string | null;
+  /** Só na entrada no ranking: a posição na torre da categoria naquele instante e o ponto da primeira leitura. */
+  position: number | null;
+  point: RacePointRef | null;
   /** Só na penalidade: os segundos (o motivo nunca vai). */
   seconds: number | null;
   stationName: string | null;
@@ -119,8 +132,11 @@ export type RaceTickerEvent = {
 };
 
 export type RaceLivePayload = {
-  /** Passos do rodízio da torre: onda na pista × categoria, na ordem de largada e da categoria (20 s cada). */
+  /** `division`: torres das categorias (ranking único); `wave`: a torre da onda fixada na mesa. */
+  scope: 'division' | 'wave';
+  /** Passos do rodízio: a categoria (torre da categoria) ou onda × categoria (onda fixada), na ordem das torres. */
   steps: RaceLiveStep[];
+  /** Ondas na pista (relógios do cabeçalho); com a onda fixada, só ela. */
   waves: RaceLiveWaveView[];
   boards: RaceLiveBoardView[];
   /** Melhor tempo da categoria por estação, só das categorias que estão no ar. */

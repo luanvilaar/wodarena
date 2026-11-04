@@ -6,11 +6,13 @@ import { ChevronDown, ChevronUp, Maximize, WifiOff } from 'lucide-react';
 import type { RaceBoardRow, RaceStationRecord } from '@/lib/raceBroadcast';
 import {
   RACE_FLAG_INITIAL,
+  RACE_LEADER_INITIAL,
   RACE_LIGHTS_UNITS,
   describeRaceCardAWithPurple,
   describeRaceFlag,
   detectSeenStart,
   nextRaceFlagState,
+  nextRaceLeaderState,
   racePurpleByAthlete,
   raceArrivalWaveTitle,
   raceClassGridFrame,
@@ -21,6 +23,8 @@ import {
   withRacePurple,
   type RaceFlagState,
   type RaceGridFrame,
+  type RaceLeaderState,
+  type RaceNewLeaderCard,
   type RacePurpleCard,
   type RaceSeenStart
 } from '@/lib/raceBroadcastMoments';
@@ -43,6 +47,7 @@ import {
   raceBoardMarkers,
   raceClosingStationId,
   raceFinishedCount,
+  raceFrameRacing,
   raceLastTickerEvent,
   raceLiveFrame,
   raceMapLayout,
@@ -51,6 +56,7 @@ import {
   raceRunLabel,
   raceSilenceNotice,
   raceStageLines,
+  raceWaveTag,
   type RaceCardA,
   type RaceCardB,
   type RaceGapView,
@@ -63,6 +69,9 @@ import styles from './RaceBroadcast.module.css';
 // Tela do telão do Fitness Race: a tela ao vivo (Story 1.113), com a torre de
 // posições, o mapa do percurso, os cartões e a faixa da direção de prova, e os
 // momentos da Story 1.114: o grid de largada, as luzes, a bandeirada e o roxo.
+// Desde a Story 1.118 (ranking único), a torre do automático é a da categoria,
+// com todas as ondas largadas, 15 linhas por página, selo da onda e um relógio
+// por onda no cabeçalho; a torre de uma onda fica para a mesa ("Fixar uma onda").
 // Desenho aprovado em docs/design/telao-fitness-race/. Não faz requisição: o
 // BroadcastScreen consulta o servidor (um `fetch` só) e entrega o payload já
 // pronto, com a hora do servidor. Os textos e números vêm de raceBroadcastView.ts
@@ -82,7 +91,8 @@ type Props = {
 
 type ArrowsByBoard = Map<string, Map<string, RankArrow>>;
 
-const boardKey = (frame: RaceLiveFrame) => `${frame.board.waveKey}|${frame.board.divisionKey}`;
+const keyOfBoard = (board: { waveKey: string | null; divisionKey: string }) => `${board.waveKey ?? ''}|${board.divisionKey}`;
+const boardKey = (frame: RaceLiveFrame) => keyOfBoard(frame.board);
 
 /**
  * Setas de variação por torre (onda × categoria). A ordem de cada torre é guardada
@@ -99,7 +109,7 @@ function useRankArrows(live: RaceLivePayload | null, now: number) {
     const orders = new Map<string, string[]>();
     const arrows: ArrowsByBoard = new Map();
     for (const board of live?.boards ?? []) {
-      const key = `${board.waveKey}|${board.divisionKey}`;
+      const key = keyOfBoard(board);
       const order = raceRankOrder(board.rows);
       orders.set(key, order);
       arrows.set(key, nextRankArrows(state.arrows.get(key) ?? new Map(), state.orders.get(key) ?? null, order, now));
@@ -134,6 +144,16 @@ function useArrivalFlags(live: RaceLivePayload | null, now: number) {
   return next;
 }
 
+/**
+ * Novo líder da torre da categoria: a troca do 1º entre a resposta anterior e a nova, derivada durante o
+ * render como as setas (nunca na primeira carga); o cartão fica 6,5 s pela hora do servidor.
+ */
+function useLeaderChanges(live: RaceLivePayload | null, now: number) {
+  const [state, setState] = useState<{ source: RaceLivePayload | null; seen: boolean; leaders: RaceLeaderState }>({ source: null, seen: false, leaders: RACE_LEADER_INITIAL });
+  if (live !== state.source) setState({ source: live, seen: true, leaders: nextRaceLeaderState(state.leaders, live, now, !state.seen) });
+  return state.leaders;
+}
+
 /** `prefers-reduced-motion`: com ele, as luzes não fazem passo a passo (T4-6). */
 const subscribeReducedMotion = (onChange: () => void) => {
   if (typeof window.matchMedia !== 'function') return () => {};
@@ -152,23 +172,27 @@ const toneClass = (tone: RaceWhereView['tone']) => (
           : tone === 'purple' ? styles.tonePurple
             : styles.toneDnf
 );
-const gapClass = (tone: RaceGapView['tone']) => (tone === 'lead' ? styles.gapLead : tone === 'final' ? styles.gapFinal : tone === 'none' ? styles.gapNone : '');
+const gapClass = (tone: RaceGapView['tone']) => (
+  tone === 'lead' ? styles.gapLead : tone === 'final' ? styles.gapFinal : tone === 'none' ? styles.gapNone : tone === 'ahead' ? styles.gapAhead : ''
+);
 
 // ---------------------------------------------------------------------------
 // Torre
 // ---------------------------------------------------------------------------
 
-function TowerRow({ row, index, closingStationId, arrow, purple, now }: { row: RaceBoardRow; index: number; closingStationId: string | null; arrow: RankArrow | undefined; purple: RaceStationRecord | undefined; now: number }) {
+function TowerRow({ row, index, closingStationId, arrow, purple, now, scope }: { row: RaceBoardRow; index: number; closingStationId: string | null; arrow: RankArrow | undefined; purple: RaceStationRecord | undefined; now: number; scope: 'division' | 'wave' }) {
   const where = withRacePurple(describeRaceWhere(row, closingStationId, now), row, purple);
-  const gap = describeRaceGap(row);
+  const gap = describeRaceGap(row, { scope, nowMs: now });
+  const division = scope === 'division';
   const direction = arrow && arrow.until > now ? arrow.dir : null;
   const className = [
     styles.twRow,
     row.isLeader ? styles.lead : '',
-    row.status === 'dnf' ? styles.dnf : '',
+    row.status === 'dnf' || row.position === null ? styles.dnf : '',
     direction === 'up' ? styles.flashUp : direction === 'down' ? styles.flashDown : '',
     where.tone === 'purple' ? styles.flashPurple : ''
   ].filter(Boolean).join(' ');
+  const tag = division ? raceWaveTag(row.waveNumber) : '';
   return (
     <div className={className} style={{ '--rank': index } as CSSProperties}>
       <span className={`${styles.twPos} ${styles.num}`}><span>{raceRowPosition(row)}</span></span>
@@ -176,7 +200,13 @@ function TowerRow({ row, index, closingStationId, arrow, purple, now }: { row: R
         {direction === 'up' ? <ChevronUp aria-hidden="true" strokeWidth={3} /> : direction === 'down' ? <ChevronDown aria-hidden="true" strokeWidth={3} /> : null}
       </span>
       <span className={styles.twWho}>
-        <span className={styles.twNm}>{row.name}</span>
+        {division ? (
+          <span className={styles.twNmLine}>
+            <span className={styles.twNm}>{row.name}</span>
+            {tag && <span className={`${styles.twTag} ${styles.num}`}>{tag}</span>}
+            {gap.penalty && <span className={`${styles.namePen} ${styles.num}`}>{gap.penalty}</span>}
+          </span>
+        ) : <span className={styles.twNm}>{row.name}</span>}
         <span className={styles.twBx}>{row.box}</span>
       </span>
       <span className={`${styles.twWhere} ${toneClass(where.tone)}`}>
@@ -185,7 +215,9 @@ function TowerRow({ row, index, closingStationId, arrow, purple, now }: { row: R
       </span>
       <span className={`${styles.twGap} ${gapClass(gap.tone)} ${styles.num}`}>
         <b>{gap.text}</b>
-        {gap.penalty ? <span className={styles.pen}>{gap.penalty}</span> : gap.sub ? <span>{gap.sub}</span> : null}
+        {!division && gap.penalty
+          ? <span className={styles.pen}>{gap.penalty}</span>
+          : gap.sub ? <span>{gap.counting ? <>{gap.sub.replace(/ · contando$/, '')} · <span className={styles.cnt}>contando</span></> : gap.sub}</span> : null}
       </span>
     </div>
   );
@@ -193,18 +225,20 @@ function TowerRow({ row, index, closingStationId, arrow, purple, now }: { row: R
 
 function Tower({ frame, arrows, purples, now }: { frame: RaceLiveFrame; arrows: Map<string, RankArrow> | undefined; purples: ReadonlyMap<string, RaceStationRecord>; now: number }) {
   const closingStationId = raceClosingStationId(frame.board);
+  const division = frame.board.scope === 'division';
+  const athleteLabel = division ? 'Atleta · onda' : 'Atleta';
   return (
-    <div className={`${styles.tower} ${styles.fade}`}>
+    <div className={`${styles.tower} ${division ? styles.dense : ''} ${styles.fade}`}>
       <div className={styles.twHead}>
         <span>Pos</span>
         <span />
-        <span>{frame.pageCount > 1 ? `Atleta · página ${frame.pageIndex + 1} de ${frame.pageCount}` : 'Atleta'}</span>
+        <span>{frame.pageCount > 1 ? `${athleteLabel} · página ${frame.pageIndex + 1} de ${frame.pageCount}` : athleteLabel}</span>
         <span>Onde está</span>
-        <span className={styles.r}>Dif. líder</span>
+        <span className={styles.r}>{division ? 'Dif. para o 1º' : 'Dif. líder'}</span>
       </div>
       <div className={styles.twBody}>
         {frame.rows.map((row, index) => (
-          <TowerRow key={row.athleteKey} row={row} index={index} closingStationId={closingStationId} arrow={arrows?.get(row.athleteKey)} purple={purples.get(row.athleteKey)} now={now} />
+          <TowerRow key={row.athleteKey} row={row} index={index} closingStationId={closingStationId} arrow={arrows?.get(row.athleteKey)} purple={purples.get(row.athleteKey)} now={now} scope={frame.board.scope} />
         ))}
       </div>
     </div>
@@ -322,12 +356,18 @@ function RouteMap({ frame, purpleKeys }: { frame: RaceLiveFrame; purpleKeys: Rea
 // Cartões
 // ---------------------------------------------------------------------------
 
-function CardABox({ card }: { card: RaceCardA | RacePurpleCard | null }) {
+function CardABox({ card }: { card: RaceCardA | RacePurpleCard | RaceNewLeaderCard | null }) {
   if (!card) return <div className={styles.card}><div className={styles.cardEb}>Onda</div></div>;
-  const key = card.kind === 'battle' ? `battle-${card.ahead.name}-${card.back.name}` : card.kind === 'purple' ? `purple-${card.station}-${card.who}` : card.kind;
+  const key = card.kind === 'battle'
+    ? `battle-${card.ahead.name}-${card.back.name}`
+    : card.kind === 'purple' ? `purple-${card.station}-${card.who}` : card.kind === 'newLeader' ? `lead-${card.name}` : card.kind;
+  const tone = card.kind === 'battle' ? styles.cardBattle : card.kind === 'purple' ? styles.cardPurple : card.kind === 'newLeader' ? styles.cardNewLead : '';
   return (
-    <div className={`${styles.card} ${card.kind === 'battle' ? styles.cardBattle : ''} ${card.kind === 'purple' ? styles.cardPurple : ''}`}>
-      <div className={styles.cardEb}>{card.eyebrow}</div>
+    <div className={`${styles.card} ${tone}`}>
+      <div className={styles.cardEb}>
+        <span className={styles.cardEbText}>{card.eyebrow}</span>
+        {card.kind === 'battle' && card.crossWave && <span className={styles.xw}>entre ondas</span>}
+      </div>
       <div key={key} className={styles.cardIn}>
         {card.kind === 'purple' && (
           <div className={styles.pp}>
@@ -335,6 +375,14 @@ function CardABox({ card }: { card: RaceCardA | RacePurpleCard | null }) {
             <span className={`${styles.ppT} ${styles.num}`}>{card.time}</span>
             <span className={styles.ppW}>{card.who}</span>
             <span className={styles.ppWas}>{card.was}</span>
+          </div>
+        )}
+        {card.kind === 'newLeader' && (
+          <div className={styles.ld}>
+            <span className={styles.w}>{card.name}</span>
+            <span className={styles.bx}>{card.who}</span>
+            {card.at && <span className={styles.at}>{card.at}</span>}
+            {card.advantage && <span className={styles.adv}>por <b className={styles.num}>{card.advantage}</b> de tempo de prova</span>}
           </div>
         )}
         {card.kind === 'battle' && (
@@ -372,24 +420,40 @@ function CardABox({ card }: { card: RaceCardA | RacePurpleCard | null }) {
 
 function CardBBox({ card }: { card: RaceCardB }) {
   return (
-    <div className={styles.card}>
-      <div className={styles.cardEb}>{card.eyebrow}</div>
-      <div key={card.kind === 'finalists' ? 'finalists' : 'next'} className={styles.cardIn}>
-        {card.kind === 'finalists' ? (
+    <div className={`${styles.card} ${card.kind === 'finalists' ? styles.cardFinal : ''}`}>
+      <div className={styles.cardEb}><span className={styles.cardEbText}>{card.eyebrow}</span></div>
+      <div key={card.kind} className={styles.cardIn}>
+        {card.kind === 'finalists' && (
           <div className={styles.wb}>
             {card.items.map((item) => (
               <div key={item.key} className={styles.wbRow}>
-                <div className={styles.w}><b>{[item.position ?? '–', item.name].join(' · ')}</b><span>{[item.box, item.caption].filter(Boolean).join(' · ')}</span></div>
+                <div className={styles.w}>
+                  <b>{[item.position ?? '–', item.name].join(' · ')}{item.wave && <span className={`${styles.twTag} ${styles.num}`}>{item.wave}</span>}</b>
+                  <span>{[item.box, item.caption].filter(Boolean).join(' · ')}</span>
+                </div>
                 <span className={`${styles.c} ${styles.num}`}>{item.value}{item.of && <small>{item.of}</small>}</span>
                 {item.fraction !== null && <div className={styles.wbBar}><i style={{ transform: `scaleX(${item.fraction.toFixed(3)})` }} /></div>}
+                {item.target && <span className={styles.tg}>Passa {item.target.name} se fechar antes de <b className={styles.num}>{item.target.time}</b></span>}
               </div>
             ))}
           </div>
-        ) : (
+        )}
+        {card.kind === 'next' && (
           <div className={styles.nx}>
             <span className={styles.w}>{card.title}</span>
             {card.time && <span className={`${styles.h} ${styles.num}`}>{card.time}</span>}
             {card.detail && <span className={styles.c}>{card.detail}</span>}
+          </div>
+        )}
+        {card.kind === 'waves' && (
+          <div className={styles.wl}>
+            {card.items.map((item) => (
+              <div key={item.key} className={styles.wlRow}>
+                <b>{item.title}</b>
+                <span className={styles.num}>{item.clock}</span>
+                <span>{item.detail}</span>
+              </div>
+            ))}
           </div>
         )}
       </div>
@@ -639,6 +703,7 @@ function NeutralScreen({ payload, text }: { payload: RaceBroadcastPayload; text:
 export function RaceBroadcastScreen({ payload, now, localNow, offline, lastOkAt, idle }: Props) {
   const stageRef = useRef<HTMLDivElement>(null);
   const arrows = useRankArrows(payload.live, now);
+  const leaders = useLeaderChanges(payload.screen === 'live' ? payload.live : null, now);
   const flags = useArrivalFlags(payload.live, now);
   const { start: lightsStart, dismiss: dismissLights } = useSeenStart(payload, now);
   const reducedMotion = usePrefersReducedMotion();
@@ -657,21 +722,22 @@ export function RaceBroadcastScreen({ payload, now, localNow, offline, lastOkAt,
   const classFrame = payload.screen === 'class' && payload.class ? raceClassFrame(payload.class, payload.next, now) : null;
   const standbyFrame = payload.screen === 'standby' && payload.standby ? describeRaceStandby(payload.standby, payload.event) : null;
   const header = frame ? describeRaceHeader(frame, now) : null;
-  const ticker = live && frame ? raceLastTickerEvent(live, frame.wave.key) : null;
+  const ticker = live && frame ? raceLastTickerEvent(live, frame.board) : null;
   const tickerView = ticker ? describeRaceTicker(ticker) : null;
-  const silence = frame ? raceSilenceNotice(frame.wave, now) : null;
+  const silence = frame ? raceSilenceNotice(frame.waves, now) : null;
   const agoSeconds = lastOkAt ? Math.max(1, Math.round((localNow - lastOkAt) / 1000)) : null;
 
   let pill: { text: string; className?: string };
-  if (frame) pill = frame.wave.racingCount === 0 ? { text: 'ENCERRADA' } : { text: 'AO VIVO', className: styles.pillLive };
+  if (frame) pill = raceFrameRacing(frame) ? { text: 'AO VIVO', className: styles.pillLive } : { text: 'ENCERRADA' };
   else if (gridFrame || payload.screen === 'grid') pill = { text: 'GRID', className: styles.pillCall };
   else if (payload.screen === 'class') pill = { text: 'RESULTADOS', className: styles.pillRes };
   else if (payload.screen === 'live') pill = { text: 'AO VIVO', className: styles.pillLive };
   else pill = { text: 'ESPERA' };
 
   const title = header?.title ?? gridFrame?.title ?? classFrame?.title ?? standbyFrame?.name ?? (payload.screen === 'live' ? 'Ao vivo' : SCREEN_LABELS[payload.screen]);
-  const clockMain = header?.clock ?? timeOfDay(now, payload.event.timeZone);
-  const clockSub = header?.caption ?? 'Hora local';
+  const clockMain = header ? header.clock : timeOfDay(now, payload.event.timeZone);
+  const clockSub = header ? header.caption : 'Hora local';
+  const waveClocks = header?.clocks ?? [];
 
   // Rodapé: a faixa da direção de prova ao vivo; no grid, o aviso de que o relógio começa no sinal do organizador;
   // na classificação, a origem do resultado; na espera, a próxima largada.
@@ -688,8 +754,8 @@ export function RaceBroadcastScreen({ payload, now, localNow, offline, lastOkAt,
   let body;
   if (frame && live) {
     const purples = racePurpleByAthlete(live.records, now);
-    const cardA = describeRaceCardAWithPurple(live, frame, now);
-    const cardB = describeRaceCardB(frame.board, payload.next, now);
+    const cardA = describeRaceCardAWithPurple(live, frame, now, leaders);
+    const cardB = describeRaceCardB(frame.board, payload.next, now, frame.waves);
     const stepKey = boardKey(frame);
     const lastFlag = flags.last;
     body = (
@@ -731,8 +797,15 @@ export function RaceBroadcastScreen({ payload, now, localNow, offline, lastOkAt,
               <div className={styles.event}>{payload.event.name || 'WODArena'}</div>
               <div className={styles.title}>{title}</div>
             </div>
+            {waveClocks.length > 0 && (
+              <div className={styles.clocks}>
+                {waveClocks.map((item) => (
+                  <div key={item.key} className={styles.wclock}><b className={styles.num}>{item.clock}</b><span>{item.label}</span></div>
+                ))}
+              </div>
+            )}
             <div className={`${styles.pill} ${pill.className ?? ''}`}><i /><span>{pill.text}</span></div>
-            <div className={styles.clock}><b className={styles.num}>{clockMain}</b><span>{clockSub}</span></div>
+            {clockMain && <div className={styles.clock}><b className={styles.num}>{clockMain}</b><span>{clockSub}</span></div>}
           </header>
           <div key={payload.screen} className={styles.body}>{body}</div>
           <footer className={styles.foot}>

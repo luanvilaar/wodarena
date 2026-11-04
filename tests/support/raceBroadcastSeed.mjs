@@ -66,9 +66,11 @@ const divisionRow = (id, name, order, category) => ({ id, event_id: EVENT_ID, na
  * (para createFakeSupabase), a entrada equivalente do motor e os atalhos de ids.
  * `athletePatch[chave]` troca colunas do atleta; `extra` acrescenta linhas por tabela;
  * `snapshot: false` deixa o regulamento sem percurso (a leitura cai no da categoria).
+ * `input` troca o cenário de referência por outra entrada do motor (por exemplo, o do ranking
+ * único, tests/support/raceRankingScenario.mjs), com as mesmas categorias e o mesmo percurso.
  */
-export const seedRaceDatabase = ({ seconds, withResults = true, athletePatch = {}, extra = {}, mode = 'auto', pinnedHeat = null, pinnedDivision = null, snapshot = true, schedule } = {}) => {
-  const input = buildReferenceInput({ seconds, withResults });
+export const seedRaceDatabase = ({ seconds, withResults = true, athletePatch = {}, extra = {}, mode = 'auto', pinnedHeat = null, pinnedDivision = null, snapshot = true, schedule, input: givenInput } = {}) => {
+  const input = givenInput ?? buildReferenceInput({ seconds, withResults });
   const keyOf = new Map(input.athletes.map((athlete) => [athlete.key, athlete]));
 
   const athletes = input.athletes.map((athlete) => ({
@@ -119,7 +121,7 @@ export const seedRaceDatabase = ({ seconds, withResults = true, athletePatch = {
       heat_id: run.waveKey,
       ruleset_id: 'rs-race-1',
       status: run.status,
-      started_at: iso(0),
+      started_at: run.startedAt ?? iso(0),
       finish_at: run.finishAt,
       gross_seconds: official,
       penalty_seconds: 0,

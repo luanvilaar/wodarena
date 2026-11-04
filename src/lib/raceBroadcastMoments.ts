@@ -12,10 +12,19 @@ import type {
   RaceBroadcastPayload,
   RaceClassPayload,
   RaceGridPayload,
+  RaceLiveBoardView,
   RaceLivePayload,
   RaceStageView
 } from '@/lib/raceBroadcastPayload';
-import { describeRaceCardA, formatRaceTime, type RaceCardA, type RaceLiveFrame, type RaceWhereView } from '@/lib/raceBroadcastView';
+import {
+  describeRaceCardA,
+  describeRaceGap,
+  formatRaceTime,
+  racePointText,
+  type RaceCardA,
+  type RaceLiveFrame,
+  type RaceWhereView
+} from '@/lib/raceBroadcastView';
 
 // Momentos do telão do Fitness Race (Story 1.114): o grid de largada, as luzes que
 // acendem quando o telão vê a largada (D3), a bandeirada de quem fecha o tempo (D34)
@@ -66,7 +75,10 @@ export const detectSeenStart = (previous: RaceBroadcastPayload | null, next: Rac
   if (!live) return null;
   const previousLive = liveOf(previous);
   const known = new Set((previousLive?.waves ?? []).map((wave) => wave.key));
-  const onAir = new Set(live.steps.map((step) => step.waveKey));
+  // Torre da categoria (ranking único): a onda está no ar quando alguma categoria dela tem torre; torre de uma onda: só a do passo.
+  const onAir = new Set(live.scope === 'division'
+    ? live.waves.filter((wave) => live.boards.some((board) => wave.divisionKeys.includes(board.divisionKey))).map((wave) => wave.key)
+    : live.steps.map((step) => step.waveKey).filter((key): key is string => key !== null));
   const candidates = live.waves
     .filter((wave) => !known.has(wave.key) && onAir.has(wave.key))
     .map((wave) => ({ wave, at: Date.parse(wave.startedAt) }))
@@ -74,7 +86,9 @@ export const detectSeenStart = (previous: RaceBroadcastPayload | null, next: Rac
     .sort((a, b) => b.at - a.at);
   const chosen = candidates[0]?.wave;
   if (!chosen) return null;
-  const divisions = [...new Set(live.boards.filter((board) => board.waveKey === chosen.key).map((board) => board.divisionName))];
+  const divisions = live.scope === 'division'
+    ? chosen.divisionKeys.map((key) => live.boards.find((board) => board.divisionKey === key)?.divisionName ?? '').filter(Boolean)
+    : [...new Set(live.boards.filter((board) => board.waveKey === chosen.key).map((board) => board.divisionName))];
   return {
     waveKey: chosen.key,
     waveTitle: chosen.title,
@@ -236,6 +250,76 @@ export const raceArrivalWaveTitle = (live: Pick<RaceLivePayload, 'waves' | 'boar
 };
 
 // ---------------------------------------------------------------------------
+// Novo líder (torre da categoria, ranking único)
+// ---------------------------------------------------------------------------
+
+/** O cartão "Novo líder da prova" fica por isto depois que o 1º da categoria muda. */
+export const RACE_NEW_LEADER_MS = 6_500;
+
+export type RaceLeaderState = {
+  /** O 1º de cada torre da categoria na última resposta vista nesta abertura da tela. */
+  leaders: Readonly<Record<string, string>>;
+  /** A troca mais recente de cada torre: quem passou a liderar, quem liderava e até quando o cartão fica. */
+  changes: Readonly<Record<string, { leaderKey: string; previousKey: string; until: number }>>;
+};
+
+export const RACE_LEADER_INITIAL: RaceLeaderState = { leaders: {}, changes: {} };
+
+const leaderOf = (board: Pick<RaceLiveBoardView, 'rows'>) => board.rows.find((row) => row.isLeader)?.athleteKey ?? null;
+
+/**
+ * Troca de líder nas torres das categorias, entre a resposta anterior e a nova, na mesma abertura da
+ * tela (nunca na primeira carga). A torre de uma onda não tem o cartão. Estado só da tela, para a
+ * `version` do payload não mudar sem dado novo.
+ */
+export const nextRaceLeaderState = (state: RaceLeaderState, live: Pick<RaceLivePayload, 'boards'> | null, nowMs: number, first: boolean): RaceLeaderState => {
+  const leaders: Record<string, string> = {};
+  const changes: Record<string, { leaderKey: string; previousKey: string; until: number }> = {};
+  for (const [key, change] of Object.entries(state.changes)) if (change.until > nowMs) changes[key] = change;
+  for (const board of live?.boards ?? []) {
+    if (board.scope !== 'division') continue;
+    const leader = leaderOf(board);
+    if (!leader) continue;
+    leaders[board.divisionKey] = leader;
+    const previous = state.leaders[board.divisionKey];
+    if (!first && previous && previous !== leader) changes[board.divisionKey] = { leaderKey: leader, previousKey: previous, until: nowMs + RACE_NEW_LEADER_MS };
+  }
+  return { leaders, changes };
+};
+
+export type RaceNewLeaderCard = {
+  kind: 'newLeader';
+  eyebrow: string;
+  name: string;
+  /** "Onda 2 · CT Meireles". */
+  who: string;
+  /** "Passou Rafael Tavares (Onda 1) na saída Ski Erg"; vazio quando o anterior já não está na torre. */
+  at: string;
+  /** "0:13": a diferença do antigo líder no ponto em que se compararam; vazio sem diferença. */
+  advantage: string;
+};
+
+/** O cartão do novo líder enquanto a troca está no ar e ele continua em 1º. */
+export const describeRaceNewLeader = (board: RaceLiveBoardView, state: RaceLeaderState, nowMs: number): RaceNewLeaderCard | null => {
+  if (board.scope !== 'division') return null;
+  const change = state.changes[board.divisionKey];
+  if (!change || change.until <= nowMs || leaderOf(board) !== change.leaderKey) return null;
+  const leader = board.rows.find((row) => row.athleteKey === change.leaderKey);
+  if (!leader) return null;
+  const previous = board.rows.find((row) => row.athleteKey === change.previousKey);
+  const gap = previous ? describeRaceGap(previous, { scope: 'division', nowMs }) : null;
+  const point = previous?.gapPoint ?? null;
+  return {
+    kind: 'newLeader',
+    eyebrow: 'Novo líder da prova',
+    name: leader.name,
+    who: [leader.waveTitle, leader.box].filter(Boolean).join(' · '),
+    at: previous ? [`Passou ${previous.name}${previous.waveTitle ? ` (${previous.waveTitle})` : ''}`, point ? `na ${racePointText(point)}` : ''].filter(Boolean).join(' ') : '',
+    advantage: gap && (gap.tone === 'gap' || gap.tone === 'ahead') ? gap.text.replace(/^[+−]/, '') : ''
+  };
+};
+
+// ---------------------------------------------------------------------------
 // Roxo de melhor estação (D5)
 // ---------------------------------------------------------------------------
 
@@ -308,7 +392,8 @@ export const describeRacePurpleCard = (live: Pick<RaceLivePayload, 'records' | '
   const record = activeRaceRecords(live.records, nowMs, RACE_PURPLE_CARD_MS)[0];
   if (!record) return null;
   const divisionName = live.boards.find((board) => board.divisionKey === record.divisionKey)?.divisionName ?? '';
-  const sameStep = record.divisionKey === frame.board.divisionKey && (!record.waveTitle || record.waveTitle === frame.wave.title);
+  const sameStep = record.divisionKey === frame.board.divisionKey
+    && (frame.board.scope === 'division' || !record.waveTitle || record.waveTitle === frame.wave?.title);
   const previous = record.previous;
   return {
     kind: 'purple',
@@ -322,9 +407,14 @@ export const describeRacePurpleCard = (live: Pick<RaceLivePayload, 'records' | '
   };
 };
 
-/** Cartão A: o roxo primeiro; sem ele, a prioridade da 1.113 (disputa, onda sem leitura, líder). */
-export const describeRaceCardAWithPurple = (live: RaceLivePayload, frame: RaceLiveFrame, nowMs: number): RaceCardA | RacePurpleCard | null => (
-  describeRacePurpleCard(live, frame, nowMs) ?? describeRaceCardA(frame.board, frame.wave, nowMs)
+/** Cartão A: o roxo primeiro; depois o novo líder (torre da categoria); sem eles, a prioridade da 1.113 (disputa, sem leitura, líder). */
+export const describeRaceCardAWithPurple = (
+  live: RaceLivePayload,
+  frame: RaceLiveFrame,
+  nowMs: number,
+  leaders: RaceLeaderState = RACE_LEADER_INITIAL
+): RaceCardA | RacePurpleCard | RaceNewLeaderCard | null => (
+  describeRacePurpleCard(live, frame, nowMs) ?? describeRaceNewLeader(frame.board, leaders, nowMs) ?? describeRaceCardA(frame.board, frame.wave, nowMs)
 );
 
 // ---------------------------------------------------------------------------

@@ -29,9 +29,13 @@ const builder = await importServerModule('lib/serverRaceBroadcast.ts');
 
 const nowAt = (seconds) => BASE_MS + seconds * 1000;
 
-/** O payload real do servidor para o cenário de referência (o mesmo que a TV recebe). */
+/**
+ * O payload real do servidor para o cenário de referência (o mesmo que a TV recebe). A torre de uma
+ * onda é a da mesa ("Fixar uma onda") desde o ranking único (Story 1.116, R4): estes testes fixam a
+ * Onda 3; a torre da categoria tem os testes em race-broadcast-ranking-screen.test.mjs.
+ */
 const payloadAt = async (seconds, options = {}, mutate) => {
-  const seeded = seedRaceDatabase({ seconds, ...options });
+  const seeded = seedRaceDatabase({ seconds, mode: 'pin_heat', pinnedHeat: 'w3', ...options });
   database = createFakeSupabase(seeded.seed);
   if (mutate) mutate(database);
   return builder.buildRaceBroadcastState(client, database.rows('events')[0], database.rows('event_broadcasts')[0], { nowMs: nowAt(options.nowSeconds ?? seconds) });
@@ -125,17 +129,17 @@ test('AC5: chegada, DNF e "sem tempo fechado" (D44) têm o texto próprio; a pen
 
 test('AC5: "dif. líder": LÍDER, +m:ss, tempo final com a diferença, "–" e a penalidade só em segundos', () => {
   const gap = view.describeRaceGap;
-  assert.deepEqual(gap(row({ isLeader: true })), { tone: 'lead', text: 'LÍDER', sub: '', penalty: null });
+  assert.deepEqual(gap(row({ isLeader: true })), { tone: 'lead', text: 'LÍDER', sub: '', penalty: null, counting: false });
   assert.equal(gap(row({ isLeader: true, penaltySeconds: 15 })).penalty, '+15 s');
-  assert.deepEqual(gap(row({ gapSeconds: 79 })), { tone: 'gap', text: '+1:19', sub: '', penalty: null });
+  assert.deepEqual(gap(row({ gapSeconds: 79 })), { tone: 'gap', text: '+1:19', sub: '', penalty: null, counting: false });
   assert.equal(gap(row({ gapSeconds: 3700 })).text, '+1:01:40');
   assert.equal(gap(row({ gapSeconds: 0 })).text, '+0:00');
-  assert.deepEqual(gap(row({ gapSeconds: null })), { tone: 'none', text: '–', sub: '', penalty: null });
-  assert.deepEqual(gap(row({ gapSeconds: 129, penaltySeconds: 15 })), { tone: 'gap', text: '+2:09', sub: '', penalty: '+15 s' });
-  assert.deepEqual(gap(row({ status: 'finished', isLeader: true, finalSeconds: 3982 })), { tone: 'final', text: '1:06:22', sub: 'líder', penalty: null });
-  assert.deepEqual(gap(row({ status: 'finished', finalSeconds: 4015, gapSeconds: 33, penaltySeconds: 15 })), { tone: 'final', text: '1:06:55', sub: '+0:33', penalty: null }, 'quem fechou: o "inclui" já está em "onde está"');
+  assert.deepEqual(gap(row({ gapSeconds: null })), { tone: 'none', text: '–', sub: '', penalty: null, counting: false });
+  assert.deepEqual(gap(row({ gapSeconds: 129, penaltySeconds: 15 })), { tone: 'gap', text: '+2:09', sub: '', penalty: '+15 s', counting: false });
+  assert.deepEqual(gap(row({ status: 'finished', isLeader: true, finalSeconds: 3982 })), { tone: 'final', text: '1:06:22', sub: 'líder', penalty: null, counting: false });
+  assert.deepEqual(gap(row({ status: 'finished', finalSeconds: 4015, gapSeconds: 33, penaltySeconds: 15 })), { tone: 'final', text: '1:06:55', sub: '+0:33', penalty: null, counting: false }, 'quem fechou: o "inclui" já está em "onde está"');
   assert.equal(gap(row({ status: 'finished', finalSeconds: 4015, gapSeconds: null })).sub, '');
-  assert.deepEqual(gap(row({ status: 'dnf', penaltySeconds: 15 })), { tone: 'none', text: '–', sub: '', penalty: null });
+  assert.deepEqual(gap(row({ status: 'dnf', penaltySeconds: 15 })), { tone: 'none', text: '–', sub: '', penalty: null, counting: false });
   assert.deepEqual([view.raceRowPosition(row({ position: 3 })), view.raceRowPosition(row({ position: null, status: 'dnf' }))], ['3', '–']);
 });
 
@@ -174,7 +178,7 @@ test('AC7: cartão A: a disputa tem prioridade e conta a tendência desde a leit
   const battle = (over) => ({ position: 1, aheadKey: 'a', backKey: 'b', intervalSeconds: 2, trend: 'closing', trendSeconds: 47, since: { stationName: 'Sled Pull', side: 'in' }, ...over });
   const card = (over) => view.describeRaceCardA(board({ rows, battle: battle(over) }), wave, nowAt(1440));
   assert.deepEqual(card({}), {
-    kind: 'battle', eyebrow: 'Disputa pelo 1º lugar',
+    kind: 'battle', eyebrow: 'Disputa pelo 1º lugar', crossWave: false,
     ahead: { position: 1, name: 'Rafael Tavares', box: 'Box Aldeota' }, back: { position: 2, name: 'Bruno Sampaio', box: 'CT Meireles' },
     interval: '0:02', trend: 'caiu 0:47 desde a entrada do Sled Pull'
   });
@@ -205,9 +209,9 @@ test('AC7: cartão B: reta final com o progresso pelo tipo da estação (reps, t
   const reps = card(finalist({}));
   assert.equal(reps.kind, 'finalists');
   assert.equal(reps.eyebrow, 'Reta final · Wall Balls');
-  assert.deepEqual(reps.items[0], { key: 'k', position: 3, name: 'Diego Martins', box: 'Arena Sul', value: '75', of: '/100', fraction: 0.75, caption: '' });
+  assert.deepEqual(reps.items[0], { key: 'k', position: 3, name: 'Diego Martins', box: 'Arena Sul', wave: '', target: null, value: '75', of: '/100', fraction: 0.75, caption: '' });
   assert.deepEqual(card(finalist({ progress: { type: 'reps', done: 130, target: 100 } })).items[0].fraction, 1, 'a barra não passa de cheia');
-  assert.deepEqual(card(finalist({ progress: { type: 'reps', done: 12, target: null } })).items[0], { key: 'k', position: 3, name: 'Diego Martins', box: 'Arena Sul', value: '12', of: '', fraction: null, caption: '' });
+  assert.deepEqual(card(finalist({ progress: { type: 'reps', done: 12, target: null } })).items[0], { key: 'k', position: 3, name: 'Diego Martins', box: 'Arena Sul', wave: '', target: null, value: '12', of: '', fraction: null, caption: '' });
 
   const sled = card(finalist({ progress: { type: 'units', unit: 'trecho', done: 2, target: 4 } })).items[0];
   assert.deepEqual([sled.value, sled.of, sled.fraction, sled.caption], ['2', '/4', 0.5, 'trechos']);
@@ -247,9 +251,10 @@ test('AC8: a faixa mostra o último evento da onda, com a hora no fuso do evento
   assert.equal(text({ kind: 'finish', seconds: null, stationName: null, name: null, finalSeconds: null }).text, 'CHEGADA · Atleta · –');
 
   const live = { ticker: [event({ at: iso(1), waveKey: 'w3' }), event({ at: iso(2), waveKey: 'w9', name: 'De outra onda' }), event({ at: iso(3), waveKey: 'w3', name: 'Mais novo' })] };
-  assert.equal(view.raceLastTickerEvent(live, 'w3').name, 'Mais novo');
-  assert.equal(view.raceLastTickerEvent(live, 'w9').name, 'De outra onda');
-  assert.equal(view.raceLastTickerEvent(live, 'w1'), null);
+  const waveBoard = (waveKey) => ({ scope: 'wave', waveKey, divisionKey: 'open-m' });
+  assert.equal(view.raceLastTickerEvent(live, waveBoard('w3')).name, 'Mais novo');
+  assert.equal(view.raceLastTickerEvent(live, waveBoard('w9')).name, 'De outra onda');
+  assert.equal(view.raceLastTickerEvent(live, waveBoard('w1')), null);
 });
 
 test('AC9: aviso de silêncio aos 10 min sem leitura, em minutos pela hora do servidor; a tela segue ao vivo', () => {
@@ -269,7 +274,7 @@ test('AC9: aviso de silêncio aos 10 min sem leitura, em minutos pela hora do se
 test('AC3: título "Onda N · Categoria" e o relógio da onda, contado desde a largada oficial pela hora do servidor', async () => {
   const payload = await payloadAt(1440);
   const frame = view.raceLiveFrame(payload.live, nowAt(1441.9));
-  assert.deepEqual(view.describeRaceHeader(frame, nowAt(1441.9)), { title: 'Onda 3 · Open Masculino', clock: '24:01', caption: 'Tempo da onda 3' });
+  assert.deepEqual(view.describeRaceHeader(frame, nowAt(1441.9)), { title: 'Onda 3 · Open Masculino', clock: '24:01', caption: 'Tempo da onda 3', clocks: [] });
   assert.equal(view.describeRaceHeader(frame, nowAt(3600)).clock, '1:00:00', 'a partir de 1 h: h:mm:ss');
   assert.equal(view.describeRaceHeader({ ...frame, wave: { ...frame.wave, startedAt: 'inválido' } }, nowAt(5)).clock, '--:--');
   assert.equal(view.describeRaceHeader({ ...frame, wave: { ...frame.wave, heatNumber: null } }, nowAt(5)).caption, 'Tempo da onda');

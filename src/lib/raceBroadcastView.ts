@@ -1,11 +1,14 @@
 import {
-  RACE_LIVE_STEP_MS,
   RACE_TOWER_PAGE_MS,
+  raceBoardPageSize,
   raceFixedKeys,
+  raceLiveStepDurations,
   raceQuietMs,
   raceStepIndex,
+  raceTimedStep,
   raceTowerPages,
-  type RaceBoardRow
+  type RaceBoardRow,
+  type RacePointRef
 } from '@/lib/raceBroadcast';
 import type { BroadcastPayload } from '@/lib/broadcastPayload';
 import type {
@@ -78,54 +81,117 @@ export const raceSecondsSince = (iso: string | null | undefined, nowMs: number) 
   return Number.isFinite(at) ? Math.max(0, (nowMs - at) / 1000) : null;
 };
 
+/** Diferença com sinal: "+0:44" ou "−0:20" (segundos inteiros, como o resto da tela). */
+export const formatRaceSignedGap = (seconds: number) => {
+  const rounded = Math.round(Number.isFinite(seconds) ? seconds : 0);
+  return `${rounded < 0 ? '−' : '+'}${formatRaceTime(Math.abs(rounded))}`;
+};
+
+/** O ponto como a tela escreve: "entrada Sled Push", "saída Sled Push" ou "chegada". */
+export const racePointText = (point: RacePointRef | null | undefined) => {
+  if (!point) return '';
+  if (point.side === 'finish') return 'chegada';
+  return `${point.side === 'in' ? 'entrada' : 'saída'} ${point.stationName}`;
+};
+
+/** Relógio do atleta (tempo de prova agora): desde a largada da corrida dele, mais as penalidades vigentes (R2). */
+export const raceAthleteClock = (row: Pick<RaceBoardRow, 'startedAt' | 'penaltySeconds'>, nowMs: number) => {
+  const elapsed = raceSecondsSince(row.startedAt, nowMs);
+  return elapsed === null ? null : elapsed + Math.max(0, row.penaltySeconds || 0);
+};
+
+/** Selo da onda na torre da categoria: "O3"; vazio sem número de onda. */
+export const raceWaveTag = (waveNumber: number | null | undefined) => (typeof waveNumber === 'number' && Number.isFinite(waveNumber) ? `O${waveNumber}` : '');
+
 // ---------------------------------------------------------------------------
 // Passo do rodízio e página da torre (D1, Regra 5)
 // ---------------------------------------------------------------------------
 
 export type RaceLiveFrame = {
   board: RaceLiveBoardView;
-  wave: RaceLiveWaveView;
+  /** A onda da torre de uma onda (mesa); null na torre da categoria. */
+  wave: RaceLiveWaveView | null;
+  /** Ondas na pista com atletas desta categoria (relógios do cabeçalho); na torre de uma onda, só ela. */
+  waves: RaceLiveWaveView[];
   stepIndex: number;
   stepCount: number;
   pageIndex: number;
   pageCount: number;
-  /** Linhas da página no ar, na ordem da torre; com mais de 10 atletas, o líder e a reta final ficam em toda página. */
+  /** Linhas da página no ar, na ordem da torre; o líder e a reta final ficam em toda página. */
   rows: RaceBoardRow[];
 };
 
+const stepBoard = (live: RaceLivePayload, step: RaceLivePayload['steps'][number]) => live.boards.find((item) => (
+  item.divisionKey === step.divisionKey && (item.waveKey ?? null) === (step.waveKey ?? null)
+));
+
 /**
- * O que a tela ao vivo mostra agora: o passo do rodízio (onda × categoria, 20 s)
- * e a página da torre (8 s, só com mais de 10 atletas), pela hora do servidor,
- * para duas TVs mostrarem o mesmo. Null quando não há passo no ar.
+ * O que a tela ao vivo mostra agora, pela hora do servidor, para duas TVs mostrarem o mesmo. Torre
+ * da categoria (ranking único, R3): páginas de 15 linhas a 8 s e o passo fica no ar até mostrar todas
+ * (pelo menos 20 s). Torre de uma onda (mesa): passos de 20 s e páginas de 10 linhas a 8 s, como na
+ * 1.113. Null quando não há passo no ar.
  */
 export const raceLiveFrame = (live: RaceLivePayload, nowMs: number): RaceLiveFrame | null => {
-  if (live.steps.length === 0) return null;
-  const stepIndex = raceStepIndex(nowMs, RACE_LIVE_STEP_MS, live.steps.length);
-  const step = live.steps[stepIndex];
-  const board = live.boards.find((item) => item.waveKey === step.waveKey && item.divisionKey === step.divisionKey);
-  const wave = live.waves.find((item) => item.key === step.waveKey);
-  if (!board || !wave) return null;
-  const pages = raceTowerPages(board.rows, raceFixedKeys(board));
-  const pageIndex = raceStepIndex(nowMs, RACE_TOWER_PAGE_MS, pages.length);
+  const boards = live.steps.map((step) => stepBoard(live, step)).filter((board): board is RaceLiveBoardView => Boolean(board));
+  if (boards.length === 0) return null;
+  const { index: stepIndex, offsetMs } = raceTimedStep(nowMs, raceLiveStepDurations(boards));
+  const board = boards[stepIndex];
+  const wave = board.scope === 'wave' ? live.waves.find((item) => item.key === board.waveKey) ?? null : null;
+  if (board.scope === 'wave' && !wave) return null;
+  const waves = board.scope === 'division' ? live.waves.filter((item) => item.divisionKeys.includes(board.divisionKey)) : [wave as RaceLiveWaveView];
+  const pages = raceTowerPages(board.rows, raceFixedKeys(board), raceBoardPageSize(board));
+  const pageIndex = board.scope === 'division' && boards.length > 1
+    ? Math.floor(offsetMs / RACE_TOWER_PAGE_MS) % pages.length
+    : raceStepIndex(nowMs, RACE_TOWER_PAGE_MS, pages.length);
   const onPage = new Set(pages[pageIndex] ?? []);
-  return { board, wave, stepIndex, stepCount: live.steps.length, pageIndex, pageCount: pages.length, rows: board.rows.filter((row) => onPage.has(row.athleteKey)) };
+  return { board, wave, waves, stepIndex, stepCount: boards.length, pageIndex, pageCount: pages.length, rows: board.rows.filter((row) => onPage.has(row.athleteKey)) };
 };
 
 // ---------------------------------------------------------------------------
 // Cabeçalho
 // ---------------------------------------------------------------------------
 
-export type RaceHeaderView = { title: string; clock: string; caption: string };
+export type RaceHeaderView = {
+  title: string;
+  /** Relógio grande (torre de uma onda); vazio na torre da categoria, que mostra `clocks`. */
+  clock: string;
+  caption: string;
+  /** Torre da categoria: um relógio por onda na pista com atletas dela (até 4, as mais novas), na ordem de largada. */
+  clocks: { key: string; label: string; clock: string }[];
+};
 
-/** Título "Onda N · Categoria" e o relógio da onda, contado desde a largada oficial pela hora do servidor. */
+/** Quantos relógios de onda cabem no cabeçalho da torre da categoria. */
+export const RACE_HEADER_CLOCKS_MAX = 4;
+
+/**
+ * Cabeçalho. Torre de uma onda: "Onda N · Categoria" e o relógio da onda. Torre da categoria (ranking
+ * único): "Categoria · ranking da prova" e um relógio por onda na pista, contado da largada oficial
+ * pela hora do servidor.
+ */
 export const describeRaceHeader = (frame: RaceLiveFrame, nowMs: number): RaceHeaderView => {
+  if (frame.board.scope === 'division' || !frame.wave) {
+    const clocks = [...frame.waves]
+      .sort((a, b) => Date.parse(a.startedAt) - Date.parse(b.startedAt))
+      .slice(-RACE_HEADER_CLOCKS_MAX)
+      .map((wave) => {
+        const elapsed = raceSecondsSince(wave.startedAt, nowMs);
+        return { key: wave.key, label: wave.title, clock: elapsed === null ? '--:--' : formatRaceRunningClock(elapsed) };
+      });
+    return { title: `${frame.board.divisionName} · ranking da prova`, clock: '', caption: '', clocks };
+  }
   const elapsed = raceSecondsSince(frame.wave.startedAt, nowMs);
   return {
-    title: `${frame.board.waveTitle} · ${frame.board.divisionName}`,
+    title: `${frame.board.waveTitle ?? frame.wave.title} · ${frame.board.divisionName}`,
     clock: elapsed === null ? '--:--' : formatRaceRunningClock(elapsed),
-    caption: frame.wave.heatNumber !== null ? `Tempo da onda ${frame.wave.heatNumber}` : 'Tempo da onda'
+    caption: frame.wave.heatNumber !== null ? `Tempo da onda ${frame.wave.heatNumber}` : 'Tempo da onda',
+    clocks: []
   };
 };
+
+/** Há alguém correndo na torre (o selo do cabeçalho diz AO VIVO; senão, ENCERRADA). */
+export const raceFrameRacing = (frame: RaceLiveFrame) => (
+  frame.wave && frame.board.scope === 'wave' ? frame.wave.racingCount > 0 : frame.board.rows.some((row) => row.status === 'racing')
+);
 
 // ---------------------------------------------------------------------------
 // Linha da torre
@@ -159,6 +225,11 @@ const whereView = (tone: RaceWhereView['tone'], parts: RaceWhereView['parts']): 
  */
 export const describeRaceWhere = (row: RaceBoardRow, closingStationId: string | null, nowMs: number): RaceWhereView => {
   const where = row.where;
+  // Torre da categoria: quem largou e ainda não tem leitura fica sem posição, "aguardando 1ª leitura".
+  if (row.position === null && row.status === 'racing' && where.kind === 'track' && !where.afterStationId && !where.closedWithoutTime) {
+    const since = raceSecondsSince(where.sinceAt, nowMs);
+    return whereView('track', { name: 'Largou', progress: '', subText: 'aguardando 1ª leitura', counter: since === null ? '' : formatRaceTime(Math.floor(since)) });
+  }
   if (where.kind === 'dnf') return whereView('dnf', { name: 'DNF', progress: '', subText: 'decisão do organizador', counter: '' });
   if (where.kind === 'finished') {
     return whereView('finished', { name: 'Chegada', progress: '', subText: row.penaltySeconds > 0 ? `inclui +${row.penaltySeconds} s` : 'tempo final', counter: '' });
@@ -188,27 +259,52 @@ export const describeRaceWhere = (row: RaceBoardRow, closingStationId: string | 
   });
 };
 
-export type RaceGapView = { tone: 'lead' | 'gap' | 'final' | 'none'; text: string; sub: string; penalty: string | null };
+export type RaceGapView = {
+  tone: 'lead' | 'gap' | 'ahead' | 'final' | 'none';
+  text: string;
+  sub: string;
+  penalty: string | null;
+  /** A diferença anda com o relógio ("contando"). */
+  counting: boolean;
+};
+
+const NO_GAP = { tone: 'none' as const, text: '–', sub: '', counting: false };
 
 /**
- * "Dif. líder" (AC5): "LÍDER"; "+m:ss" no mesmo ponto; o tempo final com "+m:ss"
- * (ou "líder") para quem fechou; "–" sem diferença e no DNF. A penalidade vigente
- * de quem ainda corre sai só em segundos ("+15 s"), nunca o motivo (D2).
+ * "Dif." (AC5 da 1.113). Torre de uma onda: "LÍDER"; "+m:ss" no mesmo ponto; o tempo final com
+ * "+m:ss" (ou "líder") para quem fechou; "–" sem diferença e no DNF. Torre da categoria (ranking
+ * único, 1.116): a diferença para o 1º com sinal e o ponto embaixo ("+0:44" · "saída Sled Pull"),
+ * "contando" quando o relógio do atleta já passou do tempo do 1º num ponto que ele não alcançou
+ * (conta com a hora do servidor), o ponto e o tempo de prova do líder e "–" para quem não tem posição.
+ * A penalidade vigente de quem ainda corre sai só em segundos ("+15 s"), nunca o motivo (D2).
  */
-export const describeRaceGap = (row: RaceBoardRow): RaceGapView => {
-  if (row.status === 'dnf') return { tone: 'none', text: '–', sub: '', penalty: null };
+export const describeRaceGap = (row: RaceBoardRow, options: { scope?: 'division' | 'wave'; nowMs?: number } = {}): RaceGapView => {
+  const division = options.scope === 'division';
+  if (row.status === 'dnf') return { ...NO_GAP, penalty: null };
   if (row.status === 'finished') {
-    return {
-      tone: 'final',
-      text: row.finalSeconds === null ? '–' : formatRaceTime(row.finalSeconds),
-      sub: row.isLeader ? 'líder' : row.gapSeconds === null ? '' : `+${formatRaceTime(row.gapSeconds)}`,
-      penalty: null
-    };
+    const sub = row.isLeader
+      ? 'líder'
+      : row.gapSeconds === null ? '' : division ? [formatRaceSignedGap(row.gapSeconds), racePointText(row.gapPoint)].filter(Boolean).join(' · ') : `+${formatRaceTime(row.gapSeconds)}`;
+    return { tone: 'final', text: row.finalSeconds === null ? '–' : formatRaceTime(row.finalSeconds), sub, penalty: null, counting: false };
   }
   const penalty = row.penaltySeconds > 0 ? `+${row.penaltySeconds} s` : null;
-  if (row.isLeader) return { tone: 'lead', text: 'LÍDER', sub: '', penalty };
-  if (row.gapSeconds === null) return { tone: 'none', text: '–', sub: '', penalty };
-  return { tone: 'gap', text: `+${formatRaceTime(row.gapSeconds)}`, sub: '', penalty };
+  if (!division) {
+    if (row.isLeader) return { tone: 'lead', text: 'LÍDER', sub: '', penalty, counting: false };
+    if (row.gapSeconds === null) return { ...NO_GAP, penalty };
+    return { tone: 'gap', text: `+${formatRaceTime(row.gapSeconds)}`, sub: '', penalty, counting: false };
+  }
+  if (row.position === null) return { ...NO_GAP, penalty };
+  if (row.isLeader) {
+    const at = row.lastPointRef && row.pointSeconds !== null ? `${racePointText(row.lastPointRef)} · ${formatRaceTime(row.pointSeconds)}` : '';
+    return { tone: 'lead', text: 'LÍDER', sub: at, penalty, counting: false };
+  }
+  if (row.gapCounting && row.gapBaseSeconds !== null) {
+    const clock = raceAthleteClock(row, options.nowMs ?? 0);
+    if (clock === null) return { ...NO_GAP, penalty };
+    return { tone: 'gap', text: `+${formatRaceTime(Math.max(0, clock - row.gapBaseSeconds))}`, sub: `${racePointText(row.gapPoint)} · contando`, penalty, counting: true };
+  }
+  if (row.gapSeconds === null) return { ...NO_GAP, penalty };
+  return { tone: Math.round(row.gapSeconds) < 0 ? 'ahead' : 'gap', text: formatRaceSignedGap(row.gapSeconds), sub: racePointText(row.gapPoint), penalty, counting: false };
 };
 
 /** Posição da torre: o número, ou "–" no DNF. */
@@ -245,8 +341,8 @@ export const nextRankArrows = (
   return next;
 };
 
-/** A ordem que a seta compara: os atletas que ainda têm posição (o DNF sai da ordem). */
-export const raceRankOrder = (rows: readonly RaceBoardRow[]) => rows.filter((row) => row.status !== 'dnf').map((row) => row.athleteKey);
+/** A ordem que a seta compara: os atletas que têm posição (o DNF e quem ainda não tem leitura na torre da categoria saem da ordem). */
+export const raceRankOrder = (rows: readonly RaceBoardRow[]) => rows.filter((row) => row.status !== 'dnf' && row.position !== null).map((row) => row.athleteKey);
 
 // ---------------------------------------------------------------------------
 // Cartões
@@ -258,6 +354,8 @@ export type RaceCardA =
   | {
     kind: 'battle';
     eyebrow: string;
+    /** Os dois são de ondas diferentes (selo "entre ondas"). */
+    crossWave: boolean;
     ahead: { position: number | null; name: string; box: string };
     back: { position: number | null; name: string; box: string };
     interval: string;
@@ -270,11 +368,18 @@ const sinceText = (since: { stationName: string; side: 'in' | 'out' } | null) =>
   since ? `desde ${since.side === 'in' ? 'a entrada do' : 'a saída do'} ${since.stationName}` : ''
 );
 
+/** "Onda 2 · CT Meireles" na torre da categoria; só o box na torre de uma onda. */
+const whoLine = (board: Pick<RaceLiveBoardView, 'scope'>, row: Pick<RaceBoardRow, 'waveTitle' | 'box'>) => (
+  board.scope === 'division' ? [row.waveTitle, row.box].filter(Boolean).join(' · ') : row.box
+);
+
 /**
- * Cartão A, por prioridade (AC7): a disputa do motor; a onda ainda sem nenhuma
- * leitura; o líder da onda. O roxo (Story 1.114) entra por cima dele em `raceBroadcastMoments.ts`.
+ * Cartão A, por prioridade (AC7 da 1.113): a disputa do motor; a torre ainda sem nenhuma leitura; o
+ * líder. Na torre da categoria a disputa pode ser entre ondas e diz o ponto comparado. O roxo (1.114)
+ * e o novo líder (1.118) entram por cima dele em `raceBroadcastMoments.ts`.
  */
-export const describeRaceCardA = (board: RaceLiveBoardView, wave: RaceLiveWaveView, nowMs: number): RaceCardA | null => {
+export const describeRaceCardA = (board: RaceLiveBoardView, wave: RaceLiveWaveView | null, nowMs: number): RaceCardA | null => {
+  const division = board.scope === 'division';
   const battle = board.battle;
   if (battle) {
     const ahead = rowByKey(board, battle.aheadKey);
@@ -289,15 +394,26 @@ export const describeRaceCardA = (board: RaceLiveBoardView, wave: RaceLiveWaveVi
       return {
         kind: 'battle',
         eyebrow: `Disputa pelo ${battle.position}º lugar`,
-        ahead: { position: ahead.position, name: ahead.name, box: ahead.box },
-        back: { position: back.position, name: back.name, box: back.box },
+        crossWave: division && battle.crossWave,
+        ahead: { position: ahead.position, name: ahead.name, box: whoLine(board, ahead) },
+        back: { position: back.position, name: back.name, box: whoLine(board, back) },
         interval: formatRaceTime(battle.intervalSeconds),
-        trend: trend.trim()
+        trend: [division && battle.point ? `na ${racePointText(battle.point)}` : '', trend.trim()].filter(Boolean).join(' · ')
       };
     }
   }
   if (board.rows.length === 0) return null;
   if (!board.hasLeaderReading) {
+    if (division || !wave) {
+      return {
+        kind: 'waiting',
+        eyebrow: `${board.divisionName} · ranking da prova`,
+        title: 'Ranking em formação',
+        detail: 'Quem largou entra no ranking na primeira leitura de um judge',
+        at: 'Aguardando a primeira leitura de um judge',
+        note: ''
+      };
+    }
     return {
       kind: 'waiting',
       eyebrow: `${wave.title} na pista`,
@@ -309,16 +425,18 @@ export const describeRaceCardA = (board: RaceLiveBoardView, wave: RaceLiveWaveVi
   }
   const leader = board.rows.find((row) => row.isLeader);
   if (!leader) return null;
-  const second = board.rows.find((row) => row.status !== 'dnf' && !row.isLeader);
+  const second = board.rows.find((row) => row.status !== 'dnf' && !row.isLeader && row.position !== null);
   const where = describeRaceWhere(leader, raceClosingStationId(board), nowMs);
+  const secondGap = second ? describeRaceGap(second, { scope: board.scope, nowMs }) : null;
+  const known = Boolean(secondGap && (secondGap.tone === 'gap' || secondGap.tone === 'ahead' || secondGap.tone === 'final'));
   return {
     kind: 'leader',
-    eyebrow: 'Líder da onda',
+    eyebrow: division ? 'Líder da prova' : 'Líder da onda',
     name: leader.name,
-    box: leader.box,
+    box: whoLine(board, leader),
     at: `${where.main} · ${where.sub}`,
-    advantage: second && second.gapSeconds !== null
-      ? { label: 'Vantagem para o 2º', value: `+${formatRaceTime(second.gapSeconds)}`, known: true }
+    advantage: known && secondGap
+      ? { label: 'Vantagem para o 2º', value: division && secondGap.tone === 'final' ? secondGap.sub.split(' · ')[0] || secondGap.text : secondGap.text, known: true }
       : { label: 'Vantagem para o 2º', value: 'aguardando leitura', known: false }
   };
 };
@@ -331,6 +449,8 @@ export type RaceFinalistView = {
   position: number | null;
   name: string;
   box: string;
+  /** Selo da onda ("O3") na torre da categoria; vazio na torre de uma onda. */
+  wave: string;
   /** O número grande: reps, trechos ou voltas feitos; o tempo na estação (ergômetro, genérica, sem meta); "–" aguardando início. */
   value: string;
   /** "/100" ou "/4" depois do número; vazio sem meta. */
@@ -338,23 +458,50 @@ export type RaceFinalistView = {
   /** Preenchimento da barra de 0 a 1; null sem barra. */
   fraction: number | null;
   caption: string;
+  /**
+   * Torre da categoria: o tempo a bater, o tempo final de quem já chegou e ainda pode ser superado pelo
+   * relógio do atleta ("Passa Rafael Tavares se fechar antes de 1:11:32"). Null sem ninguém a passar.
+   */
+  target: { name: string; time: string } | null;
 };
+
+export type RaceWaveLine = { key: string; title: string; clock: string; detail: string };
 
 export type RaceCardB =
   | { kind: 'finalists'; eyebrow: string; items: RaceFinalistView[] }
-  | { kind: 'next'; eyebrow: string; title: string; time: string; detail: string };
+  | { kind: 'next'; eyebrow: string; title: string; time: string; detail: string }
+  | { kind: 'waves'; eyebrow: string; items: RaceWaveLine[] };
+
+/** O tempo a bater: entre quem já fechou, o menor tempo final que ainda é maior que o relógio do atleta. */
+const targetOf = (board: RaceLiveBoardView, clock: number | null): RaceFinalistView['target'] => {
+  if (clock === null) return null;
+  const beatable = board.rows
+    .filter((row) => row.status === 'finished' && row.finalSeconds !== null && row.finalSeconds > clock)
+    .sort((a, b) => (a.finalSeconds as number) - (b.finalSeconds as number))[0];
+  return beatable ? { name: beatable.name, time: formatRaceTime(beatable.finalSeconds as number) } : null;
+};
 
 /**
- * Cartão B (AC7): "Reta final" com até 3 atletas da última estação do percurso
- * (D34), com o progresso pelo tipo da estação; senão, "Próxima largada".
+ * Cartão B (AC7 da 1.113): "Reta final" com até 3 atletas da última estação do percurso (D34), com o
+ * progresso pelo tipo da estação e, na torre da categoria, o tempo a bater; senão "Próxima largada";
+ * sem próxima onda, na torre da categoria, "Ondas na pista" (relógio, quantos correm e quantos chegaram).
  */
-export const describeRaceCardB = (board: RaceLiveBoardView, next: RaceWaveBrief | null, nowMs: number): RaceCardB => {
+export const describeRaceCardB = (board: RaceLiveBoardView, next: RaceWaveBrief | null, nowMs: number, waves: readonly RaceLiveWaveView[] = []): RaceCardB => {
+  const division = board.scope === 'division';
   if (board.finalists.length > 0) {
     return {
       kind: 'finalists',
       eyebrow: `Reta final · ${board.finalists[0].stationName}`,
       items: board.finalists.map((finalist): RaceFinalistView => {
-        const base = { key: finalist.athleteKey, position: finalist.position, name: finalist.name, box: finalist.box };
+        const clock = division ? raceAthleteClock({ startedAt: finalist.raceStartedAt, penaltySeconds: finalist.penaltySeconds }, nowMs) : null;
+        const base = {
+          key: finalist.athleteKey,
+          position: finalist.position,
+          name: finalist.name,
+          box: finalist.box,
+          wave: division ? raceWaveTag(finalist.waveNumber) : '',
+          target: division ? targetOf(board, clock) : null
+        };
         if (finalist.waiting) return { ...base, value: '–', of: '', fraction: null, caption: 'aguardando início' };
         const progress = finalist.progress;
         if (progress.type === 'reps') {
@@ -368,29 +515,58 @@ export const describeRaceCardB = (board: RaceLiveBoardView, next: RaceWaveBrief 
       })
     };
   }
-  if (!next) return { kind: 'next', eyebrow: 'Próxima largada', title: 'Sem próxima onda', time: '', detail: 'Todas as ondas do cronograma já largaram' };
-  const people = `${next.athleteCount} ${next.athleteCount === 1 ? 'atleta' : 'atletas'}`;
-  return {
-    kind: 'next',
-    eyebrow: 'Próxima largada',
-    title: next.title,
-    time: next.time ? `${next.time} prevista` : '',
-    detail: [next.divisionNames.join(' e '), people].filter(Boolean).join(' · ')
-  };
+  if (next) {
+    const people = `${next.athleteCount} ${next.athleteCount === 1 ? 'atleta' : 'atletas'}`;
+    return {
+      kind: 'next',
+      eyebrow: 'Próxima largada',
+      title: next.title,
+      time: next.time ? `${next.time} prevista` : '',
+      detail: [next.divisionNames.join(' e '), people].filter(Boolean).join(' · ')
+    };
+  }
+  if (division && waves.length > 0) {
+    const items = [...waves]
+      .sort((a, b) => Date.parse(a.startedAt) - Date.parse(b.startedAt))
+      .slice(-3)
+      .map((wave): RaceWaveLine => {
+        const rows = board.rows.filter((row) => row.waveKey === wave.key);
+        const racing = rows.filter((row) => row.status === 'racing').length;
+        const finished = rows.filter((row) => row.status === 'finished').length;
+        const elapsed = raceSecondsSince(wave.startedAt, nowMs);
+        return {
+          key: wave.key,
+          title: wave.title,
+          clock: racing > 0 && elapsed !== null ? formatRaceRunningClock(elapsed) : 'fim',
+          detail: `${racing} correndo · ${finished} ${finished === 1 ? 'chegou' : 'chegaram'}`
+        };
+      });
+    return { kind: 'waves', eyebrow: 'Ondas na pista', items };
+  }
+  return { kind: 'next', eyebrow: 'Próxima largada', title: 'Sem próxima onda', time: '', detail: 'Todas as ondas do cronograma já largaram' };
 };
 
 // ---------------------------------------------------------------------------
 // Faixa da direção de prova e aviso de silêncio
 // ---------------------------------------------------------------------------
 
-/** O último evento da onda que está no ar (a largada é o primeiro, então a faixa nunca fica vazia ao vivo). */
-export const raceLastTickerEvent = (live: Pick<RaceLivePayload, 'ticker'>, waveKey: string): RaceTickerEvent | null => (
-  [...live.ticker].reverse().find((event) => event.waveKey === waveKey) ?? null
+/**
+ * O último evento da torre no ar: na torre de uma onda, o da onda (a largada é o primeiro, então a faixa
+ * nunca fica vazia ao vivo); na torre da categoria, o da categoria (a largada vale para as categorias da onda).
+ */
+export const raceLastTickerEvent = (live: Pick<RaceLivePayload, 'ticker'>, board: Pick<RaceLiveBoardView, 'scope' | 'waveKey' | 'divisionKey'>): RaceTickerEvent | null => (
+  [...live.ticker].reverse().find((event) => (
+    board.scope === 'division' ? (event.divisionKeys ?? []).includes(board.divisionKey) : event.waveKey === board.waveKey
+  )) ?? null
 );
 
 /** Texto da faixa; a hora do dia vem no fuso do evento. Nunca o motivo da penalidade (D2). */
 export const describeRaceTicker = (event: RaceTickerEvent): { clock: string | null; text: string } => {
   if (event.kind === 'start') return { clock: null, text: `LARGADA · ${event.waveTitle} · ${event.clock}` };
+  if (event.kind === 'enter') {
+    const who = `${event.name ?? 'Atleta'}${event.waveTitle ? ` (${event.waveTitle})` : ''}${event.position ? ` em ${event.position}º` : ''}`;
+    return { clock: event.clock, text: ['ENTRA NO RANKING', who, racePointText(event.point)].filter(Boolean).join(' · ') };
+  }
   if (event.kind === 'penalty') {
     return { clock: event.clock, text: ['PENALIDADE', `+${event.seconds ?? 0} s`, event.name, event.stationName].filter(Boolean).join(' · ') };
   }
@@ -399,12 +575,14 @@ export const describeRaceTicker = (event: RaceTickerEvent): { clock: string | nu
 };
 
 /**
- * Aviso do rodapé quando passam 10 min sem leitura na onda (regra do motor): a
- * onda não sai do ar por isso. N sai da hora do servidor e do instante da última
- * leitura (ou da largada, se nunca houve leitura).
+ * Aviso do rodapé quando passam 10 min sem leitura (regra do motor): a tela não sai do ar por isso.
+ * Na torre da categoria vale a leitura mais nova entre as ondas dela na pista. N sai da hora do
+ * servidor e do instante da última leitura (ou da largada, se nunca houve leitura).
  */
-export const raceSilenceNotice = (wave: Pick<RaceLiveWaveView, 'lastReadingAt'>, nowMs: number): string | null => {
-  const quiet = raceQuietMs(wave.lastReadingAt, nowMs);
+export const raceSilenceNotice = (wave: Pick<RaceLiveWaveView, 'lastReadingAt'> | readonly Pick<RaceLiveWaveView, 'lastReadingAt'>[], nowMs: number): string | null => {
+  const list = Array.isArray(wave) ? wave : [wave as Pick<RaceLiveWaveView, 'lastReadingAt'>];
+  const latest = list.map((item) => item.lastReadingAt).filter((iso): iso is string => Boolean(iso)).sort((a, b) => Date.parse(b) - Date.parse(a))[0] ?? null;
+  const quiet = raceQuietMs(latest, nowMs);
   return quiet === null ? null : `Sem leitura há ${Math.floor(quiet / 60_000)} min`;
 };
 

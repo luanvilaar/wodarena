@@ -47,10 +47,10 @@ const MODE_OPTIONS: { value: BroadcastMode; title: string; text: string }[] = [
   {
     value: 'auto',
     title: 'Automático',
-    text: 'Ao vivo enquanto há onda na pista. Entre as ondas, o grid da próxima; com resultado publicado, a classificação alternando com o grid. A espera só aparece sem próxima onda e sem resultado.'
+    text: 'Ao vivo enquanto há onda na pista: o ranking da prova, uma torre por categoria com todas as ondas que já largaram. Entre as ondas, o grid da próxima; com resultado publicado, a classificação alternando com o grid. A espera só aparece sem próxima onda e sem resultado.'
   },
-  { value: 'pin_heat', title: 'Fixar uma onda', text: 'O grid da onda escolhida antes da largada e o ao vivo dela depois, até você voltar ao automático.' },
-  { value: 'pin_standings', title: 'Fixar a classificação de uma categoria', text: 'A classificação da categoria escolhida fica no ar até você voltar ao automático.' },
+  { value: 'pin_heat', title: 'Fixar uma onda', text: 'Só a onda escolhida: o grid antes da largada e, depois, a torre só dela, com o relógio da onda, até você voltar ao automático.' },
+  { value: 'pin_standings', title: 'Fixar uma categoria', text: 'O ranking ao vivo da categoria escolhida enquanto alguém dela está na pista; depois, a classificação dela. Fica até você voltar ao automático.' },
   { value: 'standby', title: 'Espera', text: 'A marca do evento e as próximas ondas do cronograma.' }
 ];
 

@@ -1,0 +1,1145 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Proposta aprovada pelo Luan em 2026-11-04 (R1 a R5 = A). Publicada em https://claude.ai/artifact/G3en4somBpty3HxDHmk96y; esta cópia é a referência das Stories 1.116 a 1.118. -->
+<title>Ranking único Fitness Race</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@500;600;700&family=Inter:wght@400;500;600;700;800&display=swap">
+<style>
+/* Layout: proposta em coluna única; o telão 16:9 simulado é a peça central, com a leitura ao lado (empilha em telas estreitas).
+   Mesmo mundo visual do telão aprovado em docs/design/telao-fitness-race/ (painel escuro, amarelo de destaque, verde/vermelho de variação, roxo de melhor estação).
+   Escuro de propósito, nos dois temas do visualizador: é a linguagem do telão e do painel do WODArena. */
+:root {
+  color-scheme: dark;
+  --bg: #0b0e11;
+  --tv-bg: #090b0e;
+  --panel: #14171c;
+  --card: #1e2329;
+  --line: #2b3139;
+  --line-soft: #1c2026;
+  --fg: #eaecef;
+  --muted: #929aa5;
+  --muted-soft: #7f8898;
+  --primary: #fcd535;
+  --primary-ink: #181a20;
+  --primary-tint: rgba(252, 213, 53, 0.12);
+  --primary-edge: rgba(252, 213, 53, 0.45);
+  --up: #0ecb81;
+  --up-tint: rgba(14, 203, 129, 0.14);
+  --down: #f6465d;
+  --down-tint: rgba(246, 70, 93, 0.14);
+  --purple: #b47cff;
+  --track: #232830;
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-num: "IBM Plex Sans", "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+}
+html { background: var(--bg); }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.55; }
+::selection { background: var(--primary); color: var(--primary-ink); }
+* { box-sizing: border-box; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 6px; }
+code { font: 500 0.86em var(--font-num); color: var(--fg); background: var(--card); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+
+.page { max-width: 1480px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 36px 72px; display: grid; gap: 64px; }
+
+/* Abertura */
+.intro { display: grid; gap: 14px; max-width: 920px; }
+.chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; letter-spacing: 0.02em; border: 1px solid var(--line); color: var(--muted); }
+.chip.wait { border-color: var(--primary-edge); color: var(--primary); background: var(--primary-tint); }
+.intro h1 { margin: 0; font-size: clamp(32px, 4.2vw, 48px); line-height: 1.04; letter-spacing: -0.03em; font-weight: 800; text-wrap: balance; }
+.intro p { margin: 0; color: var(--muted); font-size: 17px; max-width: 72ch; }
+.intro p strong { color: var(--fg); font-weight: 600; }
+.intro .small { font-size: 14px; color: var(--muted-soft); }
+
+.block { display: grid; gap: 18px; min-width: 0; }
+.sec { margin: 0; font-size: clamp(22px, 2.4vw, 28px); line-height: 1.15; font-weight: 800; letter-spacing: -0.02em; text-wrap: balance; }
+.sec-lead { margin: 0; color: var(--muted); max-width: 74ch; }
+
+/* Exemplo Ana × Bia */
+.ex { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; max-width: 920px; }
+.ex-scroll { overflow-x: auto; }
+.ex table { width: 100%; border-collapse: collapse; min-width: 560px; font-size: 15px; }
+.ex th, .ex td { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }
+.ex th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted-soft); font-weight: 700; }
+.ex td { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.ex td:first-child { font-family: var(--font-body); font-weight: 700; }
+.ex td:first-child span { color: var(--muted); font-weight: 500; }
+.ex td.big { font-size: 22px; font-weight: 600; }
+.ex tr.win td.big { color: var(--primary); }
+.ex-out { padding: 14px 16px; display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+.ex-out b { font: 600 26px var(--font-num); color: var(--primary); letter-spacing: -0.02em; }
+.ex-out span { color: var(--muted); max-width: 64ch; }
+
+/* Palco */
+.stage { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; align-items: start; }
+.stage-main { display: grid; gap: 14px; min-width: 0; }
+.tv-scroll { overflow-x: auto; max-width: 100%; }
+.tv-wrap { border-radius: 12px; background: #000; padding: 6px; box-shadow: 0 30px 60px -30px rgba(0, 0, 0, 0.9), 0 0 0 1px var(--line); max-width: 100%; }
+.tv-wrap:fullscreen { display: grid; place-items: center; padding: 0; border-radius: 0; }
+.tv-wrap:fullscreen .tv { width: min(100vw, 177.78vh); border-radius: 0; }
+.toolbar { display: grid; gap: 10px; }
+.tgroup { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; min-width: 0; }
+.tlabel { font-size: 12px; color: var(--muted-soft); letter-spacing: 0.05em; text-transform: uppercase; font-weight: 600; min-width: 108px; }
+.seg { display: inline-flex; flex-wrap: wrap; max-width: 100%; background: var(--panel); border: 1px solid var(--line); border-radius: 9px; padding: 3px; gap: 2px; }
+.seg button { border: 0; background: transparent; padding: 6px 11px; border-radius: 6px; font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; white-space: nowrap; }
+.seg button:hover { color: var(--fg); }
+.seg button[aria-pressed="true"] { background: var(--card); color: var(--fg); box-shadow: inset 0 0 0 1px var(--line); }
+.seg button .rec { color: var(--primary); }
+.btn { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--line); background: var(--panel); padding: 7px 12px; border-radius: 9px; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--fg); }
+.btn:hover { border-color: #3a414b; background: var(--card); }
+.btn.primary { background: var(--primary); color: var(--primary-ink); border-color: var(--primary); }
+.btn.primary:hover { background: #f0b90b; border-color: #f0b90b; }
+.btn svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.scrub { display: flex; align-items: center; gap: 10px; flex: 1 1 260px; min-width: 0; }
+.scrub input { flex: 1; min-width: 0; accent-color: var(--primary); }
+.scrub output { font: 600 13px var(--font-num); color: var(--fg); min-width: 64px; text-align: right; font-variant-numeric: tabular-nums; }
+.jumps { display: flex; flex-wrap: wrap; gap: 6px; }
+.jumps button { border: 1px solid var(--line); background: transparent; color: var(--muted); padding: 5px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.jumps button:hover { color: var(--fg); border-color: #3a414b; }
+.rule-note { margin: 0; font-size: 13.5px; color: var(--muted); min-height: 2.6em; max-width: 90ch; }
+.rule-note b { color: var(--fg); }
+
+.side { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; display: grid; gap: 14px; min-width: 0; }
+.side h3 { margin: 0; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted-soft); }
+.side ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; color: var(--muted); font-size: 14px; }
+.side li strong { color: var(--fg); font-weight: 600; }
+.side hr { border: 0; border-top: 1px solid var(--line-soft); margin: 0; }
+
+/* Regra, cartões de fato e decisões */
+.steps { margin: 0; padding: 0; list-style: none; counter-reset: st; display: grid; gap: 12px; max-width: 920px; }
+.steps li { counter-increment: st; display: grid; grid-template-columns: 36px 1fr; gap: 12px; align-items: start; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+.steps li::before { content: counter(st); font: 700 15px var(--font-num); color: var(--primary-ink); background: var(--primary); width: 28px; height: 28px; border-radius: 6px; display: grid; place-items: center; transform: skewX(-10deg); }
+.steps li p { margin: 0; color: var(--muted); }
+.steps li p b { color: var(--fg); }
+.rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr)); gap: 14px; }
+.rule { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 6px; align-content: start; }
+.rule b { font-size: 15px; }
+.rule p { margin: 0; color: var(--muted); font-size: 14px; }
+
+.decisions { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)); gap: 16px; }
+.dec { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.dec .id { font: 700 12px var(--font-num); color: var(--primary); letter-spacing: 0.1em; }
+.dec h3 { margin: 0; font-size: 17px; line-height: 1.3; }
+.dec > p { margin: 0; color: var(--muted); font-size: 14px; }
+.opt { display: grid; grid-template-columns: 24px 1fr; gap: 6px 8px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line-soft); }
+.opt.rec { border-color: var(--primary-edge); background: var(--primary-tint); }
+.opt .l { font: 700 13px var(--font-num); color: var(--muted); }
+.opt.rec .l { color: var(--primary); }
+.opt p { margin: 0; font-size: 14px; }
+.opt .badge { display: inline-block; font-size: 11px; font-weight: 800; color: var(--primary); letter-spacing: 0.05em; text-transform: uppercase; margin-left: 4px; }
+
+.tbl-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; }
+.tbl { width: 100%; border-collapse: collapse; min-width: 760px; font-size: 14px; }
+.tbl th, .tbl td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+.tbl tr:last-child td { border-bottom: 0; }
+.tbl th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted-soft); background: var(--panel); font-weight: 700; }
+.tbl td:first-child { font-weight: 700; white-space: nowrap; }
+.tbl td.muted { color: var(--muted); }
+.tag { display: inline-block; font-size: 11.5px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+.tag.keep { color: var(--up); border-color: rgba(14, 203, 129, 0.45); }
+.tag.change { color: var(--primary); border-color: var(--primary-edge); }
+.tag.more { color: var(--fg); border-color: #49515c; }
+
+.arch { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
+.arch-list { display: grid; gap: 14px; }
+.arch-item { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 6px; min-width: 0; }
+.arch-item b { font-size: 15px; }
+.arch-item p { margin: 0; color: var(--muted); font-size: 14px; }
+.arch h3 { margin: 0; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted-soft); }
+.out { margin: 0; padding-left: 18px; color: var(--muted); display: grid; gap: 8px; font-size: 14px; }
+.out b { color: var(--fg); font-weight: 600; }
+.next-step { background: linear-gradient(135deg, var(--primary-tint), transparent 70%); border: 1px solid rgba(252, 213, 53, 0.35); border-radius: 14px; padding: 20px; display: grid; gap: 8px; max-width: 920px; }
+.next-step b { font-size: 17px; }
+.next-step p { margin: 0; color: var(--muted); }
+
+@media (max-width: 1100px) { .stage { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 900px) { .arch { grid-template-columns: 1fr; } .tv-wrap { min-width: 760px; } }
+
+/* ================= TELÃO (unidades em cqw: escala de 720p a 4K) ================= */
+.tv { container-type: inline-size; position: relative; width: 100%; aspect-ratio: 16 / 9; max-width: 100%; background: var(--tv-bg); border-radius: 8px; overflow: hidden; color: var(--fg); font-family: var(--font-body); line-height: 1.15; }
+.tvc { position: absolute; inset: 0; display: grid; grid-template-rows: 6.6cqw 1fr 3.3cqw; }
+.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+
+.tv-top { display: flex; align-items: center; gap: 1.6cqw; padding: 0 2.2cqw; border-bottom: 0.08cqw solid var(--line); background: linear-gradient(#0f1216, var(--tv-bg)); min-width: 0; }
+.tv-logo { width: 3.2cqw; height: 3.2cqw; flex: none; }
+.tv-id { display: grid; gap: 0.25cqw; min-width: 0; }
+.tv-event { font-size: 1.0cqw; color: var(--muted); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; }
+.tv-title { font-size: 1.8cqw; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -0.01em; }
+.tv-sp { flex: 1; }
+.tv-pill { display: inline-flex; align-items: center; gap: 0.6cqw; font-size: 1.0cqw; font-weight: 800; letter-spacing: 0.12em; padding: 0.55cqw 1cqw; border-radius: 0.5cqw; border: 0.08cqw solid var(--line); color: var(--muted); white-space: nowrap; transform: skewX(-10deg); flex: none; }
+.tv-pill > * { transform: skewX(10deg); }
+.tv-pill i { width: 0.75cqw; height: 0.75cqw; border-radius: 50%; background: currentColor; }
+.tv-pill.live { color: #fff; background: var(--down); border-color: var(--down); }
+.tv-pill.live i { animation: pulse 1.4s ease-in-out infinite; background: #fff; }
+.tv-pill.res { color: var(--up); border-color: rgba(14, 203, 129, 0.5); }
+@keyframes pulse { 50% { opacity: 0.25; } }
+.tv-clocks { display: flex; gap: 1.6cqw; align-items: center; flex: none; }
+.wclock { display: grid; justify-items: end; gap: 0.2cqw; }
+.wclock b { font: 600 2.1cqw var(--font-num); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; line-height: 1; }
+.wclock span { font-size: 0.72cqw; color: var(--muted); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap; }
+.wclock.big b { font-size: 3.6cqw; }
+.wclock.big span { font-size: 0.92cqw; }
+
+.tv-body { position: relative; min-height: 0; padding: 1.2cqw 2.2cqw 1cqw; }
+.tv-foot { display: flex; align-items: center; gap: 1.4cqw; padding: 0 2.2cqw; border-top: 0.08cqw solid var(--line-soft); font-size: 1cqw; color: var(--muted); white-space: nowrap; min-width: 0; }
+.tv-sync { display: inline-flex; align-items: center; gap: 0.5cqw; }
+.tv-sync i { width: 0.6cqw; height: 0.6cqw; border-radius: 50%; background: var(--up); }
+.tick { display: flex; align-items: center; gap: 1cqw; min-width: 0; flex: 1; overflow: hidden; }
+.tick > b { font-size: 0.85cqw; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg); background: var(--card); padding: 0.3cqw 0.7cqw; border-radius: 0.3cqw; flex: none; transform: skewX(-10deg); }
+.tick > b > span { display: inline-block; transform: skewX(10deg); }
+.tick > span { overflow: hidden; text-overflow: ellipsis; color: var(--fg); font-weight: 600; }
+.tick > span.anim { animation: tickIn 0.6s var(--ease); }
+.tick .k-pen, .tick .k-dnf { color: var(--down); }
+.tick .k-fin { color: var(--up); }
+.tick .k-in { color: var(--primary); }
+@keyframes tickIn { from { opacity: 0; transform: translateY(0.8cqw); } }
+.tv-brand { color: var(--muted-soft); font-weight: 700; letter-spacing: 0.08em; flex: none; }
+
+/* Ao vivo: torre única + percurso */
+.r-live { display: grid; grid-template-columns: 45fr 55fr; gap: 1.5cqw; height: 100%; }
+.tower { --rowH: 2.74cqw; --cols: 2.5cqw 0.9cqw minmax(0, 1fr) 9.4cqw 7.4cqw; position: relative; display: grid; grid-template-rows: 2cqw 1fr; min-width: 0; min-height: 0; background: linear-gradient(180deg, #0f1318, #0b0e12); border: 0.08cqw solid var(--line); border-radius: 0.8cqw; overflow: hidden; }
+.tw-head { display: grid; grid-template-columns: var(--cols); align-items: center; gap: 0.6cqw; padding: 0 0.9cqw; font-size: 0.68cqw; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted-soft); border-bottom: 0.08cqw solid var(--line-soft); white-space: nowrap; }
+.tw-head .r { text-align: right; }
+.tw-body { position: relative; min-height: 0; }
+.tw-empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: 1.1cqw; }
+.tw-empty[hidden] { display: none; }
+.tw-row { position: absolute; left: 0; right: 0; top: 0; height: var(--rowH); display: grid; grid-template-columns: var(--cols); align-items: center; gap: 0.6cqw; padding: 0 0.9cqw; border-bottom: 0.08cqw solid var(--line-soft); transform: translateY(calc(var(--i) * var(--rowH))); transition: transform 0.9s var(--ease), opacity 0.5s, background-color 0.6s; }
+.tw-row.off { opacity: 0; pointer-events: none; }
+.tw-row.flash-up { background: linear-gradient(90deg, var(--up-tint), transparent 75%); }
+.tw-row.flash-down { background: linear-gradient(90deg, var(--down-tint), transparent 75%); }
+.tw-row.flash-new { background: linear-gradient(90deg, var(--primary-tint), transparent 75%); }
+.tw-pos { font: 600 1.2cqw var(--font-num); text-align: center; background: var(--card); border-radius: 0.2cqw; padding: 0.12cqw 0; transform: skewX(-12deg); color: var(--fg); }
+.tw-pos > span { display: inline-block; transform: skewX(12deg); }
+.tw-row.lead .tw-pos { background: var(--primary); color: var(--primary-ink); }
+.tw-row.nopos .tw-pos { background: transparent; color: var(--muted-soft); }
+.tw-chg { display: grid; place-items: center; }
+.tw-chg svg { width: 0.85cqw; height: 0.85cqw; }
+.tw-chg.up { color: var(--up); }
+.tw-chg.down { color: var(--down); }
+.tw-who { min-width: 0; display: grid; gap: 0.1cqw; }
+.tw-nm { display: flex; align-items: center; gap: 0.45cqw; min-width: 0; }
+.tw-nm b { font-size: 1.1cqw; font-weight: 700; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.wv { flex: none; font: 700 0.6cqw var(--font-num); letter-spacing: 0.04em; color: var(--muted); border: 0.08cqw solid #3a414b; border-radius: 0.2cqw; padding: 0.04cqw 0.28cqw; }
+.pen { flex: none; font: 700 0.62cqw var(--font-num); color: var(--down); border: 0.08cqw solid rgba(246, 70, 93, 0.55); border-radius: 0.2cqw; padding: 0.04cqw 0.28cqw; }
+.tw-bx { font-size: 0.7cqw; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tw-row.wait .tw-nm b { color: var(--muted); }
+.tw-where { min-width: 0; display: grid; gap: 0.1cqw; }
+.tw-where b { font-size: 0.78cqw; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tw-where span { font-size: 0.66cqw; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-station b { color: var(--fg); }
+.st-station b::before, .st-track b::before { content: ""; display: inline-block; width: 0.48cqw; height: 0.48cqw; border-radius: 50%; margin-right: 0.38cqw; vertical-align: 0.08cqw; box-sizing: border-box; }
+.st-station b::before { background: var(--fg); }
+.st-track b { color: var(--muted); }
+.st-track b::before { border: 0.1cqw solid var(--muted); }
+.st-wait b { color: var(--muted-soft); }
+.st-fin b { color: var(--up); }
+.st-fin b::before { content: ""; display: inline-block; width: 0.62cqw; height: 0.62cqw; margin-right: 0.38cqw; vertical-align: 0.02cqw; background: conic-gradient(#eaecef 25%, #111 0 50%, #eaecef 0 75%, #111 0) 0 0 / 0.31cqw 0.31cqw; border-radius: 0.08cqw; }
+.st-dnf b { color: var(--down); }
+.tw-gap { text-align: right; display: grid; justify-items: end; gap: 0.08cqw; min-width: 0; }
+.tw-gap b { font: 500 1.12cqw var(--font-num); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tw-gap span { font: 500 0.64cqw var(--font-body); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.tw-gap.lead b { font: 800 0.8cqw var(--font-body); letter-spacing: 0.1em; color: var(--primary); }
+.tw-gap.fin b { color: var(--up); }
+.tw-gap.ahead b { color: var(--up); }
+.tw-gap.none b { color: var(--muted-soft); }
+.tw-gap .cnt { color: var(--primary); }
+
+.r-right { position: relative; display: grid; grid-template-rows: 56fr 44fr; gap: 1.1cqw; min-height: 0; min-width: 0; }
+.map { background: var(--panel); border-radius: 0.8cqw; padding: 0.8cqw 1.1cqw 0.4cqw; display: grid; grid-template-rows: auto 1fr; min-height: 0; min-width: 0; }
+.map-head { display: flex; align-items: baseline; gap: 1.1cqw; min-width: 0; white-space: nowrap; }
+.map-head b { font-size: 0.86cqw; letter-spacing: 0.12em; text-transform: uppercase; }
+.map-head .grow { flex: 1; }
+.map-head .cnt { font: 600 0.8cqw var(--font-num); color: var(--muted); }
+.map-leg { display: inline-flex; align-items: center; gap: 0.4cqw; font-size: 0.72cqw; color: var(--muted); }
+.map-leg i { width: 0.7cqw; height: 0.7cqw; border-radius: 50%; display: inline-block; box-sizing: border-box; }
+.map-leg i.k { background: #eaecef; }
+.map-leg i.e { border: 0.12cqw solid #eaecef; }
+.map-leg i.d { width: 1.3cqw; height: 0; border-radius: 0; border-top: 0.14cqw dashed #6b7480; }
+.map svg { width: 100%; height: 100%; display: block; min-height: 0; }
+.map svg text { font-family: var(--font-body); }
+.mk { transition: transform 0.9s var(--ease), opacity 0.4s; }
+
+.cards { display: grid; grid-template-columns: 1fr 1fr; gap: 1.1cqw; min-height: 0; }
+.card { position: relative; background: var(--panel); border-radius: 0.8cqw; padding: 0.9cqw 1.1cqw; display: grid; grid-template-rows: auto 1fr; gap: 0.5cqw; min-height: 0; min-width: 0; overflow: hidden; }
+.card-eb { display: flex; align-items: center; gap: 0.6cqw; font-size: 0.8cqw; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); white-space: nowrap; overflow: hidden; }
+.card-eb .xw { font-size: 0.66cqw; letter-spacing: 0.08em; color: var(--fg); border: 0.08cqw solid #49515c; border-radius: 0.25cqw; padding: 0.08cqw 0.4cqw; }
+.card-in { min-height: 0; min-width: 0; animation: cardIn 0.6s var(--ease); }
+@keyframes cardIn { from { opacity: 0; transform: translateY(0.6cqw); } }
+.card.battle .card-eb, .card.leader .card-eb { color: var(--primary); }
+.card.newlead { background: linear-gradient(135deg, rgba(252, 213, 53, 0.2), var(--panel) 62%); box-shadow: inset 0 0 0 0.1cqw var(--primary-edge); }
+.card.newlead .card-eb { color: var(--primary); }
+.card.final .card-eb { color: var(--fg); }
+.bt { display: grid; gap: 0.45cqw; height: 100%; align-content: center; }
+.bt-line { display: grid; grid-template-columns: 2.3cqw minmax(0, 1fr); gap: 0.7cqw; align-items: center; min-width: 0; }
+.bt-line .p { font: 600 1.3cqw var(--font-num); text-align: center; background: var(--card); border-radius: 0.2cqw; transform: skewX(-12deg); }
+.bt-line .p span { display: inline-block; transform: skewX(12deg); }
+.bt-line .w { min-width: 0; }
+.bt-line .w b { display: block; font-size: 1.2cqw; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bt-line .w span { display: block; font-size: 0.75cqw; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bt-gap { display: flex; align-items: baseline; gap: 0.7cqw; padding-left: 3cqw; min-width: 0; }
+.bt-gap b { font: 600 2.3cqw var(--font-num); color: var(--primary); letter-spacing: -0.02em; line-height: 1; flex: none; }
+.bt-gap span { font-size: 0.8cqw; color: var(--muted); min-width: 0; }
+.ld { display: grid; gap: 0.3cqw; align-content: center; height: 100%; min-width: 0; }
+.ld .w { font-size: 1.8cqw; font-weight: 800; letter-spacing: -0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ld .bx { font-size: 0.9cqw; color: var(--muted); }
+.ld .at { font-size: 0.98cqw; font-weight: 600; margin-top: 0.35cqw; }
+.ld .adv { font-size: 0.9cqw; color: var(--muted); }
+.ld .adv b { font-family: var(--font-num); color: var(--primary); font-size: 1.3cqw; }
+.wb { display: grid; gap: 0.5cqw; align-content: center; height: 100%; min-width: 0; }
+.wb-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.12cqw 0.7cqw; align-items: end; min-width: 0; }
+.wb-row .w { min-width: 0; display: flex; align-items: center; gap: 0.4cqw; }
+.wb-row .w b { font-size: 1.02cqw; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.wb-row .c { font: 600 1.45cqw var(--font-num); line-height: 1; letter-spacing: -0.02em; }
+.wb-row .c small { font-size: 0.8cqw; color: var(--muted); font-weight: 500; }
+.wb-bar { grid-column: 1 / -1; height: 0.36cqw; background: var(--track); border-radius: 0.3cqw; overflow: hidden; }
+.wb-bar i { display: block; height: 100%; background: var(--primary); transform-origin: left center; transition: transform 0.5s var(--ease); }
+.wb-row .tg { grid-column: 1 / -1; font-size: 0.68cqw; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wb-row .tg b { font-family: var(--font-num); color: var(--primary); font-weight: 600; }
+.nx { display: grid; gap: 0.3cqw; align-content: center; height: 100%; }
+.nx .w { font-size: 2.4cqw; font-weight: 800; letter-spacing: -0.02em; }
+.nx .h { font: 600 1.5cqw var(--font-num); color: var(--primary); }
+.nx .c { font-size: 0.95cqw; color: var(--muted); }
+.wl { display: grid; gap: 0.55cqw; align-content: center; height: 100%; }
+.wl-row { display: grid; grid-template-columns: 5.5cqw 5.5cqw minmax(0, 1fr); gap: 0.8cqw; align-items: baseline; }
+.wl-row b { font-size: 1.1cqw; font-weight: 700; }
+.wl-row .num { font-size: 1.3cqw; font-weight: 600; }
+.wl-row span { font-size: 0.82cqw; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tw-row, .mk, .wb-bar i { transition: none; }
+  .card-in, .tick > span.anim, .tv-pill.live i { animation: none; }
+}
+</style>
+
+<style>body { margin: 0; } [hidden] { display: none !important; }</style>
+</head>
+<body>
+<main class="page">
+
+  <header class="intro">
+    <div class="chips">
+      <span class="chip wait">Proposta · aguarda aprovação</span>
+      <span class="chip">Nenhuma linha de código alterada</span>
+      <span class="chip">Substitui a D1 do telão aprovado em 03/11</span>
+    </div>
+    <h1>Todas as ondas no mesmo ranking</h1>
+    <p>Hoje o telão do Fitness Race mostra uma onda por vez. A proposta é <strong>uma torre por categoria com todos os atletas que já largaram</strong>, comparados pelo <strong>tempo de prova</strong> de cada um, contado da largada da própria onda. Quando uma onda larga, os atletas dela entram no fim da torre e sobem para a posição real na primeira leitura de um judge.</p>
+    <p class="small">Base: o telão das stories 1.111 a 1.115 (implementado, sem commit) e o desenho aprovado em <code>docs/design/telao-fitness-race/</code>. Nomes e tempos da simulação são fictícios.</p>
+  </header>
+
+  <section class="block" aria-labelledby="h-ideia">
+    <h2 class="sec" id="h-ideia">A ideia em um exemplo</h2>
+    <p class="sec-lead">O horário da parede não serve para comparar ondas diferentes. O que vale é o relógio de cada atleta desde a largada dele, que é a mesma base do tempo oficial.</p>
+    <div class="ex">
+      <div class="ex-scroll">
+        <table>
+          <thead><tr><th>Atleta</th><th>Largada da onda</th><th>Entrou no Sled Push</th><th>Tempo de prova</th></tr></thead>
+          <tbody>
+            <tr><td>Ana <span>· Onda 1</span></td><td>10:00:00</td><td>10:14:10</td><td class="big">14:10</td></tr>
+            <tr class="win"><td>Bia <span>· Onda 2</span></td><td>10:12:00</td><td>10:25:32</td><td class="big">13:32</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="ex-out"><b>Bia +0:38 à frente</b><span>no Sled Push, mesmo tendo chegado lá 11 minutos depois pelo relógio da parede. No telão, Bia aparece acima de Ana.</span></div>
+    </div>
+  </section>
+
+  <section class="block" aria-labelledby="h-tv">
+    <h2 class="sec" id="h-tv">Telão simulado</h2>
+    <p class="sec-lead">Uma categoria com três ondas de 5 atletas, largando a cada 12 minutos, judge em 6 das 8 estações. Arraste o tempo, use os atalhos e troque a regra para comparar.</p>
+    <div class="stage">
+      <div class="stage-main">
+        <div class="tv-scroll">
+          <div class="tv-wrap" id="tvWrap">
+            <div class="tv" id="tv" role="img" aria-label="Simulação do telão com o ranking único da categoria">
+              <div class="tvc">
+                <header class="tv-top">
+                  <svg class="tv-logo" viewBox="0 0 40 40" aria-hidden="true"><rect x="1" y="1" width="38" height="38" rx="9" fill="#fcd535"/><path d="M9 13l4.2 14L18 15l2 6 2-6 4.8 12L31 13" fill="none" stroke="#181a20" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  <div class="tv-id">
+                    <span class="tv-event">Fitness Race Fortaleza</span>
+                    <span class="tv-title" id="tvTitle">Open Masculino · ranking da prova</span>
+                  </div>
+                  <div class="tv-sp"></div>
+                  <div class="tv-clocks" id="tvClocks"></div>
+                  <span class="tv-pill live" id="tvPill"><i></i><span>AO VIVO</span></span>
+                </header>
+                <div class="tv-body">
+                  <div class="r-live">
+                    <section class="tower" aria-label="Torre">
+                      <div class="tw-head"><span>Pos</span><span></span><span>Atleta · onda</span><span>Onde está</span><span class="r">Dif. para o 1º</span></div>
+                      <div class="tw-body" id="twBody"><div class="tw-empty" id="twEmpty" hidden>Aguardando a primeira largada</div></div>
+                    </section>
+                    <div class="r-right">
+                      <section class="map" aria-label="Percurso">
+                        <div class="map-head">
+                          <b>Percurso</b>
+                          <span class="map-leg"><i class="k"></i>na estação</span>
+                          <span class="map-leg"><i class="e"></i>estimado</span>
+                          <span class="map-leg"><i class="d"></i>sem judge</span>
+                          <span class="grow"></span>
+                          <span class="cnt" id="mapCount"></span>
+                        </div>
+                        <svg id="map" viewBox="0 0 1040 384" preserveAspectRatio="xMidYMid meet" aria-hidden="true"></svg>
+                      </section>
+                      <div class="cards">
+                        <section class="card" id="cardA"></section>
+                        <section class="card" id="cardB"></section>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <footer class="tv-foot">
+                  <span class="tv-sync"><i></i>atualizado há 1 s</span>
+                  <div class="tick"><b><span>Direção de prova</span></b><span id="tick"></span></div>
+                  <span class="tv-brand">WODARENA</span>
+                </footer>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="toolbar">
+          <div class="tgroup">
+            <button class="btn primary" id="play" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path id="playIco" d="M8 5l11 7-11 7z"/></svg><span id="playTxt">Rodar</span></button>
+            <div class="seg" role="group" aria-label="Velocidade" id="speed">
+              <button type="button" data-v="10" aria-pressed="false">10×</button>
+              <button type="button" data-v="30" aria-pressed="true">30×</button>
+              <button type="button" data-v="90" aria-pressed="false">90×</button>
+            </div>
+            <label class="scrub" for="time"><input id="time" type="range" min="-60" max="6900" step="1" value="2520" aria-label="Horário da simulação"><output id="timeOut" for="time">10:42:00</output></label>
+            <button class="btn" id="full" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>Tela cheia</button>
+          </div>
+          <div class="tgroup">
+            <span class="tlabel">Ir para</span>
+            <div class="jumps" id="jumps"></div>
+          </div>
+          <div class="tgroup">
+            <span class="tlabel">Regra · R1</span>
+            <div class="seg" role="group" aria-label="Regra de ordem" id="rule">
+              <button type="button" data-v="A" aria-pressed="true">A · tempo no mesmo ponto <span class="rec">★</span></button>
+              <button type="button" data-v="B" aria-pressed="false">B · mais adiante na pista</button>
+              <button type="button" data-v="C" aria-pressed="false">C · posição na passagem</button>
+              <button type="button" data-v="hoje" aria-pressed="false">Hoje · uma onda por vez</button>
+            </div>
+          </div>
+          <div class="tgroup">
+            <span class="tlabel">Penalidade · R2</span>
+            <div class="seg" role="group" aria-label="Penalidade no tempo de prova" id="pen">
+              <button type="button" data-v="A" aria-pressed="true">A · conta na hora <span class="rec">★</span></button>
+              <button type="button" data-v="B" aria-pressed="false">B · só no tempo final</button>
+            </div>
+          </div>
+          <p class="rule-note" id="ruleNote"></p>
+        </div>
+      </div>
+
+      <aside class="side" aria-label="Como ler">
+        <h3>Como ler</h3>
+        <ul>
+          <li><strong>Selo O1, O2, O3:</strong> a onda do atleta.</li>
+          <li><strong>Dif. para o 1º:</strong> no ponto escrito embaixo do número, pelo tempo de prova. Verde e com sinal de menos: mais rápido que o 1º naquele ponto.</li>
+          <li><strong>"contando":</strong> o relógio do atleta já passou do tempo do 1º num ponto que ele ainda não alcançou. A diferença cresce até ele passar por lá.</li>
+          <li><strong>Relógios no topo:</strong> um por onda na pista.</li>
+          <li><strong>Marcador cheio:</strong> na estação com judge. <strong>Vazado:</strong> estimado, entre leituras.</li>
+        </ul>
+        <hr>
+        <h3>Repare</h3>
+        <ul>
+          <li>Às <strong>10:20</strong>, Bruno (Onda 2) passa Rafael (Onda 1) na saída do Ski Erg, com Rafael 3 estações à frente na pista.</li>
+          <li>Às <strong>10:28</strong>, Diego (Onda 3) entra no Ski Erg mais rápido que todos e aparece em 1º. Na saída do Ski Erg cai para 3º.</li>
+          <li>Na <strong>reta final</strong>, Diego corre contra o 1:11:32 do Rafael, que já chegou. Fecha em 1:11:31 e fica em 2º por 1 s.</li>
+          <li>Em <strong>B</strong>, os atletas da Onda 3 ficam no fim mesmo sendo mais rápidos no mesmo ponto. Em <strong>C</strong>, Rafael fica em 1º aos 10:42 sendo 0:44 mais lento que Bruno.</li>
+        </ul>
+      </aside>
+    </div>
+  </section>
+
+  <section class="block" aria-labelledby="h-regra">
+    <h2 class="sec" id="h-regra">Quem está à frente de quem</h2>
+    <p class="sec-lead">É a regra 3 do telão aprovado (diferença só no mesmo ponto), estendida para ondas diferentes. Cada par de atletas passa por estas checagens, em ordem:</p>
+    <ol class="steps">
+      <li><p><b>Cada atleta tem o próprio relógio, o tempo de prova:</b> da largada da corrida dele até a leitura, mais as penalidades já lançadas (R2). É a base do tempo oficial e acompanha a correção de largada da story 1.107.</p></li>
+      <li><p><b>Os dois já passaram pelo mesmo ponto mais adiantado?</b> Fica à frente quem passou com menos tempo de prova.</p></li>
+      <li><p><b>Um passou por um ponto que o outro ainda não alcançou, e o relógio do outro já passou daquele tempo?</b> Então o outro está atrás com certeza, porque vai chegar lá com tempo maior. A diferença aparece com "contando".</p></li>
+      <li><p><b>Ainda dá para o outro chegar melhor?</b> Vale o último ponto que os dois já passaram.</p></li>
+    </ol>
+    <div class="rules">
+      <div class="rule"><b>Na mesma onda, nada muda</b><p>Com a mesma largada, essas checagens dão exatamente a ordem da torre de hoje.</p></div>
+      <div class="rule"><b>Ponto é leitura de judge</b><p>Entrada e saída de estação com judge. Estação sem judge não tem ponto. Com judge só no Wall Balls, o ranking só se forma na chegada.</p></div>
+      <div class="rule"><b>Quem largou entra no fim</b><p>Sem posição e com "aguardando 1ª leitura" até o primeiro ponto. Quem chegou entra pelo tempo final. DNF fica no fim, sem posição.</p></div>
+      <div class="rule"><b>Começo agitado</b><p>Quem acabou de largar e chega ao Ski Erg mais rápido que todos aparece em 1º. É verdade naquele ponto, e a posição se ajeita a cada leitura.</p></div>
+      <div class="rule"><b>Diferença sempre contra o 1º</b><p>No ponto escrito embaixo. Como cada linha pode ser comparada num ponto diferente, os números não crescem necessariamente linha a linha.</p></div>
+      <div class="rule"><b>Ciclos raros</b><p>Como cada par é comparado num ponto, três atletas podem formar um ciclo. A ordem segue quem vence mais confrontos e o empate fica com quem está mais adiante. Na simulação, foi menos de 1 em cada mil comparações.</p></div>
+      <div class="rule"><b>Escala diferente por onda</b><p>A checagem 3 só vale se a estação tem judge na onda de quem ainda não passou (pela escala da onda ou por leitura de alguém dela). Sem isso, vale o último ponto em comum.</p></div>
+      <div class="rule"><b>Sem previsão</b><p>A regra 8 continua: nada de chegada prevista nem ritmo. O "contando" e o tempo a bater usam só tempos que já aconteceram.</p></div>
+    </div>
+  </section>
+
+  <section class="block" aria-labelledby="h-dec">
+    <h2 class="sec" id="h-dec">Decisões para aprovar</h2>
+    <p class="sec-lead">A recomendação está marcada em cada uma. R1 e R2 podem ser testadas no telão simulado.</p>
+    <div class="decisions">
+      <article class="dec">
+        <span class="id">R1</span>
+        <h3>Como ordenar atletas de ondas diferentes</h3>
+        <div class="opt rec"><span class="l">A</span><p>Tempo de prova no mesmo ponto, com as checagens acima. Compara de verdade ondas diferentes e, dentro da mesma onda, dá a ordem de hoje.<span class="badge">Recomendada</span></p></div>
+        <div class="opt"><span class="l">B</span><p>Quem está mais adiante na pista primeiro. Simples, mas quem largou antes fica sempre na frente: às 10:42, Diego aparece em 11º tendo passado pela saída do Sled Push só 0:08 depois do 1º.</p></div>
+        <div class="opt"><span class="l">C</span><p>Posição na passagem: cada um no seu último ponto, contra quem já passou por ele. Quem largou antes leva vantagem, porque as ondas seguintes ainda não chegaram aos pontos mais adiante: às 10:42, Rafael fica em 1º sendo 0:44 mais lento que Bruno na saída do Sled Pull.</p></div>
+      </article>
+      <article class="dec">
+        <span class="id">R2</span>
+        <h3>Penalidade no tempo de prova ao vivo</h3>
+        <div class="opt rec"><span class="l">A</span><p>Conta a partir do lançamento: quem levou +15 s no Sled Push carrega os 15 s em todos os pontos seguintes. Segue a regra de que penalidade vale na hora e, na chegada, bate com o tempo oficial. Penalidade revogada sai da conta.<span class="badge">Recomendada</span></p></div>
+        <div class="opt"><span class="l">B</span><p>Só no tempo final. Ao vivo, tempo bruto com o selo "+15 s"; a posição pode mudar na chegada.</p></div>
+      </article>
+      <article class="dec">
+        <span class="id">R3</span>
+        <h3>Categoria com muitos atletas</h3>
+        <p>Somando as ondas, uma categoria pode passar de 40 atletas.</p>
+        <div class="opt rec"><span class="l">A</span><p>15 linhas por página, mais compactas, como na simulação. Líder e quem está no Wall Balls ficam em toda página, cada página fica 8 s e a categoria fica no ar até mostrar todas. Com 40 atletas, 3 páginas.<span class="badge">Recomendada</span></p></div>
+        <div class="opt"><span class="l">B</span><p>10 linhas grandes, como hoje. Com 40 atletas, 4 páginas.</p></div>
+        <div class="opt"><span class="l">C</span><p>15 linhas sem páginas: os 10 primeiros fixos e 5 vagas para quem acabou de passar por um ponto. Nem todo atleta aparece.</p></div>
+      </article>
+      <article class="dec">
+        <span class="id">R4</span>
+        <h3>O que a mesa do gestor fixa</h3>
+        <div class="opt rec"><span class="l">A</span><p>"Fixar a classificação de uma categoria" passa a fixar a categoria: ranking ao vivo enquanto houver alguém correndo, classificação depois. "Fixar uma onda" continua e mostra a torre de hoje, só daquela onda e com o relógio dela. Os modos já existem no banco.<span class="badge">Recomendada</span></p></div>
+        <div class="opt"><span class="l">B</span><p>Só "Fixar uma categoria"; sai "Fixar uma onda". Menos código, e a visão por onda deixa de existir.</p></div>
+      </article>
+      <article class="dec">
+        <span class="id">R5</span>
+        <h3>Ordem de entrega</h3>
+        <div class="opt rec"><span class="l">A</span><p>Commit local das 1.111 a 1.115 agora, sem push, como base. O ranking entra em 3 stories novas e tudo vai a produção junto, depois do ensaio com um evento de teste.<span class="badge">Recomendada</span></p></div>
+        <div class="opt"><span class="l">B</span><p>Publicar já o telão por onda e trocar quando o ranking ficar pronto. Faz sentido se houver evento Fitness Race antes disso.</p></div>
+      </article>
+    </div>
+  </section>
+
+  <section class="block" aria-labelledby="h-muda">
+    <h2 class="sec" id="h-muda">O que muda no telão aprovado</h2>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr><th>Item aprovado em 03/11</th><th>Situação</th><th>Como fica</th></tr></thead>
+        <tbody>
+          <tr><td>D1 · Torre de uma onda por vez</td><td><span class="tag change">Muda</span></td><td class="muted">Uma torre por categoria, com todas as ondas largadas. O rodízio passa a ser só entre categorias, e a visão por onda fica na mesa (R4).</td></tr>
+          <tr><td>D2 · Penalidade só em segundos</td><td><span class="tag keep">Fica</span></td><td class="muted">"+15 s" na linha, sem motivo. Passa também a contar no tempo de prova (R2).</td></tr>
+          <tr><td>D3 · Luzes de largada</td><td><span class="tag keep">Fica</span></td><td class="muted">Acendem por cima do mapa quando a onda larga, e os atletas dela entram no fim da torre.</td></tr>
+          <tr><td>D4 · Atleta entre estações</td><td><span class="tag keep">Fica</span></td><td class="muted">"Na pista · após X" e marcador vazado.</td></tr>
+          <tr><td>D5 · Roxo de melhor estação</td><td><span class="tag keep">Fica</span></td><td class="muted">Já somava as ondas do evento.</td></tr>
+          <tr><td>D6 · Classificação</td><td><span class="tag keep">Fica</span></td><td class="muted">Entra quando ninguém está correndo. A torre ao vivo termina igual a ela.</td></tr>
+          <tr><td>Regra 3 · Diferença no mesmo ponto</td><td><span class="tag more">Amplia</span></td><td class="muted">Mesmo ponto, pelo tempo de prova de cada um, com o "contando".</td></tr>
+          <tr><td>Regra 5 · Páginas de 10</td><td><span class="tag change">Ajusta</span></td><td class="muted">Conforme R3.</td></tr>
+          <tr><td>Cabeçalho</td><td><span class="tag change">Muda</span></td><td class="muted">Um relógio por onda na pista no lugar do relógio único.</td></tr>
+          <tr><td>Cartão Disputa</td><td><span class="tag more">Amplia</span></td><td class="muted">Também entre ondas, com o selo "entre ondas" e o ponto em que foram comparados.</td></tr>
+          <tr><td>Cartão Novo líder</td><td><span class="tag more">Novo</span></td><td class="muted">Por alguns segundos quando o 1º da categoria muda, com o ponto e a diferença da ultrapassagem.</td></tr>
+          <tr><td>Cartão Reta final</td><td><span class="tag more">Amplia</span></td><td class="muted">Ganha o tempo a bater: o tempo final de quem já chegou e ainda pode ser superado.</td></tr>
+          <tr><td>Cartão Próxima largada</td><td><span class="tag change">Ajusta</span></td><td class="muted">Sem próxima onda, vira "Ondas na pista": relógio, quantos correm e quantos chegaram.</td></tr>
+          <tr><td>Faixa da direção de prova</td><td><span class="tag more">Amplia</span></td><td class="muted">Ganha "entra no ranking em Nº" na primeira leitura de cada atleta.</td></tr>
+          <tr><td>Bandeirada</td><td><span class="tag keep">Fica</span></td><td class="muted">Já mostrava a posição na categoria somando as ondas.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="block" aria-labelledby="h-sis">
+    <h2 class="sec" id="h-sis">Como entra no sistema</h2>
+    <div class="arch">
+      <div class="arch-list">
+        <div class="arch-item"><b>Motor</b><p><code>src/lib/raceBroadcast.ts</code> ganha a torre da categoria. O tempo de prova parte de <code>race_runs.started_at</code>, a mesma base do tempo oficial (<code>closeRaceRunOnRelease</code>). Entram as checagens de confronto, a ordem por confrontos vencidos, a diferença com o ponto e o "contando", a disputa entre ondas, o novo líder e o tempo a bater. A torre por onda continua, usada por "Fixar uma onda".</p></div>
+        <div class="arch-item"><b>Leitura</b><p><code>src/lib/serverRaceBroadcast.ts</code>: a fase 3 passa a ler cartões e penalidades de todas as ondas largadas das categorias no ar, e não só das que estão na pista, porque quem já terminou é a referência em cada ponto. Continua paginada e passa a ler <code>started_at</code> da corrida.</p></div>
+        <div class="arch-item"><b>Payload e tela</b><p>Torres por categoria, relógios das ondas e, por linha, a onda, o ponto comparado e a base do "contando" (o relógio corre no cliente, como hoje). Na tela, torre de 15 linhas com selo da onda, cabeçalho com relógios, cartões e faixa.</p></div>
+        <div class="arch-item"><b>Mesa e banco</b><p><code>RaceBroadcastPanel.tsx</code> muda os textos dos modos (R4). Sem migration: os modos de <code>event_broadcasts</code> já cobrem tudo.</p></div>
+      </div>
+      <div class="arch-list">
+        <h3>Stories</h3>
+        <div class="tbl-wrap">
+          <table class="tbl" style="min-width: 520px">
+            <thead><tr><th>Id</th><th>Escopo</th></tr></thead>
+            <tbody>
+              <tr><td>T6</td><td class="muted">Motor da torre da categoria, com testes: mesma onda dá a ordem de hoje, ondas diferentes, penalidade, "contando", ciclo e escala por onda.</td></tr>
+              <tr><td>T7</td><td class="muted">Leitura de todas as ondas largadas, payload por categoria e mesa, com testes de contrato, de dados pessoais e de número de consultas.</td></tr>
+              <tr><td>T8</td><td class="muted">Tela: torre de 15 linhas, cabeçalho, cartões e faixa, com conferência visual contra esta maquete copiada para <code>docs/design/telao-fitness-race/</code>.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h3>Riscos</h3>
+        <ul class="out">
+          <li><b>Cobertura de judges.</b> A qualidade do ranking depende de quantas estações têm judge. Para um ranking que se mexe durante a prova, convém cobrir pelo menos uma estação do começo, uma do meio e a última.</li>
+          <li><b>Leitura maior.</b> Estimativa minha: 120 atletas com 6 estações cobertas dão cerca de 1.400 cartões, 2 páginas de 1.000 linhas por consulta, a cada segundo por TV aberta. Medir no ensaio. Se pesar, entra o cache curto no servidor que já ficou anotado na 1.112.</li>
+          <li><b>Testes das 1.111 a 1.115.</b> Os testes de regressão que conferem o rodízio onda × categoria serão ajustados junto.</li>
+          <li><b>Atleta fora da onda prevista.</b> Coberto: a base é a largada da corrida dele, não a do item do cronograma.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="next-step" aria-labelledby="h-next">
+    <b id="h-next">Próximo passo</b>
+    <p>Responda R1 a R5, ou "tudo pela recomendação". Com a aprovação, copio esta maquete para <code>docs/design/telao-fitness-race/</code>, escrevo as stories T6 a T8 e implemento uma por vez, como nas cinco anteriores. Push só quando você pedir.</p>
+  </section>
+
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  // ---------------- Percurso, ondas e atletas (fictícios) ----------------
+  const STAGES = [
+    { name: 'Corrida 1', short: 'C1', type: 'run', d: 280 },
+    { name: 'Ski Erg', type: 'st', d: 280, judge: true },
+    { name: 'Corrida 2', short: 'C2', type: 'run', d: 290 },
+    { name: 'Sled Push', type: 'st', d: 210, judge: true },
+    { name: 'Corrida 3', short: 'C3', type: 'run', d: 300 },
+    { name: 'Sled Pull', type: 'st', d: 270, judge: true },
+    { name: 'Corrida 4', short: 'C4', type: 'run', d: 310 },
+    { name: 'Burpee Broad Jump', lines: ['Burpee', 'Broad Jump'], type: 'st', d: 300, judge: false },
+    { name: 'Corrida 5', short: 'C5', type: 'run', d: 310 },
+    { name: 'Row', type: 'st', d: 290, judge: true },
+    { name: 'Corrida 6', short: 'C6', type: 'run', d: 320 },
+    { name: 'Farmers Carry', lines: ['Farmers', 'Carry'], type: 'st', d: 150, judge: false },
+    { name: 'Corrida 7', short: 'C7', type: 'run', d: 320 },
+    { name: 'Sandbag Lunges', lines: ['Sandbag', 'Lunges'], type: 'st', d: 270, judge: true },
+    { name: 'Corrida 8', short: 'C8', type: 'run', d: 330 },
+    { name: 'Wall Balls', type: 'st', d: 360, judge: true, closes: true }
+  ];
+  const WB = STAGES.length - 1;
+  const POINTS = [];
+  STAGES.forEach((s, k) => { if (s.judge) { POINTS.push({ stage: k, side: 'in' }); POINTS.push({ stage: k, side: 'out' }); } });
+  const LAST = POINTS.length - 1;
+  const WAVES = [
+    { n: 1, start: 0, time: '10:00' },
+    { n: 2, start: 720, time: '10:12' },
+    { n: 3, start: 1440, time: '10:24' }
+  ];
+  const RAW = [
+    ['Rafael Tavares', 'Box Aldeota', 0, 0.92, 0.95],
+    ['Thiago Bezerra', 'Box Iracema', 0, 1.0, 0.98],
+    ['Mateus Ribeiro', 'CT Benfica', 0, 1.05, 1.02],
+    ['Pedro Albuquerque', 'Arena Parquelândia', 0, 1.1, 1.08],
+    ['Gustavo Lima', 'CT Fátima', 0, 1.18, 1.12],
+    ['Bruno Sampaio', 'CT Meireles', 1, 0.95, 0.86],
+    ['Caio Fernandes', 'Box Messejana', 1, 0.98, 1.04],
+    ['André Moreira', 'Box Dunas', 1, 1.03, 0.97],
+    ['Lucas Holanda', 'Team Cumbuco', 1, 1.08, 1.1],
+    ['Felipe Castro', 'Arena Cocó', 1, 1.15, 1.05],
+    ['Diego Martins', 'Arena Sul', 2, 0.88, 1.0],
+    ['Igor Nogueira', 'CT Papicu', 2, 0.97, 0.94],
+    ['Renan Cavalcante', 'Box Varjota', 2, 1.01, 1.06],
+    ['Vitor Barros', 'Team Porto', 2, 1.06, 1.0],
+    ['Henrique Paiva', 'CT Montese', 2, 1.12, 1.15]
+  ];
+  const ATH = RAW.map(([name, box, w, rm, sm], i) => {
+    const begin = []; const end = []; let t = 0;
+    STAGES.forEach((s, k) => {
+      const noise = 1 + 0.035 * Math.sin((i + 1) * 12.9898 + (k + 1) * 78.233);
+      const d = Math.round(s.d * (s.type === 'run' ? rm : sm) * noise);
+      begin.push(t); t += d; end.push(t);
+    });
+    const rel = POINTS.map((p) => (p.side === 'in' ? begin[p.stage] : end[p.stage]));
+    return { i, key: 'a' + i, name, box, w, ws: WAVES[w].start, begin, end, rel, pens: [], dnfAt: null };
+  });
+  const byName = (n) => ATH.find((a) => a.name === n);
+  { const a = byName('Thiago Bezerra'); a.pens.push({ sec: 15, stage: 3, at: a.ws + a.end[3] - 20 }); }
+  { const a = byName('Caio Fernandes'); a.pens.push({ sec: 30, stage: 13, at: a.ws + a.end[13] - 30 }); }
+  { const a = byName('Gustavo Lima'); a.dnfAt = a.ws + a.begin[9] + 50; }
+
+  // ---------------- Estado e regras ----------------
+  const penUpTo = (a, abs) => a.pens.reduce((s, p) => (p.at <= abs ? s + p.sec : s), 0);
+
+  function stateAt(a, T, penMode) {
+    if (T < a.ws) return null;
+    const dnf = a.dnfAt !== null && T >= a.dnfAt;
+    const pt = [];
+    for (let p = 0; p < POINTS.length; p += 1) {
+      const abs = a.ws + a.rel[p];
+      if (abs > T || (a.dnfAt !== null && abs > a.dnfAt)) break;
+      pt.push(a.rel[p] + (penMode === 'A' ? penUpTo(a, abs) : 0));
+    }
+    const finished = !dnf && pt.length === POINTS.length;
+    if (finished) pt[LAST] = a.rel[LAST] + a.pens.reduce((s, p) => s + p.sec, 0);
+    const el = T - a.ws;
+    const clock = el + (penMode === 'A' ? penUpTo(a, T) : 0);
+    let stage = WB;
+    for (let k = 0; k < STAGES.length; k += 1) if (el < a.end[k]) { stage = k; break; }
+    return { dnf, pt, finished, clock, el, stage, pen: penUpTo(a, T) };
+  }
+
+  const lastOf = (x) => x.s.pt.length - 1;
+
+  // Regra A: confronto no ponto mais adiantado; certeza quando o relógio de quem ficou para trás já passou do tempo do outro.
+  function cmpA(x, y) {
+    const la = lastOf(x); const lb = lastOf(y);
+    if (la === lb) return x.s.pt[la] - y.s.pt[lb];
+    const xFurther = la > lb;
+    const F = xFurther ? x : y; const S = xFurther ? y : x;
+    const lf = Math.max(la, lb); const ls = Math.min(la, lb);
+    if (!S.s.finished && F.s.pt[lf] < S.s.clock) return xFurther ? -1 : 1;
+    return x.s.pt[ls] - y.s.pt[ls];
+  }
+
+  function ranking(T, rule, penMode, onlyWave) {
+    const list = ATH.map((a) => ({ a, s: stateAt(a, T, penMode) })).filter((x) => x.s && (onlyWave == null || x.a.w === onlyWave));
+    const ranked = list.filter((x) => !x.s.dnf && x.s.pt.length > 0);
+    const waiting = list.filter((x) => !x.s.dnf && x.s.pt.length === 0).sort((x, y) => x.a.w - y.a.w || x.a.i - y.a.i);
+    const dnf = list.filter((x) => x.s.dnf).sort((x, y) => x.a.w - y.a.w || x.a.i - y.a.i);
+    const tie = (x, y) => (lastOf(y) - lastOf(x)) || (x.s.pt[lastOf(x)] - y.s.pt[lastOf(y)]) || (x.a.w - y.a.w) || (x.a.i - y.a.i);
+    if (rule === 'A') {
+      ranked.forEach((x) => { x.wins = 0; });
+      for (let i = 0; i < ranked.length; i += 1) for (let j = i + 1; j < ranked.length; j += 1) {
+        const c = cmpA(ranked[i], ranked[j]);
+        if (c < 0) ranked[i].wins += 1; else if (c > 0) ranked[j].wins += 1;
+      }
+      ranked.sort((x, y) => (y.wins - x.wins) || tie(x, y));
+    } else if (rule === 'C') {
+      ranked.forEach((x) => {
+        const l = lastOf(x); const t = x.s.pt[l];
+        x.v = 1 + ranked.filter((o) => o !== x && o.s.pt.length > l && o.s.pt[l] < t).length;
+      });
+      ranked.sort((x, y) => (x.v - y.v) || tie(x, y));
+    } else {
+      ranked.sort(tie);
+    }
+    return { ranked, waiting, dnf };
+  }
+
+  function gapOf(x, L, rule) {
+    if (x === L) return { lead: true };
+    const lx = lastOf(x); const lL = lastOf(L);
+    if (x.s.finished && L.s.finished) return { sec: x.s.pt[LAST] - L.s.pt[LAST], point: LAST };
+    if (lx === lL) return { sec: x.s.pt[lx] - L.s.pt[lL], point: lx };
+    if (rule === 'A' && lL > lx && !x.s.finished && L.s.pt[lL] < x.s.clock) return { sec: x.s.clock - L.s.pt[lL], point: lL, counting: true };
+    const c = Math.min(lx, lL);
+    return { sec: x.s.pt[c] - L.s.pt[c], point: c };
+  }
+
+  // ---------------- Formatação ----------------
+  const pad = (n) => String(n).padStart(2, '0');
+  const fmt = (sec) => {
+    let s = Math.round(Math.abs(sec)); const h = Math.floor(s / 3600); s -= h * 3600; const m = Math.floor(s / 60); const r = s - m * 60;
+    return h ? `${h}:${pad(m)}:${pad(r)}` : `${m}:${pad(r)}`;
+  };
+  const fmtGap = (sec) => (Math.round(sec) < 0 ? '−' : '+') + fmt(sec);
+  const dayClock = (T) => { const s = Math.round(36000 + T); return `${Math.floor(s / 3600)}:${pad(Math.floor((s % 3600) / 60))}:${pad(s % 60)}`; };
+  const pointName = (p) => (p === LAST ? 'chegada' : `${POINTS[p].side === 'in' ? 'entrada' : 'saída'} ${STAGES[POINTS[p].stage].name}`);
+  const ord = (n) => `${n}º`;
+  const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const waveTag = (a) => `O${a.w + 1}`;
+  const waveName = (a) => `Onda ${a.w + 1}`;
+
+  // ---------------- Eventos da faixa ----------------
+  const EVENTS = [];
+  WAVES.forEach((wv, w) => EVENTS.push({ T: wv.start, kind: 'start', w }));
+  ATH.forEach((a) => {
+    EVENTS.push({ T: a.ws + a.rel[0], kind: 'enter', a });
+    a.pens.forEach((p) => EVENTS.push({ T: p.at, kind: 'pen', a, sec: p.sec, stage: p.stage }));
+    if (a.dnfAt !== null) EVENTS.push({ T: a.dnfAt, kind: 'dnf', a });
+    else EVENTS.push({ T: a.ws + a.rel[LAST], kind: 'fin', a });
+  });
+  EVENTS.sort((x, y) => x.T - y.T);
+
+  // ---------------- Atalhos ----------------
+  const diego = byName('Diego Martins');
+  const JUMPS = [
+    { label: 'Onda 2 larga · 10:12', T: 717 },
+    { label: 'Bruno passa Rafael · 10:20', T: 1224 },
+    { label: 'Diego entra em 1º · 10:28', T: diego.ws + diego.rel[0] - 4 },
+    { label: 'Três ondas na pista · 10:42', T: 2520 },
+    { label: 'Diego contra 1:11:32 · 11:34', T: diego.ws + diego.rel[LAST] - 70 },
+    { label: 'Resultado', T: 6840 }
+  ];
+
+  // ---------------- Elementos ----------------
+  const $ = (id) => document.getElementById(id);
+  const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const ui = { T: 2520, playing: false, speed: 30, rule: 'A', pen: 'A', jumped: true };
+  const T_MIN = -60; const T_MAX = 6900;
+  const track = { prev: new Map(), arrows: new Map(), leader: null, newLead: null, tick: '', wave: null };
+
+  const twBody = $('twBody');
+  const rows = new Map();
+  ATH.forEach((a) => {
+    const el = document.createElement('div');
+    el.className = 'tw-row off';
+    el.style.setProperty('--i', String(ATH.length));
+    el.innerHTML = '<div class="tw-pos"><span></span></div><div class="tw-chg"></div><div class="tw-who"></div><div class="tw-where"></div><div class="tw-gap"></div>';
+    twBody.appendChild(el);
+    rows.set(a.key, { el, cache: '' });
+  });
+
+  // Mapa: percurso em S (duas linhas), marcadores por casa.
+  const TOPY = 130; const BOTY = 270;
+  const slotXY = (k) => (k <= 7 ? { x: 175 + k * 100, y: TOPY, part: 'top' } : k === 8 ? { x: 960, y: 200, part: 'curve' } : { x: 875 - (k - 9) * 100, y: BOTY, part: 'bottom' });
+  const markerXY = (k, n) => {
+    const s = slotXY(k);
+    if (s.part === 'curve') return { x: 932 - (n % 5) * 27, y: 186 + Math.floor(n / 5) * 27 };
+    const col = n % 4; const row = Math.floor(n / 4);
+    const x = s.x + (col - 1.5) * 27;
+    return s.part === 'top' ? { x, y: TOPY - 38 - row * 27 } : { x, y: BOTY + 38 + row * 27 };
+  };
+  (function drawMap() {
+    const svg = $('map');
+    let h = '';
+    h += `<path d="M110 ${TOPY} H930 Q960 ${TOPY} 960 ${TOPY + 30} V${BOTY - 30} Q960 ${BOTY} 930 ${BOTY} H205" fill="none" stroke="#232830" stroke-width="8" stroke-linecap="round"/>`;
+    h += `<path d="M110 ${TOPY} H930 Q960 ${TOPY} 960 ${TOPY + 30} V${BOTY - 30} Q960 ${BOTY} 930 ${BOTY} H205" fill="none" stroke="#3a414b" stroke-width="2" stroke-dasharray="3 9"/>`;
+    h += `<rect x="106" y="${TOPY - 16}" width="4" height="32" fill="#eaecef"/>`;
+    h += `<text x="96" y="${TOPY + 6}" text-anchor="end" fill="#929aa5" font-size="17" font-weight="700" letter-spacing="1.5">LARGADA</text>`;
+    for (let r = 0; r < 4; r += 1) for (let c = 0; c < 2; c += 1) h += `<rect x="${196 + c * 7}" y="${BOTY - 14 + r * 7}" width="7" height="7" fill="${(r + c) % 2 ? '#111' : '#eaecef'}"/>`;
+    h += `<text x="186" y="${BOTY + 6}" text-anchor="end" fill="#929aa5" font-size="17" font-weight="700" letter-spacing="1.5">CHEGADA</text>`;
+    STAGES.forEach((s, k) => {
+      const p = slotXY(k);
+      if (s.type === 'run') {
+        const ly = p.part === 'top' ? TOPY + 32 : p.part === 'bottom' ? BOTY - 22 : 204;
+        const lx = p.part === 'curve' ? 985 : p.x;
+        h += `<text x="${lx}" y="${ly}" text-anchor="middle" fill="#7f8898" font-size="15" font-weight="700">${s.short}</text>`;
+        return;
+      }
+      const lines = s.lines || [s.name];
+      const stroke = s.closes ? '#fcd535' : '#3a414b';
+      const dash = s.judge ? '' : ' stroke-dasharray="6 5"';
+      h += `<rect x="${p.x - 48}" y="${p.y - 21}" width="96" height="42" rx="8" fill="#1a1e24" stroke="${stroke}" stroke-width="${s.closes ? 2.5 : 1.6}"${dash}/>`;
+      lines.forEach((ln, j) => {
+        const y = p.y + 5 + (j - (lines.length - 1) / 2) * 15;
+        h += `<text x="${p.x}" y="${y}" text-anchor="middle" fill="${s.judge ? '#eaecef' : '#929aa5'}" font-size="${lines.length > 1 ? 13 : 14.5}" font-weight="700">${esc(ln)}</text>`;
+      });
+    });
+    h += '<g id="markers"></g>';
+    svg.innerHTML = h;
+  })();
+  const markersG = $('markers');
+  const markers = new Map();
+  ATH.forEach((a) => {
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.setAttribute('class', 'mk');
+    g.style.opacity = '0';
+    g.innerHTML = '<circle r="12.5"></circle><text text-anchor="middle" y="5" font-size="13.5" font-weight="700" class="n" font-family="IBM Plex Sans, Inter, sans-serif"></text>';
+    markersG.appendChild(g);
+    markers.set(a.key, g);
+  });
+
+  // ---------------- Desenho ----------------
+  const ARROW_UP = '<svg viewBox="0 0 10 10" aria-hidden="true"><path d="M5 1.5l4 6H1z" fill="currentColor"/></svg>';
+  const ARROW_DOWN = '<svg viewBox="0 0 10 10" aria-hidden="true"><path d="M5 8.5l-4-6h8z" fill="currentColor"/></svg>';
+
+  function wavesOnTrack(T) {
+    return WAVES.map((wv, w) => w).filter((w) => {
+      if (T < WAVES[w].start) return false;
+      return ATH.some((a) => a.w === w && (() => { const s = stateAt(a, T, 'A'); return s && !s.finished && !s.dnf; })());
+    });
+  }
+
+  function whereOf(x) {
+    const s = x.s; const a = x.a;
+    if (s.dnf) return { cls: 'st-dnf', b: 'DNF', sub: 'decisão do organizador' };
+    if (s.finished) return { cls: 'st-fin', b: 'Chegou', sub: 'tempo final' };
+    if (!s.pt.length) return { cls: 'st-wait', b: 'Largou', sub: 'aguardando 1ª leitura' };
+    const st = STAGES[s.stage];
+    if (st.type === 'st' && st.judge) return { cls: 'st-station', b: st.name, sub: `na estação · ${fmt(s.el - a.begin[s.stage])}` };
+    let lastOut = -1;
+    for (let p = s.pt.length - 1; p >= 0; p -= 1) if (POINTS[p].side === 'out') { lastOut = p; break; }
+    if (lastOut < 0) return { cls: 'st-track', b: 'Na pista', sub: 'após a largada' };
+    const stIdx = POINTS[lastOut].stage;
+    return { cls: 'st-track', b: 'Na pista', sub: `após ${STAGES[stIdx].name} · ${fmt(s.el - a.end[stIdx])}` };
+  }
+
+  function slotOf(x) {
+    const s = x.s; const a = x.a;
+    if (s.finished || s.dnf) return null;
+    if (!s.pt.length) return { k: 0, est: true };
+    const st = STAGES[s.stage];
+    if (st.type === 'st' && st.judge) return { k: s.stage, est: false };
+    let lastOut = -1;
+    for (let p = s.pt.length - 1; p >= 0; p -= 1) if (POINTS[p].side === 'out') { lastOut = p; break; }
+    if (lastOut < 0) return { k: 0, est: true };
+    return { k: Math.min(POINTS[lastOut].stage + 1, WB), est: true, a };
+  }
+
+  function render() {
+    const now = performance.now();
+    const T = ui.T;
+    const hoje = ui.rule === 'hoje';
+    let onlyWave = null;
+    const onTrack = wavesOnTrack(T);
+    if (hoje) {
+      const pool = onTrack.length ? onTrack : WAVES.map((wv, w) => w).filter((w) => T >= WAVES[w].start);
+      onlyWave = pool.length ? pool[Math.floor(now / 8000) % pool.length] : 0;
+    }
+    if (track.wave !== onlyWave) { ui.jumped = true; track.wave = onlyWave; }
+    const rule = hoje ? 'B' : ui.rule;
+    const r = ranking(T, rule, ui.pen, onlyWave);
+    const order = [...r.ranked, ...r.waiting, ...r.dnf];
+    const L = r.ranked[0] || null;
+    const indexOf = new Map(order.map((x, i) => [x.a.key, i]));
+
+    // Setas e novo líder (não disparam depois de um salto, troca de regra ou de penalidade).
+    if (ui.jumped) {
+      track.arrows.clear(); track.newLead = null;
+    } else {
+      order.forEach((x, i) => {
+        const before = track.prev.get(x.a.key);
+        if (before !== undefined && before !== i && i < r.ranked.length) track.arrows.set(x.a.key, { dir: i < before ? 'up' : 'down', until: now + 4000 });
+        if (before === undefined) track.arrows.set(x.a.key, { dir: 'new', until: now + 3000 });
+      });
+      if (L && track.leader && track.leader.key !== L.a.key && !hoje) {
+        const prevX = r.ranked.find((x) => x.a.key === track.leader.key);
+        track.newLead = { key: L.a.key, prevKey: track.leader.key, gap: prevX ? gapOf(prevX, L, rule) : null, until: now + 6500 };
+      }
+    }
+    track.prev = new Map(order.map((x, i) => [x.a.key, i]));
+    track.leader = L ? { key: L.a.key } : null;
+    ui.jumped = false;
+
+    // Torre
+    $('twEmpty').hidden = order.length > 0;
+    ATH.forEach((a) => {
+      const row = rows.get(a.key);
+      const i = indexOf.get(a.key);
+      if (i === undefined) { row.el.classList.add('off'); row.el.style.setProperty('--i', String(ATH.length)); return; }
+      const x = order[i];
+      const ranked = i < r.ranked.length;
+      const where = whereOf(x);
+      let gapCls = 'none'; let gapB = '–'; let gapS = '';
+      if (ranked && L) {
+        if (x === L) {
+          gapCls = x.s.finished ? 'fin' : 'lead';
+          gapB = x.s.finished ? fmt(x.s.pt[LAST]) : 'Líder';
+          gapS = x.s.finished ? 'líder' : `${pointName(lastOf(x))} · ${fmt(x.s.pt[lastOf(x)])}`;
+        } else {
+          const g = gapOf(x, L, rule);
+          if (x.s.finished) {
+            gapCls = 'fin'; gapB = fmt(x.s.pt[LAST]);
+            gapS = `${fmtGap(g.sec)} · ${pointName(g.point)}`;
+          } else {
+            gapCls = Math.round(g.sec) < 0 ? 'ahead' : '';
+            gapB = fmtGap(g.sec);
+            gapS = g.counting ? `${pointName(g.point)} · <span class="cnt">contando</span>` : pointName(g.point);
+          }
+        }
+      }
+      const arrow = track.arrows.get(a.key);
+      const arrowOn = arrow && arrow.until > now;
+      const pos = ranked ? String(i + 1) : '–';
+      const penTxt = x.s.pen > 0 ? `<span class="pen">+${x.s.pen} s</span>` : '';
+      const html = `<div class="tw-pos"><span>${pos}</span></div>`
+        + `<div class="tw-chg ${arrowOn && arrow.dir !== 'new' ? arrow.dir : ''}">${arrowOn && arrow.dir === 'up' ? ARROW_UP : arrowOn && arrow.dir === 'down' ? ARROW_DOWN : ''}</div>`
+        + `<div class="tw-who"><div class="tw-nm"><b>${esc(a.name)}</b><span class="wv">${waveTag(a)}</span>${penTxt}</div><span class="tw-bx">${esc(a.box)}</span></div>`
+        + `<div class="tw-where ${where.cls}"><b>${esc(where.b)}</b><span>${esc(where.sub)}</span></div>`
+        + `<div class="tw-gap ${gapCls}"><b>${gapB}</b><span>${gapS}</span></div>`;
+      if (row.cache !== html) { row.el.innerHTML = html; row.cache = html; }
+      row.el.classList.remove('off');
+      row.el.classList.toggle('lead', ranked && i === 0);
+      row.el.classList.toggle('nopos', !ranked);
+      row.el.classList.toggle('wait', !ranked && !x.s.dnf);
+      row.el.classList.toggle('flash-up', !!(arrowOn && arrow.dir === 'up'));
+      row.el.classList.toggle('flash-down', !!(arrowOn && arrow.dir === 'down'));
+      row.el.classList.toggle('flash-new', !!(arrowOn && arrow.dir === 'new'));
+      row.el.style.setProperty('--i', String(i));
+    });
+
+    // Mapa
+    const bySlot = new Map();
+    order.forEach((x, i) => {
+      const sl = slotOf(x);
+      if (!sl) return;
+      if (!bySlot.has(sl.k)) bySlot.set(sl.k, []);
+      bySlot.get(sl.k).push({ x, i, est: sl.est, ranked: i < r.ranked.length });
+    });
+    const seen = new Set();
+    bySlot.forEach((list, k) => {
+      list.forEach((m, n) => {
+        const g = markers.get(m.x.a.key); const p = markerXY(k, n);
+        seen.add(m.x.a.key);
+        if (g.dataset.placed !== '1') {
+          // Primeira vez no mapa: aparece direto na casa, sem voar do canto.
+          g.style.transition = 'none';
+          g.style.transform = `translate(${p.x}px, ${p.y}px)`;
+          void g.getBoundingClientRect();
+          g.style.transition = '';
+          g.dataset.placed = '1';
+        }
+        g.style.opacity = '1';
+        g.style.transform = `translate(${p.x}px, ${p.y}px)`;
+        const c = g.querySelector('circle'); const t = g.querySelector('text');
+        const lead = m.ranked && m.i === 0;
+        if (!m.ranked) { c.setAttribute('r', '7'); c.setAttribute('fill', 'none'); c.setAttribute('stroke', '#7f8898'); c.setAttribute('stroke-width', '2'); t.textContent = ''; return; }
+        c.setAttribute('r', '12.5');
+        if (lead) { c.setAttribute('fill', m.est ? 'none' : '#fcd535'); c.setAttribute('stroke', '#fcd535'); c.setAttribute('stroke-width', m.est ? '2.5' : '0'); t.setAttribute('fill', m.est ? '#fcd535' : '#181a20'); }
+        else if (m.est) { c.setAttribute('fill', 'none'); c.setAttribute('stroke', '#eaecef'); c.setAttribute('stroke-width', '2'); t.setAttribute('fill', '#eaecef'); }
+        else { c.setAttribute('fill', '#eaecef'); c.setAttribute('stroke', 'none'); c.setAttribute('stroke-width', '0'); t.setAttribute('fill', '#181a20'); }
+        t.textContent = String(m.i + 1);
+      });
+    });
+    markers.forEach((g, key) => { if (!seen.has(key)) g.style.opacity = '0'; });
+    const finCount = order.filter((x) => x.s.finished).length;
+    const dnfCount = r.dnf.length;
+    $('mapCount').textContent = finCount || dnfCount ? `${finCount} chegaram${dnfCount ? ` · ${dnfCount} DNF` : ''}` : '';
+
+    // Cabeçalho
+    const clocks = $('tvClocks');
+    if (hoje) {
+      $('tvTitle').textContent = `Onda ${onlyWave + 1} · Open Masculino`;
+      clocks.innerHTML = T >= WAVES[onlyWave].start ? `<div class="wclock big"><b>${fmt(T - WAVES[onlyWave].start)}</b><span>Tempo da onda ${onlyWave + 1}</span></div>` : '';
+    } else {
+      $('tvTitle').textContent = 'Open Masculino · ranking da prova';
+      clocks.innerHTML = onTrack.map((w) => `<div class="wclock"><b>${fmt(T - WAVES[w].start)}</b><span>Onda ${w + 1}</span></div>`).join('');
+    }
+    const pill = $('tvPill');
+    const live = onTrack.length > 0;
+    pill.className = `tv-pill ${live ? 'live' : order.length ? 'res' : ''}`;
+    pill.innerHTML = live ? '<i></i><span>AO VIVO</span>' : order.length ? '<span>RESULTADO</span>' : '<span>EM BREVE</span>';
+
+    renderCardA(r, rule, now, hoje);
+    renderCardB(r, T, onTrack);
+    renderTicker(T, rule, onlyWave, hoje);
+
+    $('timeOut').textContent = dayClock(T);
+    const range = $('time');
+    if (Number(range.value) !== Math.round(T)) range.value = String(Math.round(T));
+  }
+
+  function setCard(el, cls, key, html) {
+    if (el.dataset.key === key) return;
+    el.dataset.key = key;
+    el.className = `card ${cls}`;
+    el.innerHTML = html;
+  }
+
+  function renderCardA(r, rule, now, hoje) {
+    const el = $('cardA');
+    const R = r.ranked;
+    if (!R.length) { setCard(el, '', 'empty', '<div class="card-eb">Disputa</div><div class="card-in ld"><div class="bx">Aguardando a primeira leitura de judge.</div></div>'); return; }
+    if (track.newLead && track.newLead.until > now && R[0].a.key === track.newLead.key) {
+      const L = R[0]; const prevA = ATH.find((a) => a.key === track.newLead.prevKey); const g = track.newLead.gap;
+      const how = g && prevA ? `<div class="at">Passou ${esc(prevA.name)} (${waveName(prevA)}) na ${esc(pointName(g.point))}</div><div class="adv">por <b>${fmt(g.sec)}</b> de tempo de prova</div>` : '';
+      setCard(el, 'newlead', `nl-${L.a.key}-${track.newLead.prevKey}`, `<div class="card-eb">Novo líder da prova</div><div class="card-in ld"><div class="w">${esc(L.a.name)}</div><div class="bx">${waveName(L.a)} · ${esc(L.a.box)}</div>${how}</div>`);
+      return;
+    }
+    for (let i = 0; i < R.length - 1; i += 1) {
+      const a = R[i]; const b = R[i + 1];
+      if (a.s.finished && b.s.finished) continue;
+      const c = Math.min(lastOf(a), lastOf(b));
+      const d = Math.round(b.s.pt[c] - a.s.pt[c]);
+      if (d < 0 || d > 10) continue;
+      const cross = a.a.w !== b.a.w;
+      const line = (x, p) => `<div class="bt-line"><span class="p"><span>${p}</span></span><div class="w"><b>${esc(x.a.name)}</b><span>${waveName(x.a)} · ${esc(x.a.box)}</span></div></div>`;
+      const html = `<div class="card-eb">Disputa pelo ${ord(i + 1)} lugar${cross && !hoje ? '<span class="xw">entre ondas</span>' : ''}</div>`
+        + `<div class="card-in bt">${line(a, i + 1)}<div class="bt-gap"><b class="num">${fmt(d)}</b><span>comparados na ${esc(pointName(c))}</span></div>${line(b, i + 2)}</div>`;
+      setCard(el, 'battle', `bt-${a.a.key}-${b.a.key}-${c}-${d}`, html);
+      return;
+    }
+    const L = R[0]; const w = whereOf(L);
+    setCard(el, 'leader', `ld-${L.a.key}-${w.b}`, `<div class="card-eb">Líder da prova</div><div class="card-in ld"><div class="w">${esc(L.a.name)}</div><div class="bx">${waveName(L.a)} · ${esc(L.a.box)}</div><div class="at">${esc(w.b)} · ${esc(w.sub)}</div></div>`);
+  }
+
+  function renderCardB(r, T, onTrack) {
+    const el = $('cardB');
+    const order = [...r.ranked, ...r.waiting];
+    const finals = order.filter((x) => !x.s.finished && !x.s.dnf && x.s.stage === WB && x.s.pt.length > 0).slice(0, 3);
+    if (finals.length) {
+      const finished = r.ranked.filter((x) => x.s.finished);
+      const rowsHtml = finals.map((x) => {
+        const reps = Math.max(0, Math.min(99, Math.floor((100 * (x.s.el - x.a.begin[WB])) / (x.a.end[WB] - x.a.begin[WB]))));
+        const beatable = finished.filter((f) => f.s.pt[LAST] > x.s.clock).sort((p, q) => p.s.pt[LAST] - q.s.pt[LAST])[0];
+        const tg = beatable ? `<span class="tg">Passa ${esc(beatable.a.name)} se fechar antes de <b>${fmt(beatable.s.pt[LAST])}</b> · relógio ${fmt(x.s.clock)}</span>` : `<span class="tg">Relógio ${fmt(x.s.clock)}</span>`;
+        return `<div class="wb-row"><div class="w"><b>${esc(x.a.name)}</b><span class="wv">${waveTag(x.a)}</span></div><span class="c num">${reps}<small>/100</small></span><div class="wb-bar"><i style="transform: scaleX(${reps / 100})"></i></div>${tg}</div>`;
+      }).join('');
+      setCard(el, 'final', `wb-${finals.map((x) => x.a.key).join('-')}-${Math.floor(T / 2)}`, `<div class="card-eb">Reta final · Wall Balls</div><div class="card-in wb">${rowsHtml}</div>`);
+      return;
+    }
+    const nextW = WAVES.findIndex((wv) => T < wv.start);
+    if (nextW >= 0) {
+      setCard(el, '', `nx-${nextW}`, `<div class="card-eb">Próxima largada</div><div class="card-in nx"><div class="w">Onda ${nextW + 1}</div><div class="h">${WAVES[nextW].time} prevista</div><div class="c">Open Masculino · 5 atletas</div></div>`);
+      return;
+    }
+    const lines = WAVES.map((wv, w) => {
+      const mine = ATH.map((a) => ({ a, s: stateAt(a, T, ui.pen) })).filter((x) => x.a.w === w && x.s);
+      const run = mine.filter((x) => !x.s.finished && !x.s.dnf).length;
+      const fin = mine.filter((x) => x.s.finished).length;
+      const clock = run ? fmt(T - wv.start) : 'fim';
+      return `<div class="wl-row"><b>Onda ${w + 1}</b><span class="num">${clock}</span><span>${run} correndo · ${fin} ${fin === 1 ? 'chegou' : 'chegaram'}</span></div>`;
+    }).join('');
+    setCard(el, '', `wl-${Math.floor(T)}`, `<div class="card-eb">${onTrack.length ? 'Ondas na pista' : 'Ondas do dia'}</div><div class="card-in wl" style="animation:none">${lines}</div>`);
+  }
+
+  function renderTicker(T, rule, onlyWave, hoje) {
+    let ev = null;
+    for (let i = EVENTS.length - 1; i >= 0; i -= 1) {
+      const e = EVENTS[i];
+      if (e.T > T) continue;
+      if (hoje && (e.kind === 'start' ? e.w : e.a.w) !== onlyWave) continue;
+      ev = e; break;
+    }
+    const el = $('tick');
+    if (!ev) { if (track.tick !== '') { el.textContent = ''; track.tick = ''; } return; }
+    const at = dayClock(ev.T);
+    const posAt = (a) => { const rr = ranking(ev.T + 0.5, rule, ui.pen, hoje ? onlyWave : null); const i = rr.ranked.findIndex((x) => x.a === a); return i >= 0 ? i + 1 : null; };
+    let html = '';
+    if (ev.kind === 'start') html = `${at} · LARGADA · Onda ${ev.w + 1} · 5 atletas`;
+    else if (ev.kind === 'enter') { const p = posAt(ev.a); html = `${at} · <span class="k-in">ENTRA NO RANKING</span> · ${esc(ev.a.name)} (${waveName(ev.a)})${p ? ` em ${ord(p)}` : ''} · entrada Ski Erg`; }
+    else if (ev.kind === 'pen') html = `${at} · <span class="k-pen">PENALIDADE · +${ev.sec} s</span> · ${esc(ev.a.name)} · ${esc(STAGES[ev.stage].name)}`;
+    else if (ev.kind === 'dnf') html = `${at} · <span class="k-dnf">DNF</span> · ${esc(ev.a.name)}`;
+    else { const p = posAt(ev.a); const fin = ev.a.rel[LAST] + ev.a.pens.reduce((s, q) => s + q.sec, 0); html = `${at} · <span class="k-fin">CHEGADA</span> · ${esc(ev.a.name)} · ${fmt(fin)}${p ? ` · ${ord(p)}` : ''}`; }
+    if (track.tick !== html) { el.innerHTML = html; el.className = 'anim'; void el.offsetWidth; track.tick = html; }
+  }
+
+  // ---------------- Controles ----------------
+  const NOTES = {
+    A: '<b>A · Tempo de prova no mesmo ponto.</b> A recomendada: cada par é comparado pelo relógio de cada um, no ponto mais adiantado possível.',
+    B: '<b>B · Quem está mais adiante na pista.</b> Repare nas diferenças em verde com sinal de menos: gente mais rápida no mesmo ponto aparece abaixo, só porque largou depois.',
+    C: '<b>C · Posição na passagem.</b> Cada atleta no seu último ponto, contra quem já passou por ele. Quem largou antes fica sozinho nos pontos mais adiante e sobe na lista.',
+    hoje: '<b>Hoje · uma onda por vez.</b> A torre aprovada em 03/11: troca de onda a cada 8 s nesta simulação (20 s no telão), cada uma com o próprio relógio.'
+  };
+  function setPressed(groupId, value) {
+    $(groupId).querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === String(value))));
+  }
+  function setPlaying(on) {
+    ui.playing = on;
+    $('playTxt').textContent = on ? 'Pausar' : 'Rodar';
+    $('playIco').setAttribute('d', on ? 'M8 5v14M16 5v14' : 'M8 5l11 7-11 7z');
+  }
+  $('play').addEventListener('click', () => { if (!ui.playing && ui.T >= T_MAX) { ui.T = T_MIN; ui.jumped = true; } setPlaying(!ui.playing); render(); });
+  $('speed').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; ui.speed = Number(b.dataset.v); setPressed('speed', ui.speed); });
+  $('rule').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; ui.rule = b.dataset.v; setPressed('rule', ui.rule); $('ruleNote').innerHTML = NOTES[ui.rule]; ui.jumped = true; render(); });
+  $('pen').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; ui.pen = b.dataset.v; setPressed('pen', ui.pen); ui.jumped = true; render(); });
+  $('time').addEventListener('input', (e) => { ui.T = Number(e.target.value); ui.jumped = true; render(); });
+  const jumpsEl = $('jumps');
+  JUMPS.forEach((j) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.textContent = j.label;
+    b.addEventListener('click', () => { ui.T = Math.max(T_MIN, Math.min(T_MAX, j.T)); ui.jumped = true; render(); if (!reduced && j.label !== 'Resultado') setPlaying(true); });
+    jumpsEl.appendChild(b);
+  });
+  $('full').addEventListener('click', () => {
+    const wrap = $('tvWrap');
+    try {
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+      else if (wrap.requestFullscreen) wrap.requestFullscreen().catch(() => {});
+    } catch (err) { /* tela cheia indisponível neste visualizador */ }
+  });
+  $('ruleNote').innerHTML = NOTES.A;
+
+  let lastTs = performance.now();
+  setInterval(() => {
+    const ts = performance.now();
+    const dt = Math.min(1, (ts - lastTs) / 1000);
+    lastTs = ts;
+    if (ui.playing) {
+      ui.T = Math.min(T_MAX, ui.T + dt * ui.speed);
+      if (ui.T >= T_MAX) setPlaying(false);
+    }
+    render();
+  }, 250);
+
+  render();
+  if (!reduced) setPlaying(true);
+})();
+</script>
+
+</body>
+</html>

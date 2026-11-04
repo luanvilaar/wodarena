@@ -9,8 +9,11 @@ import {
   computeRaceBroadcast,
   computeRaceWaveStates,
   nextRaceWave,
+  raceDivisionPositionAt,
+  raceRankingEntries,
   resolveRaceScreen,
   type RaceBroadcastAttempt,
+  type RaceBroadcastCoverage,
   type RaceBroadcastInput,
   type RaceBroadcastPenalty,
   type RaceBroadcastResult,
@@ -66,10 +69,14 @@ import type { Athlete, Score, Workout } from '@/types';
 //   1. categorias, largadas e regulamentos (e a prova TOTAL de cada categoria);
 //   2. corridas das ondas largadas, resultados publicados, elegibilidade e
 //      atletas; e, para as corridas em DNF, o instante da decisão;
-//   3. cartões e penalidades vigentes, só das corridas das ondas que vão ao ar.
-// A fase 3 só sabe quais ondas vão ao ar depois de um primeiro passe do motor
-// sem cartões (a escolha da tela e as ondas na pista dependem só das corridas,
-// dos resultados e das largadas, não dos cartões).
+//   3. cartões e penalidades vigentes do que vai ao ar: na torre da categoria
+//      (ranking único, Story 1.117), as corridas de todas as ondas largadas das
+//      categorias no ar, porque quem já terminou é a referência em cada ponto, e
+//      a escala de judges (checagem de certeza do R1); na torre de uma onda
+//      fixada, só as corridas dela.
+// A fase 3 só sabe o que vai ao ar depois de um primeiro passe do motor sem
+// cartões (a escolha da tela e as ondas na pista dependem só das corridas, dos
+// resultados e das largadas, não dos cartões).
 //
 // Toda leitura que pode passar de 1000 linhas (o corte silencioso do PostgREST)
 // é paginada por uma ordem estável (`readAllPages`). Não usa `readRaceBoardSources`
@@ -93,8 +100,8 @@ const check = (result: { data: unknown; error: unknown }) => {
 
 /** Ids por consulta `in(...)`: acima disso a URL do PostgREST estoura. */
 const IDS_PER_QUERY = 100;
-/** Quantos eventos a faixa da direção de prova leva (o cliente mostra o mais novo). */
-const TICKER_MAX = 10;
+/** Quantos eventos a faixa da direção de prova leva por categoria no ar (o cliente mostra o mais novo da torre no ar). */
+const TICKER_MAX = 6;
 /** Quantos recordes batidos o payload ao vivo leva (o cliente destaca o mais novo). */
 const RECORDS_MAX = 12;
 /** Próximas ondas na tela de espera. */
@@ -138,6 +145,7 @@ type RunRow = {
   heat_id: string | null;
   ruleset_id: string;
   status: string;
+  started_at: string | null;
   finish_at: string | null;
   official_seconds: number | string | null;
   time_source: 'sheet' | 'manual' | null;
@@ -156,8 +164,9 @@ type AttemptRow = {
   ended_at: string | null;
 };
 type PenaltyRow = { run_id: string; station_id: string | null; seconds: number | string; created_at: string };
+type AssignmentRow = { station_key: string; heat_id: string | null };
 
-const RUN_COLUMNS = 'id, division_id, athlete_id, heat_id, ruleset_id, status, finish_at, official_seconds, time_source';
+const RUN_COLUMNS = 'id, division_id, athlete_id, heat_id, ruleset_id, status, started_at, finish_at, official_seconds, time_source';
 const ATTEMPT_COLUMNS = 'run_id, athlete_id, station_id, status, progress, started_at, ended_at';
 
 export type RaceBroadcastReadOptions = {
@@ -400,7 +409,8 @@ export const buildRaceBroadcastState = async (
     officialSeconds: numberOrNull(run.official_seconds),
     timeSource: run.time_source,
     finishAt: run.finish_at,
-    dnfAt: dnfAtByRun.get(run.id) ?? null
+    dnfAt: dnfAtByRun.get(run.id) ?? null,
+    startedAt: run.started_at
   }));
   const engineResults: RaceBroadcastResult[] = publishedRows.map((row) => {
     const athlete = athleteById.get(row.athlete_id) as AthleteRow;
@@ -439,15 +449,20 @@ export const buildRaceBroadcastState = async (
     standings: divisions.map((division) => ({ divisionKey: division.id, rows: standingsByDivision.get(division.id)?.length ?? 0 }))
   };
 
-  // Primeiro passe (sem cartões): quais ondas vão ao ar. Os cartões não mudam a escolha da tela nem as ondas na pista.
+  // Primeiro passe (sem cartões): o que vai ao ar. Os cartões não mudam a escolha da tela nem as ondas na pista.
   const waveStates = computeRaceWaveStates(baseInput);
   const firstPass = resolveRaceScreen({ ...view, waves: waveStates });
+  const divisionScope = firstPass.screen === 'live' && firstPass.scope === 'division';
   const liveWaveKeys = firstPass.screen === 'live' ? firstPass.waveKeys : [];
+  const liveDivisionIds = new Set(divisionScope && firstPass.screen === 'live' ? firstPass.divisionKeys : []);
 
-  // Fase 3: cartões e penalidades vigentes, só das corridas das ondas que vão ao ar.
-  const liveRuns = runRows.filter((run) => run.heat_id !== null && liveWaveKeys.includes(run.heat_id));
+  // Fase 3: cartões e penalidades vigentes do que vai ao ar. Torre da categoria: as corridas de todas as ondas
+  // largadas das categorias no ar (`runRows` já são só das ondas largadas) e a escala de judges. Torre de uma onda: as dela.
+  const liveRuns = divisionScope
+    ? runRows.filter((run) => run.division_id !== null && liveDivisionIds.has(run.division_id))
+    : runRows.filter((run) => run.heat_id !== null && liveWaveKeys.includes(run.heat_id));
   const liveRunIds = liveRuns.map((run) => run.id);
-  const [attemptParts, penaltyParts] = await Promise.all([
+  const [attemptParts, penaltyParts, assignmentRows] = await Promise.all([
     Promise.all(chunk(liveRunIds, IDS_PER_QUERY).map((ids) => pages<AttemptRow>((from, to) => supabaseAdmin
       .from('race_attempts')
       .select(ATTEMPT_COLUMNS)
@@ -462,8 +477,17 @@ export const buildRaceBroadcastState = async (
       .eq('kind', 'penalty')
       .eq('status', 'confirmed')
       .order('id', { ascending: true })
-      .range(from, to))))
+      .range(from, to)))),
+    divisionScope
+      ? pages<AssignmentRow>((from, to) => supabaseAdmin
+        .from('race_judge_assignments')
+        .select('station_key, heat_id')
+        .eq('event_id', eventId)
+        .order('id', { ascending: true })
+        .range(from, to))
+      : Promise.resolve([] as AssignmentRow[])
   ]);
+  const coverage: RaceBroadcastCoverage[] = assignmentRows.map((row) => ({ stationKey: row.station_key, waveKey: row.heat_id ?? null }));
   const runAthleteKey = new Map(liveRuns.map((run) => [run.id, athleteKeyOf(run.athlete_id)]));
   const attempts: RaceBroadcastAttempt[] = attemptParts.flat().map((row) => {
     const progress = isPlainObject(row.progress) ? row.progress : {};
@@ -488,7 +512,8 @@ export const buildRaceBroadcastState = async (
       at: row.created_at
     }));
 
-  const out = computeRaceBroadcast({ ...baseInput, attempts, penalties }, view);
+  const fullInput: RaceBroadcastInput = { ...baseInput, attempts, penalties, coverage };
+  const out = computeRaceBroadcast(fullInput, view);
 
   // -------------------------------------------------------------------------
   // Payload
@@ -567,12 +592,18 @@ export const buildRaceBroadcastState = async (
   };
 
   if (out.resolution.screen === 'live') {
-    const liveKeys = new Set(out.resolution.waveKeys);
+    const resolution = out.resolution;
+    const liveKeys = new Set(resolution.waveKeys);
     const liveDivisionKeys = new Set(out.boards.map((board) => board.divisionKey));
     const penaltyTotals = new Map<string, number>();
     for (const penalty of penalties) penaltyTotals.set(penalty.athleteKey, (penaltyTotals.get(penalty.athleteKey) ?? 0) + penalty.seconds);
     const nameByKey = new Map(baseInput.athletes.map((athlete) => [athlete.key, athlete]));
     const waveOfKey = new Map(runRows.map((run) => [athleteKeyOf(run.athlete_id), run.heat_id]));
+    const divisionsOf = (athleteKey: string) => {
+      const divisionKey = nameByKey.get(athleteKey)?.divisionKey;
+      return divisionKey ? [divisionKey] : [];
+    };
+    const waveTitleOf = (waveKey: string | null | undefined) => (waveKey && stateByKey.get(waveKey)?.title) || '';
 
     const arrivals: RaceArrivalView[] = out.arrivals
       .filter((arrival) => arrival.waveKey !== null && liveKeys.has(arrival.waveKey))
@@ -587,23 +618,26 @@ export const buildRaceBroadcastState = async (
           .map((best) => ({ stationName: best.stationName, seconds: best.seconds }))
       }));
 
-    const ticker: (RaceTickerEvent & { sortMs: number })[] = [];
-    const pushTicker = (event: Omit<RaceTickerEvent, 'clock'>) => {
+    type TickerItem = RaceTickerEvent & { sortMs: number; athleteKey: string | null };
+    const ticker: TickerItem[] = [];
+    const pushTicker = (event: Omit<RaceTickerEvent, 'clock' | 'position' | 'point'> & Partial<Pick<RaceTickerEvent, 'point'>>, athleteKey: string | null = null) => {
       const ms = timeMs(event.at);
-      if (ms !== null) ticker.push({ ...event, clock: clock(event.at), sortMs: ms });
+      if (ms !== null) ticker.push({ position: null, point: null, ...event, clock: clock(event.at), sortMs: ms, athleteKey });
     };
+    const empty = { name: null, seconds: null, stationName: null, finalSeconds: null };
     for (const wave of out.waves.filter((item) => liveKeys.has(item.key) && item.startedAt)) {
-      pushTicker({ kind: 'start', at: wave.startedAt as string, waveKey: wave.key, waveTitle: wave.title, name: null, seconds: null, stationName: null, finalSeconds: null });
+      pushTicker({ kind: 'start', at: wave.startedAt as string, waveKey: wave.key, waveTitle: wave.title, divisionKeys: wave.divisionKeys, ...empty });
     }
     for (const penalty of penalties) {
       const athlete = nameByKey.get(penalty.athleteKey);
-      if (!athlete || !penalty.at) continue;
-      const waveKey = waveOfKey.get(penalty.athleteKey);
+      const waveKey = waveOfKey.get(penalty.athleteKey) ?? null;
+      if (!athlete || !penalty.at || !waveKey || !liveKeys.has(waveKey)) continue;
       pushTicker({
         kind: 'penalty',
         at: penalty.at,
-        waveKey: waveKey ?? null,
-        waveTitle: (waveKey && stateByKey.get(waveKey)?.title) || '',
+        waveKey,
+        waveTitle: waveTitleOf(waveKey),
+        divisionKeys: [athlete.divisionKey],
         name: athlete.name,
         seconds: penalty.seconds,
         stationName: stageNameOf(athlete.divisionKey, penalty.stationId) || null,
@@ -612,14 +646,43 @@ export const buildRaceBroadcastState = async (
     }
     for (const run of engineRuns) {
       if (run.status !== 'dnf' || !run.dnfAt || !run.waveKey || !liveKeys.has(run.waveKey)) continue;
-      pushTicker({ kind: 'dnf', at: run.dnfAt, waveKey: run.waveKey, waveTitle: stateByKey.get(run.waveKey)?.title ?? '', name: nameByKey.get(run.athleteKey)?.name ?? null, seconds: null, stationName: null, finalSeconds: null });
+      pushTicker({ kind: 'dnf', at: run.dnfAt, waveKey: run.waveKey, waveTitle: waveTitleOf(run.waveKey), divisionKeys: divisionsOf(run.athleteKey), ...empty, name: nameByKey.get(run.athleteKey)?.name ?? null });
     }
     for (const arrival of arrivals) {
-      pushTicker({ kind: 'finish', at: arrival.finishAt, waveKey: arrival.waveKey, waveTitle: (arrival.waveKey && stateByKey.get(arrival.waveKey)?.title) || '', name: arrival.name, seconds: null, stationName: null, finalSeconds: arrival.finalSeconds });
+      pushTicker({ kind: 'finish', at: arrival.finishAt, waveKey: arrival.waveKey, waveTitle: waveTitleOf(arrival.waveKey), divisionKeys: [arrival.divisionKey], ...empty, name: arrival.name, finalSeconds: arrival.finalSeconds });
     }
-    ticker.sort((a, b) => a.sortMs - b.sortMs);
+    // Entrada no ranking (torre da categoria): a primeira leitura de cada atleta das ondas na pista; a posição é calculada só para os eventos que vão no payload.
+    if (resolution.scope === 'division') {
+      for (const entry of raceRankingEntries(fullInput, resolution.divisionKeys)) {
+        if (!entry.waveKey || !liveKeys.has(entry.waveKey)) continue;
+        pushTicker({ kind: 'enter', at: entry.at, waveKey: entry.waveKey, waveTitle: waveTitleOf(entry.waveKey), divisionKeys: [entry.divisionKey], ...empty, name: nameByKey.get(entry.athleteKey)?.name ?? null, point: entry.point }, entry.athleteKey);
+      }
+    }
+    ticker.sort((a, b) => a.sortMs - b.sortMs || a.kind.localeCompare(b.kind));
+    // Os últimos de cada categoria no ar (a largada conta para as categorias da onda), sem repetir.
+    const kept = new Set<TickerItem>();
+    for (const divisionKey of liveDivisionKeys) {
+      ticker.filter((event) => event.divisionKeys.includes(divisionKey)).slice(-TICKER_MAX).forEach((event) => kept.add(event));
+    }
+    const tickerOut = ticker.filter((event) => kept.has(event)).map((event): RaceTickerEvent => ({
+      kind: event.kind,
+      at: event.at,
+      clock: event.clock,
+      waveKey: event.waveKey,
+      waveTitle: event.waveTitle,
+      divisionKeys: event.divisionKeys,
+      name: event.name,
+      position: event.kind === 'enter' && event.athleteKey && event.divisionKeys[0]
+        ? raceDivisionPositionAt(fullInput, event.divisionKeys[0], event.athleteKey, event.sortMs)
+        : null,
+      point: event.point,
+      seconds: event.seconds,
+      stationName: event.stationName,
+      finalSeconds: event.finalSeconds
+    }));
 
     const live: RaceLivePayload = {
+      scope: resolution.scope,
       steps: out.liveSteps,
       waves: out.waves.filter((wave) => liveKeys.has(wave.key) && wave.startedAt).map((wave) => ({
         key: wave.key,
@@ -634,6 +697,7 @@ export const buildRaceBroadcastState = async (
         racingCount: wave.racingCount
       })),
       boards: out.boards.map((board) => ({
+        scope: board.scope,
         waveKey: board.waveKey,
         waveTitle: board.waveTitle,
         divisionKey: board.divisionKey,
@@ -650,7 +714,8 @@ export const buildRaceBroadcastState = async (
           closesTime: stage.closesTime,
           semJudge: stage.semJudge
         })),
-        rows: board.rows,
+        // O "contando" anda com o relógio: a tela conta pela base; no payload a diferença fica nula, para a `version` só mudar com dado novo.
+        rows: board.rows.map((row) => (row.gapCounting ? { ...row, gapSeconds: null } : row)),
         battle: board.battle,
         finalists: board.finalists,
         hasLeaderReading: board.hasLeaderReading
@@ -658,7 +723,7 @@ export const buildRaceBroadcastState = async (
       bests: out.bests.filter((best) => liveDivisionKeys.has(best.divisionKey)),
       records: out.records.filter((record) => record.at !== null && liveDivisionKeys.has(record.divisionKey)).slice(-RECORDS_MAX),
       arrivals,
-      ticker: ticker.slice(-TICKER_MAX).map((event) => ({ kind: event.kind, at: event.at, clock: event.clock, waveKey: event.waveKey, waveTitle: event.waveTitle, name: event.name, seconds: event.seconds, stationName: event.stationName, finalSeconds: event.finalSeconds }))
+      ticker: tickerOut
     };
     payload.live = live;
   }

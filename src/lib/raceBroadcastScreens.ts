@@ -183,7 +183,7 @@ export const describeRaceStandby = (standby: Pick<RaceStandbyPayload, 'upcoming'
 export type RacePanelPreview = {
   /** "Ao vivo", "Grid de largada", "Classificação" ou "Espera". */
   screenLabel: string;
-  /** A onda e a categoria do passo no ar ("Onda 3 · Open Masculino"); vazio na espera. */
+  /** O passo no ar: "Open Masculino · ranking da prova" (torre da categoria) ou "Onda 3 · Open Masculino" (onda fixada); vazio na espera. */
   context: string;
   /** Ao vivo: a torre em lista (posição, nome, onde está), no máximo 10, e quantos ficaram de fora. */
   rows: { key: string; position: string; name: string; where: string }[];
@@ -206,7 +206,7 @@ export const describeRacePanelPreview = (payload: RaceBroadcastPayload): RacePan
     });
     return {
       screenLabel: 'Ao vivo',
-      context: `${frame.board.waveTitle} · ${frame.board.divisionName}`,
+      context: frame.board.scope === 'division' ? `${frame.board.divisionName} · ranking da prova` : `${frame.board.waveTitle ?? ''} · ${frame.board.divisionName}`,
       rows,
       hiddenCount: Math.max(0, frame.board.rows.length - rows.length)
     };

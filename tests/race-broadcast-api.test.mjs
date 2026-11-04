@@ -222,7 +222,7 @@ const spyClient = (log) => ({
 });
 const newLog = () => ({ in: [], range: [], select: [] });
 
-test('AC3: três páginas de cartões e nenhuma consulta de cartão ou penalidade de corrida fora das ondas na pista', async () => {
+test('AC3 (Story 1.117): na torre da categoria, os cartões de todas as ondas largadas dela, em páginas; da onda fixada, só os dela', async () => {
   load({ seconds: 1440, extra: finishedWave2() });
   const log = newLog();
   const small = await build({ nowMs: nowAt(1440), pageSize: 10 }, { client: spyClient(log) });
@@ -230,19 +230,26 @@ test('AC3: três páginas de cartões e nenhuma consulta de cartão ou penalidad
   assert.deepEqual(withoutTime(small), withoutTime(normal), 'a paginação não perde nem repete linha');
 
   const attemptPages = log.range.filter((entry) => entry.table === 'race_attempts');
-  assert.deepEqual(attemptPages.map((entry) => [entry.from, entry.to]), [[0, 9], [10, 19], [20, 29]], '27 cartões em páginas de 10');
+  assert.deepEqual(attemptPages.map((entry) => [entry.from, entry.to]), [[0, 9], [10, 19], [20, 29]], '27 cartões da onda 3 e 2 da onda 2 em páginas de 10');
 
-  const onTrackRuns = new Set(['rafael', 'bruno', 'diego', 'thiago', 'lucas', 'mateus', 'caio', 'pedro', 'gustavo', 'andre'].map(runId));
+  const openMaleRuns = new Set(['rafael', 'bruno', 'diego', 'thiago', 'lucas', 'mateus', 'caio', 'pedro', 'gustavo', 'andre', 'joao', 'samuel'].map(runId));
   const askedRunIds = log.in.filter((entry) => entry.column === 'run_id').flatMap((entry) => entry.values);
-  assert.ok(askedRunIds.length > 0);
-  assert.ok(askedRunIds.every((id) => onTrackRuns.has(id)), `ids pedidos: ${askedRunIds.join(', ')}`);
-  assert.equal(askedRunIds.includes(runId('joao')), false, 'a onda 2 já terminou: nenhum cartão nem penalidade dela');
+  assert.ok(askedRunIds.every((id) => openMaleRuns.has(id)), `ids pedidos: ${askedRunIds.join(', ')}`);
+  assert.ok(askedRunIds.includes(runId('joao')), 'a onda 2 já terminou, mas é a referência em cada ponto: os cartões dela entram');
   assert.deepEqual(
     [...new Set(log.in.filter((entry) => entry.table === 'race_attempts' || entry.table === 'race_infractions').map((entry) => entry.table))].sort(),
     ['race_attempts', 'race_infractions']
   );
-  assert.equal(normal.live.boards[0].rows.length, 10);
-  assert.equal(JSON.stringify(normal).includes('Motivo da onda 2'), false);
+  assert.equal(log.range.filter((entry) => entry.table === 'race_judge_assignments').length, 1, 'a escala de judges é lida (checagem de certeza do R1)');
+  assert.equal(normal.live.boards[0].rows.length, 15, 'os 10 da onda 3 e os 5 das ondas 1 e 2');
+  assert.equal(JSON.stringify(normal).includes('Motivo da onda 2'), false, 'o motivo da penalidade nunca vai');
+
+  load({ seconds: 1440, extra: finishedWave2(), mode: 'pin_heat', pinnedHeat: 'w3' });
+  const pinnedLog = newLog();
+  await build({ nowMs: nowAt(1440) }, { client: spyClient(pinnedLog) });
+  const pinnedIds = pinnedLog.in.filter((entry) => entry.column === 'run_id').flatMap((entry) => entry.values);
+  assert.equal(pinnedIds.includes(runId('joao')), false, 'onda fixada: só os cartões dela');
+  assert.equal(pinnedLog.range.filter((entry) => entry.table === 'race_judge_assignments').length, 0);
 });
 
 test('AC3 (DoD): onda ao vivo com mais de 1000 cartões é lida inteira, sem o corte silencioso do PostgREST', async () => {
@@ -267,7 +274,7 @@ test('AC3 (DoD): onda ao vivo com mais de 1000 cartões é lida inteira, sem o c
   const log = newLog();
   const payload = await build({ nowMs: nowAt(1440) }, { client: spyClient(log) });
   const rows = payload.live.boards[0].rows;
-  assert.equal(rows.length, 150, 'os 10 do cenário e os 140 a mais, todos na torre');
+  assert.equal(rows.length, 155, 'os 10 do cenário, os 140 a mais e os 5 das ondas 1 e 2, todos na torre da categoria');
   const lastExtra = rows.find((row) => row.name === 'Atleta zz139');
   assert.ok(lastExtra, 'o último atleta (ids no fim da ordem) chegou');
   assert.equal(lastExtra.point, 15, 'todos os 8 cartões dele foram lidos: a saída do Wall Balls é o ponto 15');
@@ -357,16 +364,22 @@ test('AC4: tela ao vivo: onda, torre, percurso com meta e carga, melhores, recor
   assert.equal(payload.serverTime, new Date(nowAt(1440)).toISOString());
 
   const live = payload.live;
-  assert.deepEqual(Object.keys(live).sort(), ['arrivals', 'bests', 'boards', 'records', 'steps', 'ticker', 'waves']);
-  assert.deepEqual(live.steps, [{ waveKey: 'w3', divisionKey: 'open-m' }]);
+  assert.deepEqual(Object.keys(live).sort(), ['arrivals', 'bests', 'boards', 'records', 'scope', 'steps', 'ticker', 'waves']);
+  assert.equal(live.scope, 'division');
+  assert.deepEqual(live.steps, [{ waveKey: null, divisionKey: 'open-m' }]);
   assert.deepEqual(live.waves, [{
     key: 'w3', title: 'Onda 3', heatNumber: 3, time: '10:12', startedAt: iso(0), startedClock: '10:12:05', lastReadingAt: iso(1418),
     divisionKeys: ['open-m'], athleteCount: 10, racingCount: 10
   }]);
   const board = live.boards[0];
-  assert.deepEqual([board.waveKey, board.divisionKey, board.divisionName, board.startedAt, board.hasLeaderReading, board.rows.length], ['w3', 'open-m', 'Open Masculino', iso(0), true, 10]);
-  assert.deepEqual(board.rows.map((row) => [row.position, row.name, row.gapSeconds]).slice(0, 4), [[1, 'Rafael Tavares', null], [2, 'Bruno Sampaio', 2], [3, 'Diego Martins', 79], [4, 'Thiago Bezerra', 129]]);
-  assert.deepEqual(board.battle && [board.battle.position, board.battle.intervalSeconds, board.battle.trend, board.battle.trendSeconds], [1, 2, 'closing', 47]);
+  assert.deepEqual([board.scope, board.waveKey, board.divisionKey, board.divisionName, board.startedAt, board.hasLeaderReading, board.rows.length], ['division', null, 'open-m', 'Open Masculino', null, true, 15]);
+  // As ondas 1 e 2 só têm resultado publicado (sem cartão): sem ponto comum com quem corre, ficam à frente (AUTO-DECISION T6-1).
+  assert.deepEqual(board.rows.map((row) => [row.position, row.name, row.waveKey, row.gapSeconds]).slice(0, 7), [
+    [1, 'Felipe Arruda', 'w1', null], [2, 'João Victor Castro', 'w2', 176], [3, 'Renan Pinheiro', 'w1', 289], [4, 'Samuel Rocha', 'w2', 365],
+    [5, 'Rafael Tavares', 'w3', null], [6, 'Bruno Sampaio', 'w3', null], [7, 'Diego Martins', 'w3', null]
+  ]);
+  assert.deepEqual(board.rows.at(-1).name, 'Otávio Campos', 'DNF publicado no fim, sem posição');
+  assert.deepEqual(board.battle && [board.battle.position, board.battle.intervalSeconds, board.battle.trend, board.battle.trendSeconds, board.battle.crossWave, board.battle.point], [5, 2, 'closing', 47, false, { stationName: 'Sled Pull', side: 'out' }]);
   assert.deepEqual(
     board.stages.filter((stage) => stage.type === 'station').map((stage) => [stage.name, stage.kind, stage.target, stage.load, stage.closesTime, stage.semJudge]),
     [
@@ -385,13 +398,19 @@ test('AC4: tela ao vivo: onda, torre, percurso com meta e carga, melhores, recor
     ['row', 240, 'Renan Pinheiro'], ['sandbag-lunges', 262, 'Samuel Rocha'], ['ski-erg', 218, 'Rafael Tavares'],
     ['sled-pull', 227, 'Bruno Sampaio'], ['sled-push', 171, 'Bruno Sampaio'], ['wall-balls', 356, 'João Victor Castro']
   ].sort());
-  assert.deepEqual(live.records.map((record) => [record.stationKey, record.seconds, record.athleteKey === board.rows[0].athleteKey || record.athleteKey === board.rows[1].athleteKey]), [
+  const keyOf = (name) => board.rows.find((row) => row.name === name).athleteKey;
+  assert.deepEqual(live.records.map((record) => [record.stationKey, record.seconds, record.athleteKey === keyOf('Rafael Tavares') || record.athleteKey === keyOf('Bruno Sampaio')]), [
     ['ski-erg', 218, true], ['sled-push', 171, true], ['sled-pull', 227, true]
   ]);
-  assert.deepEqual(live.ticker.map((event) => [event.kind, event.clock, event.name, event.seconds, event.stationName]), [
-    ['start', '10:12:05', null, null, null],
-    ['penalty', '10:26:29', 'Thiago Bezerra', 15, 'Sled Push']
-  ], 'só os segundos e a estação; o motivo nunca vai');
+  assert.deepEqual(live.ticker.map((event) => [event.kind, event.clock, event.name, event.seconds, event.stationName, event.position]), [
+    ['enter', '10:16:54', 'Caio Fernandes', null, null, 10],
+    ['enter', '10:17:01', 'Mateus Ribeiro', null, null, 11],
+    ['enter', '10:17:12', 'Pedro Albuquerque', null, null, 12],
+    ['enter', '10:17:34', 'Gustavo Lima', null, null, 13],
+    ['enter', '10:17:55', 'André Moreira', null, null, 14],
+    ['penalty', '10:26:29', 'Thiago Bezerra', 15, 'Sled Push', null]
+  ], 'os 6 últimos da categoria; na penalidade, só os segundos e a estação (o motivo nunca vai)');
+  assert.deepEqual([live.ticker[0].point, live.ticker[0].divisionKeys, live.ticker[0].waveTitle], [{ stationName: 'Ski Erg', side: 'in' }, ['open-m'], 'Onda 3']);
   assert.deepEqual(live.arrivals, []);
 });
 
@@ -399,11 +418,13 @@ test('AC4: reta final, chegadas fechadas pela súmula com posição, penalidade 
   load({ seconds: 4100 });
   const live = (await build({ nowMs: nowAt(4100) })).live;
   const board = live.boards[0];
-  assert.deepEqual(board.finalists.map((item) => [item.name, item.position, item.progress]), [
-    ['Diego Martins', 3, { type: 'reps', done: 75, target: 100 }],
-    ['Thiago Bezerra', 4, { type: 'reps', done: 66, target: 100 }],
-    ['Lucas Holanda', 5, { type: 'reps', done: 5, target: 100 }]
+  assert.deepEqual(board.finalists.map((item) => [item.name, item.position, item.progress, item.raceStartedAt, item.waveNumber]), [
+    ['Diego Martins', 7, { type: 'reps', done: 75, target: 100 }, iso(0), 3],
+    ['Thiago Bezerra', 8, { type: 'reps', done: 66, target: 100 }, iso(0), 3],
+    ['Lucas Holanda', 9, { type: 'reps', done: 5, target: 100 }, iso(0), 3]
   ]);
+  const diego = board.rows.find((row) => row.name === 'Diego Martins');
+  assert.deepEqual([diego.gapCounting, diego.gapSeconds, diego.gapBaseSeconds, diego.gapPoint], [true, null, 3982, { stationName: 'Wall Balls', side: 'finish' }], 'o relógio dele passou do tempo final do Rafael: "contando", com a diferença nula no payload (a tela conta pela base)');
   assert.deepEqual(live.arrivals.map((item) => [item.name, item.finishAt, item.finishClock, item.finalSeconds, item.finalText, item.position, item.penaltySeconds, item.divisionName]), [
     ['Rafael Tavares', iso(3982), '11:18:27', 3982, '1:06:22', 1, 0, 'Open Masculino'],
     ['Bruno Sampaio', iso(4015), '11:19:00', 4015, '1:06:55', 3, 0, 'Open Masculino']
@@ -540,9 +561,9 @@ test('AC5: nome sanitizado, equipe pelo nome da equipe e box como está', async 
     bruno: { name: 'Bruno Sampaio bruno.sigilo@example.com' },
     diego: { name: `Arena Sul Racing (Diego Martins / ${SECRETS.member})`, is_team: true, box: 'Arena Sul' }
   } });
-  const rows = (await build({ nowMs: nowAt(1440) })).live.boards[0].rows;
-  const byPosition = (position) => rows.find((row) => row.position === position);
-  assert.deepEqual([byPosition(1).name, byPosition(2).name, byPosition(3).name, byPosition(3).box], ['Rafael Tavares', 'Bruno Sampaio', 'Arena Sul Racing', 'Arena Sul']);
+  const rows = (await build({ nowMs: nowAt(1440) })).live.boards[0].rows.filter((row) => row.waveKey === 'w3');
+  const byPosition = (index) => rows[index];
+  assert.deepEqual([byPosition(0).name, byPosition(1).name, byPosition(2).name, byPosition(2).box], ['Rafael Tavares', 'Bruno Sampaio', 'Arena Sul Racing', 'Arena Sul']);
 });
 
 test('AC5: a chave do atleta é opaca, estável entre consultas e única; o id nunca sai', async () => {
@@ -558,8 +579,9 @@ test('AC5: a chave do atleta é opaca, estável entre consultas e única; o id n
   }
   // Outro segredo do servidor, outras chaves: quem não tem o segredo não confere um palpite de id.
   const { deriveOpaqueId } = await importServerModule('lib/serverSecurity.ts');
-  assert.equal(deriveOpaqueId(athleteId('rafael'), 'telao-athlete'), first.live.boards[0].rows[0].athleteKey);
-  assert.notEqual(deriveOpaqueId(athleteId('rafael'), 'outra-finalidade'), first.live.boards[0].rows[0].athleteKey);
+  const rafaelKey = first.live.boards[0].rows.find((row) => row.name === 'Rafael Tavares').athleteKey;
+  assert.equal(deriveOpaqueId(athleteId('rafael'), 'telao-athlete'), rafaelKey);
+  assert.notEqual(deriveOpaqueId(athleteId('rafael'), 'outra-finalidade'), rafaelKey);
 });
 
 // ---------------------------------------------------------------------------

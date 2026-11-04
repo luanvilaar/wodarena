@@ -55,6 +55,11 @@
 .clock { display: grid; justify-items: end; min-width: 13cqw; }
 .clock b { font-size: 3.7cqw; font-weight: 500; letter-spacing: -0.02em; line-height: 1; }
 .clock span { font-size: 0.95cqw; color: var(--muted); font-weight: 600; margin-top: 0.3cqw; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; }
+/* Ranking único (Story 1.118): um relógio por onda na pista com atletas da categoria */
+.clocks { display: flex; align-items: center; gap: 1.6cqw; flex: none; }
+.wclock { display: grid; justify-items: end; gap: 0.2cqw; }
+.wclock b { font-size: 2.1cqw; font-weight: 500; letter-spacing: -0.02em; line-height: 1; }
+.wclock span { font-size: 0.74cqw; color: var(--muted); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap; }
 
 @keyframes pulse { 50% { opacity: 0.25; } }
 
@@ -118,6 +123,31 @@
 .gapLead b { font-size: 0.95cqw; font-weight: 800; letter-spacing: 0.1em; color: var(--primary); font-family: var(--font-body); }
 .gapFinal b { color: var(--trading-up); }
 .gapNone b { color: var(--muted-soft); }
+.gapAhead b { color: var(--trading-up); }
+.twGap .cnt { color: var(--primary); }
+
+/* Torre da categoria (ranking único, Story 1.118; R3): 15 linhas por página, mais compactas, selo da onda e penalidade ao lado do nome */
+.dense { --rowH: 2.74cqw; --cols: 2.5cqw 0.9cqw minmax(0, 1fr) 9.4cqw 7.6cqw; grid-template-rows: 2cqw 1fr; }
+.dense .twHead { gap: 0.6cqw; padding: 0 0.9cqw; font-size: 0.68cqw; }
+.dense .twRow { gap: 0.6cqw; padding: 0 0.9cqw; }
+.dense .twPos { font-size: 1.2cqw; padding: 0.12cqw 0; }
+.dense .twChg svg { width: 0.85cqw; height: 0.85cqw; }
+.dense .twWho { gap: 0.1cqw; }
+.dense .twNm { font-size: 1.1cqw; }
+.dense .twBx { font-size: 0.7cqw; }
+.dense .twWhere { gap: 0.1cqw; }
+.dense .twWhere b { font-size: 0.78cqw; }
+.dense .twWhere > span { font-size: 0.66cqw; }
+.dense .toneStation b::before, .dense .toneTrack b::before { width: 0.48cqw; height: 0.48cqw; }
+.dense .twGap { gap: 0.08cqw; }
+.dense .twGap b { font-size: 1.12cqw; }
+.dense .twGap span { font-size: 0.64cqw; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.dense .gapLead b { font-size: 0.8cqw; }
+.twNmLine { display: flex; align-items: center; gap: 0.45cqw; min-width: 0; }
+.twNmLine .twNm { flex: 0 1 auto; }
+.twTag { flex: none; font-size: 0.6cqw; font-weight: 700; letter-spacing: 0.04em; color: var(--muted); border: 0.08cqw solid #3a414b; border-radius: 0.2cqw; padding: 0.04cqw 0.28cqw; margin-left: 0.4cqw; }
+.twNmLine .twTag { margin-left: 0; }
+.namePen { flex: none; font-size: 0.62cqw; font-weight: 700; color: var(--trading-down); border: 0.08cqw solid rgba(246, 70, 93, 0.55); border-radius: 0.2cqw; padding: 0.04cqw 0.28cqw; }
 
 .right { position: relative; min-height: 0; min-width: 0; }
 .rightIn { display: grid; grid-template-rows: 57fr 43fr; gap: 1.1cqw; height: 100%; min-height: 0; min-width: 0; }
@@ -139,7 +169,13 @@
 /* Cartões (por cima do mapa, nunca da torre) */
 .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 1.1cqw; min-height: 0; }
 .card { position: relative; background: #14171c; border-radius: 0.8cqw; padding: 1cqw 1.2cqw; display: grid; grid-template-rows: auto 1fr; gap: 0.6cqw; min-height: 0; min-width: 0; overflow: hidden; }
-.cardEb { font-size: 0.85cqw; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cardEb { display: flex; align-items: center; gap: 0.6cqw; font-size: 0.85cqw; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); white-space: nowrap; overflow: hidden; min-width: 0; }
+.cardEbText { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.xw { flex: none; font-size: 0.68cqw; letter-spacing: 0.08em; color: var(--foreground); border: 0.08cqw solid #49515c; border-radius: 0.25cqw; padding: 0.08cqw 0.4cqw; }
+.cardNewLead { background: linear-gradient(135deg, rgba(252, 213, 53, 0.2), #14171c 62%); box-shadow: inset 0 0 0 0.1cqw rgba(252, 213, 53, 0.45); }
+.cardNewLead .cardEb { color: var(--primary); }
+.cardNewLead .ld .at { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.25; }
+.cardFinal .cardEb { color: var(--foreground); }
 .cardIn { min-height: 0; min-width: 0; animation: cardIn 0.6s var(--motion-broadcast-ease); }
 @keyframes cardIn { from { opacity: 0; transform: translateY(0.6cqw); } }
 .cardBattle .cardEb { color: var(--primary); }
@@ -168,6 +204,14 @@
 .wbRow .c small { font-size: 1cqw; color: var(--muted); font-weight: 500; }
 .wbBar { grid-column: 1 / -1; height: 0.45cqw; background: #232830; border-radius: 0.3cqw; overflow: hidden; }
 .wbBar i { display: block; height: 100%; background: var(--primary); transform-origin: left center; transition: transform 0.5s var(--motion-broadcast-ease); }
+.wbRow .w b .twTag { display: inline-block; margin-left: 0.5cqw; vertical-align: 0.15cqw; font-size: 0.66cqw; color: var(--muted); }
+.wbRow .tg { grid-column: 1 / -1; font-size: 0.74cqw; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wbRow .tg b { color: var(--primary); font-weight: 600; }
+.wl { display: grid; gap: 0.7cqw; align-content: center; height: 100%; min-width: 0; }
+.wlRow { display: grid; grid-template-columns: 6cqw 6cqw minmax(0, 1fr); gap: 0.9cqw; align-items: baseline; min-width: 0; }
+.wlRow b { font-size: 1.2cqw; font-weight: 700; white-space: nowrap; }
+.wlRow .num { font-size: 1.45cqw; font-weight: 600; }
+.wlRow > span:last-child { font-size: 0.9cqw; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .nx { display: grid; gap: 0.3cqw; align-content: center; height: 100%; min-width: 0; }
 .nx .w { font-size: 2.6cqw; font-weight: 800; letter-spacing: -0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .nx .h { font-size: 1.6cqw; font-weight: 600; color: var(--primary); }

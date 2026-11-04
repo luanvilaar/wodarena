@@ -6,11 +6,13 @@ Desenho aprovado pelo Luan em 2026-11-03 para o telão ao vivo dos eventos Fitne
 - **Proposta e pesquisa:** https://claude.ai/artifact/LDmPpC7Xff1ZJtK4k1zMQ7 (privado). Esta pasta é a referência caso o artefato deixe de abrir.
 - **Base já existente:** telão de Functional Fitness ([docs/design/telao-ao-vivo/](../telao-ao-vivo/), [PLANO-TELAO-LEADERBOARD-AO-VIVO.md](../../PLANO-TELAO-LEADERBOARD-AO-VIVO.md)) e súmula Fitness Race ([docs/design/fitness-race-sumula/](../fitness-race-sumula/DECISOES.md)).
 
+> **Atualização de 2026-11-04: ranking único da prova.** A D1 abaixo foi substituída. O telão ao vivo passa a mostrar **uma torre por categoria com todas as ondas largadas**, comparando os atletas pelo tempo de prova de cada um. Desenho e regras na seção [Ranking único (R1 a R5)](#ranking-único-r1-a-r5) e na maquete [ranking-unico-aprovado.html](ranking-unico-aprovado.html). Stories 1.116 a 1.118.
+
 ## Decisões aprovadas
 
 | # | Tema | Decisão |
 |---|------|---------|
-| D1 | Várias ondas na pista | **A.** Torre de uma onda por vez, em rodízio a cada 20 s entre as ondas na pista, cada uma com o seu relógio. A mesa pode fixar uma onda. A diferença é real porque todos da onda largaram juntos. |
+| D1 | Várias ondas na pista | ~~**A.** Torre de uma onda por vez, em rodízio a cada 20 s entre as ondas na pista, cada uma com o seu relógio.~~ **Substituída em 2026-11-04 pela R1:** uma torre por categoria com todas as ondas. A torre de uma onda continua só quando a mesa fixa a onda (R4). |
 | D2 | Penalidade no telão | **B.** Só os segundos ("+15 s") na linha do atleta e na faixa da direção de prova, sem o motivo. |
 | D3 | Luzes de largada | **A.** As luzes acendem e apagam quando o telão vê a largada (até cerca de 2 s depois do gesto do gestor). A largada não muda (D45 de [DECISOES.md](../fitness-race-sumula/DECISOES.md)) e o relógio mostra o tempo real desde ela. |
 | D4 | Atleta entre estações | **A.** "Na pista · após {estação} · m:ss" na torre e marcador vazado no trecho seguinte do mapa, com a legenda "estimado". |
@@ -79,6 +81,38 @@ Numeradas pelo @sm a partir de 1.111. Cada uma cita esta pasta nos critérios de
 | T3 | Tela ao vivo: torre, mapa do percurso, cartões e faixa da direção de prova |
 | T4 | Grid de largada, luzes, bandeirada e destaque de melhor estação (roxo) |
 | T5 | Classificação, espera e mesa (aba Telão nos eventos Fitness Race) |
+| T6 (1.116) | Ranking único: motor da torre da categoria (tempo de prova, confronto, ordem por confrontos, diferença com o ponto e "contando", disputa entre ondas, entrada no ranking) |
+| T7 (1.117) | Ranking único: leitura das ondas largadas, payload por categoria, faixa "entra no ranking" e mesa (R4) |
+| T8 (1.118) | Ranking único: tela (torre de 15 linhas, cabeçalho com relógios por onda, cartões e faixa) |
+
+## Ranking único (R1 a R5)
+
+Proposta aprovada pelo Luan em 2026-11-04, todas as decisões na opção A. Maquete: [ranking-unico-aprovado.html](ranking-unico-aprovado.html) (telão simulado com três ondas de 5 atletas; os botões comparam as regras). Publicada em https://claude.ai/artifact/G3en4somBpty3HxDHmk96y (privado); esta pasta é a referência.
+
+| # | Tema | Decisão |
+|---|------|---------|
+| R1 | Ordem entre ondas | **A.** Tempo de prova no mesmo ponto, pelas checagens abaixo. Na mesma onda dá a ordem de hoje. |
+| R2 | Penalidade no tempo de prova | **A.** Conta a partir do lançamento: entra em todos os pontos lidos depois dele e no relógio do atleta. Penalidade revogada sai da conta. Na chegada bate com o tempo oficial. |
+| R3 | Categoria com muitos atletas | **A.** 15 linhas por página, mais compactas. Líder e reta final em toda página, 8 s por página, e a categoria fica no ar até mostrar todas (pelo menos 20 s). |
+| R4 | Mesa do gestor | **A.** "Fixar a classificação de uma categoria" vira "Fixar uma categoria": ranking ao vivo enquanto alguém dela corre, classificação depois. "Fixar uma onda" continua e mostra a torre de uma onda (a de 03/11). Sem migration. |
+| R5 | Entrega | **A.** Commit local das 1.111 a 1.115 como base; o ranking entra nas Stories 1.116 a 1.118 e tudo vai a produção junto, depois do ensaio. |
+
+### Quem está à frente de quem (R1)
+
+1. **Tempo de prova:** da largada da corrida do atleta (`race_runs.started_at`, a mesma base do tempo oficial e da correção de largada da 1.107) até a leitura, mais as penalidades já lançadas (R2).
+2. **Mesmo ponto mais adiantado:** se os dois já passaram por ele, fica à frente quem passou com menos tempo de prova.
+3. **Certeza:** se um passou por um ponto que o outro ainda não alcançou, e o relógio do outro já passou daquele tempo, o outro está atrás. A diferença aparece com "contando" e cresce até ele passar pelo ponto. Só vale se a estação tem judge na onda de quem ainda não passou (pela escala da onda ou por leitura de alguém dela).
+4. **Senão:** vale o último ponto que os dois já passaram.
+
+Ponto = entrada ou saída de estação com judge; quem fechou o tempo tem também o ponto "chegada", com o tempo final. A ordem da torre é por confrontos vencidos (em casos raros os confrontos formam um ciclo; o empate fica com quem está mais adiante). Quem largou e ainda não tem leitura fica no fim, sem posição e com "aguardando 1ª leitura"; DNF fica no fim, sem posição. A diferença é sempre contra o 1º, no ponto escrito embaixo do número, e pode ser negativa (mais rápido que o 1º naquele ponto). Sem previsão (Regra 8): o "contando" e o tempo a bater usam só tempos que já aconteceram.
+
+### O que muda na tela ao vivo
+
+- **Torre:** uma por categoria, com selo da onda em cada linha e penalidade ao lado do nome; rodízio só entre categorias.
+- **Cabeçalho:** "{Categoria} · ranking da prova" e um relógio por onda na pista com atletas da categoria.
+- **Cartões:** Novo líder (quando o 1º muda, por alguns segundos, com o ponto e a diferença); Disputa também entre ondas, com o selo "entre ondas" e o ponto comparado; Reta final com o tempo a bater (o tempo final de quem já chegou e ainda pode ser superado); sem próxima onda, "Ondas na pista" no lugar de "Próxima largada".
+- **Faixa da direção de prova:** "entra no ranking em Nº" na primeira leitura de cada atleta.
+- **Ficam:** luzes de largada (agora por cima do mapa, e os atletas da onda entram no fim da torre), bandeirada, roxo, mapa, classificação, grid e espera.
 
 ## Fora do escopo
 

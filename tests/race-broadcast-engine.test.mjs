@@ -39,9 +39,11 @@ const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
 // Utilidades
 // ---------------------------------------------------------------------------
 
+// A torre de uma onda (D1 de 03/11) é a da mesa "Fixar uma onda" desde o ranking único (Story 1.116, R4): os
+// testes dela fixam a onda; o automático (torre da categoria) tem os testes em race-broadcast-ranking.test.mjs.
 const compute = (seconds, options = {}) => {
   const input = buildReferenceInput({ seconds, ...options });
-  return { input, out: engine.computeRaceBroadcast(input, referenceView(input, options.view)) };
+  return { input, out: engine.computeRaceBroadcast(input, referenceView(input, options.view ?? { mode: 'pin_heat', pinnedWaveKey: 'w3' })) };
 };
 const boardOf = (out, waveKey = 'w3', divisionKey = 'open-m') => out.boards.find((item) => item.waveKey === waveKey && item.divisionKey === divisionKey);
 const rowOf = (board, key) => board.rows.find((item) => item.athleteKey === key);
@@ -90,6 +92,7 @@ const attempt = (athleteKey, stationId, status, startMs, endMs, extra = {}) => (
 });
 const view = (input, over) => referenceView(input, over);
 const run = (input, over) => engine.computeRaceBroadcast(input, view(input, over));
+const runWave = (input, waveKey = 'w') => run(input, { mode: 'pin_heat', pinnedWaveKey: waveKey });
 const rowsSummary = (board) => board.rows.map((item) => [item.position, item.athleteKey, item.gapSeconds]);
 
 // ---------------------------------------------------------------------------
@@ -205,7 +208,7 @@ test('percurso: nome repetido ganha sufixo e a ordem vem do orderIndex, não da 
 
 test('cenário aos 24:00: ordem, diferença no mesmo ponto, onde está cada atleta e penalidade (AC2, AC3, AC4)', () => {
   const { out } = compute(1440);
-  assert.deepEqual(out.resolution, { screen: 'live', reason: 'auto', waveKeys: ['w3'] });
+  assert.deepEqual(out.resolution, { screen: 'live', reason: 'pinned', scope: 'wave', waveKeys: ['w3'], divisionKeys: ['open-m'] });
   const board = boardOf(out);
   assert.equal(out.boards.length, 1);
   assert.deepEqual(rowsSummary(board), [
@@ -249,7 +252,8 @@ test('cenário aos 24:00: disputa pelo 1º lugar com tendência desde a entrada 
   const board = boardOf(compute(1440).out);
   assert.deepEqual(board.battle, {
     position: 1, aheadKey: 'rafael', backKey: 'bruno', intervalSeconds: 2,
-    trend: 'closing', trendSeconds: 47, since: { stationName: 'Sled Pull', side: 'in' }
+    trend: 'closing', trendSeconds: 47, since: { stationName: 'Sled Pull', side: 'in' },
+    point: { stationName: 'Sled Pull', side: 'out' }, crossWave: false
   });
   assert.deepEqual(board.finalists, []);
 });
@@ -305,7 +309,7 @@ test('cenário aos 4100 s: quem fechou o tempo vem antes de quem está mais adia
 test('cenário final: posições, tempos finais com penalidade e diferenças para o líder (AC3, AC4)', () => {
   // Gustavo fecha aos 5164 s; 60 s depois a onda ainda está na pista (os 90 s da AC7) e a torre segue no ar.
   const { out } = compute(5164, { nowSeconds: 5164 + 60 });
-  assert.deepEqual(out.resolution, { screen: 'live', reason: 'auto', waveKeys: ['w3'] });
+  assert.deepEqual(out.resolution, { screen: 'live', reason: 'pinned', scope: 'wave', waveKeys: ['w3'], divisionKeys: ['open-m'] });
   const board = boardOf(out);
   assert.deepEqual(rowsSummary(board), [
     [1, 'rafael', null], [2, 'bruno', 33], [3, 'diego', 198], [4, 'thiago', 253], [5, 'lucas', 483],
@@ -337,7 +341,7 @@ test('AC3: ordem completa: fechou o tempo, mais adiante, mesmo ponto (quem passo
       attempt('r3', 'ski-erg', 'released', 100_000, 300_000)
     ]
   });
-  const board = boardOf(run(input), 'w', 'd1');
+  const board = boardOf(runWave(input), 'w', 'd1');
   assert.deepEqual(rowsSummary(board), [
     [1, 'f2', null], [2, 'f3', 0], [3, 'f1', 100], [4, 'r2', null], [5, 'r1', null], [6, 'r3', null], [7, 'n1', null], [8, 'n2', null], [null, 'd1', null]
   ]);
@@ -354,7 +358,7 @@ test('AC3: diferença com 0,4, 0,5 e 0,6 s arredonda para o segundo mais próxim
       runs: [racing('a'), racing('b')],
       attempts: [attempt('a', 'ski-erg', 'released', 60_000, 300_000), attempt('b', 'ski-erg', 'released', 70_000, 300_000 + extraMs)]
     });
-    const board = boardOf(run(input), 'w', 'd1');
+    const board = boardOf(runWave(input), 'w', 'd1');
     assert.deepEqual(board.rows.map((item) => item.athleteKey), ['a', 'b'], `${extraMs} ms`);
     assert.equal(rowOf(board, 'b').gapSeconds, expected, `${extraMs} ms de atraso dão ${expected} s`);
   }
@@ -367,7 +371,7 @@ test('AC3: sem ponto comum não há diferença; cartão aguardando não é leitu
     runs: [racing('a'), racing('b'), racing('c')],
     attempts: [attempt('b', 'ski-erg', 'waiting', null, null), attempt('c', 'ski-erg', 'running', 30_000, null)]
   });
-  const board = boardOf(run(input), 'w', 'd1');
+  const board = boardOf(runWave(input), 'w', 'd1');
   assert.deepEqual(rowsSummary(board), [[1, 'c', null], [2, 'a', null], [3, 'b', null]], 'c tem leitura; a e b ficam na ordem do cronograma');
   assert.equal(rowOf(board, 'c').isLeader, true);
 
@@ -393,7 +397,7 @@ test('AC3: se no ponto comum o atleta passou antes do líder, fica sem diferenç
       attempt('lider', 'sled-push', 'running', 130_000, null)
     ]
   });
-  const board = boardOf(run(input), 'w', 'd1');
+  const board = boardOf(runWave(input), 'w', 'd1');
   assert.deepEqual(rowsSummary(board), [[1, 'lider', null], [2, 'outro', null]]);
 });
 
@@ -403,7 +407,7 @@ test('AC3: sem nenhuma leitura ninguém é líder e a tela mostra "aguardando a 
     waves: [wave('w', ['a', 'b'])],
     runs: [racing('a'), racing('b')]
   });
-  const board = boardOf(run(input), 'w', 'd1');
+  const board = boardOf(runWave(input), 'w', 'd1');
   assert.equal(board.hasLeaderReading, false);
   assert.deepEqual(board.rows.map((item) => [item.athleteKey, item.isLeader, item.gapSeconds, item.position]), [['a', false, null, 1], ['b', false, null, 2]]);
 });
@@ -424,7 +428,7 @@ test('AC3: posição e diferença são por categoria, dentro da onda', () => {
       attempt('m2', 'ski-erg', 'released', 10_000, 230_000)
     ]
   });
-  const out = run(input);
+  const out = runWave(input);
   assert.deepEqual(rowsSummary(boardOf(out, 'w', 'dM')), [[1, 'm1', null], [2, 'm2', 30]]);
   assert.deepEqual(rowsSummary(boardOf(out, 'w', 'dF')), [[1, 'f1', null], [2, 'f2', 10]]);
 });
@@ -439,7 +443,7 @@ test('AC4: tempo final é o inteiro que vai ao leaderboard (raceOfficialScore, m
     waves: [wave('w', ['a', 'b'])],
     runs: [finished('a', 3599.4, 3000), finished('b', 3599.5, 3100)]
   });
-  const board = boardOf(run(input), 'w', 'd1');
+  const board = boardOf(runWave(input), 'w', 'd1');
   assert.deepEqual(board.rows.map((item) => [item.athleteKey, item.finalSeconds, item.finalText, item.finishedBy]), [
     ['a', 3599, '59:59', 'run'],
     ['b', 3600, '1:00:00', 'run']
@@ -485,7 +489,7 @@ test('AC4 (D44): saída incompleta na última estação fica "sem tempo fechado"
       attempt('b', 'ski-erg', 'exited_incomplete', 100_000, 200_000)
     ]
   });
-  const out = run(input);
+  const out = runWave(input);
   const board = boardOf(out, 'w', 'd1');
   const sem = rowOf(board, 'a');
   assert.deepEqual(sem.where, { kind: 'track', afterStationId: 'wall-balls', afterStationName: 'Wall Balls', sinceAt: iso(3100), closedWithoutTime: true });
@@ -506,7 +510,7 @@ test('AC4 (D2): penalidade só em segundos: soma, último lance por instante e n
       { athleteKey: 'a', seconds: Number.NaN, stationId: 'ski-erg', at: iso(60) }
     ]
   });
-  const out = run(input);
+  const out = runWave(input);
   const a = rowOf(boardOf(out, 'w', 'd1'), 'a');
   assert.equal(a.penaltySeconds, 45);
   assert.deepEqual(a.lastPenalty, { seconds: 30, stationId: 'row', at: iso(200) });
@@ -654,7 +658,7 @@ const battleInput = ({ aheadIn = 60_000, backIn = 60_000, aheadOut = 300_000, ba
 });
 
 test('AC6: disputa vale a até 10 s pela diferença já arredondada (10,4 vale, 10,5 não)', () => {
-  const battleOf = (backOut) => boardOf(run(battleInput({ backOut })), 'w', 'd1').battle;
+  const battleOf = (backOut) => boardOf(runWave(battleInput({ backOut })), 'w', 'd1').battle;
   assert.deepEqual(battleOf(300_000 + 10_400) && [battleOf(300_000 + 10_400).intervalSeconds], [10]);
   assert.deepEqual(battleOf(300_000 + 10_499) && [battleOf(300_000 + 10_499).intervalSeconds], [10]);
   assert.equal(battleOf(300_000 + 10_500), null, '10,5 arredonda para 11');
@@ -664,7 +668,7 @@ test('AC6: disputa vale a até 10 s pela diferença já arredondada (10,4 vale, 
 
 test('AC6: tendência desde a leitura anterior: "caiu" e "subiu" com 0,5 s ou mais, senão "estável"', () => {
   const trendOf = (backIn, backOut) => {
-    const battle = boardOf(run(battleInput({ backIn, backOut })), 'w', 'd1').battle;
+    const battle = boardOf(runWave(battleInput({ backIn, backOut })), 'w', 'd1').battle;
     return battle && [battle.trend, battle.trendSeconds, battle.since];
   };
   // antes: o de trás largava 20 s depois; agora, 8 s depois: a diferença caiu 12 s.
@@ -682,14 +686,14 @@ test('AC6: sem leitura anterior em comum a tendência fica nula', () => {
     runs: [racing('a'), racing('b')],
     attempts: [attempt('a', 'ski-erg', 'released', null, 300_000), attempt('b', 'ski-erg', 'released', null, 305_000)]
   });
-  const battle = boardOf(run(input), 'w', 'd1').battle;
+  const battle = boardOf(runWave(input), 'w', 'd1').battle;
   assert.deepEqual([battle.intervalSeconds, battle.trend, battle.trendSeconds, battle.since], [5, null, null, null]);
 });
 
 test('AC6: disputa só entre vizinhos no mesmo ponto, sem tempo fechado nem DNF; vale a primeira da torre', () => {
   // vizinhos em pontos diferentes: sem disputa
   const apart = battleInput({ backAtOut: false });
-  assert.equal(boardOf(run(apart), 'w', 'd1').battle, null);
+  assert.equal(boardOf(runWave(apart), 'w', 'd1').battle, null);
 
   // o primeiro par fechou o tempo e o segundo não: a disputa é a do par que ainda corre
   const keys = ['a', 'b', 'c', 'd', 'e'];
@@ -703,7 +707,7 @@ test('AC6: disputa só entre vizinhos no mesmo ponto, sem tempo fechado nem DNF;
       attempt('e', 'ski-erg', 'released', 60_000, 307_000)
     ]
   });
-  const battle = boardOf(run(input), 'w', 'd1').battle;
+  const battle = boardOf(runWave(input), 'w', 'd1').battle;
   assert.deepEqual([battle.position, battle.aheadKey, battle.backKey, battle.intervalSeconds], [3, 'c', 'd', 4], 'o par c e d é o primeiro da torre; d e e vêm depois');
 
   // DNF não entra
@@ -713,7 +717,7 @@ test('AC6: disputa só entre vizinhos no mesmo ponto, sem tempo fechado nem DNF;
     runs: [racing('a'), dnf('b', 500)],
     attempts: [attempt('a', 'ski-erg', 'released', 60_000, 300_000), attempt('b', 'ski-erg', 'released', 60_000, 303_000)]
   });
-  assert.equal(boardOf(run(withDnf), 'w', 'd1').battle, null);
+  assert.equal(boardOf(runWave(withDnf), 'w', 'd1').battle, null);
 });
 
 const finalistsOf = (lastStage, attempts, extra = {}) => {
@@ -736,7 +740,7 @@ const finalistsOf = (lastStage, attempts, extra = {}) => {
     attempts,
     ...extra
   });
-  return boardOf(run(input), 'w', 'd1');
+  return boardOf(runWave(input), 'w', 'd1');
 };
 const atLast = (key, startMs, over = {}) => attempt(key, 'last', 'running', startMs, null, over);
 
@@ -789,7 +793,7 @@ test('AC6: Wall Ball no meio do percurso é só uma estação com contagem, não
       attempt('b', 'row', 'running', 250_000, null)
     ]
   });
-  const board = boardOf(run(input), 'w', 'd1');
+  const board = boardOf(runWave(input), 'w', 'd1');
   assert.deepEqual(board.finalists.map((item) => [item.athleteKey, item.stationName, item.progress]), [['b', 'Row', { type: 'time' }]]);
   assert.deepEqual(rowOf(board, 'a').where.progress, { type: 'reps', done: 30, target: 100 }, 'o Wall Ball do meio mostra a contagem na linha');
   assert.equal(board.stages.find((stage) => stage.id === 'wall-balls').closesTime, false);
@@ -847,8 +851,8 @@ test('AC7 (AUTO-DECISION 7e): terminar só por resultado lançado à mão não t
 
 test('AC7: ao vivo não sai do ar por falta de leitura; o aviso de silêncio entra aos 10 min', () => {
   const quietAfter = 1200;
-  const { out } = compute(1440, { nowSeconds: 1440 + quietAfter });
-  assert.deepEqual(out.resolution, { screen: 'live', reason: 'auto', waveKeys: ['w3'] }, 'passaram 20 min sem leitura e a tela segue ao vivo');
+  const { out } = compute(1440, { nowSeconds: 1440 + quietAfter, view: {} });
+  assert.deepEqual(out.resolution, { screen: 'live', reason: 'auto', scope: 'division', waveKeys: ['w3'], divisionKeys: ['open-m'] }, 'passaram 20 min sem leitura e a tela segue ao vivo');
   const state = waveOf(out, 'w3');
   assert.equal(state.onTrack, true);
   assert.equal(state.lastReadingAt, iso(1418), 'a última leitura é a saída do Sled Pull do Bruno');
@@ -894,37 +898,43 @@ const ws = (key, over = {}) => ({
 });
 const screenOf = (over) => engine.resolveRaceScreen({ mode: 'auto', pinnedWaveKey: null, pinnedDivisionKey: null, waves: [], standings: [], ...over });
 
-test('AC8: modos da mesa: espera, classificação de uma categoria e onda fixada', () => {
+test('AC8 (R4 da 1.116): modos da mesa: espera, categoria fixada e onda fixada', () => {
   assert.deepEqual(screenOf({ mode: 'standby', waves: [ws('a', { onTrack: true, started: true })] }), { screen: 'standby', reason: 'pinned' });
   assert.deepEqual(
     screenOf({ mode: 'pin_standings', pinnedDivisionKey: 'd2', waves: [ws('a', { onTrack: true, started: true })] }),
-    { screen: 'class', reason: 'pinned', divisionKeys: ['d2'], gridWaveKey: null }
+    { screen: 'class', reason: 'pinned', divisionKeys: ['d2'], gridWaveKey: null },
+    'categoria sem onda na pista: a classificação dela'
+  );
+  assert.deepEqual(
+    screenOf({ mode: 'pin_standings', pinnedDivisionKey: 'd1', waves: [ws('a', { onTrack: true, started: true })] }),
+    { screen: 'live', reason: 'pinned', scope: 'division', waveKeys: ['a'], divisionKeys: ['d1'] },
+    'categoria com onda na pista: a torre da categoria ao vivo'
   );
   assert.equal(screenOf({ mode: 'pin_standings', pinnedDivisionKey: null, waves: [ws('a', { onTrack: true, started: true })] }).screen, 'live', 'sem categoria fixada cai no automático');
 
   assert.deepEqual(screenOf({ mode: 'pin_heat', pinnedWaveKey: 'a', waves: [ws('a')] }), { screen: 'grid', reason: 'pinned', waveKey: 'a' });
   assert.deepEqual(
     screenOf({ mode: 'pin_heat', pinnedWaveKey: 'a', waves: [ws('a', { started: true, finished: true }), ws('b', { started: true, onTrack: true })] }),
-    { screen: 'live', reason: 'pinned', waveKeys: ['a'] },
-    'onda largada vai ao vivo mesmo terminada'
+    { screen: 'live', reason: 'pinned', scope: 'wave', waveKeys: ['a'], divisionKeys: ['d1'] },
+    'onda largada vai ao vivo (a torre da onda) mesmo terminada'
   );
   assert.deepEqual(
     screenOf({ mode: 'pin_heat', pinnedWaveKey: 'fantasma', waves: [ws('b', { started: true, onTrack: true })] }),
-    { screen: 'live', reason: 'auto', waveKeys: ['b'] },
+    { screen: 'live', reason: 'auto', scope: 'division', waveKeys: ['b'], divisionKeys: ['d1'] },
     'onda fixada que não existe cai no automático'
   );
 });
 
-test('AC8: automático: ao vivo com onda na pista, ondas mais antigas primeiro', () => {
+test('AC8 (R1 da 1.116): automático: ao vivo com onda na pista, ondas mais antigas primeiro e uma torre por categoria delas', () => {
   const resolution = screenOf({
     waves: [
-      ws('b', { order: 0, started: true, onTrack: true, startedAt: iso(100) }),
+      ws('b', { order: 0, started: true, onTrack: true, startedAt: iso(100), divisionKeys: ['d2', 'd1'] }),
       ws('a', { order: 1, started: true, onTrack: true, startedAt: iso(0) }),
-      ws('c', { order: 2 })
+      ws('c', { order: 2, divisionKeys: ['d3'] })
     ],
-    standings: [{ divisionKey: 'd1', rows: 5 }]
+    standings: [{ divisionKey: 'd1', rows: 5 }, { divisionKey: 'd2', rows: 0 }, { divisionKey: 'd3', rows: 0 }]
   });
-  assert.deepEqual(resolution, { screen: 'live', reason: 'auto', waveKeys: ['a', 'b'] });
+  assert.deepEqual(resolution, { screen: 'live', reason: 'auto', scope: 'division', waveKeys: ['a', 'b'], divisionKeys: ['d1', 'd2'] }, 'categorias na ordem de standings; a da onda que não largou fica de fora');
 });
 
 test('AC8: automático: sem onda na pista, a classificação alterna com o grid da próxima onda', () => {
@@ -956,14 +966,14 @@ test('AC8: o gatilho é a súmula, não o cronograma: horário do cronograma nã
 });
 
 test('AC8: computeRaceBroadcast: ao vivo, onda fixada terminada, grid fixado e classificação com o grid da próxima onda', () => {
-  const live = compute(1440).out;
+  const live = compute(1440, { view: {} }).out;
   assert.equal(live.resolution.screen, 'live');
   assert.deepEqual(live.classSteps, []);
-  assert.equal(live.boards.length, 1);
+  assert.deepEqual(live.boards.map((board) => [board.scope, board.divisionKey]), [['division', 'open-m']], 'automático: a torre da categoria');
 
   const input = buildReferenceInput({ seconds: 5300, nowSeconds: 5300 + 600 });
   const finishedWave = run(input, { mode: 'pin_heat', pinnedWaveKey: 'w3' });
-  assert.deepEqual(finishedWave.resolution, { screen: 'live', reason: 'pinned', waveKeys: ['w3'] });
+  assert.deepEqual(finishedWave.resolution, { screen: 'live', reason: 'pinned', scope: 'wave', waveKeys: ['w3'], divisionKeys: ['open-m'] });
   assert.equal(finishedWave.boards.length, 1, 'a onda fixada aparece com os resultados dela');
   assert.equal(waveOf(finishedWave, 'w3').onTrack, false);
 
@@ -1008,7 +1018,7 @@ test('AC9: o passo do rodízio vem da hora do servidor: 20 s por passo, um passo
   assert.equal(step(BASE_MS, 20_000, 0), 0);
 });
 
-test('AC9: passos da torre = onda na pista × categoria, na ordem de largada e da categoria', () => {
+test('AC9 (R1 e R4 da 1.116): passos da torre = categoria no automático; onda × categoria só com a onda fixada', () => {
   const input = base({
     divisions: [
       { key: 'dF', name: 'Open Feminino', orderIndex: 2, stages: stageList() },
@@ -1018,19 +1028,22 @@ test('AC9: passos da torre = onda na pista × categoria, na ordem de largada e d
     waves: [wave('w1', ['b1', 'a1', 'a2'], 0), wave('w2', ['c2', 'c1'], 300), wave('w3', ['a1'], null)],
     runs: [racing('a1', 'w1'), racing('a2', 'w1'), racing('b1', 'w1'), racing('c1', 'w2'), racing('c2', 'w2')]
   });
-  const out = run(input);
-  assert.deepEqual(out.resolution, { screen: 'live', reason: 'auto', waveKeys: ['w1', 'w2'] });
-  assert.deepEqual(out.liveSteps, [
-    { waveKey: 'w1', divisionKey: 'dM' }, { waveKey: 'w1', divisionKey: 'dF' },
-    { waveKey: 'w2', divisionKey: 'dM' }, { waveKey: 'w2', divisionKey: 'dF' }
-  ]);
-  assert.deepEqual(out.boards.map((item) => [item.waveKey, item.divisionKey, item.divisionName, item.rows.map((row) => row.athleteKey)]), [
-    ['w1', 'dM', 'Open Masculino', ['a1', 'a2']],
-    ['w1', 'dF', 'Open Feminino', ['b1']],
-    ['w2', 'dM', 'Open Masculino', ['c1']],
-    ['w2', 'dF', 'Open Feminino', ['c2']]
-  ]);
+  const standings = [{ divisionKey: 'dM', rows: 0 }, { divisionKey: 'dF', rows: 0 }];
+  const out = run(input, { standings });
+  assert.deepEqual(out.resolution, { screen: 'live', reason: 'auto', scope: 'division', waveKeys: ['w1', 'w2'], divisionKeys: ['dM', 'dF'] });
+  assert.deepEqual(out.liveSteps, [{ waveKey: null, divisionKey: 'dM' }, { waveKey: null, divisionKey: 'dF' }]);
+  assert.deepEqual(out.boards.map((item) => [item.scope, item.waveKey, item.divisionKey, item.divisionName, item.rows.map((row) => row.athleteKey)]), [
+    ['division', null, 'dM', 'Open Masculino', ['a1', 'a2', 'c1']],
+    ['division', null, 'dF', 'Open Feminino', ['b1', 'c2']]
+  ], 'a torre da categoria junta as ondas largadas; sem leitura, na ordem das ondas e do cronograma');
   assert.deepEqual(engine.buildRaceLiveSteps(out.boards), out.liveSteps);
+
+  const pinned = run(input, { standings, mode: 'pin_heat', pinnedWaveKey: 'w1' });
+  assert.deepEqual(pinned.liveSteps, [{ waveKey: 'w1', divisionKey: 'dM' }, { waveKey: 'w1', divisionKey: 'dF' }]);
+  assert.deepEqual(pinned.boards.map((item) => [item.scope, item.waveKey, item.divisionKey, item.rows.map((row) => row.athleteKey)]), [
+    ['wave', 'w1', 'dM', ['a1', 'a2']],
+    ['wave', 'w1', 'dF', ['b1']]
+  ]);
 });
 
 test('AC9: categoria com mais de 10 atletas: páginas de 10 com o líder e a reta final fixos em toda página', () => {
