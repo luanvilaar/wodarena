@@ -5,14 +5,19 @@ import {
   buildBroadcastState,
   findBroadcastByToken,
   hashBroadcastToken,
-  isBroadcastTokenFormat
+  isBroadcastTokenFormat,
+  readBroadcastEvent
 } from '@/lib/serverBroadcast';
+import { buildRaceBroadcastState } from '@/lib/serverRaceBroadcast';
 import { checkRateLimit, createSupabaseAdmin, getClientIp, isRateLimitExceeded, safeErrorMessage } from '@/lib/serverSecurity';
 
-// Estado do telão ao vivo (Story 1.56). Sem sessão: o link secreto gerado pelo
-// gestor é a credencial, só de leitura e só daquele evento. O telão pergunta a
-// cada 1 s durante a bateria; sem mudança, a resposta é 304 sem corpo. Toda
-// resposta (inclusive 404 e 429) sai com no-store, noindex e no-referrer.
+// Estado do telão ao vivo (Story 1.56; Fitness Race na Story 1.112). Sem sessão:
+// o link secreto gerado pelo gestor é a credencial, só de leitura e só daquele
+// evento. O telão pergunta a cada 1 s durante a bateria; sem mudança, a resposta
+// é 304 sem corpo. Toda resposta (inclusive 404 e 429) sai com no-store, noindex
+// e no-referrer. O evento é lido uma vez e o tipo decide o telão: Fitness Race
+// tem a leitura própria; Functional Fitness segue igual; outro tipo (Qualifier)
+// responde 400.
 
 export const dynamic = 'force-dynamic';
 
@@ -97,7 +102,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
     const limited = checkRateLimit({ key: `telao:${hashBroadcastToken(token).slice(0, 16)}:${getClientIp(request)}`, limit: TOKEN_LIMIT, windowMs: WINDOW_MS });
     if (limited) return withHeaders(limited);
 
-    const state = await buildBroadcastState(supabaseAdmin, config.event_id, config);
+    const eventRow = await readBroadcastEvent(supabaseAdmin, config.event_id);
+    const state = eventRow.event_type === 'fitness_racing'
+      ? await buildRaceBroadcastState(supabaseAdmin, eventRow, config)
+      : await buildBroadcastState(supabaseAdmin, config.event_id, config, Date.now(), eventRow);
     const etag = `"${state.version}"`;
     if (request.headers.get('if-none-match') === etag) {
       return new NextResponse(null, { status: 304, headers: { ...HEADERS, ETag: etag } });

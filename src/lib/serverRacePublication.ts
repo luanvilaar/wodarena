@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { RACE_NO_RESULT_VALUE, raceOfficialScore } from '@/lib/raceOfficialScore';
 import { computeOfficialSeconds, sumConfirmedPenaltySeconds } from '@/lib/raceRules';
 import { secondsToTime } from '@/lib/scoring';
 import {
@@ -48,17 +49,13 @@ const isDuplicate = (error: unknown) => Boolean(error && typeof error === 'objec
 type PlainObject = Record<string, unknown>;
 const isPlainObject = (value: unknown): value is PlainObject => value !== null && typeof value === 'object' && !Array.isArray(value);
 
-/** "Sem resultado" do leaderboard de Fitness Race (computeDivisionStandings): fica atrás de todos e sem posição. */
-export const RACE_NO_RESULT_VALUE = 999999;
+// `RACE_NO_RESULT_VALUE` ("sem resultado" do leaderboard) e `raceOfficialScore` (tempo publicado,
+// arredondado uma vez) moram em módulo puro, porque o motor do telão (Story 1.111) roda no
+// navegador. Seguem exportados daqui com o mesmo comportamento.
+export { RACE_NO_RESULT_VALUE, raceOfficialScore };
 export const RACE_SPLIT_PENALTY_SECONDS_KEY = 'race:penalty_seconds';
 export const RACE_SPLIT_PENALTIES_KEY = 'race:penalties';
 export const RACE_MANUAL_OVERRIDE_ACTION = 'manual_override';
-
-/** Tempo publicado: arredonda uma vez (segundo mais próximo) e formata o mesmo inteiro. */
-export const raceOfficialScore = (officialSeconds: number) => {
-  const value = Math.max(0, Math.round(officialSeconds));
-  return { value, result: secondsToTime(value) };
-};
 
 export const raceTotalWorkoutId = (divisionId: string) => `wod-${divisionId}-total`;
 

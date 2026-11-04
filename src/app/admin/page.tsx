@@ -16,6 +16,7 @@ import { QualifierAthleteContestation } from '@/components/QualifierAthleteConte
 import { QualifierManagerPanel } from '@/components/QualifierManagerPanel';
 import { ScoresheetsPanel } from '@/components/admin/ScoresheetsPanel';
 import { RaceSheetPanel } from '@/components/admin/RaceSheetPanel';
+import { RaceBroadcastPanel } from '@/components/admin/RaceBroadcastPanel';
 import { BroadcastPanel } from '@/components/admin/BroadcastPanel';
 import { QualifierResultsManager } from '@/components/QualifierResultsManager';
 import { DashboardOverview } from '@/components/admin/DashboardOverview';
@@ -9924,6 +9925,7 @@ export default function AdminPage() {
                             ? [{ id: 'sheets', label: 'Súmulas e Judges' }, { id: 'broadcast', label: 'Telão' }]
                             : []),
                           ...(selectedEventToManage.eventType === 'fitness_racing' ? [{ id: 'race', label: 'Súmula Fitness Race' }] : []),
+                          ...(selectedEventToManage.eventType === 'fitness_racing' ? [{ id: 'broadcast', label: 'Telão' }] : []),
                           ...((selectedEventToManage.eventType || 'functional_fitness') !== 'fitness_racing'
                             ? [{ id: 'contestations', label: 'Contestações' }]
                             : [])
@@ -9952,6 +9954,7 @@ export default function AdminPage() {
                             ? [{ id: 'sheets', label: 'Súmulas e Judges' }, { id: 'broadcast', label: 'Telão' }]
                             : []),
                           ...(selectedEventToManage.eventType === 'fitness_racing' ? [{ id: 'race', label: 'Súmula Fitness Race' }] : []),
+                          ...(selectedEventToManage.eventType === 'fitness_racing' ? [{ id: 'broadcast', label: 'Telão' }] : []),
                         ...((selectedEventToManage.eventType || 'functional_fitness') !== 'fitness_racing'
                           ? [{ id: 'contestations', label: 'Contestações' }]
                           : [])
@@ -9997,6 +10000,7 @@ export default function AdminPage() {
                       {activeEventTab === 'submissions' && selectedEventToManage.eventType === 'functional_fitness_qualifier' && <QualifierManagerPanel event={selectedEventToManage} />}
                       {activeEventTab === 'sheets' && (selectedEventToManage.eventType || 'functional_fitness') === 'functional_fitness' && <ScoresheetsPanel event={selectedEventToManage} />}
                       {activeEventTab === 'race' && selectedEventToManage.eventType === 'fitness_racing' && <RaceSheetPanel event={selectedEventToManage} />}
+                      {activeEventTab === 'broadcast' && selectedEventToManage.eventType === 'fitness_racing' && <RaceBroadcastPanel event={selectedEventToManage} />}
                       {activeEventTab === 'broadcast' && (selectedEventToManage.eventType || 'functional_fitness') === 'functional_fitness' && <BroadcastPanel event={selectedEventToManage} />}
                       {activeEventTab === 'contestations' && renderAbaContestations()}
                     </div>

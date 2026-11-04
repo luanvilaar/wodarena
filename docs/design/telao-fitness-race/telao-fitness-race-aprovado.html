@@ -1,0 +1,1714 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Telão Fitness Race</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@500;600;700&family=Inter:wght@400;500;600;700;800&display=swap">
+<style>
+/* Layout: proposta em coluna única; o telão 16:9 é a peça central, com a leitura da tela ao lado (empilha em telas estreitas).
+   Mundo visual do WODArena (painel escuro, amarelo de destaque, verde/vermelho de variação) + o roxo de "melhor da categoria" emprestado da F1.
+   Visual escuro de propósito: é a mesma linguagem do telão e do painel. */
+:root {
+  color-scheme: dark;
+  --bg: #0b0e11;
+  --tv-bg: #090b0e;
+  --panel: #14171c;
+  --card: #1e2329;
+  --line: #2b3139;
+  --line-soft: #1c2026;
+  --fg: #eaecef;
+  --muted: #929aa5;
+  --muted-soft: #7f8898;
+  --primary: #fcd535;
+  --primary-ink: #181a20;
+  --primary-tint: rgba(252, 213, 53, 0.12);
+  --up: #0ecb81;
+  --up-tint: rgba(14, 203, 129, 0.14);
+  --down: #f6465d;
+  --down-tint: rgba(246, 70, 93, 0.14);
+  --purple: #b47cff;
+  --purple-tint: rgba(180, 124, 255, 0.16);
+  --lamp: #ff2d2d;
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-num: "IBM Plex Sans", "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+}
+html { background: var(--bg); }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.55; }
+::selection { background: var(--primary); color: var(--primary-ink); }
+* { box-sizing: border-box; scrollbar-color: var(--line) transparent; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 6px; }
+a { color: var(--fg); }
+.ico { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+.page { max-width: 1480px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 36px 72px; display: grid; gap: 64px; }
+
+/* Abertura */
+.intro { display: grid; gap: 14px; max-width: 920px; }
+.chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; letter-spacing: 0.02em; border: 1px solid var(--line); color: var(--muted); }
+.chip.wait { border-color: rgba(252, 213, 53, 0.45); color: var(--primary); background: var(--primary-tint); }
+.intro h1 { margin: 0; font-size: clamp(32px, 4.2vw, 48px); line-height: 1.04; letter-spacing: -0.03em; font-weight: 800; text-wrap: balance; }
+.intro p { margin: 0; color: var(--muted); font-size: 17px; max-width: 72ch; }
+.intro p strong { color: var(--fg); font-weight: 600; }
+.intro .small { font-size: 14px; color: var(--muted-soft); }
+
+.block { display: grid; gap: 18px; min-width: 0; }
+.sec { margin: 0; font-size: clamp(22px, 2.4vw, 28px); line-height: 1.15; font-weight: 800; letter-spacing: -0.02em; text-wrap: balance; }
+.sec-lead { margin: 0; color: var(--muted); max-width: 74ch; }
+
+/* Palco */
+.stage { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; align-items: start; }
+.stage-main { display: grid; gap: 14px; min-width: 0; }
+.tv-wrap { border-radius: 12px; background: #000; padding: 6px; box-shadow: 0 30px 60px -30px rgba(0, 0, 0, 0.9), 0 0 0 1px var(--line); max-width: 100%; }
+.toolbar { display: grid; gap: 10px; }
+.tgroup { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; min-width: 0; }
+.tlabel { font-size: 12px; color: var(--muted-soft); letter-spacing: 0.05em; text-transform: uppercase; font-weight: 600; min-width: 92px; }
+.seg { display: inline-flex; flex-wrap: wrap; max-width: 100%; background: var(--panel); border: 1px solid var(--line); border-radius: 9px; padding: 3px; gap: 2px; }
+.seg button { border: 0; background: transparent; padding: 6px 11px; border-radius: 6px; font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; white-space: nowrap; }
+.seg button:hover { color: var(--fg); }
+.seg button[aria-pressed="true"] { background: var(--card); color: var(--fg); box-shadow: inset 0 0 0 1px var(--line); }
+.btn { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--line); background: var(--panel); padding: 7px 12px; border-radius: 9px; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--fg); }
+.btn:hover { border-color: #3a414b; background: var(--card); }
+.btn.primary { background: var(--primary); color: var(--primary-ink); border-color: var(--primary); }
+.btn.primary:hover { background: #f0b90b; border-color: #f0b90b; }
+.scrub { display: flex; align-items: center; gap: 10px; flex: 1 1 260px; min-width: 0; }
+.scrub input { flex: 1; min-width: 0; accent-color: var(--primary); }
+.scrub output { font: 600 13px var(--font-num); color: var(--fg); min-width: 64px; text-align: right; font-variant-numeric: tabular-nums; }
+.note { font-size: 13px; color: var(--muted-soft); margin: 0; }
+
+.side { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; display: grid; gap: 12px; min-width: 0; }
+.side h3 { margin: 0; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted-soft); }
+.side h4 { margin: 0; font-size: 18px; font-weight: 800; letter-spacing: -0.01em; }
+.side ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; color: var(--muted); font-size: 14px; }
+.side li strong { color: var(--fg); font-weight: 600; }
+.legend-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.sw { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+
+/* Tabelas e cartões da proposta */
+.tbl-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; }
+.tbl { width: 100%; border-collapse: collapse; min-width: 760px; font-size: 14px; }
+.tbl th, .tbl td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+.tbl tr:last-child td { border-bottom: 0; }
+.tbl th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted-soft); background: var(--panel); font-weight: 700; }
+.tbl td:first-child { font-weight: 700; white-space: nowrap; }
+.tbl td.muted { color: var(--muted); }
+.tbl .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+
+.research { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.rcol { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px; display: grid; gap: 16px; align-content: start; min-width: 0; }
+.rcol h3 { margin: 0; font-size: 18px; font-weight: 800; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.rcol h3 span { font-size: 13px; font-weight: 600; color: var(--muted-soft); }
+.finding { display: grid; gap: 6px; min-width: 0; }
+.finding + .finding { border-top: 1px solid var(--line-soft); padding-top: 16px; }
+.finding p { margin: 0; }
+.finding .fact { color: var(--fg); }
+.finding .take { color: var(--muted); font-size: 14px; }
+.finding .take b { color: var(--primary); font-weight: 700; }
+.finding .src { font-size: 12.5px; color: var(--muted-soft); overflow-wrap: anywhere; }
+.finding .src a { color: var(--muted); text-underline-offset: 2px; }
+.caveat { font-size: 13px; color: var(--muted-soft); margin: 0; max-width: 90ch; }
+
+.rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr)); gap: 14px; }
+.rule { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 6px; align-content: start; }
+.rule b { font-size: 15px; }
+.rule p { margin: 0; color: var(--muted); font-size: 14px; }
+
+.decisions { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 16px; }
+.dec { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.dec .id { font: 700 12px var(--font-num); color: var(--primary); letter-spacing: 0.1em; }
+.dec h3 { margin: 0; font-size: 17px; line-height: 1.3; }
+.dec > p { margin: 0; color: var(--muted); font-size: 14px; }
+.opt { display: grid; grid-template-columns: 24px 1fr; gap: 6px 8px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line-soft); }
+.opt.rec { border-color: rgba(252, 213, 53, 0.45); background: var(--primary-tint); }
+.opt .l { font: 700 13px var(--font-num); color: var(--muted); }
+.opt.rec .l { color: var(--primary); }
+.opt p { margin: 0; font-size: 14px; }
+.opt .badge { display: inline-block; font-size: 11px; font-weight: 800; color: var(--primary); letter-spacing: 0.05em; text-transform: uppercase; margin-left: 4px; }
+
+.arch { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
+.arch-list { display: grid; gap: 14px; }
+.arch-item { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 6px; }
+.arch-item b { font-size: 15px; }
+.arch-item p { margin: 0; color: var(--muted); font-size: 14px; }
+.arch-item code, .tbl code { font: 500 12.5px var(--font-num); color: var(--fg); background: var(--card); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+.out { margin: 0; padding-left: 18px; color: var(--muted); display: grid; gap: 6px; font-size: 14px; }
+.next-step { background: linear-gradient(135deg, var(--primary-tint), transparent 70%); border: 1px solid rgba(252, 213, 53, 0.35); border-radius: 14px; padding: 20px; display: grid; gap: 8px; }
+.next-step b { font-size: 17px; }
+.next-step p { margin: 0; color: var(--muted); }
+.sources { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; font-size: 13.5px; }
+.sources h3 { margin: 0 0 8px; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted-soft); }
+.sources ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; color: var(--muted); }
+.sources a { color: var(--muted); overflow-wrap: anywhere; text-underline-offset: 2px; }
+
+@media (max-width: 1100px) { .stage { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 900px) { .research, .arch, .sources { grid-template-columns: 1fr; } }
+
+/* ================= TELÃO (unidades em cqw: escala de 720p a 4K) ================= */
+.tv { container-type: inline-size; position: relative; width: 100%; aspect-ratio: 16 / 9; max-width: 100%; background: var(--tv-bg); border-radius: 8px; overflow: hidden; color: var(--fg); font-family: var(--font-body); line-height: 1.15; }
+.tvc { position: absolute; inset: 0; display: grid; grid-template-rows: 6.6cqw 1fr 3.3cqw; }
+.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+
+.tv-top { display: flex; align-items: center; gap: 1.6cqw; padding: 0 2.2cqw; border-bottom: 0.08cqw solid var(--line); background: linear-gradient(#0f1216, var(--tv-bg)); min-width: 0; }
+.tv-logo { width: 3.4cqw; height: 3.4cqw; flex: none; }
+.tv-id { display: grid; gap: 0.25cqw; min-width: 0; }
+.tv-event { font-size: 1.05cqw; color: var(--muted); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; }
+.tv-title { font-size: 1.85cqw; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -0.01em; }
+.tv-sp { flex: 1; }
+.tv-pill { display: inline-flex; align-items: center; gap: 0.6cqw; font-size: 1.05cqw; font-weight: 800; letter-spacing: 0.12em; padding: 0.55cqw 1cqw; border-radius: 0.5cqw; border: 0.08cqw solid var(--line); color: var(--muted); white-space: nowrap; transform: skewX(-10deg); }
+.tv-pill > * { transform: skewX(10deg); }
+.tv-pill i { width: 0.75cqw; height: 0.75cqw; border-radius: 50%; background: currentColor; }
+.tv-pill.live { color: #fff; background: var(--down); border-color: var(--down); }
+.tv-pill.live i { animation: pulse 1.4s ease-in-out infinite; background: #fff; }
+.tv-pill.call { color: var(--primary); border-color: rgba(252, 213, 53, 0.5); }
+.tv-pill.res { color: var(--up); border-color: rgba(14, 203, 129, 0.5); }
+@keyframes pulse { 50% { opacity: 0.25; } }
+.tv-clock { display: grid; justify-items: end; min-width: 13cqw; }
+.tv-clock b { font-size: 3.7cqw; font-weight: 600; letter-spacing: -0.02em; line-height: 1; }
+.tv-clock span { font-size: 0.95cqw; color: var(--muted); font-weight: 600; margin-top: 0.3cqw; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; }
+
+.tv-body { position: relative; min-height: 0; }
+.scr { position: absolute; inset: 0; padding: 1.3cqw 2.2cqw 1.1cqw; opacity: 0; visibility: hidden; transition: opacity 0.6s var(--ease), visibility 0s 0.6s; }
+.scr.on { opacity: 1; visibility: visible; transition: opacity 0.6s var(--ease); }
+
+.tv-foot { display: flex; align-items: center; gap: 1.4cqw; padding: 0 2.2cqw; border-top: 0.08cqw solid var(--line-soft); font-size: 1cqw; color: var(--muted); white-space: nowrap; min-width: 0; }
+.tv-sync { display: inline-flex; align-items: center; gap: 0.5cqw; }
+.tv-sync i { width: 0.6cqw; height: 0.6cqw; border-radius: 50%; background: var(--up); }
+.tick { display: flex; align-items: center; gap: 1cqw; min-width: 0; flex: 1; overflow: hidden; }
+.tick > b { font-size: 0.85cqw; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg); background: var(--card); padding: 0.3cqw 0.7cqw; border-radius: 0.3cqw; flex: none; transform: skewX(-10deg); }
+.tick > b > span { display: inline-block; transform: skewX(10deg); }
+.tick > span { overflow: hidden; text-overflow: ellipsis; color: var(--fg); font-weight: 600; }
+.tick > span.anim { animation: tickIn 0.6s var(--ease); }
+.tick .k-pen { color: var(--down); }
+.tick .k-fin { color: var(--up); }
+.tick .k-dnf { color: var(--down); }
+@keyframes tickIn { from { opacity: 0; transform: translateY(0.8cqw); } }
+.tv-brand { color: var(--muted-soft); font-weight: 700; letter-spacing: 0.08em; flex: none; }
+
+/* --- Ao vivo: torre + percurso --- */
+.r-live { display: grid; grid-template-columns: 41fr 59fr; gap: 1.6cqw; height: 100%; }
+.tower { --rowH: 4.15cqw; --cols: 3.1cqw 1.2cqw minmax(0, 1fr) 9.6cqw 6.4cqw; position: relative; display: grid; grid-template-rows: 2.2cqw 1fr; min-width: 0; min-height: 0; background: linear-gradient(180deg, #0f1318, #0b0e12); border: 0.08cqw solid var(--line-soft); border-radius: 0.8cqw; overflow: hidden; }
+.tw-head { display: grid; grid-template-columns: var(--cols); align-items: center; gap: 0.7cqw; padding: 0 1cqw; font-size: 0.78cqw; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted-soft); border-bottom: 0.08cqw solid var(--line); }
+.tw-head .r { text-align: right; }
+.tw-body { position: relative; min-height: 0; }
+.tw-row { position: absolute; left: 0; right: 0; top: 0; height: var(--rowH); display: grid; grid-template-columns: var(--cols); align-items: center; gap: 0.7cqw; padding: 0 1cqw; border-bottom: 0.08cqw solid var(--line-soft); transform: translateY(calc(var(--rank, 0) * var(--rowH))); transition: transform 0.9s var(--ease), background 0.6s; }
+.tw-row.flash-up { background: linear-gradient(90deg, var(--up-tint), transparent 75%); }
+.tw-row.flash-down { background: linear-gradient(90deg, var(--down-tint), transparent 75%); }
+.tw-row.flash-purple { background: linear-gradient(90deg, var(--purple-tint), transparent 80%); }
+.tw-pos { font: 600 1.6cqw var(--font-num); text-align: center; background: var(--card); border-radius: 0.2cqw; padding: 0.25cqw 0; transform: skewX(-12deg); color: var(--fg); }
+.tw-pos > span { display: inline-block; transform: skewX(12deg); }
+.tw-row.lead .tw-pos { background: var(--primary); color: var(--primary-ink); }
+.tw-row.dnf .tw-pos { background: transparent; color: var(--muted-soft); }
+.tw-chg { display: grid; place-items: center; }
+.tw-chg svg { width: 1.1cqw; height: 1.1cqw; }
+.tw-chg.up { color: var(--up); }
+.tw-chg.down { color: var(--down); }
+.tw-who { min-width: 0; display: grid; gap: 0.15cqw; }
+.tw-nm { display: flex; align-items: center; gap: 0.5cqw; min-width: 0; }
+.tw-nm b { font-size: 1.38cqw; font-weight: 700; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.tw-bx { font-size: 0.88cqw; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pen { flex: none; font: 700 0.78cqw var(--font-num); color: var(--down); border: 0.08cqw solid rgba(246, 70, 93, 0.55); border-radius: 0.25cqw; padding: 0.05cqw 0.32cqw; }
+.tw-where { min-width: 0; display: grid; gap: 0.15cqw; }
+.tw-where b { font-size: 0.95cqw; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tw-where span { font-size: 0.8cqw; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-station b { color: var(--fg); }
+.st-station b::before { content: ""; display: inline-block; width: 0.55cqw; height: 0.55cqw; border-radius: 50%; background: var(--fg); margin-right: 0.45cqw; vertical-align: 0.12cqw; }
+.st-track b { color: var(--muted); }
+.st-track b::before { content: ""; display: inline-block; width: 0.55cqw; height: 0.55cqw; border-radius: 50%; border: 0.12cqw solid var(--muted); margin-right: 0.45cqw; vertical-align: 0.1cqw; box-sizing: border-box; }
+.st-purple b { color: var(--purple); }
+.st-fin b { color: var(--up); }
+.st-fin b::before { content: ""; display: inline-block; width: 0.75cqw; height: 0.75cqw; margin-right: 0.45cqw; vertical-align: 0.05cqw; background: conic-gradient(#eaecef 25%, #111 0 50%, #eaecef 0 75%, #111 0) 0 0 / 0.375cqw 0.375cqw; border-radius: 0.1cqw; }
+.st-dnf b { color: var(--down); }
+.tw-gap { text-align: right; display: grid; justify-items: end; gap: 0.1cqw; }
+.tw-gap b { font: 500 1.4cqw var(--font-num); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tw-gap span { font: 500 0.8cqw var(--font-num); color: var(--muted); white-space: nowrap; }
+.tw-gap.lead b { font: 800 0.95cqw var(--font-body); letter-spacing: 0.1em; color: var(--primary); }
+.tw-gap.fin b { color: var(--up); }
+.tw-gap.none b { color: var(--muted-soft); }
+
+.r-right { position: relative; display: grid; grid-template-rows: 57fr 43fr; gap: 1.1cqw; min-height: 0; min-width: 0; }
+.map { background: var(--panel); border-radius: 0.8cqw; padding: 0.8cqw 1.1cqw 0.4cqw; display: grid; grid-template-rows: auto 1fr; min-height: 0; min-width: 0; }
+.map-head { display: flex; align-items: baseline; gap: 1.2cqw; min-width: 0; white-space: nowrap; }
+.map-head b { font-size: 0.92cqw; letter-spacing: 0.12em; text-transform: uppercase; }
+.map-head .grow { flex: 1; }
+.map-leg { display: inline-flex; align-items: center; gap: 0.4cqw; font-size: 0.78cqw; color: var(--muted); }
+.map-leg i { width: 0.75cqw; height: 0.75cqw; border-radius: 50%; display: inline-block; }
+.map-leg i.k { background: #eaecef; }
+.map-leg i.e { border: 0.12cqw solid #eaecef; box-sizing: border-box; }
+.map-leg i.d { width: 1.4cqw; height: 0; border-radius: 0; border-top: 0.14cqw dashed #6b7480; }
+.map svg { width: 100%; height: 100%; display: block; min-height: 0; }
+.map svg text { font-family: var(--font-body); }
+.map svg .n { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.mk { transition: transform 0.9s var(--ease), opacity 0.4s; }
+
+.cards { display: grid; grid-template-columns: 1fr 1fr; gap: 1.1cqw; min-height: 0; }
+.card { position: relative; background: var(--panel); border-radius: 0.8cqw; padding: 1cqw 1.2cqw; display: grid; grid-template-rows: auto 1fr; gap: 0.6cqw; min-height: 0; min-width: 0; overflow: hidden; }
+.card-eb { font-size: 0.85cqw; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card-in { min-height: 0; min-width: 0; animation: cardIn 0.6s var(--ease); }
+@keyframes cardIn { from { opacity: 0; transform: translateY(0.6cqw); } }
+.card.purple { background: linear-gradient(135deg, rgba(180, 124, 255, 0.24), var(--panel) 62%); box-shadow: inset 0 0 0 0.1cqw rgba(180, 124, 255, 0.55); }
+.card.purple .card-eb { color: var(--purple); }
+.card.battle .card-eb { color: var(--primary); }
+.card.final .card-eb { color: var(--fg); }
+.bt { display: grid; grid-template-rows: auto auto auto; gap: 0.5cqw; height: 100%; align-content: center; }
+.bt-line { display: grid; grid-template-columns: 2.6cqw minmax(0, 1fr); gap: 0.8cqw; align-items: center; min-width: 0; }
+.bt-line .p { font: 600 1.5cqw var(--font-num); text-align: center; background: var(--card); border-radius: 0.2cqw; transform: skewX(-12deg); }
+.bt-line .p span { display: inline-block; transform: skewX(12deg); }
+.bt-line .w { min-width: 0; }
+.bt-line .w b { display: block; font-size: 1.35cqw; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bt-line .w span { display: block; font-size: 0.85cqw; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bt-gap { display: flex; align-items: baseline; gap: 0.8cqw; padding-left: 3.4cqw; }
+.bt-gap b { font: 600 2.6cqw var(--font-num); color: var(--primary); letter-spacing: -0.02em; line-height: 1; }
+.bt-gap span { font-size: 0.9cqw; color: var(--muted); }
+.bt-gap .closing { color: var(--up); font-weight: 700; }
+.bt-gap .opening { color: var(--down); font-weight: 700; }
+.pp { display: grid; gap: 0.35cqw; align-content: center; height: 100%; }
+.pp .st { font-size: 1.9cqw; font-weight: 800; letter-spacing: -0.02em; }
+.pp .t { font: 600 3.4cqw var(--font-num); color: var(--purple); line-height: 1; letter-spacing: -0.02em; }
+.pp .w { font-size: 1.25cqw; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pp .was { font-size: 0.88cqw; color: var(--muted); }
+.ld { display: grid; gap: 0.35cqw; align-content: center; height: 100%; }
+.ld .w { font-size: 1.9cqw; font-weight: 800; letter-spacing: -0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ld .bx { font-size: 1cqw; color: var(--muted); }
+.ld .at { font-size: 1.1cqw; font-weight: 600; margin-top: 0.4cqw; }
+.ld .adv { font-size: 1cqw; color: var(--muted); }
+.ld .adv b { font-family: var(--font-num); color: var(--primary); font-size: 1.4cqw; }
+.wb { display: grid; gap: 0.55cqw; align-content: start; }
+.wb-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.15cqw 0.8cqw; align-items: end; }
+.wb-row .w { min-width: 0; }
+.wb-row .w b { display: block; font-size: 1.2cqw; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wb-row .w span { font-size: 0.8cqw; color: var(--muted); }
+.wb-row .c { font: 600 2.3cqw var(--font-num); line-height: 1; letter-spacing: -0.02em; }
+.wb-row .c small { font-size: 1cqw; color: var(--muted); font-weight: 500; }
+.wb-bar { grid-column: 1 / -1; height: 0.45cqw; background: #232830; border-radius: 0.3cqw; overflow: hidden; }
+.wb-bar i { display: block; height: 100%; background: var(--primary); transform-origin: left center; transition: transform 0.5s var(--ease); }
+.nx { display: grid; gap: 0.3cqw; align-content: center; height: 100%; }
+.nx .w { font-size: 2.6cqw; font-weight: 800; letter-spacing: -0.02em; }
+.nx .h { font: 600 1.6cqw var(--font-num); color: var(--primary); }
+.nx .c { font-size: 1cqw; color: var(--muted); }
+
+/* Bandeirada: cobre o percurso e os cartões, nunca a torre */
+.flag { position: absolute; inset: 0; border-radius: 0.8cqw; overflow: hidden; background: #0d1014; box-shadow: inset 0 0 0 0.08cqw var(--line); display: grid; grid-template-rows: 2.4cqw 1fr; opacity: 0; visibility: hidden; transition: opacity 0.5s var(--ease), visibility 0s 0.5s; z-index: 3; }
+.flag.on { opacity: 1; visibility: visible; transition: opacity 0.5s var(--ease); }
+.flag-strip { background: conic-gradient(#eaecef 25%, #0d1014 0 50%, #eaecef 0 75%, #0d1014 0) 0 0 / 2.4cqw 2.4cqw; }
+.flag.on .flag-strip { animation: wave 1.2s linear infinite; }
+@keyframes wave { to { background-position: 2.4cqw 0; } }
+.flag-in { padding: 1.6cqw 2.2cqw; display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto 1fr auto; column-gap: 2.2cqw; row-gap: 0.6cqw; min-height: 0; }
+.flag-eb { grid-column: 1 / -1; font-size: 1cqw; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
+.flag-pos { grid-row: 2 / 4; align-self: center; display: grid; justify-items: center; gap: 0.3cqw; }
+.flag-pos b { font: 600 9.5cqw var(--font-num); color: var(--primary); line-height: 0.85; letter-spacing: -0.05em; }
+.flag-pos span { font-size: 0.95cqw; color: var(--muted); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; text-align: center; max-width: 13cqw; }
+.flag-who { align-self: end; min-width: 0; }
+.flag-who b { display: block; font-size: 3cqw; font-weight: 800; letter-spacing: -0.025em; line-height: 1.02; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.flag-who span { display: block; font-size: 1.3cqw; color: var(--muted); margin-top: 0.3cqw; }
+.flag-time { align-self: start; display: grid; gap: 0.3cqw; margin-top: 0.6cqw; }
+.flag-time b { font: 600 4.6cqw var(--font-num); line-height: 1; letter-spacing: -0.03em; }
+.flag-time span { font-size: 1.05cqw; color: var(--muted); }
+.flag-time .pb { color: var(--purple); font-weight: 700; }
+
+/* --- Grid de largada --- */
+.r-grid { display: grid; grid-template-columns: 57fr 43fr; gap: 2.4cqw; height: 100%; }
+.g-left { display: grid; grid-template-rows: auto 1fr; gap: 1.4cqw; min-height: 0; min-width: 0; }
+.eb { font-size: 1.05cqw; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--primary); }
+.g-title h3 { margin: 0.3cqw 0 0; font-size: 3.2cqw; font-weight: 800; letter-spacing: -0.03em; line-height: 1; }
+.g-title p { margin: 0.5cqw 0 0; font-size: 1.25cqw; color: var(--muted); }
+.g-slots { display: grid; grid-template-columns: 1fr 1fr; column-gap: 2.2cqw; row-gap: 0.4cqw; align-content: start; min-height: 0; }
+.g-slot { position: relative; display: grid; grid-template-columns: 3.4cqw minmax(0, 1fr); gap: 1cqw; align-items: center; padding: 0.9cqw 0 0.8cqw 0.9cqw; min-width: 0; }
+.g-slot::before { content: ""; position: absolute; left: 0; top: 0; width: 70%; height: 1.1cqw; border: 0.18cqw solid #cfd4db; border-bottom: 0; opacity: 0.85; }
+.g-slot:nth-child(even) { transform: translateY(2.3cqw); }
+.g-slot .n { font: 600 2.4cqw var(--font-num); color: var(--muted); text-align: center; }
+.g-slot b { display: block; font-size: 1.6cqw; font-weight: 700; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.g-slot span { display: block; font-size: 0.95cqw; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.g-right { display: grid; grid-template-rows: auto auto 1fr; gap: 1.4cqw; background: var(--panel); border-radius: 1cqw; padding: 1.6cqw 1.8cqw; min-height: 0; min-width: 0; }
+.gantry { display: flex; justify-content: center; gap: 1cqw; padding: 1.1cqw; background: #050607; border-radius: 0.8cqw; box-shadow: inset 0 0 0 0.1cqw #1e2329; }
+.unit { display: grid; gap: 0.5cqw; padding: 0.5cqw; background: #0b0d10; border-radius: 0.6cqw; box-shadow: inset 0 0 0 0.08cqw #1a1e24; }
+.lamp { width: 3.3cqw; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #3a1a1d, #170a0c 72%); box-shadow: inset 0 0 0.5cqw rgba(0, 0, 0, 0.85); transition: background 0.06s, box-shadow 0.06s; }
+.unit.on .lamp { background: radial-gradient(circle at 35% 35%, #ff9a90, var(--lamp) 45%, #a50e0e 82%); box-shadow: 0 0 1.8cqw rgba(255, 45, 45, 0.7), inset 0 0 0.4cqw rgba(255, 255, 255, 0.25); }
+.g-when { display: grid; gap: 0.3cqw; border-bottom: 0.08cqw solid var(--line); padding-bottom: 1.2cqw; }
+.g-when .lb { font-size: 1cqw; color: var(--muted); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.g-when b { font: 600 4.4cqw var(--font-num); color: var(--primary); line-height: 1; letter-spacing: -0.02em; }
+.g-when span { font-size: 1.2cqw; font-weight: 600; }
+.g-course { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5cqw 1.4cqw; align-content: start; min-height: 0; }
+.g-course .lb { grid-column: 1 / -1; font-size: 1cqw; color: var(--muted); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 0.2cqw; }
+.g-course div { font-size: 1.15cqw; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.g-course div span { color: var(--muted); font-weight: 500; font-size: 0.95cqw; margin-left: 0.4cqw; }
+
+/* Luzes de largada (sobrepostas) */
+.lights-ov { position: absolute; inset: 0; z-index: 6; display: grid; place-content: center; justify-items: center; gap: 2cqw; background: rgba(6, 8, 10, 0.95); }
+.lights-ov .gantry { gap: 1.6cqw; padding: 1.6cqw; }
+.lights-ov .lamp { width: 6.2cqw; }
+.lights-ov .msg { font-size: 1.4cqw; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); min-height: 1.6cqw; }
+.lights-ov.go .msg { font-size: 5.4cqw; letter-spacing: -0.02em; color: var(--fg); animation: go 0.9s var(--ease); }
+@keyframes go { from { transform: scale(1.25); opacity: 0; } }
+
+/* --- Classificação --- */
+.r-class { display: grid; grid-template-rows: auto 1fr auto; gap: 0.9cqw; height: 100%; }
+.c-head { display: flex; align-items: baseline; gap: 1.4cqw; min-width: 0; white-space: nowrap; }
+.c-head h3 { margin: 0; font-size: 2.5cqw; font-weight: 800; letter-spacing: -0.02em; }
+.c-head .cat { color: var(--primary); }
+.c-head .meta { font-size: 1.15cqw; color: var(--muted); font-weight: 600; }
+.c-head .grow { flex: 1; }
+.pager { display: flex; gap: 0.5cqw; align-items: center; font-size: 1cqw; color: var(--muted); font-weight: 700; }
+.pager i { width: 2.6cqw; height: 0.35cqw; border-radius: 1cqw; background: var(--card); overflow: hidden; display: block; }
+.pager i.on { background: var(--muted); }
+.c-body { display: grid; grid-template-columns: 63fr 37fr; gap: 1.8cqw; min-height: 0; }
+.c-table { display: grid; grid-template-rows: auto repeat(10, 1fr); min-height: 0; min-width: 0; }
+.c-cols, .c-row { display: grid; grid-template-columns: 3.4cqw minmax(0, 1fr) 6cqw 8cqw 6.6cqw; gap: 1cqw; align-items: center; }
+.c-cols { font-size: 0.82cqw; letter-spacing: 0.1em; color: var(--muted-soft); font-weight: 700; text-transform: uppercase; padding-bottom: 0.4cqw; border-bottom: 0.08cqw solid var(--line); }
+.c-cols .r, .c-row .r { text-align: right; }
+.c-row { border-bottom: 0.08cqw solid var(--line-soft); min-height: 0; }
+.c-row .p { font: 500 1.6cqw var(--font-num); }
+.c-row .who { display: flex; align-items: baseline; gap: 0.8cqw; min-width: 0; }
+.c-row .nm { font-size: 1.45cqw; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 0 1 auto; }
+.c-row .bx { font-size: 0.95cqw; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.c-row .wv { font-size: 1cqw; color: var(--muted); }
+.c-row .tm { font: 500 1.5cqw var(--font-num); text-align: right; }
+.c-row .df { font: 500 1.15cqw var(--font-num); color: var(--muted); text-align: right; }
+.c-row.fresh { background: linear-gradient(90deg, var(--primary-tint), transparent 70%); }
+.c-row.dnf .p, .c-row.dnf .tm { color: var(--muted-soft); }
+.tag-new { flex: none; font-size: 0.72cqw; font-weight: 800; color: var(--primary); border: 0.08cqw solid rgba(252, 213, 53, 0.5); border-radius: 0.3cqw; padding: 0.1cqw 0.35cqw; letter-spacing: 0.06em; }
+.c-best { background: var(--panel); border-radius: 0.9cqw; padding: 1.2cqw 1.4cqw; display: grid; grid-template-rows: auto 1fr auto; gap: 0.5cqw; min-height: 0; min-width: 0; }
+.c-best h4 { margin: 0; font-size: 0.95cqw; letter-spacing: 0.12em; text-transform: uppercase; color: var(--purple); }
+.b-list { display: grid; align-content: start; min-height: 0; }
+.b-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.1cqw 1cqw; padding: 0.5cqw 0; border-bottom: 0.08cqw solid var(--line-soft); }
+.b-row b { font-size: 1.15cqw; font-weight: 700; }
+.b-row .t { font: 600 1.35cqw var(--font-num); color: var(--purple); text-align: right; }
+.b-row span { grid-column: 1 / -1; font-size: 0.85cqw; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.c-best p { margin: 0; font-size: 0.82cqw; color: var(--muted-soft); }
+.c-next { display: flex; align-items: center; gap: 1.6cqw; background: var(--panel); border-radius: 0.8cqw; padding: 0.8cqw 1.4cqw; font-size: 1.3cqw; white-space: nowrap; min-width: 0; }
+.c-next b { font-weight: 800; }
+.c-next .grow { flex: 1; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+
+/* --- Espera --- */
+.r-wait { display: grid; grid-template-columns: 54fr 46fr; gap: 3cqw; height: 100%; align-items: center; }
+.w-brand { display: grid; gap: 1.2cqw; min-width: 0; }
+.w-brand svg { width: 7cqw; height: 7cqw; }
+.w-brand h2 { margin: 0; font-size: 4.6cqw; font-weight: 800; letter-spacing: -0.035em; line-height: 0.98; }
+.w-brand p { margin: 0; font-size: 1.6cqw; color: var(--muted); }
+.w-list { display: grid; min-width: 0; }
+.w-list .lb { font-size: 1.05cqw; color: var(--muted); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding-bottom: 0.6cqw; }
+.w-item { display: grid; grid-template-columns: 7.5cqw minmax(0, 1fr); gap: 1.2cqw; padding: 1.1cqw 0; border-bottom: 0.08cqw solid var(--line); }
+.w-item .h { font: 500 2cqw var(--font-num); color: var(--muted); }
+.w-item:nth-child(2) .h { color: var(--primary); }
+.w-item b { display: block; font-size: 1.6cqw; font-weight: 700; }
+.w-item span { font-size: 1.1cqw; color: var(--muted); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}
+</style>
+<style>body { margin: 0; } [hidden] { display: none !important; }</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e2a93a"/><stop offset="1" stop-color="#9a6c1e"/></linearGradient>
+  </defs>
+  <symbol id="logo" viewBox="0 0 999.46 966.89">
+    <g fill="url(#gold)">
+      <path d="M506.72,439.9l-171.75-273.2-111.63-.37,97.13,178.81-45.91,89.75L111.35,166.24,0,168.86l270.63,485.17,117.04-185.14,108.92,200.51,102.36-186.52h98.97l-97.64,186.52h116.3l282.87-503.150h-345.8l-146.94,273.66ZM810.05,268.56l-62.330,119.15h-96.54l65.4-119.15h93.47Z"/>
+      <polygon points="538.88 337.84 602.33 219.35 573 166.24 441.98 166.24 538.88 337.84"/>
+      <polygon points="821.15 698.7 500.58 903.05 174.27 693.74 175.56 565.51 125.71 481.36 126.99 728.05 498.51 966.89 869.26 729.88 870.36 485.03 821.15 565.33 821.15 698.7"/>
+      <polygon points="687.15 724.13 311.73 724.13 371.13 772.6 627.06 774.29 687.15 724.13"/>
+      <path d="M872.37,120.68c.03-16.98-.18-34-.66-51.06-236.74-93.1-512.66-92.8-749.08.76-.21,16.8-.17,33.57.09,50.3,235.52-98.36,514.14-98.35,749.65,0Z"/>
+    </g>
+  </symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="m18 15-6-6-6 6" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+</svg>
+
+<main class="page">
+
+  <header class="intro">
+    <div class="chips">
+      <span class="chip wait">Aprovado pelo Luan em 03/11/2026</span>
+      <span class="chip">Dados de exemplo</span>
+    </div>
+    <h1>Telão Fitness Race</h1>
+    <p>Uma tela para a TV do evento no espírito das transmissões de HYROX, com a linguagem da Fórmula 1: <strong>torre de posições sempre na tela</strong>, <strong>mapa do percurso</strong> com cada atleta, <strong>luzes de largada</strong>, <strong>bandeirada</strong> e o <strong>roxo de melhor estação</strong>. Tudo sai do que a súmula do Fitness Race já registra: a largada do gestor, os cartões dos judges nas estações e as penalidades. Sem chip e sem ninguém digitando.</p>
+    <p class="small">A simulação roda sozinha: Onda 3, Open Masculino, 10 atletas, percurso de 8 corridas e 8 estações. O Burpee Broad Jump e o Farmers Carry estão sem judge de propósito, para mostrar como o telão trata estação sem leitura.</p>
+  </header>
+
+  <section class="block" aria-labelledby="sim-title">
+    <h2 class="sec" id="sim-title">Simulação</h2>
+    <div class="stage">
+      <div class="stage-main">
+        <div class="tv-wrap">
+          <div class="tv" id="tv" role="region" aria-label="Simulação do telão com dados de exemplo">
+            <div class="tvc">
+              <div class="tv-top">
+                <svg class="tv-logo" aria-hidden="true"><use href="#logo"/></svg>
+                <div class="tv-id">
+                  <div class="tv-event">Fitness Race · Etapa Fortaleza</div>
+                  <div class="tv-title" id="tvTitle">Onda 3 · Open Masculino</div>
+                </div>
+                <div class="tv-sp"></div>
+                <span class="tv-pill live" id="tvPill"><i></i><span id="tvPillText">AO VIVO</span></span>
+                <div class="tv-clock"><b class="num" id="tvClock">24:00</b><span id="tvClockCap">Tempo da onda 3</span></div>
+              </div>
+
+              <div class="tv-body">
+                <!-- Espera -->
+                <section class="scr" data-screen="standby" aria-label="Espera">
+                  <div class="r-wait">
+                    <div class="w-brand">
+                      <svg aria-hidden="true"><use href="#logo"/></svg>
+                      <h2>Fitness Race<br>Etapa Fortaleza</h2>
+                      <p>Sábado, 14 de novembro · 8 corridas de 1 km e 8 estações</p>
+                    </div>
+                    <div class="w-list" id="waitList"></div>
+                  </div>
+                </section>
+
+                <!-- Grid de largada -->
+                <section class="scr" data-screen="grid" aria-label="Grid de largada">
+                  <div class="r-grid">
+                    <div class="g-left">
+                      <div class="g-title">
+                        <div class="eb">Grid de largada</div>
+                        <h3>Onda 3</h3>
+                        <p>Open Masculino · 10 atletas · ordem do cronograma</p>
+                      </div>
+                      <div class="g-slots" id="gridSlots"></div>
+                    </div>
+                    <div class="g-right">
+                      <div class="gantry" id="gridGantry" aria-hidden="true"></div>
+                      <div class="g-when">
+                        <span class="lb">Largada prevista</span>
+                        <b>10:12</b>
+                        <span>Aguardando o sinal do organizador</span>
+                      </div>
+                      <div class="g-course" id="gridCourse"></div>
+                    </div>
+                  </div>
+                </section>
+
+                <!-- Ao vivo -->
+                <section class="scr" data-screen="live" aria-label="Ao vivo">
+                  <div class="r-live">
+                    <div class="tower">
+                      <div class="tw-head"><span>Pos</span><span></span><span>Atleta</span><span>Onde está</span><span class="r">Dif. líder</span></div>
+                      <div class="tw-body" id="towerBody"></div>
+                    </div>
+                    <div class="r-right">
+                      <div class="map">
+                        <div class="map-head">
+                          <b>Percurso</b>
+                          <span class="grow"></span>
+                          <span class="map-leg"><i class="k"></i>na estação</span>
+                          <span class="map-leg"><i class="e"></i>estimado</span>
+                          <span class="map-leg"><i class="d"></i>sem judge</span>
+                        </div>
+                        <svg id="mapSvg" viewBox="0 0 1040 384" preserveAspectRatio="xMidYMid meet" aria-hidden="true"></svg>
+                      </div>
+                      <div class="cards">
+                        <div class="card" id="cardA"></div>
+                        <div class="card" id="cardB"></div>
+                      </div>
+                      <div class="flag" id="flag" aria-live="off">
+                        <div class="flag-strip"></div>
+                        <div class="flag-in" id="flagIn"></div>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                <!-- Classificação -->
+                <section class="scr" data-screen="class" aria-label="Classificação">
+                  <div class="r-class">
+                    <div class="c-head">
+                      <h3>Classificação · <span class="cat">Open Masculino</span></h3>
+                      <span class="meta" id="classMeta"></span>
+                      <span class="grow"></span>
+                      <span class="pager" id="classPager"></span>
+                    </div>
+                    <div class="c-body">
+                      <div class="c-table" id="classTable"></div>
+                      <div class="c-best">
+                        <h4>Melhores por estação</h4>
+                        <div class="b-list" id="bestList"></div>
+                        <p>Só estação com judge tem tempo. Somando as ondas do dia.</p>
+                      </div>
+                    </div>
+                    <div class="c-next"><b>Próxima largada</b><span class="num">Onda 4 · 10:40</span><span class="grow">Open Masculino e Open Feminino · 12 atletas</span></div>
+                  </div>
+                </section>
+
+                <!-- Luzes -->
+                <div class="lights-ov" id="lightsOv" hidden>
+                  <div class="gantry" id="ovGantry"></div>
+                  <div class="msg" id="ovMsg">Onda 3</div>
+                </div>
+              </div>
+
+              <div class="tv-foot">
+                <span class="tv-sync"><i></i>Atualizado agora</span>
+                <span class="tick"><b><span id="tickLabel">Direção de prova</span></b><span id="tickText"></span></span>
+                <span class="tv-brand">WODARENA</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="toolbar">
+          <div class="tgroup">
+            <span class="tlabel">Tela</span>
+            <div class="seg" id="segScreen" role="group" aria-label="Tela do telão">
+              <button type="button" id="b-auto" data-screen="auto" aria-pressed="true">Automático</button>
+              <button type="button" id="b-standby" data-screen="standby" aria-pressed="false">Espera</button>
+              <button type="button" id="b-grid" data-screen="grid" aria-pressed="false">Grid de largada</button>
+              <button type="button" id="b-live" data-screen="live" aria-pressed="false">Ao vivo</button>
+              <button type="button" id="b-class" data-screen="class" aria-pressed="false">Classificação</button>
+            </div>
+            <button type="button" class="btn primary" id="b-start">Largar a onda</button>
+          </div>
+          <div class="tgroup">
+            <span class="tlabel">Simulação</span>
+            <button type="button" class="btn" id="b-play">Pausar</button>
+            <div class="seg" id="segSpeed" role="group" aria-label="Velocidade">
+              <button type="button" id="b-s15" data-speed="15" aria-pressed="false">×15</button>
+              <button type="button" id="b-s30" data-speed="30" aria-pressed="true">×30</button>
+              <button type="button" id="b-s60" data-speed="60" aria-pressed="false">×60</button>
+            </div>
+            <label class="scrub" for="scrub"><span class="tlabel" style="min-width:auto">Tempo da onda</span><input id="scrub" type="range" min="0" max="5400" step="5" value="1440"><output id="scrubOut" for="scrub">24:00</output></label>
+          </div>
+          <div class="tgroup">
+            <span class="tlabel">Penalidade (D2)</span>
+            <div class="seg" id="segPen" role="group" aria-label="Como mostrar penalidade">
+              <button type="button" id="b-pen-reason" data-pen="reason" aria-pressed="false">Com motivo</button>
+              <button type="button" id="b-pen-seconds" data-pen="seconds" aria-pressed="true">Só os segundos</button>
+              <button type="button" id="b-pen-hidden" data-pen="hidden" aria-pressed="false">Não mostrar</button>
+            </div>
+          </div>
+          <p class="note">Velocidade acelerada só para a demonstração. No evento, o telão consulta o servidor a cada 1 s, como o telão de Functional Fitness: do toque do judge até a TV leva de 1 a 2,5 s.</p>
+        </div>
+      </div>
+
+      <aside class="side" aria-live="polite">
+        <h3>Leitura da tela</h3>
+        <h4 id="sideTitle">Ao vivo</h4>
+        <ul id="sideNotes"></ul>
+        <div class="legend-row"><span class="sw" style="background:var(--purple)"></span>Roxo: melhor tempo da categoria na estação</div>
+        <div class="legend-row"><span class="sw" style="background:var(--up)"></span>Verde: ganhou posição · tempo final</div>
+        <div class="legend-row"><span class="sw" style="background:var(--down)"></span>Vermelho: perdeu posição · penalidade · DNF</div>
+        <div class="legend-row"><span class="sw" style="background:var(--primary)"></span>Amarelo: líder e destaques (cor do WODArena)</div>
+      </aside>
+    </div>
+  </section>
+
+  <section class="block" aria-labelledby="screens-title">
+    <h2 class="sec" id="screens-title">As telas e quando cada uma entra</h2>
+    <p class="sec-lead">A troca é automática, como no telão de Functional Fitness. O gatilho é o que a súmula registra, não o horário do cronograma: atraso de onda é comum. Na mesa do gestor dá para fixar uma onda, a classificação de uma categoria ou a espera.</p>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr><th>Tela</th><th>Quando entra</th><th>O que mostra</th></tr></thead>
+        <tbody>
+          <tr><td>Espera</td><td class="muted">Nenhuma onda na pista e nenhuma terminada há pouco, ou espera fixada na mesa.</td><td>Marca do evento e as próximas ondas com o horário previsto do cronograma.</td></tr>
+          <tr><td>Grid de largada</td><td class="muted">Nenhuma onda na pista: a próxima onda sem largada, na ordem do cronograma (alterna com a classificação). Ou onda fixada na mesa.</td><td>Atletas da onda e box, categorias, horário previsto, o percurso com metas e cargas, e as cinco luzes apagadas. Quando o gestor larga no painel Ondas, as luzes acendem, apagam e a tela vai para o ao vivo.</td></tr>
+          <tr><td>Ao vivo</td><td class="muted">Uma onda largada com atleta correndo. Onda sem leitura nova há 20 min sai do ar (mesma regra do telão atual).</td><td>Torre, mapa do percurso, cartões (disputa, melhor estação, reta final do Wall Ball, próxima largada) e a faixa da direção de prova.</td></tr>
+          <tr><td>Bandeirada</td><td class="muted">Por cima do ao vivo, quando a última estação do percurso fecha o tempo de alguém (D34).</td><td>Posição na categoria até agora, nome, box e tempo final com as penalidades. Cobre o mapa, nunca a torre.</td></tr>
+          <tr><td>Classificação</td><td class="muted">Onda terminada (todos com tempo ou DNF) por pelo menos 90 s; depois alterna com o grid da próxima onda.</td><td>Ranking da categoria com tempo final e diferença para o 1º, o selo NOVO em quem acabou de chegar e os melhores tempos por estação.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="block" aria-labelledby="dict-title">
+    <h2 class="sec" id="dict-title">Da Fórmula 1 para o Fitness Race</h2>
+    <p class="sec-lead">Cada peça da transmissão de F1 que entra no telão, o equivalente na prova e de onde vem o dado no WODArena. A última linha mostra o limite de não ter chip.</p>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr><th>Na F1</th><th>No telão</th><th>De onde vem o dado</th></tr></thead>
+        <tbody>
+          <tr><td>Torre de tempos</td><td>Torre da onda: posição, atleta, onde está e diferença para o líder. Nunca sai da tela no ao vivo.</td><td class="muted">Cartões dos judges (início e liberação de cada estação) e a largada do gestor.</td></tr>
+          <tr><td>Diferença na linha</td><td>Diferença medida no mesmo ponto do percurso, em segundos inteiros.</td><td class="muted">Horários de início e liberação, já corrigidos pelo relógio do aparelho.</td></tr>
+          <tr><td>Setor roxo</td><td>Estação roxa: melhor tempo da categoria naquela estação, somando as ondas.</td><td class="muted">Duração da tentativa (início até a liberação). É o mesmo split que já vai para o resultado público (D37).</td></tr>
+          <tr><td>Volta 34/57</td><td>Progresso na estação: "SLED PUSH 2/4", "LUNGES 3/4", "WALL BALL 63".</td><td class="muted">Progresso do cartão: trechos, voltas e reps. No ergômetro, só o tempo na estação.</td></tr>
+          <tr><td>Driver tracker</td><td>Mapa do percurso em S com cada atleta.</td><td class="muted">Última leitura de cada atleta. Entre estações, a posição é estimada e aparece vazada.</td></tr>
+          <tr><td>Gráfico de disputa</td><td>"Disputa pelo 3º" quando dois atletas estão a até 10 s no mesmo ponto, com a tendência.</td><td class="muted">Duas leituras no mesmo ponto e a leitura anterior.</td></tr>
+          <tr><td>Luzes de largada</td><td>Cinco luzes acendem e apagam na largada da onda.</td><td class="muted">Largada do gestor no painel Ondas (Story 1.110).</td></tr>
+          <tr><td>Bandeira quadriculada</td><td>Bandeirada com posição e tempo final.</td><td class="muted">Tempo fechado pela última estação do percurso (D34) mais penalidades vigentes.</td></tr>
+          <tr><td>Direção de prova</td><td>Faixa do rodapé com largada, penalidade, DNF e chegada.</td><td class="muted">Penalidades vigentes e decisões do organizador.</td></tr>
+          <tr><td>Pit stop</td><td>Fica de fora.</td><td class="muted">Sem chip, a Roxzone e a corrida não têm leitura própria. Entre duas estações com judge só dá para saber "corrida + transição".</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="block" aria-labelledby="research-title">
+    <h2 class="sec" id="research-title">O que a pesquisa mostrou</h2>
+    <p class="sec-lead">O que as transmissões de HYROX e de F1 fazem, e o que isso vira no nosso telão.</p>
+    <div class="research">
+      <div class="rcol">
+        <h3>HYROX <span>cronometragem e transmissão</span></h3>
+        <div class="finding">
+          <p class="fact">Toda prova HYROX é cronometrada pela mika:timing com tapetes de chip. O resultado traz 8 corridas, 8 estações e o tempo de Roxzone (transição), que dá para calcular como o total menos corridas e estações.</p>
+          <p class="take"><b>Para nós:</b> sem chip (D8), os pontos de tempo são os cartões dos judges. Corrida e Roxzone não têm leitura própria, por isso o telão nunca mostra tempo de corrida.</p>
+          <p class="src"><a href="https://prommer.net/en/training/hyrox/results/" target="_blank" rel="noopener">prommer.net</a> · <a href="https://hyranking.com/learn/explainers/how-to-read-your-hyrox-splits-a-practical-guide-to-race-data" target="_blank" rel="noopener">hyranking.com</a></p>
+        </div>
+        <div class="finding">
+          <p class="fact">No acompanhamento ao vivo, cada split aparece logo depois que o atleta cruza um tapete. O resultado final só fecha horas depois, após a revisão dos splits marcados.</p>
+          <p class="take"><b>Para nós:</b> tudo na torre é parcial até a última estação fechar o tempo. Depois disso, o organizador ainda pode ajustar (Ajustar tempo, revogar penalidade, DNF).</p>
+          <p class="src"><a href="https://roxfit.app/blog/how-to-track-someone-doing-hyrox/" target="_blank" rel="noopener">roxfit.app</a></p>
+        </div>
+        <div class="finding">
+          <p class="fact">A transmissão do Elite 15 no YouTube é feita pela InspoHub desde 2023: 13 a 17 câmeras, equipe de até 23 pessoas, narração e um sinal próprio para os telões do local.</p>
+          <p class="take"><b>Para nós:</b> o telão do local é parte do espetáculo. O nosso entra como a camada de dados, sem câmera nem narração.</p>
+          <p class="src"><a href="https://inspohub.io/hyrox-elite15-live-streaming/" target="_blank" rel="noopener">inspohub.io</a></p>
+        </div>
+        <div class="finding">
+          <p class="fact">O briefing do pacote gráfico pedia identificar as fases da prova, mostrar ranking, tempos e distância percorrida, e contar a história para quem chega no meio.</p>
+          <p class="take"><b>Para nós:</b> mapa do percurso (fase), torre (ranking e tempos) e cartões que contam a história: disputa, melhor estação, reta final.</p>
+          <p class="src"><a href="https://inspohub.io/hyrox-elite15-live-streaming/" target="_blank" rel="noopener">inspohub.io</a></p>
+        </div>
+        <div class="finding">
+          <p class="fact">Os rastreadores mostram o estado de cada atleta (a largar, ao vivo, terminou, DNF), os splits, a posição geral e por faixa etária, e avisam quando o atleta sai de cada estação. O Hyranking também mostra chegada prevista.</p>
+          <p class="take"><b>Para nós:</b> a saída da estação é o que move a torre. Chegada prevista fica de fora: sem tempo de corrida, seria chute.</p>
+          <p class="src"><a href="https://roxfit.app/blog/how-to-track-someone-doing-hyrox/" target="_blank" rel="noopener">roxfit.app</a> · <a href="https://hyranking.com/live" target="_blank" rel="noopener">hyranking.com/live</a></p>
+        </div>
+        <div class="finding">
+          <p class="fact">Em Hamburgo 2026, o leaderboard da transmissão teve um problema técnico e mostrou a ordem errada.</p>
+          <p class="take"><b>Para nós:</b> o que é estimado aparece como estimado e nada de posição inventada. Errar a ordem na frente do público custa caro.</p>
+          <p class="src"><a href="https://www.boxrox.com/hyrox-hamburg-2026-friday-recap-elite-15-singles/" target="_blank" rel="noopener">boxrox.com</a></p>
+        </div>
+        <div class="finding">
+          <p class="fact">A HYROX fechou com a Atmosphere TV, rede de TVs em academias e bares, para transmitir os Majors e Regionais de 2025 e 2026.</p>
+          <p class="take"><b>Para nós:</b> a prova também é assistida em tela grande longe da pista, então o telão precisa ser lido de longe e por quem não conhece as regras.</p>
+          <p class="src"><a href="https://www.businesswire.com/news/home/20251003346444/en/HYROX-Partners-with-Atmosphere-TV-to-Stream-All-2025-and-2026-HYROX-Majors-and-Regional-Championships" target="_blank" rel="noopener">businesswire.com</a></p>
+        </div>
+      </div>
+      <div class="rcol">
+        <h3>Fórmula 1 <span>linguagem da tela</span></h3>
+        <div class="finding">
+          <p class="fact">A torre de tempos fica fixa à esquerda da tela: posição, piloto, equipe e pneu. É a peça que o espectador procura primeiro.</p>
+          <p class="take"><b>Para nós:</b> torre à esquerda, sempre visível no ao vivo. Cartões e bandeirada entram por cima do mapa, nunca da torre.</p>
+          <p class="src"><a href="https://speedcafe.com/formula-1-to-introduce-new-cutting-edge-tv-graphics/" target="_blank" rel="noopener">speedcafe.com</a> · <a href="https://motorsportbroadcasting.com/2018/04/22/analysing-formula-1s-new-on-air-package/" target="_blank" rel="noopener">motorsportbroadcasting.com</a></p>
+        </div>
+        <div class="finding">
+          <p class="fact">A F1 separa intervalo (para o carro da frente) de diferença para o líder.</p>
+          <p class="take"><b>Para nós:</b> a torre mostra a diferença para o líder; o cartão de disputa mostra o intervalo entre os dois.</p>
+          <p class="src"><a href="https://fansided.com/2022/07/27/f1-intervals-explained-interval-mean-formula-1" target="_blank" rel="noopener">fansided.com</a></p>
+        </div>
+        <div class="finding">
+          <p class="fact">Cores de setor: roxo é o melhor da sessão, verde é o melhor pessoal, amarelo é sem melhora.</p>
+          <p class="take"><b>Para nós:</b> roxo = melhor da categoria na estação. Verde já significa "ganhou posição" e "tempo final", e amarelo é a cor de destaque do WODArena, então os dois ficam fora do código de setores (D5).</p>
+          <p class="src"><a href="https://racingnews365.com/what-sectors-are-f1-and-what-do-the-different-colours-mean" target="_blank" rel="noopener">racingnews365.com</a> · <a href="https://f1chronicle.com/what-does-purple-sector-mean-in-f1" target="_blank" rel="noopener">f1chronicle.com</a></p>
+        </div>
+        <div class="finding">
+          <p class="fact">No pacote de 2018, quem ganha posição pisca em verde e quem perde, em vermelho. O gráfico de disputa só aparece quando os carros estão próximos, e a previsão de disputa da AWS estima em quantas voltas o perseguidor chega.</p>
+          <p class="take"><b>Para nós:</b> setas verde e vermelha por alguns segundos e cartão de disputa só com até 10 s. Previsão fica de fora (não temos tempo de corrida).</p>
+          <p class="src"><a href="https://motorsportbroadcasting.com/2018/04/22/analysing-formula-1s-new-on-air-package/" target="_blank" rel="noopener">motorsportbroadcasting.com</a> · <a href="https://www.aboutamazon.co.uk/news/aws/insights-powered-by-aws-help-to-improve-formula-1-viewing-experience" target="_blank" rel="noopener">aboutamazon.co.uk</a></p>
+        </div>
+        <div class="finding">
+          <p class="fact">O live timing da F1 tem um mapa do circuito com a posição de cada carro em tempo real, junto do leaderboard.</p>
+          <p class="take"><b>Para nós:</b> mapa do percurso em S ao lado da torre, com marcador cheio na estação e vazado quando é estimado.</p>
+          <p class="src"><a href="https://www.formula1.com/en/latest/article/improved-live-timing-on-f1-com-for-the-2022-season.3Y1ipx839mv7xeteTqQ8Mk" target="_blank" rel="noopener">formula1.com</a></p>
+        </div>
+        <div class="finding">
+          <p class="fact">Na largada, as cinco luzes vermelhas acendem uma por segundo e apagam juntas depois de um intervalo aleatório.</p>
+          <p class="take"><b>Para nós:</b> o apagar das luzes marca a largada da onda. A largada continua sendo o gesto do gestor (D3).</p>
+          <p class="src"><a href="https://flowracers.com/blog/how-f1-start-lights-work/" target="_blank" rel="noopener">flowracers.com</a> · <a href="https://f1technical.net/features/5780" target="_blank" rel="noopener">f1technical.net</a></p>
+        </div>
+        <div class="finding">
+          <p class="fact">Dois tropeços: em 2018 a fonte da torre era pequena e os nomes ficaram espremidos ("faltou teste com usuário"); em 2026 as diferenças passaram a uma casa decimal, aparentemente cortada em vez de arredondada, e o público reclamou.</p>
+          <p class="take"><b>Para nós:</b> texto para 20 a 30 m, nome com o sobrenome preservado, diferença em segundos com a mesma regra de arredondamento do tempo oficial (segundo mais próximo, nunca truncar).</p>
+          <p class="src"><a href="https://motorsportbroadcasting.com/2018/04/22/analysing-formula-1s-new-on-air-package/" target="_blank" rel="noopener">motorsportbroadcasting.com</a> · <a href="https://www.gpfans.com/en/f1-news/1078428/f1-2026-tv-broadcast-new-timing-tower-graphic" target="_blank" rel="noopener">gpfans.com</a></p>
+        </div>
+      </div>
+    </div>
+    <p class="caveat">Não há documentação pública do pacote gráfico do Elite 15 nem da posição exata dos tapetes. O que está acima sobre a transmissão vem do estudo de caso da produtora e de guias de terceiros (ROXFIT e Hyranking são apps independentes).</p>
+  </section>
+
+  <section class="block" aria-labelledby="rules-title">
+    <h2 class="sec" id="rules-title">Regras do placar</h2>
+    <p class="sec-lead">O telão mostra só o que a súmula sabe e diz quando é estimado.</p>
+    <div class="rules">
+      <div class="rule"><b>Parcial até fechar</b><p>Toda posição na torre é parcial. O tempo final só aparece quando a última estação fecha o tempo, e o organizador ainda pode ajustá-lo.</p></div>
+      <div class="rule"><b>Sem leitura, sem invenção</b><p>Estação sem judge não gera tempo nem posição. O atleta aparece "na pista" com a última estação lida e há quanto tempo; no mapa, o marcador fica vazado e a estação tracejada.</p></div>
+      <div class="rule"><b>Diferença no mesmo ponto</b><p>Como na F1, só se comparam tempos no mesmo ponto do percurso. Ordem: quem fechou o tempo, depois quem está mais adiante pela última leitura; no mesmo ponto, quem passou antes.</p></div>
+      <div class="rule"><b>Segundos, arredondados</b><p>Diferenças e tempos em segundos inteiros, arredondados para o segundo mais próximo, como o tempo oficial publicado. Mesma regra em todas as telas.</p></div>
+      <div class="rule"><b>A torre não sai do ar</b><p>Durante a onda, cartões, bandeirada e avisos entram por cima do mapa. Onda com mais de 10 atletas alterna páginas a cada 8 s, mantendo o líder e quem está na reta final.</p></div>
+      <div class="rule"><b>Uma fonte de verdade</b><p>A classificação usa o mesmo resultado publicado do leaderboard (prova TOTAL). Não existe uma segunda regra de ranking.</p></div>
+      <div class="rule"><b>Dados pessoais</b><p>Nome sanitizado e box, como no telão atual. Equipe aparece pelo nome da equipe. Sem e-mail, telefone ou ids.</p></div>
+      <div class="rule"><b>Sem previsão</b><p>Nada de chegada prevista, ritmo ou probabilidade de ultrapassagem: sem tempo de corrida, a conta seria chute.</p></div>
+    </div>
+  </section>
+
+  <section class="block" aria-labelledby="dec-title">
+    <h2 class="sec" id="dec-title">Decisões aprovadas</h2>
+    <p class="sec-lead">As opções destacadas foram as aprovadas (D1 A, D2 B, D3 A, D4 A, D5 A, D6 A) e são o que a simulação mostra. A D2 dá para trocar nos botões abaixo do telão, só para comparar.</p>
+    <div class="decisions">
+      <div class="dec">
+        <span class="id">D1</span>
+        <h3>Várias ondas na pista ao mesmo tempo</h3>
+        <p>Com percurso completo, uma onda leva mais de uma hora e as seguintes largam antes de ela terminar.</p>
+        <div class="opt rec"><span class="l">A</span><p>Torre de uma onda por vez, em rodízio a cada 20 s entre as ondas na pista, cada uma com o seu relógio. A mesa pode fixar uma onda. A diferença é real porque todos largaram juntos.<span class="badge">Aprovado</span></p></div>
+        <div class="opt"><span class="l">B</span><p>Torre por categoria juntando as ondas, pela diferença no mesmo ponto do percurso (tempo desde a largada de cada um). Mais completo, mais difícil de ler, e a posição muda quando outra onda passa por um ponto.</p></div>
+        <div class="opt"><span class="l">C</span><p>Só a onda que largou por último.</p></div>
+      </div>
+      <div class="dec">
+        <span class="id">D2</span>
+        <h3>Penalidade no telão</h3>
+        <p>O resultado público já mostra motivo e segundos (D37), mas o organizador pode revogar ou alterar depois (D30).</p>
+        <div class="opt"><span class="l">A</span><p>Na hora, com motivo e segundos, na linha do atleta e na faixa da direção de prova.</p></div>
+        <div class="opt rec"><span class="l">B</span><p>Só os segundos ("+15 s") na linha e na faixa, sem o motivo. O efeito no tempo fica visível sem expor o lance antes de uma revisão.<span class="badge">Aprovado</span></p></div>
+        <div class="opt"><span class="l">C</span><p>Não mostrar. A penalidade aparece só dentro do tempo final.</p></div>
+      </div>
+      <div class="dec">
+        <span class="id">D3</span>
+        <h3>Luzes de largada</h3>
+        <p>Hoje a largada é o gesto "segurar para largar" do gestor no painel Ondas (Story 1.110).</p>
+        <div class="opt rec"><span class="l">A</span><p>As luzes acendem e apagam quando o telão vê a largada, até cerca de 2 s depois do gesto. A largada não muda, e o relógio mostra o tempo real desde ela.<span class="badge">Aprovado</span></p></div>
+        <div class="opt"><span class="l">B</span><p>Contagem de 5 luzes no telão que dispara a largada sozinha no apagar. Muda a Story 1.110 e pede regra para cancelar uma contagem iniciada.</p></div>
+      </div>
+      <div class="dec">
+        <span class="id">D4</span>
+        <h3>Atleta entre duas estações</h3>
+        <p>Depois de sair de uma estação, só voltamos a saber dele quando o judge da próxima estação com judge abrir o cartão.</p>
+        <div class="opt rec"><span class="l">A</span><p>"Na pista · após Sled Pull · 2:10" na torre e marcador vazado no trecho seguinte do mapa, com a legenda "estimado".<span class="badge">Aprovado</span></p></div>
+        <div class="opt"><span class="l">B</span><p>Só a última leitura, sem marcador no mapa até a próxima estação.</p></div>
+      </div>
+      <div class="dec">
+        <span class="id">D5</span>
+        <h3>O roxo de melhor estação</h3>
+        <p>O roxo da F1 traduzido para estação.</p>
+        <div class="opt rec"><span class="l">A</span><p>Roxo = melhor tempo da categoria naquela estação, somando as ondas do evento até agora. Só estação com judge do início à liberação tem tempo.<span class="badge">Aprovado</span></p></div>
+        <div class="opt"><span class="l">B</span><p>Roxo para a categoria e mais uma cor para o melhor da onda.</p></div>
+      </div>
+      <div class="dec">
+        <span class="id">D6</span>
+        <h3>Classificação entre ondas</h3>
+        <p>O leaderboard do site filtra por faixa etária quando a categoria usa faixas.</p>
+        <div class="opt rec"><span class="l">A</span><p>Por categoria: tempo final, diferença para o 1º e os melhores por estação, alternando as categorias a cada 12 s.<span class="badge">Aprovado</span></p></div>
+        <div class="opt"><span class="l">B</span><p>Também por faixa etária nas categorias que usam faixas (mais telas no rodízio).</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" aria-labelledby="arch-title">
+    <h2 class="sec" id="arch-title">Como entra no sistema</h2>
+    <p class="sec-lead">Aproveita o telão de Functional Fitness que já está em produção e as tabelas da súmula do Fitness Race.</p>
+    <div class="arch">
+      <div class="arch-list">
+        <div class="arch-item"><b>O que é reaproveitado</b><p>O link secreto e a rota <code>/pt-br/telao/&lt;token&gt;</code>, a mesa do gestor (aba Telão), a atualização a cada 1 s com resposta 304 quando nada muda, o cabeçalho, o rodapé, a tela cheia e o aviso de conexão.</p></div>
+        <div class="arch-item"><b>O que muda</b><p>A aba Telão passa a aparecer nos eventos Fitness Race. A API <code>/api/telao/[token]</code>, que hoje recusa Fitness Race, passa a decidir pelo tipo do evento. Entram uma leitura nova (<code>serverRaceBroadcast.ts</code>) e um motor puro (<code>raceBroadcast.ts</code>) com onde está cada atleta, ordem, diferença, roxos, disputas e chegadas.</p></div>
+        <div class="arch-item"><b>Dados</b><p>Só o que a súmula já grava: largadas (<code>race_heat_marks</code>), corridas (<code>race_runs</code>), cartões com o progresso já resumido (<code>race_attempts</code>) e penalidades vigentes (<code>race_infractions</code>). Leitura paginada, só das ondas na pista, para não bater no limite de 1000 linhas do Supabase (o mesmo achado do QA na 1.105).</p></div>
+        <div class="arch-item"><b>Banco</b><p>Nenhuma migration prevista: os modos da mesa (Automático, Fixar onda, Fixar classificação, Espera) cabem na tabela do telão atual. Só precisaria de migration se você quiser escolher a D2 por evento na mesa.</p></div>
+      </div>
+      <div class="arch-list">
+        <div class="tbl-wrap">
+          <table class="tbl" style="min-width:520px">
+            <thead><tr><th>Story</th><th>Escopo (estimativa)</th></tr></thead>
+            <tbody>
+              <tr><td>T1</td><td>Motor puro do telão Fitness Race com testes: onde está cada atleta, ordem, diferença no mesmo ponto, roxos, disputas e chegadas.</td></tr>
+              <tr><td>T2</td><td>API do telão para Fitness Race: leitura paginada, decisão pelo tipo do evento, testes de contrato e de dados pessoais.</td></tr>
+              <tr><td>T3</td><td>Tela ao vivo: torre, mapa do percurso, cartões e faixa da direção de prova.</td></tr>
+              <tr><td>T4</td><td>Grid de largada, luzes, bandeirada e destaque de melhor estação.</td></tr>
+              <tr><td>T5</td><td>Classificação, espera e a mesa (aba Telão no Fitness Race).</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="arch-item"><b>Fora desta proposta</b>
+          <ul class="out">
+            <li>Chip, câmera, vídeo, áudio e vinhetas.</li>
+            <li>Chegada prevista, ritmo e frequência cardíaca.</li>
+            <li>Placar no celular do público (a mesma API serve depois).</li>
+            <li>Classificação por faixa etária, se a D6 ficar na opção A.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div class="next-step">
+      <b>Próximo passo</b>
+      <p>Esta maquete é a referência de desenho. As stories citam esta pasta nos critérios de aceite, e o README ao lado reúne as decisões.</p>
+    </div>
+  </section>
+
+  <footer class="block" aria-labelledby="src-title">
+    <h2 class="sec" id="src-title">Fontes</h2>
+    <div class="sources">
+      <div>
+        <h3>HYROX</h3>
+        <ul>
+          <li><a href="https://prommer.net/en/training/hyrox/results/" target="_blank" rel="noopener">HYROX Results: Find Your Time, Splits &amp; Leaderboards (prommer.net)</a></li>
+          <li><a href="https://hyranking.com/learn/explainers/how-to-read-your-hyrox-splits-a-practical-guide-to-race-data" target="_blank" rel="noopener">How to read your HYROX splits (Hyranking)</a></li>
+          <li><a href="https://hyranking.com/live" target="_blank" rel="noopener">HYROX Live Tracking (Hyranking)</a></li>
+          <li><a href="https://roxfit.app/blog/how-to-track-someone-doing-hyrox/" target="_blank" rel="noopener">How to Track Someone Doing HYROX (ROXFIT)</a></li>
+          <li><a href="https://roxfit.app/blog/how-to-watch-hyrox-live/" target="_blank" rel="noopener">How to Watch HYROX Live (ROXFIT)</a></li>
+          <li><a href="https://inspohub.io/hyrox-elite15-live-streaming/" target="_blank" rel="noopener">HYROX Elite15 Live Streaming (InspoHub)</a></li>
+          <li><a href="https://www.businesswire.com/news/home/20251003346444/en/HYROX-Partners-with-Atmosphere-TV-to-Stream-All-2025-and-2026-HYROX-Majors-and-Regional-Championships" target="_blank" rel="noopener">HYROX Partners with Atmosphere TV (Business Wire)</a></li>
+          <li><a href="https://www.boxrox.com/hyrox-hamburg-2026-friday-recap-elite-15-singles/" target="_blank" rel="noopener">HYROX Hamburg 2026 Friday Recap (BOXROX)</a></li>
+        </ul>
+      </div>
+      <div>
+        <h3>Fórmula 1</h3>
+        <ul>
+          <li><a href="https://motorsportbroadcasting.com/2018/04/22/analysing-formula-1s-new-on-air-package/" target="_blank" rel="noopener">Analysing Formula 1's new on-air package (The Motorsport Broadcasting Blog)</a></li>
+          <li><a href="https://speedcafe.com/formula-1-to-introduce-new-cutting-edge-tv-graphics/" target="_blank" rel="noopener">Formula 1 to introduce new cutting edge TV graphics (Speedcafe)</a></li>
+          <li><a href="https://fansided.com/2022/07/27/f1-intervals-explained-interval-mean-formula-1" target="_blank" rel="noopener">F1 intervals explained (FanSided)</a></li>
+          <li><a href="https://racingnews365.com/what-sectors-are-f1-and-what-do-the-different-colours-mean" target="_blank" rel="noopener">What sectors are in F1 and what do the colours mean (RacingNews365)</a></li>
+          <li><a href="https://f1chronicle.com/what-does-purple-sector-mean-in-f1" target="_blank" rel="noopener">What does purple sector mean in F1 (F1 Chronicle)</a></li>
+          <li><a href="https://www.aboutamazon.co.uk/news/aws/insights-powered-by-aws-help-to-improve-formula-1-viewing-experience" target="_blank" rel="noopener">Insights powered by AWS (About Amazon)</a></li>
+          <li><a href="https://www.formula1.com/en/latest/article/improved-live-timing-on-f1-com-for-the-2022-season.3Y1ipx839mv7xeteTqQ8Mk" target="_blank" rel="noopener">Improved Live Timing on F1.com (Formula 1)</a></li>
+          <li><a href="https://flowracers.com/blog/how-f1-start-lights-work/" target="_blank" rel="noopener">How do F1 start lights work (Flow Racers)</a></li>
+          <li><a href="https://f1technical.net/features/5780" target="_blank" rel="noopener">Race starting procedure (F1Technical)</a></li>
+          <li><a href="https://www.gpfans.com/en/f1-news/1078428/f1-2026-tv-broadcast-new-timing-tower-graphic" target="_blank" rel="noopener">F1 fans fume over TV broadcast change for 2026 season (GPFans)</a></li>
+        </ul>
+      </div>
+    </div>
+  </footer>
+</main>
+
+<script id="race-sim">
+/* Núcleo da simulação: puro, sem DOM. Mesmas regras propostas para o motor do telão. */
+window.RaceSim = (() => {
+  'use strict';
+  const mulberry32 = (seed) => () => {
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const rnd = mulberry32(20261103);
+
+  const COURSE = [
+    { id: 'run-1', type: 'run', name: 'Corrida 1', short: 'C1' },
+    { id: 'ski-erg', type: 'station', name: 'SkiErg', tv: 'SkiErg', short: 'SKI', kind: 'ergometer', meta: '1.000 m', covered: true },
+    { id: 'run-2', type: 'run', name: 'Corrida 2', short: 'C2' },
+    { id: 'sled-push', type: 'station', name: 'Sled Push', tv: 'Sled Push', short: 'PUSH', kind: 'sled', units: 4, meta: '50 m · 152 kg', covered: true },
+    { id: 'run-3', type: 'run', name: 'Corrida 3', short: 'C3' },
+    { id: 'sled-pull', type: 'station', name: 'Sled Pull', tv: 'Sled Pull', short: 'PULL', kind: 'sled', units: 4, meta: '50 m · 103 kg', covered: true },
+    { id: 'run-4', type: 'run', name: 'Corrida 4', short: 'C4' },
+    { id: 'burpee-broad-jump', type: 'station', name: 'Burpee Broad Jump', tv: 'BBJ', short: 'BBJ', kind: 'sections', meta: '80 m', covered: false },
+    { id: 'run-5', type: 'run', name: 'Corrida 5', short: 'C5' },
+    { id: 'row', type: 'station', name: 'Remo', tv: 'Remo', short: 'REMO', kind: 'ergometer', meta: '1.000 m', covered: true },
+    { id: 'run-6', type: 'run', name: 'Corrida 6', short: 'C6' },
+    { id: 'farmers-carry', type: 'station', name: 'Farmers Carry', tv: 'Farmers', short: 'FARM', kind: 'sections', meta: '200 m · 2×24 kg', covered: false },
+    { id: 'run-7', type: 'run', name: 'Corrida 7', short: 'C7' },
+    { id: 'sandbag-lunges', type: 'station', name: 'Sandbag Lunges', tv: 'Lunges', short: 'LUNGE', kind: 'sections', units: 4, meta: '100 m · 20 kg', covered: true },
+    { id: 'run-8', type: 'run', name: 'Corrida 8', short: 'C8' },
+    { id: 'wall-balls', type: 'station', name: 'Wall Ball', tv: 'Wall Ball', short: 'WB', kind: 'reps', reps: 100, meta: '100 reps · 9 kg', covered: true, closes: true }
+  ];
+  const LAST_STAGE = COURSE.length - 1;
+  const idxOf = (id) => COURSE.findIndex((s) => s.id === id);
+
+  const BASE = { run: 285, 'ski-erg': 262, 'sled-push': 214, 'sled-pull': 288, 'burpee-broad-jump': 330, row: 272, 'farmers-carry': 134, 'sandbag-lunges': 298, 'wall-balls': 395 };
+  const PEOPLE = [
+    { name: 'Rafael Tavares', box: 'Box Aldeota', run: 0.84, sta: 0.92, bias: { 'ski-erg': 0.9, row: 0.9 } },
+    { name: 'Bruno Sampaio', box: 'CT Meireles', run: 0.92, sta: 0.86, bias: { 'sled-push': 0.92, 'sled-pull': 0.93, 'wall-balls': 1.06 } },
+    { name: 'Diego Martins', box: 'Arena Sul', run: 0.82, sta: 1.02, bias: { 'sled-push': 1.12, 'sled-pull': 1.1, 'wall-balls': 0.84 } },
+    { name: 'Thiago Bezerra', box: 'Box Iracema', run: 0.93, sta: 0.93, bias: { 'sandbag-lunges': 0.88 } },
+    { name: 'Lucas Holanda', box: 'Team Cumbuco', run: 0.98, sta: 0.97 },
+    { name: 'Mateus Ribeiro', box: 'CT Benfica', run: 1.02, sta: 0.98 },
+    { name: 'Caio Fernandes', box: 'Box Messejana', run: 1.06, sta: 1.02 },
+    { name: 'Pedro Albuquerque', box: 'Arena Parquelândia', run: 1.1, sta: 1.08 },
+    { name: 'Gustavo Lima', box: 'CT Fátima', run: 1.15, sta: 1.12 },
+    { name: 'André Moreira', box: 'Box Dunas', run: 1.2, sta: 1.16 }
+  ];
+
+  const A = PEOPLE.map((p, idx) => {
+    const dur = COURSE.map((s) => {
+      const base = BASE[s.type === 'run' ? 'run' : s.id];
+      const runIdx = s.type === 'run' ? Number(s.id.split('-')[1]) - 1 : 0;
+      const factor = s.type === 'run' ? p.run * (1 + 0.012 * runIdx) : p.sta * ((p.bias && p.bias[s.id]) || 1);
+      return Math.round(base * factor * (1 + (rnd() - 0.5) * 0.09));
+    });
+    const start = [];
+    const end = [];
+    let acc = 0;
+    dur.forEach((d, i) => { start[i] = acc; acc += d; end[i] = acc; });
+    return { ...p, idx, dur, start, end, total: acc, penalties: [], stopAt: null, dnfAt: null };
+  });
+
+  A[3].penalties.push({ at: A[3].start[idxOf('sled-push')] + 75, seconds: 15, station: 'Sled Push', reason: 'invadiu a raia vizinha' });
+  A[6].penalties.push({ at: A[6].start[idxOf('sandbag-lunges')] + 110, seconds: 15, station: 'Sandbag Lunges', reason: 'joelho não tocou o chão' });
+  A[9].stopAt = A[9].end[idxOf('row')];
+  A[9].dnfAt = A[9].stopAt + 300;
+
+  // Pontos de leitura: início e liberação de cada estação com judge.
+  const CPS = [];
+  COURSE.forEach((s, i) => { if (s.type === 'station' && s.covered) { CPS.push({ i, side: 'in' }); CPS.push({ i, side: 'out' }); } });
+  const LAST_CP = CPS.length - 1;
+  const cpTime = (ath, k) => (CPS[k].side === 'in' ? ath.start[CPS[k].i] : ath.end[CPS[k].i]);
+  const cpLabel = (k) => `${CPS[k].side === 'in' ? 'a entrada' : 'a saída'} do ${COURSE[CPS[k].i].name}`;
+
+  const stateAt = (ath, t) => {
+    const limit = ath.stopAt === null ? Infinity : ath.stopAt;
+    const tt = Math.min(t, limit);
+    let k = -1;
+    for (let j = 0; j < CPS.length; j += 1) { if (cpTime(ath, j) <= tt) k = j; else break; }
+    const finished = k === LAST_CP;
+    const pen = ath.penalties.filter((p) => p.at <= t).reduce((sum, p) => sum + p.seconds, 0);
+    const dnf = ath.dnfAt !== null && t >= ath.dnfAt;
+    let stageIndex = COURSE.length;
+    for (let i = 0; i < COURSE.length; i += 1) { if (tt < ath.end[i]) { stageIndex = i; break; } }
+    const stage = COURSE[stageIndex];
+    const inStation = Boolean(!finished && !dnf && t < limit && stage && stage.type === 'station' && stage.covered && tt >= ath.start[stageIndex]);
+    const frac = inStation ? (tt - ath.start[stageIndex]) / ath.dur[stageIndex] : 0;
+    let lastOut = null;
+    for (let j = k; j >= 0; j -= 1) { if (CPS[j].side === 'out') { lastOut = { i: CPS[j].i, at: cpTime(ath, j) }; break; } }
+    const gross = finished ? ath.end[LAST_STAGE] : null;
+    return { k, kTime: k >= 0 ? cpTime(ath, k) : null, finished, gross, pen, official: finished ? gross + pen : null, dnf, stageIndex, inStation, frac, lastOut };
+  };
+
+  const rankAt = (t) => A.map((ath) => ({ ath, s: stateAt(ath, t) })).sort((x, y) => {
+    if (x.s.dnf !== y.s.dnf) return x.s.dnf ? 1 : -1;
+    if (x.s.finished && y.s.finished) return (x.s.official - y.s.official) || (x.ath.idx - y.ath.idx);
+    if (x.s.k !== y.s.k) return y.s.k - x.s.k;
+    if (x.s.k >= 0 && x.s.kTime !== y.s.kTime) return x.s.kTime - y.s.kTime;
+    return x.ath.idx - y.ath.idx;
+  });
+
+  const gapOf = (row, leader) => {
+    if (row.s.dnf) return { kind: 'dnf' };
+    if (row.s.finished) return { kind: 'fin', time: row.s.official, gap: row === leader ? null : row.s.official - leader.s.official };
+    if (row === leader) return row.s.k >= 0 ? { kind: 'lead' } : { kind: 'none' };
+    if (row.s.k < 0) return { kind: 'none' };
+    return { kind: 'gap', gap: row.s.kTime - cpTime(leader.ath, row.s.k) };
+  };
+
+  const BATTLE_SECONDS = 10;
+  const battleAt = (rows) => {
+    for (let p = 0; p < rows.length - 1; p += 1) {
+      const ahead = rows[p];
+      const back = rows[p + 1];
+      if (ahead.s.dnf || back.s.dnf || ahead.s.finished || back.s.finished || back.s.k < 0) continue;
+      const k = back.s.k;
+      const interval = back.s.kTime - cpTime(ahead.ath, k);
+      if (interval <= BATTLE_SECONDS) {
+        const trend = k > 0 ? interval - (cpTime(back.ath, k - 1) - cpTime(ahead.ath, k - 1)) : null;
+        return { position: p + 1, ahead, back, interval, trend, since: k > 0 ? cpLabel(k - 1) : null };
+      }
+    }
+    return null;
+  };
+
+  const PRIOR_BEST = {
+    'ski-erg': { secs: 232, name: 'Felipe Arruda', box: 'Box Aldeota', wave: 'Onda 1' },
+    'sled-push': { secs: 182, name: 'João Victor Castro', box: 'CT Meireles', wave: 'Onda 2' },
+    'sled-pull': { secs: 246, name: 'Felipe Arruda', box: 'Box Aldeota', wave: 'Onda 1' },
+    row: { secs: 240, name: 'Renan Pinheiro', box: 'Arena Sul', wave: 'Onda 1' },
+    'sandbag-lunges': { secs: 262, name: 'Samuel Rocha', box: 'Box Iracema', wave: 'Onda 2' },
+    'wall-balls': { secs: 356, name: 'João Victor Castro', box: 'CT Meireles', wave: 'Onda 2' }
+  };
+  const completions = [];
+  A.forEach((ath) => COURSE.forEach((s, i) => {
+    if (s.type !== 'station' || !s.covered) return;
+    if (ath.stopAt !== null && ath.end[i] > ath.stopAt) return;
+    completions.push({ ath, i, secs: ath.dur[i], at: ath.end[i] });
+  }));
+  completions.sort((a, b) => a.at - b.at);
+  const PURPLE = [];
+  const running = JSON.parse(JSON.stringify(PRIOR_BEST));
+  completions.forEach((c) => {
+    const id = COURSE[c.i].id;
+    const current = running[id];
+    if (!current || c.secs < current.secs) {
+      PURPLE.push({ ...c, prev: current ? { ...current } : null });
+      running[id] = { secs: c.secs, name: c.ath.name, box: c.ath.box, wave: 'Onda 3' };
+    }
+  });
+  const bestAt = (t) => {
+    const best = JSON.parse(JSON.stringify(PRIOR_BEST));
+    PURPLE.forEach((p) => { if (p.at <= t) best[COURSE[p.i].id] = { secs: p.secs, name: p.ath.name, box: p.ath.box, wave: 'Onda 3' }; });
+    return best;
+  };
+
+  const FINISHES = A.filter((ath) => ath.stopAt === null).map((ath) => ({ ath, at: ath.end[LAST_STAGE] })).sort((a, b) => a.at - b.at);
+
+  const TICKER = [{ at: 0, kind: 'start' }];
+  A.forEach((ath) => ath.penalties.forEach((p) => TICKER.push({ at: p.at, kind: 'pen', ath, p })));
+  A.forEach((ath) => { if (ath.dnfAt !== null) TICKER.push({ at: ath.dnfAt, kind: 'dnf', ath }); });
+  FINISHES.forEach((f) => TICKER.push({ at: f.at, kind: 'fin', ath: f.ath }));
+  TICKER.sort((a, b) => a.at - b.at);
+
+  const PRIOR = [
+    { name: 'Felipe Arruda', box: 'Box Aldeota', wave: 'Onda 1', secs: 4012 },
+    { name: 'João Victor Castro', box: 'CT Meireles', wave: 'Onda 2', secs: 4188 },
+    { name: 'Renan Pinheiro', box: 'Arena Sul', wave: 'Onda 1', secs: 4301 },
+    { name: 'Samuel Rocha', box: 'Box Iracema', wave: 'Onda 2', secs: 4377 },
+    { name: 'Vinícius Prado', box: 'CT Fátima', wave: 'Onda 1', secs: 4459 },
+    { name: 'Marcelo Teles', box: 'Team Cumbuco', wave: 'Onda 2', secs: 4560 },
+    { name: 'Hugo Barreto', box: 'Box Dunas', wave: 'Onda 1', secs: 4702 },
+    { name: 'Ícaro Nogueira', box: 'CT Benfica', wave: 'Onda 2', secs: 4855 },
+    { name: 'Davi Lacerda', box: 'Box Messejana', wave: 'Onda 1', secs: 5010 },
+    { name: 'Otávio Campos', box: 'Arena Parquelândia', wave: 'Onda 2', secs: null }
+  ];
+  const classAt = (t) => {
+    const rows = PRIOR.map((p) => ({ ...p, fresh: false, dnf: p.secs === null }));
+    A.forEach((ath) => {
+      const s = stateAt(ath, t);
+      if (s.finished) rows.push({ name: ath.name, box: ath.box, wave: 'Onda 3', secs: s.official, fresh: true, dnf: false });
+      else if (s.dnf) rows.push({ name: ath.name, box: ath.box, wave: 'Onda 3', secs: null, fresh: true, dnf: true });
+    });
+    rows.sort((a, b) => (Number(a.secs === null) - Number(b.secs === null)) || ((a.secs || 0) - (b.secs || 0)));
+    rows.forEach((r, i) => {
+      if (r.secs === null) { r.pos = null; return; }
+      const prev = rows[i - 1];
+      r.pos = prev && prev.secs === r.secs ? prev.pos : i + 1;
+    });
+    return rows;
+  };
+
+  const RACE_END = Math.max(...A.map((ath) => (ath.dnfAt !== null ? ath.dnfAt : ath.end[LAST_STAGE]))) + 15;
+
+  const pad = (n) => String(n).padStart(2, '0');
+  /** Tempo e diferença: segundo mais próximo, como o tempo oficial publicado. */
+  const fmt = (secs) => {
+    const s = Math.max(0, Math.round(secs));
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const r = s % 60;
+    return h > 0 ? `${h}:${pad(m)}:${pad(r)}` : `${m}:${pad(r)}`;
+  };
+  /** Relógio correndo: segundos completos. */
+  const fmtClock = (secs) => {
+    const s = Math.max(0, Math.floor(secs));
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const r = s % 60;
+    return h > 0 ? `${h}:${pad(m)}:${pad(r)}` : `${pad(m)}:${pad(r)}`;
+  };
+  const START_WALL = 10 * 3600 + 12 * 60 + 5;
+  const wall = (t, withSeconds = true) => {
+    const s = Math.floor(START_WALL + t);
+    const base = `${pad(Math.floor(s / 3600) % 24)}:${pad(Math.floor((s % 3600) / 60))}`;
+    return withSeconds ? `${base}:${pad(s % 60)}` : base;
+  };
+
+  return { COURSE, A, CPS, LAST_CP, cpTime, cpLabel, stateAt, rankAt, gapOf, battleAt, PURPLE, PRIOR_BEST, bestAt, FINISHES, TICKER, classAt, RACE_END, fmt, fmtClock, wall, idxOf };
+})();
+</script>
+
+<script>
+(() => {
+  'use strict';
+  const R = window.RaceSim;
+  const $ = (id) => document.getElementById(id);
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const esc = (v) => String(v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  const S = { screen: 'live', auto: true, playing: true, speed: 30, t: 24 * 60, started: true, phaseUntil: 0, penMode: 'seconds', liveEndAt: null, classStart: 0 };
+  const announced = { fin: new Set(), purple: new Set(), dnf: new Set() };
+  let queue = [];
+  let flagNow = null;
+  const flashes = new Map();
+  let lastPurple = null;
+  const chg = new Map();
+  let prevRank = null;
+  let lastTickKey = '';
+  let cardAKey = '';
+  let cardBKey = '';
+
+  const screens = [...document.querySelectorAll('.scr')];
+  const scrub = $('scrub');
+  scrub.max = String(Math.ceil(R.RACE_END / 5) * 5);
+
+  // ------------------------------------------------------------ montagem fixa
+  const gantryHtml = () => Array.from({ length: 5 }, () => '<div class="unit"><div class="lamp"></div><div class="lamp"></div></div>').join('');
+  $('gridGantry').innerHTML = gantryHtml();
+  $('ovGantry').innerHTML = gantryHtml();
+  $('gridSlots').innerHTML = R.A.map((ath, i) => `<div class="g-slot"><span class="n">${i + 1}</span><div style="min-width:0"><b>${esc(ath.name)}</b><span>${esc(ath.box)}</span></div></div>`).join('');
+  $('gridCourse').innerHTML = '<span class="lb">Percurso · cada estação depois de 1 km de corrida</span>' + R.COURSE.filter((s) => s.type === 'station').map((s) => `<div>${esc(s.name)}<span>${esc(s.meta)}</span></div>`).join('');
+  $('waitList').innerHTML = '<span class="lb">Próximas ondas</span>' + [
+    ['10:12', 'Onda 3', 'Open Masculino · 10 atletas'],
+    ['10:40', 'Onda 4', 'Open Masculino e Open Feminino · 12 atletas'],
+    ['11:05', 'Onda 5', 'Pro Masculino · 8 atletas'],
+    ['11:30', 'Onda 6', 'Duplas Mistas · 7 duplas']
+  ].map(([h, w, c]) => `<div class="w-item"><span class="h">${h}</span><div><b>${w}</b><span>${c}</span></div></div>`).join('');
+
+  // Torre: uma linha por atleta, posicionada pela posição (transição suave nas ultrapassagens)
+  const rowsEl = new Map();
+  R.A.forEach((ath) => {
+    const el = document.createElement('div');
+    el.className = 'tw-row';
+    el.innerHTML = '<span class="tw-pos"><span></span></span><span class="tw-chg"></span><span class="tw-who"><span class="tw-nm"><b></b></span><span class="tw-bx"></span></span><span class="tw-where"><b></b><span></span></span><span class="tw-gap"><b></b><span></span></span>';
+    el.querySelector('.tw-nm b').textContent = ath.name;
+    el.querySelector('.tw-bx').textContent = ath.box;
+    $('towerBody').appendChild(el);
+    rowsEl.set(ath.idx, el);
+  });
+
+  // Mapa do percurso em S
+  const X0 = 112;
+  const X1 = 900;
+  const Y1 = 120;
+  const Y2 = 262;
+  const RAD = (Y2 - Y1) / 2;
+  const CY = (Y1 + Y2) / 2;
+  const L1 = X1 - X0;
+  const LC = Math.PI * RAD;
+  const LT = L1 * 2 + LC;
+  const pointAt = (d) => {
+    if (d <= L1) return { x: X0 + d, y: Y1, part: 'top' };
+    if (d <= L1 + LC) {
+      const a = -Math.PI / 2 + (d - L1) / RAD;
+      return { x: X1 + RAD * Math.cos(a), y: CY + RAD * Math.sin(a), part: 'curve' };
+    }
+    return { x: X1 - (d - L1 - LC), y: Y2, part: 'bottom' };
+  };
+  const SLOT = LT / R.COURSE.length;
+  const slotPoint = (j) => pointAt((j + 0.5) * SLOT);
+  const map = $('mapSvg');
+  const el = (name, attrs, parent) => {
+    const node = document.createElementNS(svgNS, name);
+    Object.entries(attrs).forEach(([k, v]) => node.setAttribute(k, v));
+    if (parent) parent.appendChild(node);
+    return node;
+  };
+  const trackD = `M ${X0} ${Y1} H ${X1} A ${RAD} ${RAD} 0 0 1 ${X1} ${Y2} H ${X0}`;
+  el('path', { d: trackD, fill: 'none', stroke: '#232930', 'stroke-width': 16, 'stroke-linecap': 'round' }, map);
+  el('path', { d: trackD, fill: 'none', stroke: '#3a424c', 'stroke-width': 2, 'stroke-dasharray': '2 10', 'stroke-linecap': 'round' }, map);
+  const startFlag = el('g', {}, map);
+  el('rect', { x: X0 - 6, y: Y1 - 18, width: 4, height: 36, fill: '#eaecef' }, startFlag);
+  el('text', { x: X0 - 16, y: Y1 + 6, 'text-anchor': 'end', fill: '#929aa5', 'font-size': 17, 'font-weight': 700, 'letter-spacing': 1 }, startFlag).textContent = 'LARGADA';
+  const finishFlag = el('g', {}, map);
+  const chequer = el('pattern', { id: 'chq', width: 8, height: 8, patternUnits: 'userSpaceOnUse' }, el('defs', {}, map));
+  el('rect', { width: 8, height: 8, fill: '#0d1014' }, chequer);
+  el('rect', { width: 4, height: 4, fill: '#eaecef' }, chequer);
+  el('rect', { x: 4, y: 4, width: 4, height: 4, fill: '#eaecef' }, chequer);
+  el('rect', { x: X0 - 10, y: Y2 - 18, width: 10, height: 36, fill: 'url(#chq)' }, finishFlag);
+  el('text', { x: X0 - 18, y: Y2 + 6, 'text-anchor': 'end', fill: '#929aa5', 'font-size': 17, 'font-weight': 700, 'letter-spacing': 1 }, finishFlag).textContent = 'CHEGADA';
+  const finishCount = el('text', { x: X0 - 18, y: Y2 + 30, 'text-anchor': 'end', fill: '#0ecb81', 'font-size': 16, 'font-weight': 700, class: 'n' }, finishFlag);
+
+  R.COURSE.forEach((stage, j) => {
+    const p = slotPoint(j);
+    if (stage.type === 'run') {
+      const inward = p.part === 'top' ? 36 : p.part === 'bottom' ? -26 : 0;
+      const dx = p.part === 'curve' ? -34 : 0;
+      el('text', { x: p.x + dx, y: p.y + inward + (p.part === 'curve' ? 5 : 0), 'text-anchor': 'middle', fill: '#8a93a0', 'font-size': 16, 'font-weight': 700 }, map).textContent = stage.short;
+      return;
+    }
+    const g = el('g', {}, map);
+    const covered = stage.covered;
+    el('rect', {
+      x: p.x - 50, y: p.y - 27, width: 100, height: 54, rx: 11,
+      fill: covered ? '#1e2329' : '#101317',
+      stroke: stage.closes ? '#fcd535' : covered ? '#4a525d' : '#5d6672',
+      'stroke-width': stage.closes ? 2.5 : 2,
+      'stroke-dasharray': covered ? 'none' : '6 6'
+    }, g);
+    el('text', { x: p.x, y: p.y + 7, 'text-anchor': 'middle', fill: covered ? '#eaecef' : '#8a93a0', 'font-size': 20, 'font-weight': 800, 'letter-spacing': 0.5 }, g).textContent = stage.short;
+    if (!covered) {
+      const below = p.part === 'top' || p.part === 'curve';
+      el('text', { x: p.x + (p.part === 'curve' ? -64 : 0), y: below ? p.y + 50 : p.y - 38, 'text-anchor': p.part === 'curve' ? 'end' : 'middle', fill: '#8a93a0', 'font-size': 15, 'font-weight': 600 }, g).textContent = 'sem judge';
+    }
+  });
+
+  const markers = new Map();
+  R.A.forEach((ath) => {
+    const g = el('g', { class: 'mk' }, map);
+    el('circle', { r: 18, cx: 0, cy: 0 }, g);
+    el('text', { x: 0, y: 6, 'text-anchor': 'middle', 'font-size': 17, 'font-weight': 700, class: 'n' }, g);
+    markers.set(ath.idx, g);
+  });
+
+  // ------------------------------------------------------------ textos auxiliares
+  const ord = (n) => `${n}º`;
+  const firstName = (name) => name.split(' ')[0];
+  const stationTv = (stage) => (stage.tv || stage.name);
+
+  const whereOf = (row, t, now) => {
+    const s = row.s;
+    if (s.dnf) return { cls: 'st-dnf', main: 'DNF', sub: 'decisão do organizador' };
+    if (s.finished) return { cls: 'st-fin', main: 'Chegada', sub: s.pen && S.penMode !== 'hidden' ? `inclui +${s.pen} s` : 'tempo final' };
+    const fl = flashes.get(row.ath.idx);
+    if (fl && now < fl.until) return { cls: 'st-purple', main: stationTv(R.COURSE[fl.p.i]), sub: `melhor da categoria · ${R.fmt(fl.p.secs)}` };
+    if (s.inStation) {
+      const st = R.COURSE[s.stageIndex];
+      let prog = '';
+      let sub = 'na estação';
+      if (st.units) prog = ` ${Math.min(st.units - 1, Math.floor(s.frac * st.units))}/${st.units}`;
+      else if (st.kind === 'reps') prog = ` ${Math.min(st.reps - 1, Math.floor(s.frac * st.reps))}`;
+      else sub = `na estação · ${R.fmt(t - row.ath.start[s.stageIndex])}`;
+      if (st.kind === 'reps') sub = 'reta final';
+      return { cls: 'st-station', main: `${stationTv(st)}${prog}`, sub };
+    }
+    if (s.k < 0) return { cls: 'st-track', main: 'Na pista', sub: `desde a largada · ${R.fmt(t)}` };
+    const last = s.lastOut ? R.COURSE[s.lastOut.i].name : 'largada';
+    const since = s.lastOut ? t - s.lastOut.at : t;
+    return { cls: 'st-track', main: 'Na pista', sub: `após ${last} · ${R.fmt(since)}` };
+  };
+
+  const tickerText = (ev) => {
+    if (ev.kind === 'start') return { cls: '', html: `LARGADA · Onda 3 · ${R.wall(0)}` };
+    if (ev.kind === 'pen') {
+      const base = `PENALIDADE · <span class="k-pen">+${ev.p.seconds} s</span> · ${esc(ev.ath.name)} · ${esc(ev.p.station)}`;
+      return { cls: '', html: S.penMode === 'reason' ? `${base} · ${esc(ev.p.reason)}` : base };
+    }
+    if (ev.kind === 'dnf') return { cls: '', html: `<span class="k-dnf">DNF</span> · ${esc(ev.ath.name)} · decisão do organizador` };
+    const s = R.stateAt(ev.ath, ev.at + 0.5);
+    return { cls: '', html: `<span class="k-fin">CHEGADA</span> · ${esc(ev.ath.name)} · ${R.fmt(s.official)}` };
+  };
+
+  // ------------------------------------------------------------ eventos (bandeirada, roxo)
+  const resetAnnouncements = (t) => {
+    announced.fin = new Set(R.FINISHES.filter((f) => f.at <= t).map((f) => f.ath.idx));
+    announced.purple = new Set(R.PURPLE.map((p, n) => (p.at <= t ? n : -1)).filter((n) => n >= 0));
+    announced.dnf = new Set(R.A.filter((a) => a.dnfAt !== null && a.dnfAt <= t).map((a) => a.idx));
+    queue = [];
+    flagNow = null;
+    flashes.clear();
+    lastPurple = null;
+    chg.clear();
+    prevRank = null;
+  };
+  const syncEvents = (now) => {
+    R.FINISHES.forEach((f) => {
+      if (f.at <= S.t && !announced.fin.has(f.ath.idx)) { announced.fin.add(f.ath.idx); queue.push({ ath: f.ath, at: f.at }); }
+    });
+    R.PURPLE.forEach((p, n) => {
+      if (p.at <= S.t && !announced.purple.has(n)) {
+        announced.purple.add(n);
+        flashes.set(p.ath.idx, { p, until: now + 9000 });
+        lastPurple = { p, until: now + 11000 };
+      }
+    });
+    let newDnf = false;
+    R.A.forEach((a) => { if (a.dnfAt !== null && a.dnfAt <= S.t && !announced.dnf.has(a.idx)) { announced.dnf.add(a.idx); newDnf = true; } });
+    if (!flagNow && queue.length) { const item = queue.shift(); flagNow = { ...item, until: now + (queue.length ? 4500 : 6500) }; }
+    if (flagNow && now >= flagNow.until) {
+      flagNow = null;
+      if (queue.length) { const item = queue.shift(); flagNow = { ...item, until: now + (queue.length ? 4500 : 6500) }; }
+    }
+    return newDnf;
+  };
+
+  // ------------------------------------------------------------ renderização
+  const renderTower = (rows, now) => {
+    const leader = rows.find((r) => !r.s.dnf) || rows[0];
+    const hasLeader = leader.s.k >= 0;
+    rows.forEach((row, rank) => {
+      const elRow = rowsEl.get(row.ath.idx);
+      elRow.style.setProperty('--rank', rank);
+      elRow.classList.toggle('lead', rank === 0 && !row.s.dnf && hasLeader);
+      elRow.classList.toggle('dnf', row.s.dnf);
+      elRow.querySelector('.tw-pos > span').textContent = row.s.dnf ? '–' : String(rank + 1);
+      const c = chg.get(row.ath.idx);
+      const chgEl = elRow.querySelector('.tw-chg');
+      const live = c && now < c.until;
+      chgEl.className = `tw-chg${live ? ` ${c.dir}` : ''}`;
+      chgEl.innerHTML = live ? `<svg aria-hidden="true"><use href="#i-${c.dir}"/></svg>` : '';
+      const fl = flashes.get(row.ath.idx);
+      elRow.classList.toggle('flash-purple', Boolean(fl && now < fl.until));
+      elRow.classList.toggle('flash-up', Boolean(live && c.dir === 'up' && !(fl && now < fl.until)));
+      elRow.classList.toggle('flash-down', Boolean(live && c.dir === 'down' && !(fl && now < fl.until)));
+      // penalidade: na coluna da diferença, como o "+5s" da F1
+      const showPen = row.s.pen > 0 && S.penMode !== 'hidden' && !row.s.dnf && !row.s.finished;
+      const w = whereOf(row, S.t, now);
+      const whereEl = elRow.querySelector('.tw-where');
+      whereEl.className = `tw-where ${w.cls}`;
+      whereEl.querySelector('b').textContent = w.main;
+      whereEl.querySelector('span').textContent = w.sub;
+      const g = R.gapOf(row, leader);
+      const gapEl = elRow.querySelector('.tw-gap');
+      const gb = gapEl.querySelector('b');
+      const gs = gapEl.querySelector('span');
+      gapEl.className = 'tw-gap';
+      gs.textContent = '';
+      if (g.kind === 'lead') { gapEl.classList.add('lead'); gb.textContent = 'LÍDER'; }
+      else if (g.kind === 'gap') gb.textContent = `+${R.fmt(g.gap)}`;
+      else if (g.kind === 'fin') { gapEl.classList.add('fin'); gb.textContent = R.fmt(g.time); gs.textContent = g.gap === null ? 'líder' : `+${R.fmt(g.gap)}`; }
+      else if (g.kind === 'dnf') { gapEl.classList.add('none'); gb.textContent = '–'; }
+      else { gapEl.classList.add('none'); gb.textContent = '–'; }
+      if (showPen) gs.innerHTML = `<span class="pen">+${row.s.pen} s</span>`;
+    });
+  };
+
+  const renderMap = (rows) => {
+    const groups = new Map();
+    let finishedCount = 0;
+    rows.forEach((row, rank) => {
+      const g = markers.get(row.ath.idx);
+      if (row.s.finished || row.s.dnf) { g.style.opacity = '0'; if (row.s.finished) finishedCount += 1; return; }
+      g.style.opacity = '1';
+      let slot;
+      let estimated = false;
+      if (row.s.inStation) slot = row.s.stageIndex;
+      else if (row.s.lastOut) { slot = Math.min(R.COURSE.length - 1, row.s.lastOut.i + 1); estimated = true; }
+      else { slot = 0; estimated = true; }
+      if (!groups.has(slot)) groups.set(slot, []);
+      groups.get(slot).push({ row, rank, estimated });
+    });
+    finishCount.textContent = finishedCount ? `${finishedCount} chegaram` : '';
+    groups.forEach((items, slot) => {
+      const p = slotPoint(slot);
+      const n = items.length;
+      const cols = n > 6 ? 5 : Math.min(n, 3);
+      items.forEach((item, m) => {
+        const col = m % cols;
+        const line = Math.floor(m / cols);
+        const rowCount = Math.ceil(n / cols);
+        let x;
+        let y;
+        if (p.part === 'curve') {
+          x = p.x - 82 - line * 38;
+          y = p.y + (col - (cols - 1) / 2) * 38;
+          if (cols > 3) { x = p.x - 82 - col * 38; y = p.y + (line - (rowCount - 1) / 2) * 38; }
+        } else {
+          x = p.x + (col - (cols - 1) / 2) * 38;
+          y = p.part === 'top' ? p.y - 52 - line * 38 : p.y + 52 + line * 38;
+        }
+        const g = markers.get(item.row.ath.idx);
+        g.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
+        const circle = g.querySelector('circle');
+        const text = g.querySelector('text');
+        const leader = item.rank === 0;
+        const fl = flashes.get(item.row.ath.idx);
+        const purple = fl && performance.now() < fl.until;
+        if (item.estimated) {
+          circle.setAttribute('fill', '#0d1014');
+          circle.setAttribute('stroke', leader ? '#fcd535' : purple ? '#b47cff' : '#c6ccd4');
+          circle.setAttribute('stroke-width', '2.5');
+          text.setAttribute('fill', leader ? '#fcd535' : '#eaecef');
+        } else {
+          circle.setAttribute('fill', leader ? '#fcd535' : purple ? '#b47cff' : '#eaecef');
+          circle.setAttribute('stroke', '#0d1014');
+          circle.setAttribute('stroke-width', '2');
+          text.setAttribute('fill', '#14171c');
+        }
+        text.textContent = String(item.rank + 1);
+      });
+    });
+  };
+
+  const setCard = (node, key, cls, html, which) => {
+    const prevKey = which === 'A' ? cardAKey : cardBKey;
+    node.className = `card ${cls}`;
+    if (prevKey !== key) {
+      node.innerHTML = html;
+      if (which === 'A') cardAKey = key; else cardBKey = key;
+    } else {
+      const inner = node.querySelector('.card-in');
+      const tmp = document.createElement('div');
+      tmp.innerHTML = html;
+      const fresh = tmp.querySelector('.card-in');
+      if (inner && fresh) inner.innerHTML = fresh.innerHTML;
+      const eb = node.querySelector('.card-eb');
+      const freshEb = tmp.querySelector('.card-eb');
+      if (eb && freshEb) eb.textContent = freshEb.textContent;
+    }
+  };
+
+  const renderCards = (rows, now) => {
+    const leader = rows.find((r) => !r.s.dnf);
+    const battle = R.battleAt(rows);
+    if (lastPurple && now < lastPurple.until) {
+      const p = lastPurple.p;
+      const st = R.COURSE[p.i];
+      const was = p.prev ? `Antes: ${R.fmt(p.prev.secs)} · ${esc(p.prev.name)} (${esc(p.prev.wave)})` : 'Primeiro tempo da categoria nesta estação';
+      setCard($('cardA'), `purple-${p.ath.idx}-${p.i}`, 'purple', `<div class="card-eb">Melhor da categoria · roxo</div><div class="card-in"><div class="pp"><span class="st">${esc(st.name)}</span><span class="t num">${R.fmt(p.secs)}</span><span class="w">${esc(p.ath.name)} · ${esc(p.ath.box)}</span><span class="was">${was}</span></div></div>`, 'A');
+    } else if (battle) {
+      const trend = battle.trend === null ? '<span>de diferença</span>' : battle.trend < -0.5
+        ? `<span>de diferença · <strong>caiu ${R.fmt(-battle.trend)}</strong> desde ${esc(battle.since)}</span>`
+        : battle.trend > 0.5 ? `<span>de diferença · <strong>subiu ${R.fmt(battle.trend)}</strong> desde ${esc(battle.since)}</span>` : `<span>de diferença · estável desde ${esc(battle.since)}</span>`;
+      const line = (row, pos) => `<div class="bt-line"><span class="p num"><span>${pos}</span></span><div class="w"><b>${esc(row.ath.name)}</b><span>${esc(row.ath.box)}</span></div></div>`;
+      setCard($('cardA'), `battle-${battle.ahead.ath.idx}-${battle.back.ath.idx}`, 'battle', `<div class="card-eb">Disputa pelo ${ord(battle.position)} lugar</div><div class="card-in"><div class="bt">${line(battle.ahead, battle.position)}<div class="bt-gap"><b class="num">${R.fmt(battle.interval)}</b>${trend}</div>${line(battle.back, battle.position + 1)}</div></div>`, 'A');
+    } else if (leader && leader.s.k < 0) {
+      setCard($('cardA'), 'waiting-first', '', `<div class="card-eb">Onda 3 na pista</div><div class="card-in"><div class="ld"><span class="w">Largou às ${R.wall(0)}</span><span class="bx">Ordem do cronograma até a primeira leitura</span><span class="at">Primeira leitura: entrada do SkiErg</span><span class="adv">O judge do SkiErg abre o cartão e a torre começa a andar.</span></div></div>`, 'A');
+    } else if (leader) {
+      const second = rows[1] && !rows[1].s.dnf ? rows[1] : null;
+      const g2 = second ? R.gapOf(second, leader) : null;
+      const adv = g2 && (g2.kind === 'gap' || (g2.kind === 'fin' && g2.gap !== null)) ? `Vantagem para o 2º: <b>+${R.fmt(g2.gap)}</b>` : 'Vantagem para o 2º: aguardando leitura';
+      const w = whereOf(leader, S.t, now);
+      setCard($('cardA'), `leader-${leader.ath.idx}`, '', `<div class="card-eb">Líder da onda</div><div class="card-in"><div class="ld"><span class="w">${esc(leader.ath.name)}</span><span class="bx">${esc(leader.ath.box)}</span><span class="at">${esc(w.main)} · ${esc(w.sub)}</span><span class="adv">${adv}</span></div></div>`, 'A');
+    }
+    const finalists = rows.filter((r) => r.s.inStation && R.COURSE[r.s.stageIndex].kind === 'reps').slice(0, 3);
+    if (finalists.length) {
+      const items = finalists.map((r) => {
+        const reps = Math.min(99, Math.floor(r.s.frac * 100));
+        const pos = rows.indexOf(r) + 1;
+        return `<div class="wb-row"><div class="w"><b>${pos} · ${esc(r.ath.name)}</b><span>${esc(r.ath.box)}</span></div><span class="c num">${reps}<small>/100</small></span><div class="wb-bar"><i style="transform:scaleX(${(reps / 100).toFixed(3)})"></i></div></div>`;
+      }).join('');
+      setCard($('cardB'), 'final', 'final', `<div class="card-eb">Reta final · Wall Ball</div><div class="card-in"><div class="wb">${items}</div></div>`, 'B');
+    } else {
+      setCard($('cardB'), 'next', '', '<div class="card-eb">Próxima largada</div><div class="card-in"><div class="nx"><span class="w">Onda 4</span><span class="h">10:40 prevista</span><span class="c">Open Masculino e Open Feminino · 12 atletas</span></div></div>', 'B');
+    }
+  };
+
+  const renderFlag = () => {
+    const flag = $('flag');
+    if (!flagNow) { flag.classList.remove('on'); return; }
+    if (flag.dataset.key === String(flagNow.ath.idx) && flag.classList.contains('on')) return;
+    flag.dataset.key = String(flagNow.ath.idx);
+    const s = R.stateAt(flagNow.ath, flagNow.at + 0.5);
+    const cls = R.classAt(flagNow.at + 0.5).find((r) => r.name === flagNow.ath.name);
+    const best = R.bestAt(flagNow.at + 0.5);
+    const mine = Object.entries(best).find(([, b]) => b.name === flagNow.ath.name);
+    const pb = mine ? `<span class="pb">Melhor da categoria: ${esc(R.COURSE[R.idxOf(mine[0])].name)} ${R.fmt(mine[1].secs)}</span>` : '';
+    const penNote = s.pen && S.penMode !== 'hidden' ? ` · inclui +${s.pen} s de penalidade` : '';
+    $('flagIn').innerHTML = `<div class="flag-eb">Chegada · Onda 3 · ${R.wall(flagNow.at)}</div><div class="flag-pos"><b>${cls && cls.pos ? ord(cls.pos) : '–'}</b><span>na categoria até agora</span></div><div class="flag-who"><b>${esc(flagNow.ath.name)}</b><span>${esc(flagNow.ath.box)} · Open Masculino</span></div><div class="flag-time"><b class="num">${R.fmt(s.official)}</b><span>Tempo final${penNote}</span>${pb}</div>`;
+    flag.classList.add('on');
+  };
+
+  const renderTicker = () => {
+    let text = '';
+    let label = 'Direção de prova';
+    let key = '';
+    if (S.screen === 'live') {
+      const events = R.TICKER.filter((ev) => ev.at <= S.t && !(ev.kind === 'pen' && S.penMode === 'hidden'));
+      const ev = events[events.length - 1];
+      if (ev) { const tt = tickerText(ev); text = `${R.wall(ev.at)} · ${tt.html}`; key = `${ev.kind}-${ev.at}-${S.penMode}`; }
+    } else if (S.screen === 'grid') { label = 'Largada'; text = 'Onda 3 · prevista 10:12 · o relógio começa no sinal do organizador'; key = 'grid'; }
+    else if (S.screen === 'class') { label = 'Resultados'; text = 'Mesmo resultado do leaderboard do site · tempo final com penalidades'; key = 'class'; }
+    else { label = 'Próxima largada'; text = 'Onda 3 · 10:12 · Open Masculino'; key = 'standby'; }
+    $('tickLabel').textContent = label;
+    const tick = $('tickText');
+    if (key !== lastTickKey) {
+      tick.innerHTML = text;
+      tick.classList.remove('anim');
+      void tick.offsetWidth;
+      tick.classList.add('anim');
+      lastTickKey = key;
+    }
+  };
+
+  const renderTop = () => {
+    const pill = $('tvPill');
+    const pillText = $('tvPillText');
+    const title = $('tvTitle');
+    const clock = $('tvClock');
+    const cap = $('tvClockCap');
+    pill.className = 'tv-pill';
+    if (S.screen === 'live') {
+      pill.classList.add('live'); pillText.textContent = 'AO VIVO';
+      title.textContent = 'Onda 3 · Open Masculino';
+      clock.textContent = R.fmtClock(S.t); cap.textContent = 'Tempo da onda 3';
+    } else if (S.screen === 'grid') {
+      pill.classList.add('call'); pillText.textContent = 'GRID';
+      title.textContent = 'Grid de largada · Onda 3';
+      clock.textContent = '10:09'; cap.textContent = 'Hora local';
+    } else if (S.screen === 'class') {
+      pill.classList.add('res'); pillText.textContent = 'RESULTADOS';
+      title.textContent = 'Classificação · Open Masculino';
+      clock.textContent = R.wall(Math.max(S.t, R.RACE_END), false); cap.textContent = 'Hora local';
+    } else {
+      pillText.textContent = 'ESPERA';
+      title.textContent = 'Fitness Race · Etapa Fortaleza';
+      clock.textContent = '10:05'; cap.textContent = 'Hora local';
+    }
+  };
+
+  const renderClass = (now) => {
+    const t = S.t >= R.RACE_END - 15 ? R.RACE_END : S.t;
+    const rows = R.classAt(t);
+    const withTime = rows.filter((r) => r.secs !== null).length;
+    const dnf = rows.length - withTime;
+    $('classMeta').textContent = `${withTime} com tempo${dnf ? ` · ${dnf} DNF` : ''}`;
+    const pages = Math.max(1, Math.ceil(rows.length / 10));
+    const page = Math.floor((now - S.classStart) / 7000) % pages;
+    $('classPager').innerHTML = `${page + 1}/${pages} ` + Array.from({ length: pages }, (_, i) => `<i class="${i === page ? 'on' : ''}"></i>`).join('');
+    const first = rows.find((r) => r.secs !== null);
+    const slice = rows.slice(page * 10, page * 10 + 10);
+    const key = `${page}-${withTime}-${dnf}`;
+    const table = $('classTable');
+    if (table.dataset.key !== key) {
+      table.dataset.key = key;
+      table.innerHTML = '<div class="c-cols"><span>Pos</span><span>Atleta</span><span>Onda</span><span class="r">Tempo</span><span class="r">Dif.</span></div>' + slice.map((r) => `<div class="c-row${r.fresh ? ' fresh' : ''}${r.dnf ? ' dnf' : ''}"><span class="p">${r.pos ?? '–'}</span><span class="who"><span class="nm">${esc(r.name)}</span><span class="bx">${esc(r.box)}</span>${r.fresh ? '<span class="tag-new">NOVO</span>' : ''}</span><span class="wv">${esc(r.wave)}</span><span class="tm">${r.secs === null ? 'DNF' : R.fmt(r.secs)}</span><span class="df">${r.secs === null || !first || r === first ? '' : `+${R.fmt(r.secs - first.secs)}`}</span></div>`).join('');
+    }
+    const best = R.bestAt(t);
+    const list = R.COURSE.filter((s) => s.type === 'station' && s.covered).map((s) => {
+      const b = best[s.id];
+      return `<div class="b-row"><b>${esc(s.name)}</b><span class="t">${b ? R.fmt(b.secs) : '–'}</span><span>${b ? `${esc(b.name)} · ${esc(b.wave)}` : 'sem tempo'}</span></div>`;
+    }).join('');
+    if ($('bestList').dataset.key !== String(t)) { $('bestList').innerHTML = list; $('bestList').dataset.key = String(t); }
+  };
+
+  const SIDE = {
+    standby: ['Espera', [
+      'Entra quando nenhuma onda está na pista e nenhuma terminou há pouco, ou quando o gestor fixa a espera na mesa.',
+      'Mostra as próximas ondas do cronograma. O horário é o <strong>previsto</strong>: a largada só vale no gesto do gestor, no painel Ondas.'
+    ]],
+    grid: ['Grid de largada', [
+      'A próxima onda sem largada, na ordem do cronograma: atletas, categorias, horário previsto e o percurso com metas e cargas.',
+      'As cinco luzes ficam apagadas. Quando o gestor segura "Largar" no painel Ondas, o telão vê a largada em até 2 s, <strong>acende e apaga as luzes</strong> e vai para o ao vivo.',
+      'O relógio conta desde a largada oficial, então pode já estar em 00:02 quando as luzes apagam. Teste com o botão "Largar a onda".'
+    ]],
+    live: ['Ao vivo', [
+      '<strong>Torre:</strong> ordem pela última leitura de judge. Quem fechou o tempo vem primeiro; no mesmo ponto, quem passou antes.',
+      '<strong>Diferença:</strong> medida no mesmo ponto do percurso, em segundos, como a F1 mede na linha.',
+      '<strong>Mapa:</strong> marcador cheio = cartão aberto na estação; vazado = entre estações (estimado). Estação tracejada não tem judge nesta onda: não gera tempo nem posição.',
+      '<strong>Cartões:</strong> roxo de melhor estação, disputa de até 10 s, reta final do Wall Ball e próxima largada. A bandeirada cobre o mapa, nunca a torre.',
+      '<strong>Rodapé:</strong> direção de prova com largada, penalidade, DNF e chegada. Troque a D2 nos botões para ver as três versões.'
+    ]],
+    class: ['Classificação', [
+      'Entra 90 s depois que a onda termina (todos com tempo ou DNF) e alterna com o grid da próxima onda.',
+      'Mesmo resultado do leaderboard do site (prova TOTAL): tempo final já com penalidades. Quem acabou de chegar ganha o selo <strong>NOVO</strong>.',
+      'À direita, os roxos da categoria: o melhor tempo de cada estação com judge, somando as ondas.'
+    ]]
+  };
+  let sideKey = '';
+  const renderSide = () => {
+    if (sideKey === S.screen) return;
+    sideKey = S.screen;
+    const [title, notes] = SIDE[S.screen];
+    $('sideTitle').textContent = title;
+    $('sideNotes').innerHTML = notes.map((n) => `<li>${n}</li>`).join('');
+  };
+
+  const renderControls = () => {
+    document.querySelectorAll('#segScreen button').forEach((b) => {
+      const v = b.dataset.screen;
+      b.setAttribute('aria-pressed', String(v === 'auto' ? S.auto : (!S.auto && v === S.screen)));
+    });
+    document.querySelectorAll('#segSpeed button').forEach((b) => b.setAttribute('aria-pressed', String(Number(b.dataset.speed) === S.speed)));
+    document.querySelectorAll('#segPen button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.pen === S.penMode)));
+    $('b-play').textContent = S.playing ? 'Pausar' : 'Continuar';
+    if (document.activeElement !== scrub) scrub.value = String(Math.round(S.t));
+    $('scrubOut').textContent = R.fmtClock(S.t);
+  };
+
+  const render = (now) => {
+    renderTop();
+    renderTicker();
+    renderSide();
+    renderControls();
+    if (S.screen === 'live') {
+      const newDnf = syncEvents(now);
+      const rows = R.rankAt(S.t);
+      const ranks = new Map(rows.map((r, i) => [r.ath.idx, i]));
+      if (prevRank && !newDnf) {
+        rows.forEach((r, i) => {
+          const before = prevRank.get(r.ath.idx);
+          if (before !== undefined && before !== i && !r.s.dnf) chg.set(r.ath.idx, { dir: i < before ? 'up' : 'down', until: now + 5000 });
+        });
+      }
+      prevRank = ranks;
+      renderTower(rows, now);
+      renderMap(rows);
+      renderCards(rows, now);
+      renderFlag();
+    } else if (S.screen === 'class') {
+      renderClass(now);
+    }
+  };
+
+  // ------------------------------------------------------------ fluxo
+  let lightsGen = 0;
+  let lightsRunning = false;
+  const go = (screen, now = performance.now()) => {
+    S.screen = screen;
+    if (screen === 'standby') S.phaseUntil = now + 6000;
+    if (screen === 'grid') S.phaseUntil = now + 7000;
+    if (screen === 'class') { S.phaseUntil = now + 14500; S.classStart = now; }
+    screens.forEach((node) => node.classList.toggle('on', node.dataset.screen === screen));
+    render(now);
+  };
+  const resetRace = () => {
+    S.t = 0;
+    S.started = false;
+    S.liveEndAt = null;
+    resetAnnouncements(0);
+    cardAKey = '';
+    cardBKey = '';
+    $('flag').classList.remove('on');
+  };
+  const startWave = () => {
+    if (lightsRunning) return;
+    lightsRunning = true;
+    const gen = ++lightsGen;
+    const ov = $('lightsOv');
+    const msg = $('ovMsg');
+    const units = [...$('ovGantry').querySelectorAll('.unit')];
+    units.forEach((u) => u.classList.remove('on'));
+    ov.classList.remove('go');
+    msg.textContent = 'Onda 3 · Open Masculino';
+    ov.hidden = false;
+    const step = reduced ? 0 : 170;
+    units.forEach((u, i) => setTimeout(() => { if (gen === lightsGen) u.classList.add('on'); }, step * (i + 1)));
+    setTimeout(() => {
+      if (gen !== lightsGen) return;
+      units.forEach((u) => u.classList.remove('on'));
+      msg.textContent = 'Largada!';
+      ov.classList.add('go');
+      resetRace();
+      S.started = true;
+      go('live');
+    }, step * 5 + (reduced ? 0 : 550));
+    setTimeout(() => {
+      if (gen !== lightsGen) return;
+      ov.hidden = true;
+      ov.classList.remove('go');
+      lightsRunning = false;
+    }, step * 5 + (reduced ? 400 : 1900));
+  };
+  const cancelLights = () => {
+    lightsGen += 1;
+    lightsRunning = false;
+    $('lightsOv').hidden = true;
+  };
+
+  let last = performance.now();
+  let lastRender = 0;
+  const frame = (now) => {
+    const dt = Math.min(0.25, (now - last) / 1000);
+    last = now;
+    if (S.playing && S.screen === 'live' && S.started && !lightsRunning) S.t = Math.min(R.RACE_END, S.t + dt * S.speed);
+    if (S.auto && S.playing && !lightsRunning) {
+      if (S.screen === 'standby' && now >= S.phaseUntil) { resetRace(); go('grid', now); }
+      else if (S.screen === 'grid' && now >= S.phaseUntil) startWave();
+      else if (S.screen === 'live' && S.t >= R.RACE_END && !flagNow && !queue.length) {
+        if (S.liveEndAt === null) S.liveEndAt = now + 3500;
+        else if (now >= S.liveEndAt) go('class', now);
+      } else if (S.screen === 'class' && now >= S.phaseUntil) go('standby', now);
+    }
+    if (now - lastRender > 160) { render(now); lastRender = now; }
+    requestAnimationFrame(frame);
+  };
+
+  // ------------------------------------------------------------ controles
+  $('segScreen').addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    const v = b.dataset.screen;
+    cancelLights();
+    if (v === 'auto') { S.auto = true; S.playing = true; resetRace(); go('standby'); return; }
+    S.auto = false;
+    if (v === 'live' && !S.started) { S.started = true; resetAnnouncements(S.t); }
+    go(v);
+  });
+  $('b-start').addEventListener('click', () => {
+    cancelLights();
+    S.auto = false;
+    S.playing = true;
+    go('grid');
+    setTimeout(startWave, reduced ? 0 : 450);
+  });
+  $('b-play').addEventListener('click', () => { S.playing = !S.playing; render(performance.now()); });
+  $('segSpeed').addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    S.speed = Number(b.dataset.speed);
+    render(performance.now());
+  });
+  $('segPen').addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    S.penMode = b.dataset.pen;
+    $('flag').dataset.key = '';
+    render(performance.now());
+  });
+  scrub.addEventListener('input', () => {
+    cancelLights();
+    S.auto = false;
+    S.started = true;
+    S.t = Number(scrub.value);
+    resetAnnouncements(S.t);
+    cardAKey = '';
+    $('flag').classList.remove('on');
+    if (S.screen !== 'live') go('live'); else render(performance.now());
+  });
+
+  // estado inicial: ao vivo, no meio da onda
+  resetAnnouncements(S.t);
+  go('live');
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

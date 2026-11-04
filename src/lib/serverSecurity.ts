@@ -61,6 +61,15 @@ const sign = (payload: string, purpose = 'session') => createHmac('sha256', `${g
   .update(payload)
   .digest('base64url');
 
+/**
+ * Identificador opaco e estável de um id interno, para payloads públicos que
+ * precisam de uma chave por linha (animar a torre do telão) sem expor o id:
+ * HMAC com o segredo do servidor, separado por finalidade (`purpose`), então é
+ * igual entre consultas, não dá para reverter e quem não tem o segredo não
+ * consegue conferir um palpite de id.
+ */
+export const deriveOpaqueId = (value: string, purpose: string, length = 16) => sign(value, `opaque:${purpose}`).slice(0, length);
+
 type RegistrationAccessClaims = {
   typ: 'registration-access';
   sub: string;

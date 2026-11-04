@@ -17,12 +17,18 @@ import {
   type BroadcastStandingsBoard,
   type BroadcastWorkout
 } from '@/lib/broadcastPayload';
+import type { RaceBroadcastPayload } from '@/lib/raceBroadcastPayload';
+import { isRaceBroadcastPayload, racePollMs } from '@/lib/raceBroadcastView';
 import styles from './Broadcast.module.css';
+import { RaceBroadcastScreen } from './RaceBroadcastScreen';
 
 // Telão ao vivo (Story 1.57), aberto na TV pelo link secreto do gestor. Pergunta
 // ao servidor a cada 1 s durante a bateria e a cada 5 s no resto; sem conexão,
 // mantém a última tela e avisa. O relógio da bateria anda no aparelho, acertado
 // pela hora do servidor. Desenho aprovado: docs/design/telao-ao-vivo/ (C).
+// Evento Fitness Race (Story 1.113): o mesmo link e a mesma consulta; o payload com
+// `eventType: 'fitness_racing'` vai para a tela própria (RaceBroadcastScreen.tsx),
+// que não faz requisição. Desenho: docs/design/telao-fitness-race/.
 
 const LIVE_POLL_MS = 1_000;
 const IDLE_POLL_MS = 5_000;
@@ -32,6 +38,9 @@ const MAX_LIST_HEIGHT = 42;
 const IDLE_CURSOR_MS = 3_000;
 
 type Status = 'loading' | 'ok' | 'revoked' | 'error';
+
+/** O que a rota devolve: o payload de Functional Fitness ou o do Fitness Race. */
+type AnyBroadcastPayload = BroadcastPayload | RaceBroadcastPayload;
 
 const fmt = (seconds: number) => {
   const total = Math.max(0, Math.floor(seconds));
@@ -55,13 +64,14 @@ const workoutTitle = (workout: BroadcastWorkout | null) => (
 );
 
 function useBroadcast(token: string) {
-  const [payload, setPayload] = useState<BroadcastPayload | null>(null);
+  const [payload, setPayload] = useState<AnyBroadcastPayload | null>(null);
   const [status, setStatus] = useState<Status>('loading');
   const [message, setMessage] = useState('');
   const [offline, setOffline] = useState(false);
   const [lastOkAt, setLastOkAt] = useState<number | null>(null);
   const offset = useRef(0);
-  const screen = useRef<BroadcastPayload['screen'] | null>(null);
+  // Intervalo da próxima consulta: 1 s com bateria ao vivo (no Fitness Race, também com onda por largar), 5 s no resto.
+  const pollBase = useRef(IDLE_POLL_MS);
   const appVersion = useRef<string | null>(null);
 
   useEffect(() => {
@@ -72,7 +82,7 @@ function useBroadcast(token: string) {
 
     const schedule = () => {
       if (stopped) return;
-      const base = screen.current === 'live' ? LIVE_POLL_MS : IDLE_POLL_MS;
+      const base = pollBase.current;
       timer = window.setTimeout(tick, failures > 0 ? Math.min(IDLE_POLL_MS, base * 2 ** failures) : base);
     };
 
@@ -90,14 +100,14 @@ function useBroadcast(token: string) {
           const data = await response.json().catch(() => ({})) as { error?: string };
           setStatus('revoked');
           setMessage(data.error || 'Link do telão desativado.');
-          screen.current = null;
+          pollBase.current = IDLE_POLL_MS;
         } else if (!response.ok) {
           const data = await response.json().catch(() => ({})) as { error?: string };
           setStatus((current) => (current === 'ok' ? 'ok' : 'error'));
           setMessage(data.error || 'O telão não conseguiu carregar o evento.');
           if (response.status >= 500) setOffline(true);
         } else {
-          const data = await response.json() as BroadcastPayload;
+          const data = await response.json() as AnyBroadcastPayload;
           if (appVersion.current !== null && data.appVersion && data.appVersion !== appVersion.current) {
             window.location.reload();
             return;
@@ -105,7 +115,7 @@ function useBroadcast(token: string) {
           appVersion.current = data.appVersion || appVersion.current || '';
           etag = response.headers.get('ETag') || '';
           offset.current = Date.parse(data.serverTime) - Date.now();
-          screen.current = data.screen;
+          pollBase.current = isRaceBroadcastPayload(data) ? racePollMs(data) : data.screen === 'live' ? LIVE_POLL_MS : IDLE_POLL_MS;
           setPayload(data);
           setStatus('ok');
           setLastOkAt(Date.now());
@@ -505,10 +515,14 @@ function Message({ title, text }: { title: string; text: string }) {
 // ---------------------------------------------------------------------------
 
 export function BroadcastScreen({ token }: { token: string }) {
-  const { payload, status, message, offline, lastOkAt, offset } = useBroadcast(token);
+  const { payload: received, status, message, offline, lastOkAt, offset } = useBroadcast(token);
   const idle = useTvChrome();
   const { serverNow: now, localNow } = useNow(250, offset);
   const stageRef = useRef<HTMLDivElement>(null);
+  const racePayload = received !== null && isRaceBroadcastPayload(received) ? received : null;
+  const payload = received !== null && !isRaceBroadcastPayload(received) ? received : null;
+  // Evento Fitness Race: tela própria, depois de todos os hooks. Link revogado ou sem resposta ainda segue na moldura de baixo.
+  if (status === 'ok' && racePayload) return <RaceBroadcastScreen payload={racePayload} now={now} localNow={localNow} offline={offline} lastOkAt={lastOkAt} idle={idle} />;
 
   const toggleFullscreen = () => {
     if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});

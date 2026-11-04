@@ -50,8 +50,8 @@ export class BroadcastError extends Error {
   }
 }
 
-/** Evento Fitness Race ou Qualifier no telão (mesa e link). */
-export const BROADCAST_EVENT_TYPE_MESSAGE = 'O telão ao vivo é exclusivo de eventos Functional Fitness presenciais.';
+/** Evento Qualifier no telão (mesa e link). O texto cita o Fitness Race porque ele também tem telão e mesa própria (Stories 1.111 a 1.115). */
+export const BROADCAST_EVENT_TYPE_MESSAGE = 'O telão ao vivo é exclusivo de eventos Functional Fitness e Fitness Race presenciais.';
 
 const UNAVAILABLE_MESSAGE = 'O telão ainda não está disponível neste ambiente. Aplique a migration do telão antes de usar.';
 
@@ -219,7 +219,17 @@ export const markBroadcastHeat = async (
 
 type ScheduleItem = { id?: unknown; kind?: unknown; workoutId?: unknown; heatNumber?: unknown; date?: unknown; time?: unknown; title?: unknown; athleteIds?: unknown; isCallReleased?: unknown; stageNumber?: unknown; stageTitle?: unknown; laneWorkoutIds?: unknown };
 
-type EventRow = { id: string; name: string | null; logo_url: string | null; date: string | null; event_type: string | null; event_schedule: unknown };
+/** O evento como o telão o lê: a rota lê uma vez e entrega ao telão certo pelo tipo (Functional Fitness ou Fitness Race). */
+export type BroadcastEventRow = {
+  id: string;
+  name: string | null;
+  logo_url: string | null;
+  date: string | null;
+  event_type: string | null;
+  event_schedule: unknown;
+  time_zone?: string | null;
+};
+type EventRow = BroadcastEventRow;
 type DivisionRow = { id: string; name: string; order_index: number | null };
 type WorkoutRow = { id: string; name: string; code: string | null; order_index: number | null; division_id: string | null; type: WorkoutType; tie_breaker: string | null; time_cap: string | null; submission_closes_at: string | null; structure: unknown };
 type SheetRow = {
@@ -374,7 +384,7 @@ const minIso = (values: (string | null | undefined)[]) => {
   return times.length ? new Date(Math.min(...times)).toISOString() : null;
 };
 
-const fingerprint = (value: unknown) => createHash('sha1').update(JSON.stringify(value)).digest('base64url').slice(0, 16);
+export const fingerprint = (value: unknown) => createHash('sha1').update(JSON.stringify(value)).digest('base64url').slice(0, 16);
 
 /** Linhas por página: o "Max rows" padrão do PostgREST no Supabase (acima disso ele corta sem erro). */
 export const SHEET_PAGE_SIZE = 1000;
@@ -383,15 +393,19 @@ const MAX_PAGES = 100;
 /**
  * Lê todas as páginas de uma consulta (`range` sobre uma ordem estável) até vir
  * uma página incompleta. `fetchPage` recebe o intervalo inclusivo de linhas.
+ * `checkResult` traduz o erro da consulta; o padrão é o do telão de Functional
+ * Fitness (tabela ausente = migration do telão). O telão do Fitness Race passa
+ * o dele, que cita a migration da súmula Race (Story 1.112).
  */
 export const readAllPages = async <T>(
   fetchPage: (from: number, to: number) => PromiseLike<{ data: unknown; error: unknown }>,
-  pageSize = SHEET_PAGE_SIZE
+  pageSize = SHEET_PAGE_SIZE,
+  checkResult: (result: { data: unknown; error: unknown }) => unknown = check
 ): Promise<T[]> => {
   const rows: T[] = [];
   for (let page = 0; page < MAX_PAGES; page += 1) {
     const from = page * pageSize;
-    const data = (check(await fetchPage(from, from + pageSize - 1)) || []) as T[];
+    const data = (checkResult(await fetchPage(from, from + pageSize - 1)) || []) as T[];
     rows.push(...data);
     if (data.length < pageSize) return rows;
   }
@@ -577,20 +591,33 @@ const buildStandingsBoards = async (
 // Estado do telão
 // ---------------------------------------------------------------------------
 
-const APP_VERSION = process.env.VERCEL_GIT_COMMIT_SHA || process.env.VERCEL_DEPLOYMENT_ID || '';
+export const APP_VERSION = process.env.VERCEL_GIT_COMMIT_SHA || process.env.VERCEL_DEPLOYMENT_ID || '';
 
+/** O evento do telão (404 quando não existe). A rota lê uma vez e entrega ao telão do tipo certo. */
+export const readBroadcastEvent = async (supabaseAdmin: SupabaseClient, eventId: string): Promise<BroadcastEventRow> => {
+  const row = check(await supabaseAdmin
+    .from('events')
+    .select('id, name, logo_url, date, event_type, event_schedule, time_zone')
+    .eq('id', eventId)
+    .maybeSingle()) as BroadcastEventRow | null;
+  if (!row) throw new BroadcastError('Evento não encontrado.', 404);
+  return row;
+};
+
+/**
+ * Estado do telão de Functional Fitness. `prefetchedEvent` é o evento que a rota
+ * já leu (para não ler duas vezes); sem ele, lê aqui, como sempre. Evento de
+ * outro tipo (Qualifier) responde 400; o Fitness Race tem a leitura própria em
+ * `serverRaceBroadcast.ts`, escolhida pela rota.
+ */
 export const buildBroadcastState = async (
   supabaseAdmin: SupabaseClient,
   eventId: string,
   config: BroadcastConfig,
-  nowMs = Date.now()
+  nowMs = Date.now(),
+  prefetchedEvent?: BroadcastEventRow
 ): Promise<BroadcastPayload> => {
-  const eventRow = check(await supabaseAdmin
-    .from('events')
-    .select('id, name, logo_url, date, event_type, event_schedule')
-    .eq('id', eventId)
-    .maybeSingle()) as EventRow | null;
-  if (!eventRow) throw new BroadcastError('Evento não encontrado.', 404);
+  const eventRow = prefetchedEvent ?? await readBroadcastEvent(supabaseAdmin, eventId);
   if (eventRow.event_type && eventRow.event_type !== 'functional_fitness') {
     throw new BroadcastError(BROADCAST_EVENT_TYPE_MESSAGE, 400);
   }

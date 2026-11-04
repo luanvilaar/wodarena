@@ -281,7 +281,7 @@ test('mesa do telão: só o gestor dono (ou owner); o link é mostrado uma vez e
   assert.equal((await controlView(ATHLETE_USER)).status, 403);
   assert.equal((await controlView(JUDGE)).status, 403);
   assert.equal((await controlView(OTHER_MANAGER)).status, 403);
-  assert.equal((await controlView(MANAGER, 'ev-race')).status, 400, 'Fitness Race fica fora');
+  assert.equal((await controlView(MANAGER, 'ev-race')).status, 200, 'Fitness Race tem mesa própria (Story 1.115); a súmula e a largada dele ficam na aba Súmula Fitness Race');
   assert.equal((await controlView(OWNER)).status, 200);
 
   const view = await controlView(MANAGER);
