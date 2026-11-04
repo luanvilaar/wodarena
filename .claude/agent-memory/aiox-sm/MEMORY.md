@@ -7,3 +7,4 @@
 - [Stories 1.93 a 1.99: súmula Fitness Race](project_stories_1_93_1_99_fitness_race.md) — Draft de 2026-10-30 (F0 e F1); D1-D10 prevalecem; AUTO-DECISIONs e armadilhas de testes por regex
 - [Stories 1.60 a 1.63: formato Intervalado](project_stories_1_60_1_63_intervalado.md) — Draft de 2026-10-21; 10 decisões aprovadas no README da pasta de design, dependências e pontos a confirmar com o @po
 - [Stories 1.100 a 1.106: Fitness Race F2 (nível 2)](project_stories_1_100_1_106_fitness_race_f2.md) — Draft de 2026-10-30; cadeia, maquetes exigidas (1.103, 1.105) e perguntas abertas ao Luan
+- [Stories 1.111 a 1.115: telão Fitness Race](project_stories_1_111_1_115_telao_fitness_race.md) — Draft de 2026-11-03 (T1 a T5); AUTO-DECISIONs, 3 perguntas ao Luan, armadilhas de teste

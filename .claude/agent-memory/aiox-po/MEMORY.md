@@ -2,3 +2,4 @@
 - [Fitness Race 1.93–1.99](project_fitness_race_1_93_1_99_validation.md) — v1.4 D23–D26 em 2026-10-30: liberadas; abandon, undo_dq, faixa CourtShell; só D20 aberta
 - [Fitness Race F2 1.100–1.106](project_fitness_race_f2_1_100_1_106_validation.md) — GO 2026-10-31, Ready; 1.103/1.105 só com maquete; 7 perguntas ao Luan abertas
 - [Intervalado 1.60–1.63 validadas](project_intervalado_1_60_1_63_validation.md) — GO 9/9/8/9 em 2026-10-21, Ready; recomendação: publicar 1.61 com 1.62
+- [Telão Fitness Race 1.111–1.115](project_telao_fitness_race_1_111_1_115_validation.md) — GO 9/9/9/8/8 em 2026-11-03, Ready; T4-4/T4-5 do @po para o Luan conferir
