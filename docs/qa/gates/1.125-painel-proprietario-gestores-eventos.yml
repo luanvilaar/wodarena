@@ -1,0 +1,27 @@
+schema: 1
+story: '1.125'
+story_title: 'Painel do Proprietário: Gestores e Eventos'
+gate: CONCERNS
+status_reason: 'Filtros, contagens, renovação rápida, painel lateral acessível, cadastro no painel e detalhe do evento cobertos por testes; o construtor da consulta de cadastros foi corrigido para não ser reaproveitado entre páginas. O ranking dentro do painel lateral não foi visto no navegador.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-11-07T12:00:00-03:00'
+expires: '2026-11-21T12:00:00-03:00'
+quality_score: 84
+
+top_issues:
+  - id: UX-001
+    severity: medium
+    finding: 'O Leaderboard dentro do painel lateral (460 px) não foi conferido no navegador: tabela larga pode rolar de lado.'
+    suggested_owner: dev
+    suggested_action: 'Abrir um evento com ranking no navegador logado; se apertar, alargar o painel na aba Ranking.'
+  - id: UX-002
+    severity: low
+    finding: 'O aviso de validade salva fica no painel e aparece também ao abrir outro gestor até sumir (4 s).'
+    suggested_owner: dev
+    suggested_action: 'Opcional: limpar o aviso ao trocar de gestor.'
+waiver: { active: false }
+
+evidence:
+  tests_reviewed: 1795
+  coderabbit: 'review --agent --committed --base origin/main: 3 achados (1 major, 2 minor), todos corrigidos'
+  gates: 'npm test 1.795/1.795, lint 0 erros, typecheck e build verdes'

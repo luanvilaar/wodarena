@@ -1,0 +1,27 @@
+schema: 1
+story: '1.126'
+story_title: 'Painel do Proprietário: Comercial e Configurações'
+gate: CONCERNS
+status_reason: 'PATCH só do owner, só a coluna do status, testado contra o banco em memória; troca otimista com volta atrás; link do WhatsApp corrigido pelo CodeRabbit (DDD 55 do RS); vitrine da home com a regra da Story 1.24, agora compartilhada com a fila de atenção. Sem conferência no navegador logado.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-11-07T12:00:00-03:00'
+expires: '2026-11-21T12:00:00-03:00'
+quality_score: 85
+
+top_issues:
+  - id: UX-001
+    severity: medium
+    finding: 'Status na linha, conversa no WhatsApp e vitrine em Configurações não foram usados no navegador.'
+    suggested_owner: dev
+    suggested_action: 'Conferir no navegador logado.'
+  - id: UX-002
+    severity: low
+    finding: 'As colunas Origem e Aceite saíram da tabela de leads (os dados seguem gravados).'
+    suggested_owner: dev
+    suggested_action: 'Aceito.'
+waiver: { active: false }
+
+evidence:
+  tests_reviewed: 1795
+  coderabbit: 'review --agent --committed --base origin/main: 3 achados (1 major, 2 minor), todos corrigidos'
+  gates: 'npm test 1.795/1.795, lint 0 erros, typecheck e build verdes'

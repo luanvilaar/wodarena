@@ -1,0 +1,27 @@
+schema: 1
+story: '1.124'
+story_title: 'Painel do Proprietário: Visão Geral Nova'
+gate: CONCERNS
+status_reason: 'Números, variação, nota de outras moedas, fila, eventos à venda e gráfico cobertos por renderização; gráfico segue a skill de visualização (barras finas, hachura no mês parcial, tabela para leitor de tela). Sem conferência no navegador logado.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-11-07T12:00:00-03:00'
+expires: '2026-11-21T12:00:00-03:00'
+quality_score: 85
+
+top_issues:
+  - id: UX-001
+    severity: medium
+    finding: 'Gráfico, dica ao passar o mouse e a busca do topo não foram usados no navegador.'
+    suggested_owner: dev
+    suggested_action: 'Conferir no navegador logado.'
+  - id: UX-002
+    severity: low
+    finding: 'A busca do topo remonta a Visão geral inteira para preencher o cartão de cadastros.'
+    suggested_owner: dev
+    suggested_action: 'Aceito; os números ficam na página e não são relidos.'
+waiver: { active: false }
+
+evidence:
+  tests_reviewed: 1795
+  coderabbit: 'review --agent --committed --base origin/main: 3 achados (1 major, 2 minor), todos corrigidos'
+  gates: 'npm test 1.795/1.795, lint 0 erros, typecheck e build verdes'

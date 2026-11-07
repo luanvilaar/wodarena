@@ -1,0 +1,27 @@
+schema: 1
+story: '1.123'
+story_title: 'Painel do Proprietário: Moldura, Navegação e Login'
+gate: CONCERNS
+status_reason: 'Moldura, seção no endereço, um único <main> e o login na variante do proprietário conferidos por renderização e no HTML servido pelo next start (sem menu e rodapé no /owner, com eles na home e no /admin). Falta a conferência no navegador logado em 1280, 1440 e 390 px.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-11-07T12:00:00-03:00'
+expires: '2026-11-21T12:00:00-03:00'
+quality_score: 85
+
+top_issues:
+  - id: UX-001
+    severity: medium
+    finding: 'Nenhuma tela do painel logado foi vista no navegador; a verificação foi por renderização no servidor e testes.'
+    suggested_owner: dev
+    suggested_action: 'Abrir o /owner logado em notebook e celular antes de considerar a reorganização entregue.'
+  - id: UX-002
+    severity: low
+    finding: 'O login do /owner não tem "Esqueci minha senha"; a recuperação continua pelo /admin, com a mesma conta.'
+    suggested_owner: dev
+    suggested_action: 'Aceito pela D6; registrar no aviso aos usuários se fizer falta.'
+waiver: { active: false }
+
+evidence:
+  tests_reviewed: 1795
+  coderabbit: 'review --agent --committed --base origin/main: 3 achados (1 major, 2 minor), todos corrigidos'
+  gates: 'npm test 1.795/1.795, lint 0 erros, typecheck e build verdes'

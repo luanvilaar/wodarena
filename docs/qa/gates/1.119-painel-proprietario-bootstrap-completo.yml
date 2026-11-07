@@ -1,0 +1,27 @@
+schema: 1
+story: '1.119'
+story_title: 'Painel do Proprietário: Leitura Completa no Bootstrap (Cadastros que Somem)'
+gate: PASS
+status_reason: 'Paginação estável com ordem por chave, dedup e erro que derruba o bootstrap em vez de devolver metade. O teste com o banco em memória cortando em 1.000 linhas reproduz o problema na rota antiga e passa na nova; gestor, judge e atleta continuam lendo só o que liam.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-11-07T12:00:00-03:00'
+expires: '2026-11-21T12:00:00-03:00'
+quality_score: 92
+
+top_issues:
+  - id: PERF-001
+    severity: low
+    finding: 'O /owner passa a trazer a plataforma inteira em páginas: carga maior a cada inscrição nova.'
+    suggested_owner: dev
+    suggested_action: 'Medir o log [Bootstrap Query] Concluída do proprietário em produção; a rota da 1.122 já tira os números do navegador.'
+  - id: OPS-001
+    severity: low
+    finding: 'A causa (users acima de 1.000 linhas) não foi confirmada no banco; a conferência E4 segue com o Luan.'
+    suggested_owner: dev
+    suggested_action: 'Rodar npm run manager-service:cli -- list e comparar com a seção Gestores depois do deploy.'
+waiver: { active: false }
+
+evidence:
+  tests_reviewed: 1795
+  coderabbit: 'review --agent --committed --base origin/main: 3 achados (1 major, 2 minor), todos corrigidos'
+  gates: 'npm test 1.795/1.795, lint 0 erros, typecheck e build verdes'

@@ -1,0 +1,22 @@
+schema: 1
+story: '1.121'
+story_title: 'Painel do Proprietário: Ações Críticas com Confirmação'
+gate: PASS
+status_reason: 'Rotas reais contra o banco em memória: o percentual não é regravado, senha curta não cria gestor, e-mail repetido devolve a mensagem da API. Confirmação com foco em Cancelar, Esc e botões travados durante a gravação.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-11-07T12:00:00-03:00'
+expires: '2026-11-21T12:00:00-03:00'
+quality_score: 90
+
+top_issues:
+  - id: UX-001
+    severity: low
+    finding: 'A confirmação de validade no passado depende do relógio do navegador só para decidir abrir o diálogo; o bloqueio real é calculado no servidor no fuso de negócio.'
+    suggested_owner: dev
+    suggested_action: 'Nenhuma ação; registrado.'
+waiver: { active: false }
+
+evidence:
+  tests_reviewed: 1795
+  coderabbit: 'review --agent --committed --base origin/main: 3 achados (1 major, 2 minor), todos corrigidos'
+  gates: 'npm test 1.795/1.795, lint 0 erros, typecheck e build verdes'

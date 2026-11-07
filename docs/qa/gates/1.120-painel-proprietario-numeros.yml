@@ -1,0 +1,22 @@
+schema: 1
+story: '1.120'
+story_title: 'Painel do Proprietário: Números Certos no Painel Atual'
+gate: PASS
+status_reason: 'O exemplo da proposta (R$ 210 pago, R$ 20 de taxa, R$ 190 de repasse) é coberto por teste e bate com buildEventFinanceRow; moedas nunca somam; pendente só pending/in_review; situação pelo ciclo de vida. Desde a 1.125 os cálculos rodam no servidor pelo mesmo módulo.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-11-07T12:00:00-03:00'
+expires: '2026-11-21T12:00:00-03:00'
+quality_score: 90
+
+top_issues:
+  - id: DATA-001
+    severity: low
+    finding: 'Com payment_gateway no select (1.122), inscrições Stripe antigas sem quem paga gravado passam a seguir o padrão da Stripe (gestor absorve) também no painel do gestor: o repasse delas muda para o valor certo.'
+    suggested_owner: dev
+    suggested_action: 'Avisar quem acompanha os números dos eventos em EUR/GBP.'
+waiver: { active: false }
+
+evidence:
+  tests_reviewed: 1795
+  coderabbit: 'review --agent --committed --base origin/main: 3 achados (1 major, 2 minor), todos corrigidos'
+  gates: 'npm test 1.795/1.795, lint 0 erros, typecheck e build verdes'

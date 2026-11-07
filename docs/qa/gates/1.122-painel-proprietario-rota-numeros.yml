@@ -1,0 +1,37 @@
+schema: 1
+story: '1.122'
+story_title: 'Painel do Proprietário: Rota de Números e Cadastros Recentes'
+gate: CONCERNS
+status_reason: 'Rotas só de leitura e só do owner, leitura paginada testada com 1.250 inscrições e corte de 1.000, fallback sem users.created_at testado, busca sem sintaxe do PostgREST. CodeRabbit: 1 major (relógio do teste da fila) e 1 minor (regra do destaque fora do carrossel) corrigidos. Ficam o tempo da rota em produção, que não foi medido, e a migration ainda não aplicada.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-11-07T12:00:00-03:00'
+expires: '2026-11-21T12:00:00-03:00'
+quality_score: 84
+
+top_issues:
+  - id: PERF-001
+    severity: medium
+    finding: 'GET /api/owner/overview lê todas as inscrições, divisões e leads a cada abertura e a cada troca de período; o tempo em produção não foi medido.'
+    suggested_owner: dev
+    suggested_action: 'Conferir o log [Owner Overview] Concluída depois do deploy; se passar de ~2 s, guardar a leitura em cache curto ou somar no banco.'
+  - id: DATA-001
+    severity: low
+    finding: '"Em análise há mais de 48 h" conta pela data da inscrição, não pela hora em que o pagamento entrou em análise (a tabela não guarda essa hora).'
+    suggested_owner: dev
+    suggested_action: 'Aceito; trocar se a tabela ganhar a data da mudança de status.'
+  - id: PRIV-001
+    severity: low
+    finding: 'O bootstrap do proprietário segue com todos os atletas e inscrições no navegador: o ranking do proprietário (getLeaderboard) confia nessas inscrições.'
+    suggested_owner: dev
+    suggested_action: 'Story própria para trocar o ranking do proprietário pela fonte pública antes de enxugar o bootstrap.'
+  - id: OPS-001
+    severity: low
+    finding: 'Migration users.created_at não aplicada; sem ela a data do cadastro vem do id (ids sem horário ficam sem data).'
+    suggested_owner: dev
+    suggested_action: 'Aplicar a pedido do Luan.'
+waiver: { active: false }
+
+evidence:
+  tests_reviewed: 1795
+  coderabbit: 'review --agent --committed --base origin/main: 3 achados (1 major, 2 minor), todos corrigidos'
+  gates: 'npm test 1.795/1.795, lint 0 erros, typecheck e build verdes'
