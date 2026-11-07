@@ -13,7 +13,7 @@ const appContext = read('../src/context/AppContext.tsx');
 const adminPage = read('../src/app/admin/page.tsx');
 // Story 1.126: a vitrine da home foi para a seção Configurações (OwnerHomeShowcase).
 const ownerPageOnly = read('../src/app/owner/page.tsx');
-const ownerPage = `${ownerPageOnly}\n${read('../src/components/owner/OwnerHomeShowcase.tsx')}`;
+const ownerPage = `${ownerPageOnly}\n${read('../src/components/owner/OwnerHomeShowcase.tsx')}\n${read('../src/lib/homeShowcase.ts')}`;
 const adminPersistence = read('../src/app/api/admin/persistence/route.ts');
 const featuredBanner = read('../src/components/home/FeaturedEventBanner.tsx');
 const globalsCss = read('../src/app/globals.css');

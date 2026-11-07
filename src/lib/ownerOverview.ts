@@ -2,6 +2,7 @@ import type { Event, EventCurrency, Registration, User } from '@/types';
 import { compareEventsByDateAsc, compareEventsByDateDesc } from '@/lib/eventStatus';
 import { MANAGER_EXPIRING_SOON_DAYS, type ManagerAccessStatus } from '@/lib/managerAccess';
 import { resolveServiceFee } from '@/lib/managerFinance';
+import { findFeaturedHomeEventOffAir } from '@/lib/homeShowcase';
 import {
   buildOwnerFinance,
   buildOwnerManagerRows,
@@ -296,13 +297,15 @@ const buildAttention = (
     });
   }
 
-  const featuredOffAir = events.find(event => event.isFeatured && !FOR_SALE.includes(event.situation) && event.situation !== 'blocked');
+  // Mesma regra do carrossel da home (homeShowcase.ts), lida do evento salvo.
+  const featuredSource = findFeaturedHomeEventOffAir(source.events);
+  const featuredOffAir = featuredSource ? events.find(event => event.id === featuredSource.id) : undefined;
   if (featuredOffAir) {
     items.push({
       id: 'featured-off-air',
       severity: 'warn',
       title: 'O destaque da home saiu do carrossel',
-      detail: `${featuredOffAir.name} não está mais à venda. Escolha outro destaque ou volte para a seleção automática.`,
+      detail: `${featuredOffAir.name} encerrou e não aparece mais no carrossel. Escolha outro destaque ou volte para a seleção automática.`,
       actionLabel: 'Trocar destaque',
       action: { kind: 'section', section: 'configuracoes' }
     });

@@ -75,8 +75,10 @@ export const buildCommercialLeadWhatsAppUrl = (lead: Pick<CommercialLead, 'phone
   let digits = normalizeLeadPhone(lead.phoneNormalized || lead.phone || '');
   if (digits.length < 8) return null;
   const dial = COUNTRY_DIAL_CODES[lead.country];
-  if (dial && !digits.startsWith(dial.code) && dial.localLengths.includes(digits.replace(/^0+/, '').length)) {
-    digits = `${dial.code}${digits.replace(/^0+/, '')}`;
+  // Local pelo tamanho, não pelo prefixo: o DDD 55 (RS) começa como o código do Brasil.
+  const local = digits.replace(/^0+/, '');
+  if (dial && dial.localLengths.includes(local.length)) {
+    digits = `${dial.code}${local}`;
   }
   return `https://wa.me/${digits}`;
 };

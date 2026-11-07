@@ -4,22 +4,17 @@ import { useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import { Megaphone, ShieldAlert, Star } from 'lucide-react';
 import type { Event } from '@/types';
-import { compareEventsByDateAsc, getEventStatus } from '@/lib/eventStatus';
+import { compareEventsByDateAsc } from '@/lib/eventStatus';
+import { findFeaturedHomeEventOffAir, isFeaturedHomeCandidate } from '@/lib/homeShowcase';
 
 // Vitrine da home na seção Configurações do painel do proprietário (Story 1.126;
 // mesma regra e mesmo controle da Story 1.24, só mudaram de lugar). O componente
 // desmonta ao sair da seção: rascunho não salvo não sobrevive.
 
-const listFeaturedHomeCandidates = (events: Event[]) => events.filter(event => (
-  (event.status === 'live' || event.status === 'upcoming')
-  && getEventStatus(event) !== 'finished'
-)).sort(compareEventsByDateAsc);
+const listFeaturedHomeCandidates = (events: Event[]) => events.filter(isFeaturedHomeCandidate).sort(compareEventsByDateAsc);
 
 /** Destaque salvo que saiu do carrossel (encerrou ou deixou de ser candidato). */
-export const isFeaturedHomeEventOffAir = (events: Event[]) => {
-  const featured = events.find(event => event.isFeatured);
-  return Boolean(featured) && !listFeaturedHomeCandidates(events).some(event => event.id === featured?.id);
-};
+export const isFeaturedHomeEventOffAir = (events: Event[]) => findFeaturedHomeEventOffAir(events) !== null;
 
 type Props = {
   events: Event[];
@@ -38,7 +33,6 @@ export function OwnerHomeShowcase({ events, setFeaturedHomeEvent, onSaved }: Pro
   ), [events]);
 
   const featuredHomeCandidates = useMemo(() => listFeaturedHomeCandidates(events), [events]);
-  // Regra de candidatos (Story 1.24): getEventStatus(event) !== 'finished'.
 
   const selectableFeaturedHomeEventId = useMemo(() => {
     const currentFeaturedId = featuredHomeEvent?.id || '';

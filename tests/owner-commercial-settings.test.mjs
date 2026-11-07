@@ -75,6 +75,8 @@ test('WhatsApp link adds the country code to local numbers', () => {
   assert.equal(buildCommercialLeadWhatsAppUrl({ phone: '+55 85 99999-0101', phoneNormalized: '5585999990101', country: 'BR' }), 'https://wa.me/5585999990101');
   assert.equal(buildCommercialLeadWhatsAppUrl({ phone: '912 000 404', phoneNormalized: '912000404', country: 'PT' }), 'https://wa.me/351912000404');
   assert.equal(buildCommercialLeadWhatsAppUrl({ phone: '123', phoneNormalized: '123', country: 'BR' }), null);
+  // DDD 55 (Rio Grande do Sul): local pelo tamanho, mesmo começando como o código do país.
+  assert.equal(buildCommercialLeadWhatsAppUrl({ phone: '(55) 99999-0101', phoneNormalized: '55999990101', country: 'BR' }), 'https://wa.me/5555999990101');
 });
 
 const lead = (overrides = {}) => ({

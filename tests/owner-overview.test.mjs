@@ -133,7 +133,9 @@ test('overview totals follow the period by registration date, with the delta of 
 });
 
 test('attention queue lists what needs action, most urgent first', () => {
-  const staleDate = new Date(NOW.getTime() - 72 * 3_600_000).toISOString();
+  // Um relógio só para as datas das análises e o corte de 48 h da rota.
+  const now = new Date();
+  const staleDate = new Date(now.getTime() - 72 * 3_600_000).toISOString();
   const source = baseSource({
     events: [
       makeEvent({ id: 'evt-blocked', name: 'Copa Sertão', organizerId: 'org-expired' }),
@@ -142,7 +144,7 @@ test('attention queue lists what needs action, most urgent first', () => {
     ],
     registrations: [
       makeRegistration({ id: 'stale-1', eventId: 'evt-open', paymentStatus: 'payment_in_review', createdAt: staleDate }),
-      makeRegistration({ id: 'fresh-review', eventId: 'evt-open', paymentStatus: 'payment_in_review', createdAt: NOW.toISOString() })
+      makeRegistration({ id: 'fresh-review', eventId: 'evt-open', paymentStatus: 'payment_in_review', createdAt: now.toISOString() })
     ],
     users: [
       ...baseSource().users,
@@ -156,7 +158,7 @@ test('attention queue lists what needs action, most urgent first', () => {
     ]
   });
 
-  const overview = buildOwnerOverview(source, { period: '30d' });
+  const overview = buildOwnerOverview(source, { period: '30d', now });
   const ids = overview.attention.map(item => item.id);
   assert.deepEqual(ids, ['expired-org-expired', 'expiring-soon', 'stale-reviews', 'featured-off-air', 'new-leads', 'lead-email-failed', 'no-payment-account']);
   assert.equal(overview.attention[0].severity, 'crit');
@@ -172,6 +174,19 @@ test('attention queue lists what needs action, most urgent first', () => {
   assert.equal(overview.events.find(event => event.id === 'evt-open').staleReviewCount, 1);
   assert.equal(overview.counts.eventsForSale, 1);
   assert.equal(overview.counts.newLeads, 2);
+});
+
+test('featured event with sales closed but still on the carousel is not flagged', () => {
+  // CodeRabbit (Story 1.126): a fila usa a mesma regra do carrossel da home.
+  const source = baseSource({ events: [makeEvent({ id: 'evt-closed', isFeatured: true, isTicketingActive: false })] });
+  const overview = buildOwnerOverview(source, { period: '30d', now: new Date() });
+  assert.equal(overview.events[0].situation, 'sales_closed');
+  assert.ok(!overview.attention.some(item => item.id === 'featured-off-air'));
+
+  const ended = buildOwnerOverview(baseSource({
+    events: [makeEvent({ id: 'evt-ended', isFeatured: true, startDate: isoDaysFromNow(-10), endDate: isoDaysFromNow(-9) })]
+  }), { period: '30d', now: new Date() });
+  assert.ok(ended.attention.some(item => item.id === 'featured-off-air'));
 });
 
 test('recent signups list managers from the newest', () => {
