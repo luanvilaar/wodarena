@@ -46,6 +46,11 @@ const withDefaultFeaturedFlag = <T>(rows: T): T => {
   return rows;
 };
 
+// Story 1.119: o Supabase (PostgREST) devolve no máximo 1.000 linhas por consulta e
+// corta o resto sem erro. Leitura que pode passar disso usa readBootstrapPages.
+export const BOOTSTRAP_PAGE_SIZE = 1000;
+const BOOTSTRAP_MAX_PAGES = 500;
+
 export const readBootstrapQuery = async <T>(
   label: string,
   query: PromiseLike<BootstrapQueryResult<T>>
@@ -66,7 +71,61 @@ export const readBootstrapQuery = async <T>(
 
   const rowCount = Array.isArray(result.data) ? result.data.length : result.data ? 1 : 0;
   console.info('[Bootstrap Query] Concluída:', JSON.stringify({ label, durationMs, rowCount }));
+  if (Array.isArray(result.data) && rowCount === BOOTSTRAP_PAGE_SIZE) {
+    // Story 1.119: exatamente o limite do PostgREST quase sempre quer dizer linhas cortadas.
+    console.warn('[Bootstrap Query] Possível corte de linhas:', JSON.stringify({ label, rowCount, limit: BOOTSTRAP_PAGE_SIZE }));
+  }
   return result.data as T;
+};
+
+type BootstrapRow = Record<string, unknown>;
+
+/**
+ * Lê todas as páginas de uma consulta com ordem estável (`fetchPage` recebe o
+ * intervalo inclusivo e deve aplicar `.order(...).range(from, to)`). Avança pelo
+ * número de linhas que de fato voltaram e para na primeira página vazia, para não
+ * depender de o limite do projeto ser exatamente 1.000. Uma linha inserida no meio
+ * da leitura pode empurrar outra para a página seguinte: fica uma por `rowKey`.
+ * Erro em qualquer página, ou leitura acima do limite de páginas, sobe como erro,
+ * nunca como lista pela metade.
+ */
+export const readBootstrapPages = async (
+  label: string,
+  fetchPage: (from: number, to: number) => PromiseLike<BootstrapQueryResult<unknown>>,
+  rowKey: (row: BootstrapRow) => string = (row) => String(row.id),
+  pageSize = BOOTSTRAP_PAGE_SIZE
+): Promise<BootstrapRow[]> => {
+  const startedAt = Date.now();
+  const byKey = new Map<string, BootstrapRow>();
+  let offset = 0;
+
+  for (let page = 0; page < BOOTSTRAP_MAX_PAGES; page += 1) {
+    const result = await fetchPage(offset, offset + pageSize - 1);
+
+    if (result.error) {
+      console.error('[Bootstrap Query] Falha:', JSON.stringify({
+        label,
+        page,
+        durationMs: Date.now() - startedAt,
+        code: result.error.code,
+        message: result.error.message
+      }));
+      throw new Error(`Falha ao carregar ${label}.`);
+    }
+
+    const rows = (Array.isArray(result.data) ? result.data : []) as BootstrapRow[];
+    if (rows.length === 0) {
+      const all = [...byKey.values()];
+      console.info('[Bootstrap Query] Concluída:', JSON.stringify({ label, durationMs: Date.now() - startedAt, rowCount: all.length, pages: page }));
+      return all;
+    }
+
+    for (const row of rows) byKey.set(rowKey(row), row);
+    offset += rows.length;
+  }
+
+  console.error('[Bootstrap Query] Leitura acima do limite de páginas:', JSON.stringify({ label, pages: BOOTSTRAP_MAX_PAGES, pageSize }));
+  throw new Error(`Falha ao carregar ${label}.`);
 };
 
 export const readEventsWithFeaturedFallback = async <T>(

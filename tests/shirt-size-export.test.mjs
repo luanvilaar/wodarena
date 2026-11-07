@@ -33,7 +33,8 @@ test('shirt size is persisted in athlete storage and checkout recovery flows', (
   assert.match(context, /const PRIVATE_BOOTSTRAP_ENDPOINT = '\/api\/app\/bootstrap'/);
   assert.match(context, /const PUBLIC_BOOTSTRAP_ENDPOINT = '\/api\/app\/bootstrap\/public'/);
   assert.match(context, /const response = await fetch\(PRIVATE_BOOTSTRAP_ENDPOINT\)/);
-  assert.match(bootstrapRoute, /supabaseAdmin\.from\('athletes'\)/);
+  // Story 1.119: a leitura do proprietário passou a ser paginada e quebra a linha antes do .from.
+  assert.match(bootstrapRoute, /supabaseAdmin\s*\.from\('athletes'\)\s*\.select\(PRIVATE_ATHLETE_SELECT\)/);
   assert.match(context, /shirtSize: m\.shirtSize/);
   assert.match(startRoute, /shirt_size: safeAthleteProfile\.shirtSize/);
   assert.match(startRoute, /shirt_size: safeAthleteProfile\.shirtSize \|\| null/);

@@ -1,6 +1,6 @@
 // Cliente Supabase falso, em memória, para testes de comportamento das rotas e
 // helpers do servidor. Implementa só o necessário: from().select/insert/update/
-// upsert/delete com eq/in/is/not/order/range/maybeSingle/single, contagem com head e rpc. As chaves
+// upsert/delete com eq/in/is/not/lt/gte/ilike/or/order/range/limit/maybeSingle/single, contagem com head e rpc. As chaves
 // únicas seguem as do banco (supabase/migrations) e um conflito devolve o mesmo
 // código do Postgres (23505), sem gravar nada.
 
@@ -168,6 +168,40 @@ class FakeQuery {
     return this;
   }
 
+  // Comparações e busca usadas pela lista de cadastros do proprietário (Story 1.122).
+  lt(column, value) {
+    this.filters.push((row) => row[column] !== null && row[column] !== undefined && row[column] < value);
+    return this;
+  }
+
+  gte(column, value) {
+    this.filters.push((row) => row[column] !== null && row[column] !== undefined && row[column] >= value);
+    return this;
+  }
+
+  // ILIKE com % nas pontas (o único formato usado pelo código).
+  ilike(column, pattern) {
+    const needle = lower(pattern).replace(/^%|%$/g, '');
+    this.filters.push((row) => lower(row[column]).includes(needle));
+    return this;
+  }
+
+  // `or('a.ilike.%x%,b.ilike.%x%')`: só o operador ilike, valores opcionalmente entre aspas duplas.
+  or(expression) {
+    const clauses = String(expression).split(',').map((clause) => {
+      const match = /^([a-z_]+)\.ilike\."?(.*?)"?$/.exec(clause.trim());
+      if (!match) throw new Error(`fakeSupabase: cláusula não suportada em or(): ${clause}`);
+      return { column: match[1], needle: lower(match[2]).replace(/^%|%$/g, '') };
+    });
+    this.filters.push((row) => clauses.some(({ column, needle }) => lower(row[column]).includes(needle)));
+    return this;
+  }
+
+  limit(count) {
+    this.window = { from: 0, to: count - 1 };
+    return this;
+  }
+
   maybeSingle() {
     this.cardinality = 'maybe';
     return this;
@@ -213,7 +247,9 @@ class FakeQuery {
     if (this.action === 'select') {
       const matched = this.matchingRows();
       if (this.countOnly) return { data: null, count: matched.length, error: null };
-      const rows = this.window ? matched.slice(this.window.from, this.window.to + 1) : matched;
+      const windowed = this.window ? matched.slice(this.window.from, this.window.to + 1) : matched;
+      // Limite de linhas por consulta do PostgREST (Max Rows), só quando o teste pede.
+      const rows = database.maxRows ? windowed.slice(0, database.maxRows) : windowed;
       return this.shape(this.projection ? rows.map(this.projection) : rows);
     }
 
@@ -273,12 +309,15 @@ class FakeQuery {
  * - `onceBeforeInsert(tabela, fn)`: executa `fn(database)` uma vez, logo antes
  *   do próximo insert na tabela (simula outra requisição gravando no meio);
  * - `rpcCalls` e `operations`: o que foi chamado, na ordem.
+ * `options.maxRows` corta cada leitura nesse número de linhas, sem erro, como o
+ * Max Rows do PostgREST (Story 1.119); sem ele, nada é cortado.
  */
-export const createFakeSupabase = (seed = {}) => {
+export const createFakeSupabase = (seed = {}, options = {}) => {
   const tables = new Map(Object.entries(seed).map(([table, rows]) => [table, rows.map(clone)]));
   const beforeInsert = new Map();
 
   const database = {
+    maxRows: Number.isInteger(options.maxRows) && options.maxRows > 0 ? options.maxRows : null,
     operations: [],
     rpcCalls: [],
     rows(table) {

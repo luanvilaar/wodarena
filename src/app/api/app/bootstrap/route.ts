@@ -7,6 +7,7 @@ import {
   PUBLIC_SCORE_SELECT,
   PUBLIC_WORKOUT_SELECT,
   readEventsWithFeaturedFallback,
+  readBootstrapPages,
   readBootstrapQuery,
   sanitizeLeaderboardEntry
 } from '@/lib/bootstrapPayload';
@@ -20,6 +21,9 @@ const PRIVATE_ATHLETE_SELECT = 'id, name, box, country, division_id, birth_date,
 const PRIVATE_REGISTRATION_SELECT = 'id, event_id, division_id, user_id, athlete_id, athlete_name, athlete_email, athlete_phone, box, gender, ticket_type, ticket_price, quantity, total_paid, service_fee_percent, service_fee_amount, service_fee_payer, amount_collected, application_fee_charged, shirt_addon_count, shirt_addon_amount, created_at, coupon_code, payment_status, payment_method, payment_id, payment_status_detail, payment_error_message, cancellation_reason, cancelled_at, cancelled_by, refund_status, refund_amount, refund_method, refund_note, refund_processed_at, refund_processed_by, updated_at';
 const PRIVATE_CONTESTATION_SELECT = 'id, event_id, registration_id, user_id, athlete_id, workout_id, heat_id, heat_number, lane, submission_id, description, status, credit_consumed, credit_refunded, manager_note, created_at, updated_at, resolved_at';
 const PRIVATE_COUPON_SELECT = 'id, event_id, code, discount_type, discount_value, usage_limit, usage_count, created_at, is_active';
+
+// Scores não têm id: a chave é (athlete_id, workout_id), como a primary key da tabela.
+const scoreRowKey = (row: Record<string, unknown>) => `${String(row.athlete_id)}|${String(row.workout_id)}`;
 
 const emptyRows = <T>(): Promise<T[]> => Promise.resolve([]);
 
@@ -43,11 +47,19 @@ const mapUserForClient = (user: Record<string, unknown>) => {
   };
 };
 
+// Story 1.119: o /owner só usa o próprio dono e os gestores. A tabela também guarda uma
+// conta por atleta inscrito; lida inteira, passava de 1.000 linhas (corte do PostgREST)
+// e os gestores mais novos sumiam do painel.
+const OWNER_PANEL_USER_ROLES = ['owner', 'manager'];
+
 const readUsers = (supabaseAdmin: ReturnType<typeof createSupabaseAdmin>, session: SessionUser) => (
   session?.role === 'owner'
-    ? readBootstrapQuery('usuários', supabaseAdmin
+    ? readBootstrapPages('usuários', (from, to) => supabaseAdmin
       .from('users')
-      .select('id, name, email, role, organization, parent_manager_id, service_valid_until'))
+      .select('id, name, email, role, organization, parent_manager_id, service_valid_until')
+      .in('role', OWNER_PANEL_USER_ROLES)
+      .order('id', { ascending: true })
+      .range(from, to))
     : readBootstrapQuery('usuário da sessão', supabaseAdmin
       .from('users')
       .select('id, name, email, role, organization, parent_manager_id, service_valid_until')
@@ -110,9 +122,11 @@ export async function GET(request: Request) {
           .from('divisions')
           .select(PUBLIC_DIVISION_SELECT)
           .in('event_id', eventIdFilter), 'divisões do gestor')
-        : readBootstrapQuery('divisões autenticadas', supabaseAdmin
+        : readBootstrapPages('divisões autenticadas', (from, to) => supabaseAdmin
           .from('divisions')
-          .select(PUBLIC_DIVISION_SELECT)),
+          .select(PUBLIC_DIVISION_SELECT)
+          .order('id', { ascending: true })
+          .range(from, to)),
       session.role === 'manager' || session.role === 'judge'
         ? scopedRows(eventIdFilter, () => supabaseAdmin
           .from('workouts')
@@ -120,11 +134,12 @@ export async function GET(request: Request) {
           .in('event_id', eventIdFilter)
           .order('order_index', { ascending: true })
           .order('id', { ascending: true }), 'workouts do gestor')
-        : readBootstrapQuery('workouts autenticados', supabaseAdmin
+        : readBootstrapPages('workouts autenticados', (from, to) => supabaseAdmin
           .from('workouts')
           .select(PUBLIC_WORKOUT_SELECT)
           .order('order_index', { ascending: true })
-          .order('id', { ascending: true })),
+          .order('id', { ascending: true })
+          .range(from, to)),
       structuresPromise
     ]);
     const workouts = attachWorkoutStructures(workoutRows, workoutStructures);
@@ -141,13 +156,40 @@ export async function GET(request: Request) {
     let mercadopagoAccounts: Record<string, unknown>[] = [];
 
     if (session.role === 'owner') {
+      // Story 1.119: leituras da plataforma inteira, paginadas com ordem estável
+      // (o PostgREST corta em 1.000 linhas sem erro).
       [athletes, scores, registrations, contestations, coupons, leaderboardEntries, mercadopagoAccounts] = await Promise.all([
-        readBootstrapQuery('atletas do proprietário', supabaseAdmin.from('athletes').select(PRIVATE_ATHLETE_SELECT)),
-        readBootstrapQuery('scores do proprietário', supabaseAdmin.from('scores').select(PUBLIC_SCORE_SELECT)),
-        readBootstrapQuery('inscrições do proprietário', supabaseAdmin.from('registrations').select(PRIVATE_REGISTRATION_SELECT)),
-        readBootstrapQuery('contestações do proprietário', supabaseAdmin.from('contestations').select(PRIVATE_CONTESTATION_SELECT)),
-        readBootstrapQuery('cupons do proprietário', supabaseAdmin.from('coupons').select(PRIVATE_COUPON_SELECT)),
-        readBootstrapQuery('leaderboard do proprietário', supabaseAdmin.from('leaderboard_entries').select(PUBLIC_LEADERBOARD_ENTRY_SELECT)),
+        readBootstrapPages('atletas do proprietário', (from, to) => supabaseAdmin
+          .from('athletes')
+          .select(PRIVATE_ATHLETE_SELECT)
+          .order('id', { ascending: true })
+          .range(from, to)),
+        readBootstrapPages('scores do proprietário', (from, to) => supabaseAdmin
+          .from('scores')
+          .select(PUBLIC_SCORE_SELECT)
+          .order('athlete_id', { ascending: true })
+          .order('workout_id', { ascending: true })
+          .range(from, to), scoreRowKey),
+        readBootstrapPages('inscrições do proprietário', (from, to) => supabaseAdmin
+          .from('registrations')
+          .select(PRIVATE_REGISTRATION_SELECT)
+          .order('id', { ascending: true })
+          .range(from, to)),
+        readBootstrapPages('contestações do proprietário', (from, to) => supabaseAdmin
+          .from('contestations')
+          .select(PRIVATE_CONTESTATION_SELECT)
+          .order('id', { ascending: true })
+          .range(from, to)),
+        readBootstrapPages('cupons do proprietário', (from, to) => supabaseAdmin
+          .from('coupons')
+          .select(PRIVATE_COUPON_SELECT)
+          .order('id', { ascending: true })
+          .range(from, to)),
+        readBootstrapPages('leaderboard do proprietário', (from, to) => supabaseAdmin
+          .from('leaderboard_entries')
+          .select(PUBLIC_LEADERBOARD_ENTRY_SELECT)
+          .order('id', { ascending: true })
+          .range(from, to)),
         readBootstrapQuery('contas de pagamento do proprietário', supabaseAdmin
           .from('mercadopago_accounts')
           .select('user_id, public_key')
