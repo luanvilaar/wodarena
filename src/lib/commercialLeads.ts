@@ -26,7 +26,7 @@ export const getCommercialLeadStatusLabel = (status: CommercialLeadStatus) => {
 export const getCommercialLeadEmailStatusLabel = (status: CommercialLeadEmailNotificationStatus) => {
   if (status === 'sent') return 'Enviado';
   if (status === 'failed') return 'Falhou';
-  if (status === 'skipped') return 'Nao enviado';
+  if (status === 'skipped') return 'Não enviado';
   return 'Pendente';
 };
 
@@ -34,7 +34,7 @@ export const getCommercialLeadCountryLabel = (country: CommercialLeadCountry, co
   if (country === 'BR') return 'Brasil';
   if (country === 'PT') return 'Portugal';
   if (country === 'GB') return 'Reino Unido';
-  return countryOther || 'Outro pais';
+  return countryOther || 'Outro país';
 };
 
 export const mapCommercialLeadFromDb = (row: CommercialLeadDbRow): CommercialLead => ({
@@ -60,3 +60,23 @@ export const mapCommercialLeadFromDb = (row: CommercialLeadDbRow): CommercialLea
   submittedAt: String(row.submitted_at || row.created_at || ''),
   updatedAt: optionalString(row.updated_at)
 });
+
+const COUNTRY_DIAL_CODES: Partial<Record<CommercialLeadCountry, { code: string; localLengths: number[] }>> = {
+  BR: { code: '55', localLengths: [10, 11] },
+  PT: { code: '351', localLengths: [9] },
+  GB: { code: '44', localLengths: [10, 11] }
+};
+
+/**
+ * Link de conversa no WhatsApp do lead (Story 1.126). Número local do país do lead
+ * ganha o código do país; sem número utilizável, null.
+ */
+export const buildCommercialLeadWhatsAppUrl = (lead: Pick<CommercialLead, 'phone' | 'phoneNormalized' | 'country'>): string | null => {
+  let digits = normalizeLeadPhone(lead.phoneNormalized || lead.phone || '');
+  if (digits.length < 8) return null;
+  const dial = COUNTRY_DIAL_CODES[lead.country];
+  if (dial && !digits.startsWith(dial.code) && dial.localLengths.includes(digits.replace(/^0+/, '').length)) {
+    digits = `${dial.code}${digits.replace(/^0+/, '')}`;
+  }
+  return `https://wa.me/${digits}`;
+};

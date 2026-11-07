@@ -290,3 +290,38 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Erro ao registrar interesse comercial.' }, { status: 500 });
   }
 }
+
+// Status do lead (Story 1.126, decisão D5 de docs/design/painel-proprietario/): só o
+// proprietário, só a coluna lead_status (o gatilho do banco atualiza updated_at).
+const COMMERCIAL_LEAD_STATUSES = new Set(['new', 'contacted', 'qualified', 'discarded']);
+
+export async function PATCH(request: Request) {
+  try {
+    const auth = requireSession(request, ['owner']);
+    if (auth.response) return auth.response;
+
+    const body = await request.json().catch(() => null);
+    const id = typeof body?.id === 'string' ? body.id.trim() : '';
+    const leadStatus = typeof body?.leadStatus === 'string' ? body.leadStatus : '';
+
+    if (!id || !COMMERCIAL_LEAD_STATUSES.has(leadStatus)) {
+      return NextResponse.json({ error: 'Informe o lead e um status válido (novo, contatado, qualificado ou descartado).' }, { status: 400 });
+    }
+
+    const supabaseAdmin = createSupabaseAdmin();
+    const { data, error } = await supabaseAdmin
+      .from('commercial_leads')
+      .update({ lead_status: leadStatus })
+      .eq('id', id)
+      .select('*')
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!data) return NextResponse.json({ error: 'Lead não encontrado.' }, { status: 404 });
+
+    return NextResponse.json({ lead: mapCommercialLeadFromDb(data) });
+  } catch (err) {
+    console.error('[Commercial Leads API] Erro ao atualizar status do lead:', err);
+    return NextResponse.json({ error: 'Não foi possível atualizar o status do lead.' }, { status: 500 });
+  }
+}

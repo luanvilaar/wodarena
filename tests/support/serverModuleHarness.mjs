@@ -39,6 +39,13 @@ export default function Link({ href, children, ...props }) {
   return createElement('a', { href, ...props }, children);
 }
 `,
+  // next/image: no servidor de teste vira um <img> simples (Story 1.126, vitrine da home).
+  'next/image': `
+import { createElement } from 'react';
+export default function Image({ src, alt, width, height, unoptimized, priority, ...props }) {
+  return createElement('img', { src, alt, width, height, ...props });
+}
+`,
   // next/og: o pacote só se resolve como CommonJS; o gerador real do pôster do comprovante
   // (Story 1.75) roda nos testes, sem rede.
   'next/og': `

@@ -107,7 +107,7 @@ interface AppContextType {
   currentUser: User | null;
   login: (email: string, password: string, options?: LoginOptions) => Promise<LoginResult>;
   logout: () => void;
-  createManagerAccount: (name: string, email: string, password: string, organization: string, serviceValidUntil?: string) => Promise<boolean>;
+  createManagerAccount: (name: string, email: string, password: string, organization: string, serviceValidUntil?: string) => Promise<{ success: true } | { success: false; error: string }>;
   updateManagerServiceValidity: (userId: string, serviceValidUntil?: string | null) => Promise<User | null>;
   setFeaturedHomeEvent: (eventId: string | null) => Promise<void>;
   addEvent: (event: Omit<Event, 'id' | 'organizerId' | 'sponsors' | 'format' | 'ticketPrice' | 'ticketSlots' | 'isTicketingActive'> & { format?: 'individual' | 'duo' | 'trio'; ticketPrice?: number; ticketSlots?: number; isTicketingActive?: boolean; eventType?: EventType; }) => Promise<Event>;
@@ -1011,7 +1011,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     passwordInput: string,
     organization: string,
     serviceValidUntil?: string
-  ): Promise<boolean> => {
+  ): Promise<{ success: true } | { success: false; error: string }> => {
     try {
       const response = await fetch('/api/admin/create-user', {
         method: 'POST',
@@ -1027,17 +1027,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         })
       });
 
-      const data = await response.json();
-      if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.user) {
         console.error('Erro ao cadastrar gestor:', data.error);
-        return false;
+        // A mensagem real da API chega à tela (Story 1.121).
+        return { success: false, error: data.error || 'Não foi possível cadastrar o gestor.' };
       }
 
-      setUsers(prev => [...prev, data.user]);
-      return true;
+      setUsers(prev => [...prev.filter(user => user.id !== data.user.id), data.user]);
+      return { success: true };
     } catch (err) {
       console.error('Erro crítico ao cadastrar gestor:', err);
-      return false;
+      return { success: false, error: 'Sem conexão com o servidor. Tente de novo.' };
     }
   };
 

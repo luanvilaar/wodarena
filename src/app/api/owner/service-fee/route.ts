@@ -52,22 +52,28 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'O campo enabled deve ser booleano.' }, { status: 400 });
     }
 
+    // Liga ou desliga sem regravar o percentual (Story 1.121): o upsert só leva o
+    // interruptor, e o percentual volta lido do banco.
     const supabaseAdmin = createSupabaseAdmin();
-    const { error } = await supabaseAdmin
+    const { data, error } = await supabaseAdmin
       .from('platform_settings')
       .upsert({
         id: true,
         service_fee_enabled: enabled,
-        service_fee_percent: DEFAULT_SERVICE_FEE_PERCENT,
         updated_at: new Date().toISOString()
-      }, { onConflict: 'id' });
+      }, { onConflict: 'id' })
+      .select('service_fee_enabled, service_fee_percent')
+      .maybeSingle();
 
     if (error) {
       console.error('[Owner Service Fee] Falha ao salvar configuração:', error);
       return NextResponse.json({ error: 'Não foi possível salvar a taxa de serviço.' }, { status: 500 });
     }
 
-    return NextResponse.json({ enabled, percent: DEFAULT_SERVICE_FEE_PERCENT });
+    return NextResponse.json({
+      enabled: data ? data.service_fee_enabled !== false : enabled,
+      percent: normalizeServiceFeePercent(data?.service_fee_percent, DEFAULT_SERVICE_FEE_PERCENT)
+    });
   } catch {
     return NextResponse.json({ error: 'Dados inválidos para a taxa de serviço.' }, { status: 400 });
   }

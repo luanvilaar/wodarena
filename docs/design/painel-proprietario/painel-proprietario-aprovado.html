@@ -1,0 +1,1027 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Painel do Proprietário WODArena</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@500;600;700&family=Inter:wght@400;500;600;700;800&display=swap">
+<style>
+/* Layout: leitura em uma coluna no visual do app WODArena (tokens de src/app/globals.css);
+   a maquete do painel é sempre o tema escuro do app e ocupa a largura toda da coluna. */
+:root{
+  --font-body:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --font-num:"IBM Plex Sans",ui-monospace,Menlo,monospace;
+  --bg:#0b0e11; --surface:#13171b; --surface-2:#1e2329; --line:#2b3139;
+  --fg:#eaecef; --muted:#929aa5; --accent:#fcd535; --accent-text:#fcd535; --ink:#181a20;
+  --crit:#f6465d; --warn:#fbbf24; --ok:#0ecb81; --info:#7db4ff;
+  --crit-bg:rgba(246,70,93,.12); --warn-bg:rgba(251,191,36,.12); --ok-bg:rgba(14,203,129,.12); --info-bg:rgba(125,180,255,.12);
+  /* maquete: sempre o painel escuro do app */
+  --a-bg:#0b0e11; --a-rail:#0f1216; --a-card:#181a20; --a-card-2:#1e2329; --a-line:#2b3139;
+  --a-fg:#eaecef; --a-muted:#929aa5; --a-soft:#707a8a; --a-primary:#fcd535; --a-ink:#181a20;
+  --a-ok:#0ecb81; --a-warn:#fbbf24; --a-crit:#f6465d; --a-info:#7db4ff;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --bg:#f4f5f7; --surface:#ffffff; --surface-2:#eceef2; --line:#d6dae1;
+    --fg:#181a20; --muted:#566070; --accent-text:#7a5c00;
+    --crit:#b8243a; --warn:#8a5a00; --ok:#07694a; --info:#1f5fd1;
+    --crit-bg:rgba(184,36,58,.1); --warn-bg:rgba(138,90,0,.1); --ok-bg:rgba(7,105,74,.1); --info-bg:rgba(31,95,209,.1);
+    color-scheme:light;
+  }
+}
+:root[data-theme="light"]{
+  --bg:#f4f5f7; --surface:#ffffff; --surface-2:#eceef2; --line:#d6dae1;
+  --fg:#181a20; --muted:#566070; --accent-text:#7a5c00;
+  --crit:#b8243a; --warn:#8a5a00; --ok:#07694a; --info:#1f5fd1;
+  --crit-bg:rgba(184,36,58,.1); --warn-bg:rgba(138,90,0,.1); --ok-bg:rgba(7,105,74,.1); --info-bg:rgba(31,95,209,.1);
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:15px;line-height:1.55;-webkit-text-size-adjust:100%;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:36px 80px}
+h1,h2,h3,h4{text-wrap:balance;line-height:1.2;margin:0}
+p,ul,ol,dl,dd{margin:0}
+ul,ol{padding:0;list-style:none}
+a{color:var(--accent-text)}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--info);outline-offset:2px}
+code{font-family:var(--font-num);font-size:.86em;background:var(--surface-2);border:1px solid var(--line);border-radius:4px;padding:0 5px;overflow-wrap:anywhere}
+.num{font-family:var(--font-num);font-variant-numeric:tabular-nums}
+.wrap{max-width:1120px;margin:0 auto;display:grid;gap:64px}
+.read{max-width:760px}
+.eyebrow{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--accent-text)}
+section{display:grid;gap:20px;min-width:0}
+section>header{display:grid;gap:8px}
+h2{font-size:26px;font-weight:800;letter-spacing:-.01em}
+h3{font-size:17px;font-weight:700}
+.lede{font-size:17px;color:var(--muted);max-width:720px}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+
+/* topo */
+.hero{display:grid;gap:14px}
+.hero h1{font-size:clamp(32px,5vw,46px);font-weight:800;letter-spacing:-.02em}
+.meta{display:flex;flex-wrap:wrap;gap:8px}
+.meta span{font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:3px 10px}
+.toc{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:13px;font-weight:600;padding-top:6px}
+.toc a{color:var(--muted);text-decoration:none}
+.toc a:hover{color:var(--fg)}
+
+/* resumo */
+.sum{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.sum>div{background:var(--surface);padding:18px 20px;display:grid;gap:8px;align-content:start}
+.sum h3{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.sum p{font-size:15px}
+.sum b.num{font-size:22px;display:block;line-height:1.1}
+@media (max-width:760px){.sum{grid-template-columns:1fr}}
+
+/* números que não batem */
+.calc{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:20px;align-items:start}
+@media (max-width:860px){.calc{grid-template-columns:1fr}}
+.calc-in{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px 20px;display:grid;gap:12px}
+.calc-in li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;font-size:14px}
+.calc-in .tag{font-family:var(--font-num);font-size:12px;font-weight:600;border:1px solid var(--line);border-radius:4px;padding:1px 6px;height:fit-content}
+.calc-out{display:grid;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.calc-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:14px;align-items:center;padding:12px 16px;border-top:1px solid var(--line);background:var(--surface)}
+.calc-row:first-child{border-top:0}
+.calc-row .where{font-size:14px;font-weight:600}
+.calc-row .why{font-size:12.5px;color:var(--muted);font-weight:400;display:block}
+.calc-row .v{font-family:var(--font-num);font-variant-numeric:tabular-nums;font-size:18px;font-weight:700;text-align:right;white-space:nowrap}
+.calc-row.ref{background:var(--surface-2)}
+@media (max-width:520px){.calc-row{grid-template-columns:minmax(0,1fr) auto}.calc-row .pill{grid-column:1/-1;justify-self:start}}
+
+/* pílulas de estado */
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;border-radius:999px;padding:3px 9px;white-space:nowrap;border:1px solid transparent}
+.pill svg{width:12px;height:12px}
+.pill.crit{color:var(--crit);background:var(--crit-bg);border-color:color-mix(in srgb,var(--crit) 30%,transparent)}
+.pill.warn{color:var(--warn);background:var(--warn-bg);border-color:color-mix(in srgb,var(--warn) 30%,transparent)}
+.pill.ok{color:var(--ok);background:var(--ok-bg);border-color:color-mix(in srgb,var(--ok) 30%,transparent)}
+.pill.info{color:var(--info);background:var(--info-bg);border-color:color-mix(in srgb,var(--info) 30%,transparent)}
+
+/* achados */
+.groups{display:grid;gap:28px}
+.group>h3{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding-bottom:10px;border-bottom:1px solid var(--line)}
+.group>h3 .count{font-size:13px;color:var(--muted);font-weight:500}
+.f{display:grid;grid-template-columns:52px minmax(0,1fr);gap:4px 14px;padding:14px 0;border-bottom:1px solid var(--line)}
+.f .id{font-family:var(--font-num);font-weight:700;font-size:14px;color:var(--muted);padding-top:1px}
+.f h4{font-size:15.5px;font-weight:700}
+.f p{font-size:14.5px;color:var(--fg);max-width:78ch}
+.f .where{font-size:12.5px;color:var(--muted);margin-top:4px}
+.f-body{display:grid;gap:4px;min-width:0}
+.confirm{margin-top:6px;font-size:13.5px;background:var(--info-bg);border:1px solid color-mix(in srgb,var(--info) 30%,transparent);border-radius:8px;padding:8px 12px}
+.compact .f{padding:10px 0}
+.compact .f p{font-size:14px}
+.aside-note{font-size:14px;color:var(--muted);border:1px dashed var(--line);border-radius:10px;padding:12px 16px;max-width:860px}
+
+/* proposta */
+.principles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.principles>div{border:1px solid var(--line);border-radius:12px;padding:16px 18px;background:var(--surface);display:grid;gap:6px;align-content:start}
+.principles h3{font-size:15.5px}
+.principles p{font-size:14px;color:var(--muted)}
+@media (max-width:720px){.principles{grid-template-columns:1fr}}
+.wires{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+@media (max-width:760px){.wires{grid-template-columns:1fr}}
+.wire{display:grid;gap:8px}
+.wire>p{font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.wf{background:var(--a-bg);border:1px solid var(--a-line);border-radius:10px;padding:8px;display:grid;gap:6px;font-size:11.5px;color:var(--a-muted);aspect-ratio:16/10;max-width:100%;grid-template-rows:auto auto 1fr auto}
+.wf div{border:1px dashed #3a414b;border-radius:6px;padding:6px 8px;display:flex;align-items:center;gap:6px;min-width:0}
+.wf .hot{border-color:var(--a-crit);color:#ffb3bd}
+.wf .acc{border-style:solid;border-color:rgba(252,213,53,.5);color:var(--a-primary)}
+.wf .row{border:0;padding:0;display:grid;grid-template-columns:24% 1fr;gap:6px}
+.wf .row>div{align-items:flex-start}
+.wf.new{grid-template-rows:1fr}
+.wf.new .row{grid-template-columns:22% 1fr;height:100%}
+.wf .stack{border:0;padding:0;display:grid;gap:6px;grid-template-rows:auto auto 1fr}
+.tblwrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px}
+table.map{width:100%;border-collapse:collapse;min-width:640px;font-size:14px}
+.map th,.map td{text-align:left;padding:10px 14px;border-top:1px solid var(--line);vertical-align:top}
+.map thead th{border-top:0;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);background:var(--surface-2)}
+.map td:first-child{font-weight:600;white-space:nowrap}
+.map td.to{font-weight:600}
+.map tbody tr{background:var(--surface)}
+.map .arrow{color:var(--accent-text);font-weight:700}
+
+/* decisões */
+.decs{display:grid;gap:14px}
+.dec{border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:16px 18px;display:grid;gap:12px}
+.dec-h{display:flex;gap:12px;align-items:baseline;flex-wrap:wrap}
+.dec-h .id{font-family:var(--font-num);font-weight:700;color:var(--accent-text)}
+.dec-h p{font-size:14px;color:var(--muted);flex-basis:100%}
+.opts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+@media (max-width:720px){.opts{grid-template-columns:1fr}}
+.opt{border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:grid;gap:4px;align-content:start;font-size:14px}
+.opt b{font-size:14.5px}
+.opt.rec{border-color:color-mix(in srgb,var(--accent) 55%,var(--line));background:color-mix(in srgb,var(--accent) 6%,var(--surface))}
+.opt .rtag{font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--accent-text)}
+
+/* plano */
+.stories{display:grid;gap:0;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.st{display:grid;grid-template-columns:76px minmax(0,1fr) auto;gap:4px 16px;padding:14px 18px;border-top:1px solid var(--line);background:var(--surface)}
+.st:first-child{border-top:0}
+.st .n{font-family:var(--font-num);font-weight:700;color:var(--accent-text)}
+.st h3{font-size:15.5px}
+.st p{font-size:14px;color:var(--muted);grid-column:2/-1}
+.st .size{font-size:12px;color:var(--muted);white-space:nowrap}
+.st .fix{font-size:12.5px;color:var(--muted);grid-column:2/-1}
+@media (max-width:560px){.st{grid-template-columns:56px minmax(0,1fr)}.st .size{grid-column:2}}
+.two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+@media (max-width:760px){.two{grid-template-columns:1fr}}
+.box{border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:16px 18px;display:grid;gap:10px;align-content:start}
+.box li{font-size:14px;padding-left:16px;position:relative}
+.box li::before{content:"";position:absolute;left:2px;top:.62em;width:6px;height:6px;border-radius:50%;background:var(--muted)}
+.box ul{display:grid;gap:8px}
+
+/* ============ MAQUETE ============ */
+.mock-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.mock-head header{display:grid;gap:8px}
+.example{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--warn);background:var(--warn-bg);border-radius:6px;padding:4px 10px}
+.console{--r:10px;position:relative;display:grid;grid-template-columns:212px minmax(0,1fr);background:var(--a-bg);color:var(--a-fg);border:1px solid var(--a-line);border-radius:14px;overflow:hidden;font-size:13px;line-height:1.45;min-height:760px;color-scheme:dark}
+.console .num{font-family:var(--font-num);font-variant-numeric:tabular-nums}
+.console svg.i{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.c-rail{background:var(--a-rail);border-right:1px solid var(--a-line);padding:16px 10px;display:flex;flex-direction:column;gap:18px;min-width:0}
+.c-brand{display:flex;align-items:center;gap:10px;padding:0 6px}
+.c-mark{width:32px;height:32px;border-radius:6px;background:var(--a-primary);color:var(--a-ink);display:grid;place-items:center;font-weight:800;font-size:15px;flex:none}
+.c-brand b{display:block;font-size:14px}
+.c-brand small{display:block;font-size:11px;color:var(--a-muted);letter-spacing:.06em;text-transform:uppercase;font-weight:600}
+.c-nav{display:flex;flex-direction:column;gap:2px}
+.c-nav button{display:flex;align-items:center;gap:10px;width:100%;min-height:40px;padding:8px 10px;border:0;border-radius:8px;background:transparent;color:var(--a-muted);font-weight:600;font-size:13.5px;cursor:pointer;text-align:left;white-space:nowrap}
+.c-nav button:hover{background:var(--a-card);color:var(--a-fg)}
+.c-nav button[aria-current="page"]{background:rgba(252,213,53,.1);color:var(--a-primary)}
+.c-nav span{flex:1}
+.c-badge{font-style:normal;font-family:var(--font-num);font-size:11px;font-weight:700;min-width:20px;height:20px;border-radius:10px;display:grid;place-items:center;padding:0 6px;background:var(--a-card-2);color:var(--a-fg)}
+.c-badge.warn{background:rgba(251,191,36,.16);color:var(--a-warn)}
+.c-user{margin-top:auto;border-top:1px solid var(--a-line);padding:12px 6px 0;display:grid;gap:8px;font-size:12px;color:var(--a-muted)}
+.c-ghost{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--a-line);background:transparent;border-radius:8px;padding:7px 10px;color:var(--a-muted);cursor:pointer;font-weight:600;font-size:12.5px;width:fit-content}
+.c-ghost:hover{color:var(--a-fg);border-color:#3a414b}
+.c-main{min-width:0;display:flex;flex-direction:column}
+.c-top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:14px 22px;border-bottom:1px solid var(--a-line)}
+.c-crumb{font-size:11px;color:var(--a-soft);letter-spacing:.08em;text-transform:uppercase;font-weight:700}
+.c-top h3{font-size:19px;font-weight:700;color:var(--a-fg)}
+.c-seg{display:inline-flex;border:1px solid var(--a-line);border-radius:8px;padding:2px;background:var(--a-rail)}
+.c-seg button{border:0;background:transparent;color:var(--a-muted);font-weight:600;font-size:12.5px;padding:6px 11px;border-radius:6px;cursor:pointer;min-height:32px}
+.c-seg button[aria-pressed="true"]{background:var(--a-card-2);color:var(--a-fg)}
+.c-body{padding:20px 22px 26px;display:grid;gap:16px;align-content:start;min-width:0}
+.c-view{display:grid;gap:16px;min-width:0}
+.c-card{background:var(--a-card);border:1px solid var(--a-line);border-radius:var(--r);padding:16px;display:grid;gap:12px;min-width:0;align-content:start}
+.c-card.flush{padding:0;gap:0}
+.c-card-h{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
+.c-card-h h4{font-size:13.5px;font-weight:700;color:var(--a-fg)}
+.c-card-h p{font-size:12px;color:var(--a-soft)}
+.c-lbl{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--a-muted)}
+.c-kpis{display:grid;grid-template-columns:1.35fr repeat(3,minmax(0,1fr));gap:12px}
+.c-kpi{background:var(--a-card);border:1px solid var(--a-line);border-radius:var(--r);padding:14px 16px;display:grid;gap:4px;align-content:start;min-width:0}
+.c-kpi.hero{border-color:rgba(252,213,53,.35);background:linear-gradient(0deg,rgba(252,213,53,.05),rgba(252,213,53,.05)),var(--a-card)}
+.c-kpi.hero .c-lbl{color:var(--a-primary)}
+.c-big{font-family:var(--font-num);font-size:28px;font-weight:700;color:var(--a-primary);line-height:1.15;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.c-val{font-family:var(--font-num);font-size:20px;font-weight:700;line-height:1.2;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.c-sub{font-size:12px;color:var(--a-soft)}
+.c-delta{color:var(--a-ok);font-weight:700}
+.c-note{font-size:12px;color:var(--a-muted);display:flex;gap:6px;align-items:center}
+.c-note svg.i{width:14px;height:14px;color:var(--a-info)}
+.c-split{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:12px}
+.c-chart{position:relative}
+.c-chart svg{display:block;width:100%;height:auto}
+.c-chart .g{stroke:var(--a-line);stroke-width:1}
+.c-chart .ax{fill:var(--a-soft);font-size:11px;font-family:var(--font-body)}
+.c-chart .bar{fill:var(--a-primary);transition:opacity .15s}
+.c-chart .bar.part{fill:url(#hatch)}
+.c-chart.hovering .bar{opacity:.35}
+.c-chart.hovering .bar.on{opacity:1}
+.c-chart .hit{fill:transparent;cursor:crosshair}
+.c-tip{position:absolute;pointer-events:none;background:var(--a-card-2);border:1px solid #3a414b;border-radius:8px;padding:6px 9px;font-size:12px;white-space:nowrap;transform:translate(-50%,-100%);box-shadow:0 6px 18px rgba(0,0,0,.4)}
+.c-tip b{display:block;font-family:var(--font-num);font-size:13px}
+.c-att{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:4px 10px;align-items:start;padding:10px 0;border-top:1px solid var(--a-line)}
+.c-att:first-child{border-top:0;padding-top:0}
+.c-att b{font-size:13px;font-weight:600;display:block}
+.c-att p{font-size:12px;color:var(--a-soft)}
+.c-sev{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border-radius:999px;padding:2px 8px;white-space:nowrap;margin-top:1px}
+.c-sev svg.i{width:11px;height:11px}
+.c-sev.crit{color:var(--a-crit);background:rgba(246,70,93,.12)}
+.c-sev.warn{color:var(--a-warn);background:rgba(251,191,36,.12)}
+.c-sev.info{color:var(--a-info);background:rgba(125,180,255,.12)}
+.c-sev.ok{color:var(--a-ok);background:rgba(14,203,129,.12)}
+.c-sev.mute{color:var(--a-muted);background:var(--a-card-2)}
+.c-link{border:0;background:transparent;color:var(--a-primary);font-weight:700;font-size:12.5px;cursor:pointer;padding:2px 0;white-space:nowrap;display:inline-flex;align-items:center;gap:2px}
+.c-link svg.i{width:14px;height:14px}
+.c-link:hover{text-decoration:underline}
+.c-tablewrap{overflow-x:auto}
+.c-table{width:100%;border-collapse:collapse;font-size:13px;min-width:640px}
+.c-table th{text-align:left;font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--a-soft);padding:10px 14px;border-bottom:1px solid var(--a-line);white-space:nowrap}
+.c-table td{padding:11px 14px;border-bottom:1px solid rgba(43,49,57,.6);vertical-align:middle}
+.c-table tbody tr:last-child td{border-bottom:0}
+.c-table tr.click{cursor:pointer}
+.c-table tr.click:hover td,.c-table tr.click:focus-visible td{background:var(--a-card-2)}
+.c-table tr.click:focus-visible{outline:2px solid var(--a-info);outline-offset:-2px}
+.c-table .r{text-align:right}
+.c-table .strong{font-weight:600;color:var(--a-fg)}
+.c-table .sub{display:block;font-size:11.5px;color:var(--a-soft);font-weight:400}
+.c-table .fee{color:var(--a-primary);font-weight:700}
+.c-meter{display:grid;gap:4px;min-width:110px}
+.c-meter i{display:block;height:6px;border-radius:3px;background:var(--a-card-2);overflow:hidden}
+.c-meter i b{display:block;height:100%;background:var(--a-primary);border-radius:3px}
+.c-meter span{font-size:11.5px;color:var(--a-muted)}
+.c-cur{font-family:var(--font-num);font-size:11px;font-weight:700;border:1px solid var(--a-line);border-radius:4px;padding:1px 5px;color:var(--a-muted)}
+.c-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.c-chips{display:flex;gap:6px;flex-wrap:wrap}
+.c-chips button{border:1px solid var(--a-line);background:var(--a-card);color:var(--a-muted);border-radius:999px;padding:5px 11px;font-size:12.5px;font-weight:600;cursor:pointer;display:inline-flex;gap:6px;align-items:center;min-height:32px}
+.c-chips button em{font-style:normal;font-family:var(--font-num);color:var(--a-soft)}
+.c-chips button[aria-pressed="true"]{border-color:rgba(252,213,53,.5);color:var(--a-fg);background:rgba(252,213,53,.08)}
+.c-chips button[aria-pressed="true"] em{color:var(--a-primary)}
+.c-tools{display:flex;gap:8px;flex-wrap:wrap}
+.c-search{display:flex;align-items:center;gap:8px;border:1px solid var(--a-line);background:var(--a-rail);border-radius:8px;padding:0 10px;min-height:36px;color:var(--a-soft)}
+.c-search input{border:0;background:transparent;color:var(--a-fg);font:inherit;font-size:13px;outline:none;width:170px;min-width:0}
+.c-btn{display:inline-flex;align-items:center;gap:6px;border:0;border-radius:8px;background:var(--a-primary);color:var(--a-ink);font-weight:700;font-size:12.5px;padding:8px 14px;cursor:pointer;min-height:36px}
+.c-btn:hover{background:#f0b90b}
+.c-btn.danger{background:transparent;border:1px solid rgba(246,70,93,.5);color:#ff8a9a}
+.c-btn.danger:hover{background:rgba(246,70,93,.1)}
+.c-btn.quiet{background:var(--a-card-2);color:var(--a-fg)}
+.c-btn.quiet:hover{background:#2b3139}
+.c-hint{font-size:12px;color:var(--a-soft)}
+.c-select{background:var(--a-rail);color:var(--a-fg);border:1px solid var(--a-line);border-radius:6px;padding:5px 8px;font:inherit;font-size:12.5px;min-height:32px}
+.c-icon-btn{border:1px solid var(--a-line);background:transparent;color:var(--a-muted);border-radius:6px;width:32px;height:32px;display:grid;place-items:center;cursor:pointer}
+.c-icon-btn:hover{color:var(--a-fg);border-color:#3a414b}
+.c-settings{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
+.c-kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 14px;font-size:12.5px}
+.c-kv dt{color:var(--a-soft)}
+.c-kv dd{color:var(--a-fg);font-weight:600}
+.c-order{display:grid;gap:6px}
+.c-order li{display:flex;align-items:center;gap:10px;border:1px solid var(--a-line);border-radius:8px;padding:8px 10px;font-size:12.5px}
+.c-order .n{width:22px;height:22px;border-radius:50%;border:1px solid var(--a-line);display:grid;place-items:center;font-size:11px;color:var(--a-muted);flex:none}
+.c-order li.feat{border-color:rgba(252,213,53,.45);background:rgba(252,213,53,.05)}
+.c-warnline{font-size:12px;color:var(--a-warn);display:flex;gap:6px;align-items:flex-start}
+.c-warnline svg.i{width:14px;height:14px;margin-top:1px}
+.c-field{display:grid;gap:5px}
+.c-field label{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--a-muted)}
+.c-field input{background:var(--a-rail);border:1px solid var(--a-line);border-radius:8px;color:var(--a-fg);font:inherit;font-size:13px;padding:8px 10px;min-height:38px;width:100%;min-width:0}
+.c-field input:focus{outline:none;border-color:rgba(252,213,53,.6)}
+.c-field small{font-size:11.5px;color:var(--a-soft)}
+.c-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+/* painel lateral, diálogo e aviso */
+.c-scrim{position:absolute;inset:0;background:rgba(5,6,8,.6);z-index:5}
+.c-drawer{position:absolute;top:0;right:0;bottom:0;width:min(430px,100%);background:var(--a-rail);border-left:1px solid var(--a-line);z-index:6;transform:translateX(102%);transition:transform .22s cubic-bezier(.16,1,.3,1);display:flex;flex-direction:column;visibility:hidden}
+.c-drawer.open{transform:none;visibility:visible}
+.c-drawer-h{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:16px 18px;border-bottom:1px solid var(--a-line)}
+.c-drawer-h h4{font-size:16px;font-weight:700}
+.c-drawer-h p{font-size:12px;color:var(--a-soft)}
+.c-drawer-b{padding:16px 18px;overflow-y:auto;display:grid;gap:16px;align-content:start}
+.c-sect{display:grid;gap:10px}
+.c-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.c-stats div{background:var(--a-card);border:1px solid var(--a-line);border-radius:8px;padding:10px 12px;display:grid;gap:2px}
+.c-stats b{font-family:var(--font-num);font-size:15px;font-variant-numeric:tabular-nums}
+.c-stats span{font-size:11px;color:var(--a-soft);text-transform:uppercase;letter-spacing:.06em;font-weight:700}
+.c-list li{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid var(--a-line);font-size:12.5px}
+.c-list li:first-child{border-top:0}
+.c-tabs{display:flex;gap:4px;border-bottom:1px solid var(--a-line)}
+.c-tabs button{border:0;background:transparent;color:var(--a-muted);font-weight:600;font-size:12.5px;padding:8px 10px;border-bottom:2px solid transparent;cursor:pointer}
+.c-tabs button[aria-selected="true"]{color:var(--a-fg);border-bottom-color:var(--a-primary)}
+.c-dialog{position:absolute;inset:0;display:grid;place-items:center;z-index:8;padding:16px}
+.c-dialog-box{background:var(--a-card-2);border:1px solid #3a414b;border-radius:12px;padding:18px;width:min(420px,100%);display:grid;gap:12px;box-shadow:0 20px 50px rgba(0,0,0,.5)}
+.c-dialog-box h4{font-size:16px}
+.c-dialog-box p{font-size:13px;color:var(--a-muted)}
+.c-dialog-box .c-row{justify-content:flex-end}
+.c-toast{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);z-index:9;background:var(--a-card-2);border:1px solid rgba(14,203,129,.4);color:var(--a-fg);border-radius:8px;padding:9px 14px;font-size:12.5px;display:flex;gap:8px;align-items:center;max-width:calc(100% - 32px)}
+.c-toast svg.i{color:var(--a-ok)}
+@media (max-width:1060px){.c-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.c-split{grid-template-columns:1fr}}
+@media (max-width:820px){
+  .console{grid-template-columns:1fr;min-height:0}
+  .c-rail{flex-direction:row;align-items:center;border-right:0;border-bottom:1px solid var(--a-line);padding:10px;gap:10px;overflow-x:auto}
+  .c-brand small,.c-brand b{display:none}
+  .c-nav{flex-direction:row}
+  .c-nav button{width:auto}
+  .c-user{display:none}
+  .c-settings{grid-template-columns:1fr}
+  .c-body{padding:16px}
+  .c-top{padding:12px 16px}
+}
+@media (max-width:480px){.c-kpis{grid-template-columns:1fr}.c-search input{width:120px}}
+@media (prefers-reduced-motion:reduce){.c-drawer{transition:none}.c-chart .bar{transition:none}}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+    <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+    <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></symbol>
+    <symbol id="i-out" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-msg" viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></symbol>
+  </defs>
+</svg>
+
+<div class="wrap">
+
+<header class="hero">
+  <p class="eyebrow">Proposta · rota /owner</p>
+  <h1>Painel do Proprietário</h1>
+  <p class="lede">Li a rota inteira (<code>src/app/owner/page.tsx</code>, 1.421 linhas), o bootstrap que alimenta o painel e as rotas que ele chama. Os números não batem entre as abas, uma coluna mostra um valor fixo como se viesse do banco e duas ações mudam a plataforma inteira com um clique. A proposta reorganiza o painel em cinco seções, com uma única regra de cálculo: a mesma que o painel do gestor já usa.</p>
+  <div class="meta"><span>06/11/2026</span><span>Leitura do código, sem acesso ao banco</span><span>Nada foi alterado no repositório</span></div>
+  <nav class="toc" aria-label="Seções desta página">
+    <a href="#numeros">Números</a><a href="#achados">Achados</a><a href="#proposta">Proposta</a><a href="#maquete">Maquete</a><a href="#decisoes">Decisões</a><a href="#plano">Plano</a><a href="#validacao">Validação</a>
+  </nav>
+</header>
+
+<section id="resumo" aria-labelledby="t-resumo">
+  <h2 id="t-resumo" class="eyebrow" style="font-size:11px">Resumo</h2>
+  <div class="sum">
+    <div><h3>O que está errado</h3><b class="num">22 achados</b><p>6 mudam números na tela, 6 são riscos na operação e 10 são de leitura e acabamento.</p></div>
+    <div><h3>O que muda</h3><b class="num">5 seções</b><p>Visão geral, Gestores, Eventos, Comercial e Configurações, numa moldura própria de painel, com uma fila do que precisa de atenção e o dinheiro separado por moeda.</p></div>
+    <div><h3>O que preciso de você</h3><b class="num">6 decisões</b><p>D1 a D6, no fim da página. As duas primeiras stories corrigem os números no painel atual e não dependem delas.</p></div>
+  </div>
+</section>
+
+<section id="numeros" aria-labelledby="t-num">
+  <header class="read">
+    <p class="eyebrow">O problema central</p>
+    <h2 id="t-num">O mesmo evento aparece com quatro valores</h2>
+    <p class="lede">Cada aba soma as inscrições de um jeito. Com o exemplo abaixo, o proprietário vê R$ 210, R$ 200 ou R$ 300 conforme a aba, e o gestor do evento vê outra divisão no painel dele.</p>
+  </header>
+  <div class="calc">
+    <div class="calc-in">
+      <h3>Exemplo: um evento em reais, três inscrições de R$ 100</h3>
+      <ul style="display:grid;gap:10px">
+        <li><span class="tag">1</span><span>Aprovada, taxa por cima: o atleta pagou R$ 110 (ingresso R$ 100 + taxa R$ 10).</span></li>
+        <li><span class="tag">2</span><span>Aprovada, taxa absorvida pelo gestor: o atleta pagou R$ 100 e o gestor recebe R$ 90.</span></li>
+        <li><span class="tag">3</span><span>Pagamento recusado (<code>payment_failed</code>).</span></li>
+      </ul>
+      <p class="small muted">Resposta certa, pela regra de <code>managerFinance.ts</code>: atletas pagaram R$ 210, a WODArena reteve R$ 20 e o gestor recebe R$ 190.</p>
+    </div>
+    <div class="calc-out" role="table" aria-label="Valor exibido em cada aba para o mesmo evento">
+      <div class="calc-row" role="row"><span class="where" role="cell">Visão Geral · cartão “Volume Total Pago”<span class="why">soma <code>amountCollected ?? totalPaid</code> das aprovadas</span></span><span class="v" role="cell">R$ 210,00</span><span class="pill ok" role="cell"><svg class="i" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2.5"><use href="#i-check"/></svg>certo</span></div>
+      <div class="calc-row" role="row"><span class="where" role="cell">Visão Geral · tabela “Faturamento Evento”<span class="why">soma <code>totalPaid</code>: some a taxa paga por cima</span></span><span class="v" role="cell">R$ 200,00</span><span class="pill crit" role="cell"><svg class="i" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2.5"><use href="#i-x"/></svg>errado</span></div>
+      <div class="calc-row" role="row"><span class="where" role="cell">Gestores &amp; Vendas · “Volume Pago”<span class="why">mesma soma de <code>totalPaid</code></span></span><span class="v" role="cell">R$ 200,00</span><span class="pill crit" role="cell"><svg class="i" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2.5"><use href="#i-x"/></svg>errado</span></div>
+      <div class="calc-row" role="row"><span class="where" role="cell">Eventos Globais · “Inscrições”<span class="why">soma <code>totalPaid</code> de todas, inclusive a recusada</span></span><span class="v" role="cell">R$ 300,00</span><span class="pill crit" role="cell"><svg class="i" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2.5"><use href="#i-x"/></svg>errado</span></div>
+      <div class="calc-row" role="row"><span class="where" role="cell">Eventos Globais · “Taxa Split”<span class="why">valor fixo: o campo nunca chega do banco</span></span><span class="v" role="cell">R$ 10,00</span><span class="pill crit" role="cell"><svg class="i" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2.5"><use href="#i-x"/></svg>errado</span></div>
+      <div class="calc-row ref" role="row"><span class="where" role="cell">Painel do gestor (<code>managerFinance.ts</code>)<span class="why">pago R$ 210 · taxa R$ 20 · recebe R$ 190</span></span><span class="v" role="cell">R$ 190,00</span><span class="pill info" role="cell">referência</span></div>
+    </div>
+  </div>
+</section>
+
+<section id="achados" aria-labelledby="t-ach">
+  <header class="read">
+    <p class="eyebrow">Diagnóstico</p>
+    <h2 id="t-ach">22 achados, do que muda número ao acabamento</h2>
+    <p class="lede">Cada item aponta o arquivo e a linha. Só o A6 depende de uma conferência fora do código, e o caminho para conferir está no próprio item.</p>
+  </header>
+
+  <div class="groups">
+    <div class="group">
+      <h3><span class="pill crit"><svg class="i" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2.5"><use href="#i-alert"/></svg>Número errado</span> Valores que o proprietário lê e não estão certos <span class="count">6</span></h3>
+
+      <div class="f"><span class="id">A1</span><div class="f-body"><h4>“Taxa Split” mostra R$ 10,00 em todos os eventos</h4><p>O AppContext não copia <code>marketplace_fee</code> do banco para o evento, então o campo chega vazio e a tela usa o padrão 10. Essa coluna antiga também não entra no cálculo da taxa (hoje 10% do valor, em <code>serviceFee.ts</code>), e o número ainda aparece como reais.</p><p class="where">page.tsx:1161 e 1227 · AppContext.tsx:790-834 (o mapeamento do evento não tem o campo)</p></div></div>
+
+      <div class="f"><span class="id">A2</span><div class="f-body"><h4>A aba Eventos soma inscrições que não foram pagas</h4><p>A coluna “Inscrições” soma o <code>totalPaid</code> de todas as inscrições do evento. Pendentes, recusadas e canceladas entram no valor.</p><p class="where">page.tsx:1159-1160 e 1198-1199</p></div></div>
+
+      <div class="f"><span class="id">A3</span><div class="f-body"><h4>Reais, euros e libras somados como R$</h4><p>Nenhum cálculo do /owner lê a moeda do evento. Um evento em EUR pela Stripe entra nos cartões e nas tabelas como se fosse real. O painel do gestor já separa por moeda com <code>buildManagerFinanceSummary</code>.</p><p class="where">page.tsx:73-91, 94-131 e 141-167</p></div></div>
+
+      <div class="f"><span class="id">A4</span><div class="f-body"><h4>Três fórmulas diferentes para “faturamento”</h4><p>O cartão do topo usa <code>amountCollected ?? totalPaid</code>. As tabelas usam <code>totalPaid</code>, que inclui a taxa quando o gestor absorve e exclui quando o atleta paga. O painel do gestor usa <code>managerFinance.ts</code>. Inscrições antigas, gravadas com <code>amount_collected = total_paid</code>, ainda deixam o cartão abaixo do real; o <code>resolveCollectedAmount</code> já corrige isso.</p><p class="where">page.tsx:75, 108 e 148</p></div></div>
+
+      <div class="f"><span class="id">A5</span><div class="f-body"><h4>“Pendentes” inclui recusadas e canceladas</h4><p>O vermelho de “não pagos” conta tudo que não é <code>payment_approved</code>. Para o painel do gestor, pendente é só <code>payment_pending</code> e <code>payment_in_review</code>.</p><p class="where">page.tsx:105 e 146</p></div></div>
+
+      <div class="f"><span class="id">A6</span><div class="f-body"><h4>Pode faltar dado acima de 1.000 linhas (a confirmar)</h4><p>O bootstrap do proprietário lê inscrições, atletas e scores da plataforma inteira, sem paginação. O Supabase devolve no máximo 1.000 linhas por consulta no padrão do projeto (Max Rows). Passando disso, cartões, tabelas e o ranking ficam incompletos sem nenhum aviso.</p><p class="confirm">Como confirmar sem tocar no banco: procurar nos logs da Vercel a linha <code>[Bootstrap Query] Concluída</code> com <code>rowCount: 1000</code> em “inscrições do proprietário” ou “scores do proprietário”. Vale olhar também os eventos grandes no painel do gestor.</p><p class="where">api/app/bootstrap/route.ts:143-154 · bootstrapPayload.ts:49-70</p></div></div>
+    </div>
+
+    <div class="group">
+      <h3><span class="pill warn"><svg class="i" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2.5"><use href="#i-clock"/></svg>Risco na operação</span> Comportamentos que travam ou mudam a plataforma <span class="count">6</span></h3>
+
+      <div class="f"><span class="id">B1</span><div class="f-body"><h4>A aba Leaderboards abre sem ranking</h4><p>O evento escolhido nasce de <code>events[0]</code> no primeiro render, quando a lista ainda está vazia (os dados só chegam depois do login). O seletor mostra o primeiro evento, nada aparece embaixo e escolher o mesmo evento não dispara a troca. É preciso escolher outro e voltar.</p><p class="where">page.tsx:243</p></div></div>
+
+      <div class="f"><span class="id">B2</span><div class="f-body"><h4>Status do evento diferente do resto do site</h4><p>As tabelas leem o campo salvo <code>event.status</code>, não o ciclo de vida (<code>getEventStatus</code>, Story 1.71). Um evento que já passou e ficou salvo como “upcoming” aparece como “Em breve”. A aba Banner já usa o ciclo certo. No computador o rótulo sai em inglês (Upcoming, Finished); no celular, em português.</p><p class="where">page.tsx:665, 708-714 e 1217-1223</p></div></div>
+
+      <div class="f"><span class="id">B3</span><div class="f-body"><h4>Desligar a taxa da plataforma é um clique</h4><p>O botão fica no meio da Visão Geral, sem confirmação, e vale para todos os pagamentos novos de todos os gestores. O erro aparece no mesmo amarelo do sucesso. A rota regrava o percentual como 10 a cada troca.</p><p class="where">page.tsx:631-638 · api/owner/service-fee/route.ts:55-63</p></div></div>
+
+      <div class="f"><span class="id">B4</span><div class="f-body"><h4>Uma data no passado bloqueia o gestor na hora</h4><p>Salvar uma validade vencida bloqueia o painel e as vendas do gestor imediatamente, sem pedir confirmação. Basta errar o ano. O botão Salvar fica ativo mesmo sem mudança.</p><p class="where">page.tsx:976-989</p></div></div>
+
+      <div class="f"><span class="id">B5</span><div class="f-body"><h4>Cadastro de gestor sem senha mínima e sem estado de envio</h4><p>A rota aceita qualquer senha; a redefinição exige 6 caracteres e as subcontas, 8. O botão não trava durante o envio: um duplo clique cria o gestor e logo depois mostra “e-mail já existe”. A mensagem real da API é descartada e a tela sempre diz “O e-mail já existe ou houve um problema”.</p><p class="where">api/admin/create-user/route.ts:18 · AppContext.tsx:1031-1034 · page.tsx:852-857</p></div></div>
+
+      <div class="f"><span class="id">B6</span><div class="f-body"><h4>Leads não mudam de status</h4><p>Contatado, Qualificado e Descartado existem no tipo, mas a rota só tem GET e POST. O cartão “Novos” é sempre igual ao “Total” e não há como saber quem já foi atendido.</p><p class="where">api/commercial-leads/route.ts:70 e 92 · types/index.ts:42</p></div></div>
+    </div>
+
+    <div class="group compact">
+      <h3><span class="pill info"><svg class="i" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2.5"><use href="#i-info"/></svg>Leitura e acabamento</span> O que deixa o painel espalhado e com cara de rascunho <span class="count">10</span></h3>
+
+      <div class="f"><span class="id">C1</span><div class="f-body"><p>Eventos Globais mostra o id do gestor (<code>org-1717…</code>) em vez do nome, e o título “Eventos Ativos na Plataforma” lista também os encerrados.</p><p class="where">page.tsx:1153 e 1215</p></div></div>
+      <div class="f"><span class="id">C2</span><div class="f-body"><p>Dinheiro aparece como “R$ 1234.50”: <code>toFixed(2)</code> sem separador de milhar e com ponto. O app já tem <code>formatMoney</code>.</p><p class="where">todas as colunas de valor</p></div></div>
+      <div class="f"><span class="id">C3</span><div class="f-body"><p>Validade crua (“2026-12-31”) e “Nao definido” sem acento na tabela, com acento no cartão do celular.</p><p class="where">page.tsx:887 e 956</p></div></div>
+      <div class="f"><span class="id">C4</span><div class="f-body"><p>Textos sem acento: “necessario”, “O prazo e opcional”, “operacao”, “Nao foi possivel”, “Notificacao”, “aparecerao”.</p><p class="where">page.tsx:735, 764, 864, 390, 1084 e 1046</p></div></div>
+      <div class="f"><span class="id">C5</span><div class="f-body"><p>Jargão e inglês: “Root Access”, “Desconectar Root”, “Super Admin”, “Senha Mestra”, “Leaderboards”, “Selecione o Evento para Audit”.</p><p class="where">page.tsx:443-476, 516, 525 e 1394</p></div></div>
+      <div class="f"><span class="id">C6</span><div class="f-body"><p>O painel fica dentro do site público: o menu do site (Eventos, idioma e um botão que leva ao /admin), a faixa do proprietário e o rodapé. Há dois <code>&lt;main&gt;</code> aninhados, um do layout e outro da página.</p><p class="where">layout.tsx:76-81 · page.tsx:532</p></div></div>
+      <div class="f"><span class="id">C7</span><div class="f-body"><p>As tabelas de Gestores (mínimo de 1.060 px) e de Leads (980 px) rolam de lado em qualquer notebook: a coluna de abas ocupa um quarto da largura para seis botões, sobrando cerca de 900 px.</p><p class="where">page.tsx:533-536, 917 e 1075</p></div></div>
+      <div class="f"><span class="id">C8</span><div class="f-body"><p>A aba aberta não fica no endereço: recarregar volta para a Visão Geral e não dá para mandar o link de uma seção. As abas não marcam a atual para leitor de tela (<code>aria-current</code>).</p><p class="where">page.tsx:45 e 548-559</p></div></div>
+      <div class="f"><span class="id">C9</span><div class="f-body"><p><code>&lt;td className="flex …"&gt;</code> nas tabelas de evento tira a célula do layout de tabela e desalinha a linha.</p><p class="where">page.tsx:694 e 1203</p></div></div>
+      <div class="f"><span class="id">C10</span><div class="f-body"><p>“Quem paga a taxa” só aparece na tabela do computador; o cartão do celular não mostra.</p><p class="where">page.tsx:873-913</p></div></div>
+    </div>
+
+    <p class="aside-note"><b>Fora do painel, mas acontece ao abri-lo:</b> com o proprietário logado, a rotina de reparo do Fitness Race no AppContext percorre os eventos de Fitness Race da plataforma inteira e grava a prova TOTAL que faltar (AppContext.tsx:869-937). É uma escrita no banco disparada só por abrir a página. Não entra nesta proposta; fica registrado para uma story própria, se fizer sentido.</p>
+  </div>
+</section>
+
+<section id="proposta" aria-labelledby="t-prop">
+  <header class="read">
+    <p class="eyebrow">Proposta</p>
+    <h2 id="t-prop">Cinco seções e uma regra de cálculo</h2>
+    <p class="lede">Hoje o dinheiro aparece em três tabelas, com três fórmulas, e nada no painel diz o que precisa de ação. A proposta junta cada assunto em um lugar e abre o painel pelo que pede atenção.</p>
+  </header>
+
+  <div class="principles">
+    <div><h3>Uma regra de cálculo</h3><p>Todos os valores saem de <code>managerFinance.ts</code>, o mesmo módulo do painel do gestor. Proprietário e gestor passam a ver o mesmo número para o mesmo evento, separado por moeda.</p></div>
+    <div><h3>O que pede ação vem primeiro</h3><p>A Visão geral abre com uma fila: gestor expirado com evento à venda, acesso vencendo, pagamento parado em análise, destaque da home encerrado, lead sem resposta.</p></div>
+    <div><h3>Cada assunto em um lugar</h3><p>Dinheiro em Visão geral e Eventos, pessoas em Gestores, novos organizadores em Comercial, chaves da plataforma em Configurações. O ranking vira parte do detalhe do evento.</p></div>
+    <div><h3>Ação crítica pede confirmação</h3><p>Ligar ou desligar a taxa e salvar uma validade no passado abrem uma confirmação que diz o efeito em uma frase.</p></div>
+  </div>
+
+  <div class="wires" aria-label="Esboço da tela de hoje e da proposta">
+    <div class="wire"><p>Hoje</p>
+      <div class="wf">
+        <div>Menu do site público · Eventos · idioma · botão do /admin</div>
+        <div>Faixa: Painel do Proprietário · Root Access · Desconectar Root</div>
+        <div class="row"><div>6 abas<br>¼ da largura</div><div class="hot">Conteúdo da aba · tabela de 1.060 px rola de lado · totais com fórmulas diferentes</div></div>
+        <div>Rodapé do site público</div>
+      </div>
+    </div>
+    <div class="wire"><p>Proposta</p>
+      <div class="wf new">
+        <div class="row"><div class="acc">5 seções<br>com contadores<br><br>Sair</div>
+          <div class="stack" style="border:0;padding:0"><div>Título da seção · período · moeda</div><div class="acc">Números por moeda</div><div>Fila de atenção + receita por mês + eventos à venda</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tblwrap">
+    <table class="map">
+      <thead><tr><th>Aba de hoje</th><th>O que tem</th><th>Vai para</th></tr></thead>
+      <tbody>
+        <tr><td>Visão Geral</td><td>4 cartões com totais misturados</td><td class="to"><span class="arrow">→</span> Visão geral: 4 números por moeda, com período</td></tr>
+        <tr><td>Visão Geral</td><td>Botão que liga e desliga a taxa</td><td class="to"><span class="arrow">→</span> Configurações, com confirmação</td></tr>
+        <tr><td>Visão Geral</td><td>Tabela financeira por evento</td><td class="to"><span class="arrow">→</span> Eventos (uma tabela só)</td></tr>
+        <tr><td>Gestores &amp; Vendas</td><td>Contadores de acesso</td><td class="to"><span class="arrow">→</span> Gestores: filtros com contagem</td></tr>
+        <tr><td>Gestores &amp; Vendas</td><td>Formulário de cadastro sempre aberto</td><td class="to"><span class="arrow">→</span> Gestores: botão “Novo gestor” abre o painel lateral</td></tr>
+        <tr><td>Gestores &amp; Vendas</td><td>Tabela de 10 colunas com data e botão em cada linha</td><td class="to"><span class="arrow">→</span> Gestores: tabela enxuta; renovar fica no painel lateral</td></tr>
+        <tr><td>Leads Comerciais</td><td>Cartões e tabela só de leitura</td><td class="to"><span class="arrow">→</span> Comercial, com status editável (D5)</td></tr>
+        <tr><td>Eventos Globais</td><td>Tabela com id do gestor e “Taxa Split”</td><td class="to"><span class="arrow">→</span> Eventos, com nome do gestor e a taxa real</td></tr>
+        <tr><td>Banner da Home</td><td>Destaque e ordem do carrossel</td><td class="to"><span class="arrow">→</span> Configurações · Vitrine da home (mesma regra de hoje)</td></tr>
+        <tr><td>Leaderboards</td><td>Seletor de evento e ranking</td><td class="to"><span class="arrow">→</span> Eventos · detalhe do evento · aba Ranking</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="maquete" aria-labelledby="t-maq">
+  <div class="mock-head">
+    <header class="read">
+      <p class="eyebrow">Maquete navegável</p>
+      <h2 id="t-maq">Como o painel fica</h2>
+      <p class="lede">Clique nas seções da barra lateral, nas linhas das tabelas e nos botões da fila. O visual é o do app (tokens de <code>globals.css</code>); a implementação não cria estilo novo.</p>
+    </header>
+    <span class="example">Dados de exemplo</span>
+  </div>
+
+  <div class="console" id="console">
+    <aside class="c-rail" aria-label="Seções do painel (maquete)">
+      <div class="c-brand"><span class="c-mark">W</span><span><b>WODArena</b><small>Proprietário</small></span></div>
+      <nav class="c-nav">
+        <button type="button" data-view="overview" aria-current="page"><svg class="i"><use href="#i-grid"/></svg><span>Visão geral</span></button>
+        <button type="button" data-view="managers" aria-current="false"><svg class="i"><use href="#i-users"/></svg><span>Gestores</span><em class="c-badge warn" title="3 gestores com acesso vencido ou vencendo">3</em></button>
+        <button type="button" data-view="events" aria-current="false"><svg class="i"><use href="#i-cal"/></svg><span>Eventos</span></button>
+        <button type="button" data-view="sales" aria-current="false"><svg class="i"><use href="#i-inbox"/></svg><span>Comercial</span><em class="c-badge" id="b-leads" title="Leads novos">2</em></button>
+        <button type="button" data-view="config" aria-current="false"><svg class="i"><use href="#i-sliders"/></svg><span>Configurações</span><em class="c-badge warn" title="O destaque da home encerrou">1</em></button>
+      </nav>
+      <div class="c-user"><span>Sessão do proprietário</span><button type="button" class="c-ghost"><svg class="i"><use href="#i-out"/></svg>Sair</button></div>
+    </aside>
+
+    <div class="c-main">
+      <div class="c-top">
+        <div><p class="c-crumb">Painel do proprietário</p><h3 id="c-title">Visão geral</h3></div>
+        <div class="c-seg" id="c-period" role="group" aria-label="Período dos números">
+          <button type="button" data-p="mes" aria-pressed="false">Mês atual</button>
+          <button type="button" data-p="d30" aria-pressed="true">30 dias</button>
+          <button type="button" data-p="ano" aria-pressed="false">2026</button>
+          <button type="button" data-p="tudo" aria-pressed="false">Tudo</button>
+        </div>
+      </div>
+
+      <div class="c-body">
+        <!-- VISÃO GERAL -->
+        <div class="c-view" data-name="overview">
+          <div class="c-kpis">
+            <div class="c-kpi hero"><p class="c-lbl">Receita WODArena</p><p class="c-big" id="k-fee">R$ 10.220,10</p><p class="c-sub"><span class="c-delta" id="k-delta">+14%</span> <span id="k-delta-t">sobre os 30 dias anteriores</span></p></div>
+            <div class="c-kpi"><p class="c-lbl">Pago pelos atletas</p><p class="c-val" id="k-col">R$ 109.540,00</p><p class="c-sub">ingresso e taxa, só aprovadas</p></div>
+            <div class="c-kpi"><p class="c-lbl">Repassado aos gestores</p><p class="c-val" id="k-net">R$ 99.319,90</p><p class="c-sub">já sem a taxa WODArena</p></div>
+            <div class="c-kpi"><p class="c-lbl">Inscrições aprovadas</p><p class="c-val" id="k-app">640</p><p class="c-sub"><span id="k-pend">20</span> aguardando pagamento</p></div>
+          </div>
+          <p class="c-note"><svg class="i"><use href="#i-info"/></svg><span>Em EUR no período: € 3.480,00 pagos e € 348,00 de taxa. Ficam fora da soma em reais.</span></p>
+
+          <div class="c-split">
+            <div class="c-card">
+              <div class="c-card-h"><h4>Receita WODArena por mês</h4><p>últimos 12 meses, em reais</p></div>
+              <div class="c-chart" id="c-chart"><svg id="c-chart-svg" viewBox="0 0 560 214" role="img" aria-label="Receita WODArena por mês, de dezembro de 2025 a novembro de 2026"></svg><div class="c-tip" id="c-tip" hidden></div></div>
+            </div>
+            <div class="c-card">
+              <div class="c-card-h"><h4>Precisa de atenção</h4><p>7 itens</p></div>
+              <ul id="att"></ul>
+            </div>
+          </div>
+
+          <div class="c-card flush">
+            <div class="c-card-h" style="padding:14px 16px 6px"><h4>Eventos à venda</h4><button type="button" class="c-link" data-go="events">Ver todos os eventos<svg class="i"><use href="#i-chev"/></svg></button></div>
+            <div class="c-tablewrap"><table class="c-table"><thead><tr><th>Evento</th><th>Ocupação</th><th class="r">Aguardando</th><th class="r">Pago pelos atletas</th><th class="r">Taxa WODArena</th></tr></thead><tbody id="ov-events"></tbody></table></div>
+          </div>
+        </div>
+
+        <!-- GESTORES -->
+        <div class="c-view" data-name="managers" hidden>
+          <div class="c-toolbar">
+            <div class="c-chips" id="m-chips" role="group" aria-label="Filtrar gestores"></div>
+            <div class="c-tools">
+              <label class="c-search"><svg class="i"><use href="#i-search"/></svg><input id="m-q" type="search" placeholder="Buscar gestor ou box" aria-label="Buscar gestor ou box"></label>
+              <button type="button" class="c-btn" id="m-new"><svg class="i"><use href="#i-plus"/></svg>Novo gestor</button>
+            </div>
+          </div>
+          <div class="c-card flush"><div class="c-tablewrap"><table class="c-table"><thead><tr><th>Gestor</th><th>Acesso</th><th class="r">Eventos</th><th class="r">Inscrições aprovadas</th><th class="r">Taxa WODArena</th><th>Quem paga a taxa</th><th></th></tr></thead><tbody id="m-rows"></tbody></table></div></div>
+          <p class="c-hint">Clique em um gestor para renovar o acesso, ver os eventos e o que já vendeu.</p>
+        </div>
+
+        <!-- EVENTOS -->
+        <div class="c-view" data-name="events" hidden>
+          <div class="c-toolbar">
+            <div class="c-chips" id="e-chips" role="group" aria-label="Filtrar eventos"></div>
+            <div class="c-tools"><label class="c-search"><svg class="i"><use href="#i-search"/></svg><input id="e-q" type="search" placeholder="Buscar evento ou gestor" aria-label="Buscar evento ou gestor"></label></div>
+          </div>
+          <div class="c-card flush"><div class="c-tablewrap"><table class="c-table" style="min-width:820px"><thead><tr><th>Evento</th><th>Data</th><th>Situação</th><th>Ocupação</th><th class="r">Aguardando</th><th class="r">Pago pelos atletas</th><th class="r">Taxa WODArena</th><th></th></tr></thead><tbody id="e-rows"></tbody></table></div></div>
+          <p class="c-hint">A situação segue o ciclo de vida do site (<code style="background:transparent;border:0;padding:0;color:inherit">getEventStatus</code>). Clique em um evento para ver a divisão do dinheiro e o ranking.</p>
+        </div>
+
+        <!-- COMERCIAL -->
+        <div class="c-view" data-name="sales" hidden>
+          <div class="c-toolbar">
+            <div class="c-chips" id="l-chips" role="group" aria-label="Filtrar leads"></div>
+          </div>
+          <div class="c-card flush"><div class="c-tablewrap"><table class="c-table" style="min-width:820px"><thead><tr><th>Interessado</th><th>Evento que quer fazer</th><th>Cidade</th><th>Recebido</th><th>Aviso por e-mail</th><th>Status</th><th></th></tr></thead><tbody id="l-rows"></tbody></table></div></div>
+          <p class="c-hint">O status muda direto na linha (decisão D5). O botão de conversa abre o WhatsApp do interessado; na maquete ele não abre nada.</p>
+        </div>
+
+        <!-- CONFIGURAÇÕES -->
+        <div class="c-view" data-name="config" hidden>
+          <div class="c-settings">
+            <div class="c-card">
+              <div class="c-card-h"><h4>Taxa de serviço</h4><span class="c-sev ok" id="fee-state"><svg class="i"><use href="#i-check"/></svg>Ligada</span></div>
+              <dl class="c-kv"><dt>Percentual</dt><dd class="num">10% de cada inscrição paga</dd><dt>Quem paga</dt><dd>escolha de cada gestor (atleta paga ou gestor absorve)</dd><dt>Vale para</dt><dd>pagamentos criados depois de salvar</dd></dl>
+              <p class="c-hint">Inscrições já pagas nunca mudam. A escolha de quem paga continua na aba Pagamentos de cada gestor.</p>
+              <div><button type="button" class="c-btn danger" id="fee-toggle">Desligar taxa</button></div>
+            </div>
+            <div class="c-card">
+              <div class="c-card-h"><h4>Vitrine da home</h4><p>até 4 eventos + slide comercial</p></div>
+              <p class="c-warnline"><svg class="i"><use href="#i-alert"/></svg><span>O destaque salvo, Festival Exemplo Verão, encerrou em 19/10 e saiu do carrossel. Escolha outro ou volte para a seleção automática.</span></p>
+              <div class="c-row"><label class="sr" for="c-feat" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Evento em destaque</label>
+                <select class="c-select" id="c-feat" style="flex:1;min-width:0"><option>Seleção automática</option><option>Arena Qualifier Online</option><option>Desafio Litoral 2026</option><option>Open Studio Exemplo</option><option>Throwdown Lisboa</option></select>
+                <button type="button" class="c-btn" id="feat-save"><svg class="i"><use href="#i-star"/></svg>Salvar destaque</button></div>
+              <ol class="c-order">
+                <li><span class="n">1</span>Slide comercial</li>
+                <li class="feat"><span class="n">2</span>Arena Qualifier Online</li>
+                <li><span class="n">3</span>Desafio Litoral 2026</li>
+                <li><span class="n">4</span>Open Studio Exemplo</li>
+                <li><span class="n">5</span>Copa Sertão Race</li>
+              </ol>
+              <p class="c-hint">Mesma regra e mesmo controle de hoje (Story 1.24), só mudam de lugar.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="c-scrim" id="c-scrim" hidden></div>
+    <aside class="c-drawer" id="c-drawer" aria-label="Detalhes" aria-hidden="true">
+      <div class="c-drawer-h"><div><h4 id="d-title">Detalhes</h4><p id="d-sub"></p></div><button type="button" class="c-icon-btn" id="d-close" aria-label="Fechar"><svg class="i"><use href="#i-x"/></svg></button></div>
+      <div class="c-drawer-b" id="d-body"></div>
+    </aside>
+    <div class="c-dialog" id="c-dialog" hidden>
+      <div class="c-dialog-box" role="dialog" aria-modal="true" aria-labelledby="dlg-t">
+        <h4 id="dlg-t">Desligar a taxa de serviço?</h4>
+        <p id="dlg-p">Os pagamentos criados a partir de agora, em todos os eventos, não terão a taxa WODArena. Inscrições já pagas não mudam.</p>
+        <div class="c-row"><button type="button" class="c-btn quiet" id="dlg-cancel">Cancelar</button><button type="button" class="c-btn danger" id="dlg-ok">Desligar taxa</button></div>
+      </div>
+    </div>
+    <div class="c-toast" id="c-toast" role="status" hidden><svg class="i"><use href="#i-check"/></svg><span id="c-toast-t"></span></div>
+  </div>
+</section>
+
+<section id="decisoes" aria-labelledby="t-dec">
+  <header class="read">
+    <p class="eyebrow">Decisões</p>
+    <h2 id="t-dec">Seis escolhas antes de codar</h2>
+    <p class="lede">A opção A é a que recomendo em todas. Responda com a letra de cada uma (por exemplo, “D1 A, D2 A, D3 B…”).</p>
+  </header>
+  <div class="decs">
+    <div class="dec"><div class="dec-h"><span class="id">D1</span><h3>Estrutura do painel</h3><p>Como as informações se organizam.</p></div>
+      <div class="opts"><div class="opt rec"><span class="rtag">Recomendada</span><b>A · Cinco seções</b><span>Visão geral, Gestores, Eventos, Comercial e Configurações. O ranking entra no detalhe do evento; banner e taxa vão para Configurações.</span></div><div class="opt"><b>B · Manter as seis abas</b><span>Só corrige os números e troca o visual, sem mudar onde cada coisa fica.</span></div></div></div>
+
+    <div class="dec"><div class="dec-h"><span class="id">D2</span><h3>Moldura</h3><p>O que envolve o painel.</p></div>
+      <div class="opts"><div class="opt rec"><span class="rtag">Recomendada</span><b>A · Moldura própria</b><span>Sem o menu e o rodapé do site público. Barra lateral no computador, faixa de seções no celular, seção aberta no endereço (<code>/owner?secao=gestores</code>).</span></div><div class="opt"><b>B · Dentro do site público</b><span>Mantém menu e rodapé do site acima e abaixo do painel, como hoje.</span></div></div></div>
+
+    <div class="dec"><div class="dec-h"><span class="id">D3</span><h3>De onde vêm os números</h3><p>Liga direto ao achado A6.</p></div>
+      <div class="opts"><div class="opt rec"><span class="rtag">Recomendada</span><b>A · Rota própria do proprietário</b><span><code>/api/owner/overview</code> soma no servidor, com leitura paginada e as regras do <code>managerFinance.ts</code>. Resolve o limite de 1.000 linhas e tira do navegador os dados pessoais de todos os atletas.</span></div><div class="opt"><b>B · Continuar somando no navegador</b><span>Usa o bootstrap de hoje e só troca as fórmulas. É mais rápido, mas o limite de linhas continua.</span></div></div></div>
+
+    <div class="dec"><div class="dec-h"><span class="id">D4</span><h3>Período dos números</h3><p>A tabela de inscrições não guarda a data de aprovação; ela existe só em <code>leaderboard_entries</code>.</p></div>
+      <div class="opts"><div class="opt rec"><span class="rtag">Recomendada</span><b>A · Filtro de período</b><span>Mês atual, 30 dias, ano e tudo, pela data da inscrição (<code>created_at</code>), com a comparação ao período anterior.</span></div><div class="opt"><b>B · Sempre o acumulado</b><span>Um número só, desde o início da plataforma, como hoje.</span></div></div></div>
+
+    <div class="dec"><div class="dec-h"><span class="id">D5</span><h3>Leads comerciais</h3><p>Liga ao achado B6.</p></div>
+      <div class="opts"><div class="opt rec"><span class="rtag">Recomendada</span><b>A · Status editável</b><span>Novo, Contatado, Qualificado e Descartado, alterados na linha, por uma rota nova só do proprietário. Sem migration: a coluna já existe.</span></div><div class="opt"><b>B · Só leitura</b><span>A lista continua como registro, sem acompanhamento.</span></div></div></div>
+
+    <div class="dec"><div class="dec-h"><span class="id">D6</span><h3>Tela de login do /owner</h3><p>A Story 1.92 deixou o /owner de fora.</p></div>
+      <div class="opts"><div class="opt rec"><span class="rtag">Recomendada</span><b>A · Nova tela, variante Proprietário</b><span>Reusa a tela aprovada (<code>AdminLoginScreen</code>) com o título do proprietário, sem “Root” nem “Senha Mestra”. O <code>login()</code> com <code>ownerOnly</code> não muda.</span></div><div class="opt"><b>B · Manter a atual</b><span>Só corrige os textos.</span></div></div></div>
+  </div>
+</section>
+
+<section id="plano" aria-labelledby="t-plano">
+  <header class="read">
+    <p class="eyebrow">Plano</p>
+    <h2 id="t-plano">Sete stories, nesta ordem</h2>
+    <p class="lede">As duas primeiras corrigem o painel atual e podem ir para produção antes de qualquer mudança de visual. A numeração é sugestão; o @sm confirma ao criar.</p>
+  </header>
+  <div class="stories">
+    <div class="st"><span class="n">1.119</span><h3>Números certos no painel atual</h3><span class="size">P · sem migration</span><p>Troca as fórmulas pelo <code>managerFinance.ts</code>, separa por moeda, usa <code>formatMoney</code>, conta pendente como o gestor conta, lê a situação por <code>getEventStatus</code> em português, mostra o nome do gestor, tira a “Taxa Split”, corrige o ranking que abre vazio e os textos.</p><p class="fix">Resolve A1–A5, B1, B2, C1–C5, C9 e C10.</p></div>
+    <div class="st"><span class="n">1.120</span><h3>Ações críticas com confirmação</h3><span class="size">P · sem migration</span><p>Confirmação para ligar e desligar a taxa (e a rota deixa de regravar o percentual), confirmação para validade no passado, senha mínima de 8 caracteres no cadastro de gestor, botão travado durante o envio e a mensagem real da API na tela.</p><p class="fix">Resolve B3–B5.</p></div>
+    <div class="st"><span class="n">1.121</span><h3>Rota de números do proprietário</h3><span class="size">M · depende de D3</span><p><code>GET /api/owner/overview</code> só para <code>owner</code>: leitura paginada, totais por moeda, por evento, por gestor e por mês, e a lista do que precisa de atenção (inclui gestor sem conta Mercado Pago ou Stripe conectada).</p><p class="fix">Resolve A6.</p></div>
+    <div class="st"><span class="n">1.122</span><h3>Moldura, navegação e login</h3><span class="size">M · D1, D2, D6</span><p>Moldura própria sem menu e rodapé do site, cinco seções com contadores, seção no endereço, um único <code>&lt;main&gt;</code>, nova tela de login na variante Proprietário.</p><p class="fix">Resolve C6–C8.</p></div>
+    <div class="st"><span class="n">1.123</span><h3>Visão geral nova</h3><span class="size">M · D4</span><p>Quatro números por moeda com período, fila “Precisa de atenção”, receita WODArena por mês e eventos à venda.</p></div>
+    <div class="st"><span class="n">1.124</span><h3>Gestores e Eventos</h3><span class="size">G</span><p>Tabelas com filtros e busca. Painel lateral do gestor (renovar com +30 dias, +90 dias ou +1 ano, cadastro de novo gestor) e detalhe do evento com a divisão do dinheiro e a aba Ranking.</p></div>
+    <div class="st"><span class="n">1.125</span><h3>Comercial e Configurações</h3><span class="size">M · D5</span><p>Rota para mudar o status do lead, mudança na linha, botão de conversa; Configurações com a taxa de serviço e a vitrine da home (mesma regra da Story 1.24).</p><p class="fix">Resolve B6.</p></div>
+  </div>
+</section>
+
+<section id="validacao" aria-labelledby="t-val">
+  <header class="read">
+    <p class="eyebrow">Validação e riscos</p>
+    <h2 id="t-val">Como conferir e o que pode quebrar</h2>
+  </header>
+  <div class="two">
+    <div class="box"><h3>Validação</h3><ul>
+      <li>Para um mesmo evento, o /owner e o painel do gestor mostram o mesmo pago, a mesma taxa e o mesmo recebido.</li>
+      <li>Um evento em EUR aparece só no grupo EUR e nunca na soma em reais.</li>
+      <li>A aba de ranking abre com o primeiro evento já carregado, logo depois do login.</li>
+      <li>Logs da Vercel antes e depois da 1.121: nenhuma consulta do proprietário volta com exatamente 1.000 linhas.</li>
+      <li>Navegador em 1280, 1440 e 390 px: nenhuma tabela da Visão geral rola de lado no notebook.</li>
+      <li><code>npm test</code>, <code>npm run lint</code> e <code>npm run typecheck</code> limpos a cada story, e gate do @qa.</li>
+    </ul></div>
+    <div class="box"><h3>Riscos</h3><ul>
+      <li>Sete arquivos de teste leem o texto do <code>page.tsx</code> (<code>owner-panel-responsive</code>, <code>service-fee-payer</code>, <code>service-fee-split</code>, <code>featured-home-event</code>, <code>manager-service-validity</code>, <code>commercial-leads</code>, <code>security-hardening</code>). Rótulos como “Taxa split”, “Taxa devida” e “Pagos / pendentes” vão mudar; as asserções são ajustadas junto, sem afrouxar o que cada uma protege.</li>
+      <li>Os totais vão mudar na tela assim que a 1.119 entrar. É a correção, não uma queda de vendas; vale avisar quem acompanha esses números.</li>
+      <li>A 1.121 lê a plataforma inteira em páginas; o tempo de carga do painel precisa ser medido antes de publicar.</li>
+      <li>Banco único é produção: nenhuma story aqui tem migration, e a rota nova é só de leitura (a do lead escreve apenas o status).</li>
+    </ul></div>
+  </div>
+  <p class="aside-note">Quando você aprovar, copio esta página para <code>docs/design/painel-proprietario/</code> com um README das decisões, e as stories citam a pasta nos critérios de aceite.</p>
+</section>
+
+</div>
+
+<script>
+(function(){
+  var $ = function(s,r){return (r||document).querySelector(s);};
+  var $$ = function(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s));};
+  var BRL = new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'});
+  var INT = new Intl.NumberFormat('pt-BR');
+  var TODAY = '2026-11-06';
+  function toUTC(iso){var p=iso.split('-').map(Number);return Date.UTC(p[0],p[1]-1,p[2]);}
+  function addDays(iso,n){return new Date(toUTC(iso)+n*86400000).toISOString().slice(0,10);}
+  function fmtDate(iso){return iso?iso.split('-').reverse().join('/'):'Sem prazo';}
+  function ic(id){return '<svg class="i"><use href="#'+id+'"/></svg>';}
+  var root = $('#console');
+
+  /* ---------- dados de exemplo ---------- */
+  var PERIODS = {
+    mes:{fee:2010.40,col:21514.00,net:19503.60,app:126,delta:'+9%',dt:'sobre o mesmo trecho de outubro'},
+    d30:{fee:10220.10,col:109540.00,net:99319.90,app:640,delta:'+14%',dt:'sobre os 30 dias anteriores'},
+    ano:{fee:65080.00,col:697660.00,net:632580.00,app:4103,delta:'+41%',dt:'sobre 2025 inteiro'},
+    tudo:{fee:79364.30,col:851210.00,net:771845.70,app:4986,delta:'',dt:'desde o primeiro evento'}
+  };
+  var MONTHS = [['dez','2025',3120],['jan','2026',2480],['fev','2026',4010],['mar','2026',5630],['abr','2026',4870],['mai','2026',6240],['jun','2026',7980],['jul','2026',5410],['ago','2026',6920],['set','2026',9350],['out','2026',10180],['nov','2026',2010.40,true]];
+  var MANAGERS = [
+    {id:'m1',name:'Carlos Roberto',org:'Box Exemplo Sul',email:'carlos@exemplo.com',status:'active',until:'2027-03-31',events:3,sold:842,fee:'R$ 14.230,00',payer:'Atleta paga',evs:[['Desafio Litoral 2026','Vendas abertas'],['Festival Exemplo Verão','Encerrado'],['Open Exemplo Sul','Encerrado']]},
+    {id:'m2',name:'Marina Alves',org:'Arena Exemplo',email:'marina@exemplo.com',status:'expiring',until:'2026-11-10',events:2,sold:1204,fee:'R$ 21.870,40',payer:'Gestor absorve',evs:[['Arena Qualifier Online','Em andamento'],['Arena Games 2025','Encerrado']]},
+    {id:'m3',name:'Rafael Lima',org:'Box Exemplo Norte',email:'rafael@exemplo.com',status:'expired',until:'2026-11-02',events:1,sold:96,fee:'R$ 1.920,00',payer:'Padrão do gateway',evs:[['Copa Sertão Race','Vendas bloqueadas']]},
+    {id:'m4',name:'Júlia Costa',org:'Studio Exemplo',email:'julia@exemplo.com',status:'expiring',until:'2026-11-12',events:1,sold:210,fee:'R$ 2.290,90',payer:'Atleta paga',evs:[['Open Studio Exemplo','Vendas acabam em 48 h']]},
+    {id:'m5',name:'Pedro Nunes',org:'Exemplo Race Club',email:'pedro@exemplo.com',status:'none',until:'',events:0,sold:0,fee:'R$ 0,00',payer:'Padrão do gateway',evs:[],noAccount:true},
+    {id:'m6',name:'Ana Ribeiro',org:'Box Exemplo Lisboa',email:'ana@exemplo.com',status:'active',until:'2027-01-15',events:1,sold:58,fee:'€ 348,00',payer:'Gestor absorve',evs:[['Throwdown Lisboa','Vendas abertas']]}
+  ];
+  var MSTATUS = {active:['Ativo','ok'],expiring:['Vence em breve','warn'],expired:['Expirado','crit'],none:['Sem prazo','mute']};
+  var EVENTS = [
+    {id:'e1',name:'Arena Qualifier Online',mgr:'Marina Alves',date:'1 a 30 nov',cur:'BRL',st:'live',sold:366,cap:400,pend:4,failed:21,cancel:3,col:'R$ 54.900,00',fee:'R$ 4.990,90',net:'R$ 49.909,10'},
+    {id:'e2',name:'Desafio Litoral 2026',mgr:'Carlos Roberto',date:'15 e 16 nov',cur:'BRL',st:'open',sold:168,cap:200,pend:12,failed:9,cancel:2,col:'R$ 31.920,00',fee:'R$ 2.901,80',net:'R$ 29.018,20'},
+    {id:'e3',name:'Open Studio Exemplo',mgr:'Júlia Costa',date:'22 nov',cur:'BRL',st:'closing',sold:210,cap:220,pend:2,failed:4,cancel:0,col:'R$ 25.200,00',fee:'R$ 2.290,90',net:'R$ 22.909,10'},
+    {id:'e4',name:'Copa Sertão Race',mgr:'Rafael Lima',date:'6 dez',cur:'BRL',st:'blocked',sold:96,cap:250,pend:2,failed:3,cancel:1,col:'R$ 21.120,00',fee:'R$ 1.920,00',net:'R$ 19.200,00'},
+    {id:'e5',name:'Throwdown Lisboa',mgr:'Ana Ribeiro',date:'13 dez',cur:'EUR',st:'open',sold:58,cap:120,pend:3,failed:1,cancel:0,col:'€ 3.480,00',fee:'€ 348,00',net:'€ 3.132,00'},
+    {id:'e6',name:'Festival Exemplo Verão',mgr:'Carlos Roberto',date:'18 e 19 out',cur:'BRL',st:'done',sold:412,cap:420,pend:0,failed:17,cancel:5,col:'R$ 61.800,00',fee:'R$ 5.618,20',net:'R$ 56.181,80'}
+  ];
+  var ESTATUS = {live:['Em andamento','ok'],open:['Vendas abertas','ok'],closing:['Vendas acabam em 48 h','warn'],blocked:['Vendas bloqueadas','crit'],done:['Encerrado','mute']};
+  var LEADS = [
+    {id:'l1',name:'Thiago Mendes',phone:'(85) 99999-0101',event:'Fortaleza Fitness Games',place:'Fortaleza / CE',when:'05/11 14:20',st:'new',mail:'sent'},
+    {id:'l2',name:'Larissa Prado',phone:'(11) 99999-0202',event:'Copa Exemplo Paulista',place:'Campinas / SP',when:'04/11 09:12',st:'new',mail:'failed'},
+    {id:'l3',name:'Bruno Teixeira',phone:'(81) 99999-0303',event:'Recife Race Day',place:'Recife / PE',when:'01/11 18:40',st:'contacted',mail:'sent'},
+    {id:'l4',name:'Sofia Martins',phone:'+351 912 000 404',event:'Porto Throwdown',place:'Porto / Portugal',when:'28/10 11:05',st:'qualified',mail:'sent'},
+    {id:'l5',name:'Diego Rocha',phone:'(71) 99999-0505',event:'Salvador Open',place:'Salvador / BA',when:'20/10 16:30',st:'discarded',mail:'sent'}
+  ];
+  var LSTATUS = {new:'Novo',contacted:'Contatado',qualified:'Qualificado',discarded:'Descartado'};
+  var ATT = [
+    ['crit','Urgente','Rafael Lima está expirado com evento à venda','Copa Sertão Race não vende desde 02/11.','Renovar','m:m3'],
+    ['warn','Atenção','2 gestores vencem nos próximos 7 dias','Marina Alves (10/11) e Júlia Costa (12/11).','Ver gestores','f:expiring'],
+    ['warn','Atenção','9 pagamentos em análise há mais de 48 h','Desafio Litoral 2026 (6) e Arena Qualifier Online (3).','Ver eventos','v:events'],
+    ['warn','Atenção','O destaque da home já encerrou','Festival Exemplo Verão saiu do carrossel em 19/10.','Trocar destaque','v:config'],
+    ['info','Aviso','2 leads novos sem resposta','O mais antigo chegou em 04/11.','Abrir comercial','v:sales'],
+    ['info','Aviso','1 aviso de lead não chegou por e-mail','Larissa Prado, 04/11: falha no envio.','Abrir comercial','v:sales'],
+    ['info','Aviso','Pedro Nunes não tem conta de recebimento','Sem conta Mercado Pago ou Stripe conectada, o evento dele não vende.','Ver gestor','m:m5']
+  ];
+  var TITLES = {overview:'Visão geral',managers:'Gestores',events:'Eventos',sales:'Comercial',config:'Configurações'};
+
+  /* ---------- navegação ---------- */
+  function show(view){
+    $$('.c-view',root).forEach(function(v){v.hidden = v.getAttribute('data-name')!==view;});
+    $$('.c-nav button',root).forEach(function(b){b.setAttribute('aria-current', b.getAttribute('data-view')===view?'page':'false');});
+    $('#c-title').textContent = TITLES[view];
+    $('#c-period').hidden = view!=='overview';
+  }
+  $$('.c-nav button',root).forEach(function(b){b.addEventListener('click',function(){closeDrawer();show(b.getAttribute('data-view'));});});
+  root.addEventListener('click',function(e){
+    var go = e.target.closest('[data-go]');
+    if(go){show(go.getAttribute('data-go'));}
+  });
+
+  /* ---------- período ---------- */
+  function setPeriod(k){
+    var p = PERIODS[k];
+    $('#k-fee').textContent = BRL.format(p.fee);
+    $('#k-col').textContent = BRL.format(p.col);
+    $('#k-net').textContent = BRL.format(p.net);
+    $('#k-app').textContent = INT.format(p.app);
+    $('#k-delta').textContent = p.delta;
+    $('#k-delta-t').textContent = p.dt;
+    $$('#c-period button').forEach(function(b){b.setAttribute('aria-pressed', String(b.getAttribute('data-p')===k));});
+  }
+  $$('#c-period button').forEach(function(b){b.addEventListener('click',function(){setPeriod(b.getAttribute('data-p'));});});
+
+  /* ---------- gráfico ---------- */
+  function drawChart(){
+    var L=52,R=552,T=12,B=178,max=12000,band=(R-L)/MONTHS.length,bw=22,s='';
+    s+='<defs><pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="rgba(252,213,53,.28)"/><line x1="0" y1="0" x2="0" y2="6" stroke="#fcd535" stroke-width="2.5"/></pattern></defs>';
+    [0,4000,8000,12000].forEach(function(t){var y=B-(t/max)*(B-T);s+='<line class="g" x1="'+L+'" x2="'+R+'" y1="'+y+'" y2="'+y+'"/><text class="ax" x="'+(L-8)+'" y="'+(y+4)+'" text-anchor="end">'+(t?(t/1000)+' mil':'0')+'</text>';});
+    MONTHS.forEach(function(m,i){
+      var x=L+band*i+(band-bw)/2,h=(m[2]/max)*(B-T),y=B-h,r=Math.min(4,h);
+      var d='M'+x+','+B+' V'+(y+r)+' Q'+x+','+y+' '+(x+r)+','+y+' H'+(x+bw-r)+' Q'+(x+bw)+','+y+' '+(x+bw)+','+(y+r)+' V'+B+' Z';
+      s+='<path class="bar'+(m[3]?' part':'')+'" data-i="'+i+'" d="'+d+'"><title>'+m[0]+'/'+m[1]+': '+BRL.format(m[2])+(m[3]?' (parcial)':'')+'</title></path>';
+      s+='<text class="ax" x="'+(x+bw/2)+'" y="'+(B+17)+'" text-anchor="middle">'+m[0]+'</text>';
+      s+='<rect class="hit" data-i="'+i+'" x="'+(L+band*i)+'" y="'+T+'" width="'+band+'" height="'+(B-T)+'"/>';
+    });
+    s+='<text class="ax" x="'+(L+band*11+band/2)+'" y="'+(B+30)+'" text-anchor="middle">parcial</text>';
+    var svg=$('#c-chart-svg');svg.innerHTML=s;
+    var wrap=$('#c-chart'),tip=$('#c-tip');
+    $$('.hit',svg).forEach(function(h){
+      h.addEventListener('pointerenter',function(){
+        var i=+h.getAttribute('data-i'),m=MONTHS[i];
+        wrap.classList.add('hovering');
+        $$('.bar',svg).forEach(function(b){b.classList.toggle('on', +b.getAttribute('data-i')===i);});
+        var bar=$('.bar[data-i="'+i+'"]',svg).getBoundingClientRect(),wr=wrap.getBoundingClientRect();
+        tip.innerHTML=m[0]+'/'+m[1]+(m[3]?' · parcial':'')+'<b>'+BRL.format(m[2])+'</b>';
+        tip.hidden=false;
+        var left=bar.left-wr.left+bar.width/2;
+        left=Math.max(60,Math.min(wr.width-60,left));
+        tip.style.left=left+'px';tip.style.top=(bar.top-wr.top-8)+'px';
+      });
+    });
+    svg.addEventListener('pointerleave',function(){wrap.classList.remove('hovering');tip.hidden=true;});
+  }
+
+  /* ---------- fila de atenção ---------- */
+  function renderAtt(){
+    var icons={crit:'i-alert',warn:'i-clock',info:'i-info'};
+    $('#att').innerHTML = ATT.map(function(a){
+      return '<li class="c-att"><span class="c-sev '+a[0]+'">'+ic(icons[a[0]])+a[1]+'</span><div><b>'+a[2]+'</b><p>'+a[3]+'</p></div><button type="button" class="c-link" data-act="'+a[5]+'">'+a[4]+ic('i-chev')+'</button></li>';
+    }).join('');
+    $$('#att [data-act]').forEach(function(b){b.addEventListener('click',function(){
+      var a=b.getAttribute('data-act').split(':');
+      if(a[0]==='m'){show('managers');openManager(a[1]);}
+      else if(a[0]==='f'){mFilter=a[1];show('managers');renderManagers();}
+      else show(a[1]);
+    });});
+  }
+
+  /* ---------- eventos ---------- */
+  function meter(e){var p=Math.round(e.sold/e.cap*100);return '<div class="c-meter"><i><b style="width:'+p+'%"></b></i><span class="num">'+e.sold+' de '+e.cap+' · '+p+'%</span></div>';}
+  function sev(pair){return '<span class="c-sev '+pair[1]+'">'+pair[0]+'</span>';}
+  function renderOverviewEvents(){
+    $('#ov-events').innerHTML = EVENTS.filter(function(e){return e.st!=='done';}).slice(0,5).map(function(e){
+      return '<tr class="click" tabindex="0" data-e="'+e.id+'"><td><span class="strong">'+e.name+'</span> <span class="c-cur">'+e.cur+'</span><span class="sub">'+e.mgr+'</span></td><td>'+meter(e)+'</td><td class="r num">'+e.pend+'</td><td class="r num">'+e.col+'</td><td class="r num fee">'+e.fee+'</td></tr>';
+    }).join('');
+  }
+  var eFilter='all';
+  var EFILTERS=[['all','Todos',function(){return true;}],['sale','À venda',function(e){return e.st==='live'||e.st==='open'||e.st==='closing';}],['blocked','Bloqueados',function(e){return e.st==='blocked';}],['done','Encerrados',function(e){return e.st==='done';}]];
+  function renderEvents(){
+    var q=($('#e-q').value||'').toLowerCase(),fn=EFILTERS.filter(function(f){return f[0]===eFilter;})[0][2];
+    $('#e-chips').innerHTML=EFILTERS.map(function(f){return '<button type="button" data-f="'+f[0]+'" aria-pressed="'+(f[0]===eFilter)+'">'+f[1]+' <em>'+EVENTS.filter(f[2]).length+'</em></button>';}).join('');
+    var rows=EVENTS.filter(fn).filter(function(e){return !q||(e.name+' '+e.mgr).toLowerCase().indexOf(q)>-1;});
+    $('#e-rows').innerHTML = rows.length?rows.map(function(e){
+      return '<tr class="click" tabindex="0" data-e="'+e.id+'"><td><span class="strong">'+e.name+'</span> <span class="c-cur">'+e.cur+'</span><span class="sub">'+e.mgr+'</span></td><td>'+e.date+'</td><td>'+sev(ESTATUS[e.st])+'</td><td>'+meter(e)+'</td><td class="r num">'+e.pend+'</td><td class="r num">'+e.col+'</td><td class="r num fee">'+e.fee+'</td><td>'+ic('i-chev')+'</td></tr>';
+    }).join(''):'<tr><td colspan="8" class="c-hint">Nenhum evento com esse filtro.</td></tr>';
+  }
+  $('#e-chips').addEventListener('click',function(e){var b=e.target.closest('button');if(b){eFilter=b.getAttribute('data-f');renderEvents();}});
+  $('#e-q').addEventListener('input',renderEvents);
+
+  /* ---------- gestores ---------- */
+  var mFilter='all';
+  var MFILTERS=[['all','Todos'],['active','Ativos'],['expiring','Vencem em 7 dias'],['expired','Expirados'],['none','Sem prazo']];
+  function renderManagers(){
+    var q=($('#m-q').value||'').toLowerCase();
+    $('#m-chips').innerHTML=MFILTERS.map(function(f){var n=f[0]==='all'?MANAGERS.length:MANAGERS.filter(function(m){return m.status===f[0];}).length;return '<button type="button" data-f="'+f[0]+'" aria-pressed="'+(f[0]===mFilter)+'">'+f[1]+' <em>'+n+'</em></button>';}).join('');
+    var rows=MANAGERS.filter(function(m){return (mFilter==='all'||m.status===mFilter)&&(!q||(m.name+' '+m.org).toLowerCase().indexOf(q)>-1);});
+    $('#m-rows').innerHTML = rows.length?rows.map(function(m){
+      var st=MSTATUS[m.status];
+      return '<tr class="click" tabindex="0" data-m="'+m.id+'"><td><span class="strong">'+m.name+'</span><span class="sub">'+m.org+'</span></td><td>'+sev(st)+'<span class="sub">'+(m.until?(m.status==='expired'?'venceu em ':'até ')+fmtDate(m.until):'validade não definida')+'</span></td><td class="r num">'+m.events+'</td><td class="r num">'+INT.format(m.sold)+'</td><td class="r num fee">'+m.fee+'</td><td>'+m.payer+'</td><td>'+ic('i-chev')+'</td></tr>';
+    }).join(''):'<tr><td colspan="7" class="c-hint">Nenhum gestor com esse filtro.</td></tr>';
+  }
+  $('#m-chips').addEventListener('click',function(e){var b=e.target.closest('button');if(b){mFilter=b.getAttribute('data-f');renderManagers();}});
+  $('#m-q').addEventListener('input',renderManagers);
+
+  /* ---------- comercial ---------- */
+  var lFilter='all';
+  function renderLeads(){
+    var counts={all:LEADS.length};Object.keys(LSTATUS).forEach(function(k){counts[k]=LEADS.filter(function(l){return l.st===k;}).length;});
+    $('#l-chips').innerHTML=[['all','Todos']].concat(Object.keys(LSTATUS).map(function(k){return [k,LSTATUS[k]];})).map(function(f){return '<button type="button" data-f="'+f[0]+'" aria-pressed="'+(f[0]===lFilter)+'">'+f[1]+' <em>'+counts[f[0]]+'</em></button>';}).join('');
+    $('#b-leads').textContent=counts.new;
+    $('#l-rows').innerHTML = LEADS.filter(function(l){return lFilter==='all'||l.st===lFilter;}).map(function(l){
+      var mail=l.mail==='sent'?'<span class="c-sev ok">Enviado</span>':'<span class="c-sev crit">Falhou</span>';
+      var opts=Object.keys(LSTATUS).map(function(k){return '<option value="'+k+'"'+(k===l.st?' selected':'')+'>'+LSTATUS[k]+'</option>';}).join('');
+      return '<tr><td><span class="strong">'+l.name+'</span><span class="sub num">'+l.phone+'</span></td><td>'+l.event+'</td><td>'+l.place+'</td><td class="num">'+l.when+'</td><td>'+mail+'</td><td><select class="c-select" data-l="'+l.id+'" aria-label="Status de '+l.name+'">'+opts+'</select></td><td><button type="button" class="c-icon-btn" title="Conversar no WhatsApp" aria-label="Conversar com '+l.name+' no WhatsApp">'+ic('i-msg')+'</button></td></tr>';
+    }).join('') || '<tr><td colspan="7" class="c-hint">Nenhum lead com esse status.</td></tr>';
+  }
+  $('#l-chips').addEventListener('click',function(e){var b=e.target.closest('button');if(b){lFilter=b.getAttribute('data-f');renderLeads();}});
+  $('#l-rows').addEventListener('change',function(e){var s=e.target.closest('select[data-l]');if(!s)return;var l=LEADS.filter(function(x){return x.id===s.getAttribute('data-l');})[0];l.st=s.value;renderLeads();toast('Status de '+l.name+': '+LSTATUS[l.st]+'.');});
+
+  /* ---------- painel lateral ---------- */
+  var drawer=$('#c-drawer'),scrim=$('#c-scrim'),lastFocus=null;
+  function openDrawer(title,sub,html){
+    lastFocus=document.activeElement;
+    $('#d-title').textContent=title;$('#d-sub').textContent=sub;$('#d-body').innerHTML=html;
+    scrim.hidden=false;drawer.classList.add('open');drawer.setAttribute('aria-hidden','false');
+    setTimeout(function(){$('#d-close').focus();},30);
+  }
+  function closeDrawer(){
+    if(!drawer.classList.contains('open'))return;
+    drawer.classList.remove('open');drawer.setAttribute('aria-hidden','true');scrim.hidden=true;
+    if(lastFocus&&lastFocus.focus)lastFocus.focus();
+  }
+  $('#d-close').addEventListener('click',closeDrawer);
+  scrim.addEventListener('click',closeDrawer);
+
+  function openManager(id){
+    var m=MANAGERS.filter(function(x){return x.id===id;})[0];
+    var st=MSTATUS[m.status];
+    var evs=m.evs.length?'<ul class="c-list">'+m.evs.map(function(e){return '<li><span>'+e[0]+'</span><span class="c-hint">'+e[1]+'</span></li>';}).join('')+'</ul>':'<p class="c-hint">Nenhum evento criado ainda.</p>';
+    var html=
+      '<div class="c-row">'+sev(st)+'<span class="c-hint">'+m.email+'</span></div>'+
+      (m.noAccount?'<p class="c-warnline">'+ic('i-alert')+'<span>Sem conta Mercado Pago ou Stripe conectada. Os eventos dele não vendem até conectar.</span></p>':'')+
+      '<div class="c-sect"><p class="c-lbl">Acesso ao painel</p>'+
+        '<div class="c-row"><button type="button" class="c-btn quiet" data-add="30">+30 dias</button><button type="button" class="c-btn quiet" data-add="90">+90 dias</button><button type="button" class="c-btn quiet" data-add="365">+1 ano</button></div>'+
+        '<div class="c-field"><label for="d-until">Validade</label><input id="d-until" type="date" value="'+(m.until||'')+'"><small id="d-until-hint">'+(m.until?'Hoje vale até '+fmtDate(m.until)+'.':'Sem validade definida: o acesso não vence.')+'</small></div>'+
+        '<p class="c-warnline" id="d-past" hidden>'+ic('i-alert')+'<span>Com essa data, o painel e as vendas de '+m.name.split(' ')[0]+' ficam bloqueados assim que você salvar. Vai pedir confirmação.</span></p>'+
+        '<div><button type="button" class="c-btn" id="d-save" disabled>Salvar validade</button></div>'+
+      '</div>'+
+      '<div class="c-sect"><p class="c-lbl">Vendas</p><div class="c-stats"><div><span>Eventos</span><b>'+m.events+'</b></div><div><span>Aprovadas</span><b>'+INT.format(m.sold)+'</b></div><div><span>Taxa WODArena</span><b>'+m.fee+'</b></div><div><span>Quem paga a taxa</span><b style="font-family:var(--font-body);font-size:13px">'+m.payer+'</b></div></div></div>'+
+      '<div class="c-sect"><p class="c-lbl">Eventos</p>'+evs+'</div>';
+    openDrawer(m.name,m.org,html);
+    var input=$('#d-until'),save=$('#d-save'),past=$('#d-past');
+    function check(){var v=input.value;past.hidden=!(v&&v<TODAY);save.disabled=(v===(m.until||''));}
+    input.addEventListener('input',check);
+    $$('[data-add]',drawer).forEach(function(b){b.addEventListener('click',function(){
+      var base=(m.until&&m.until>TODAY)?m.until:TODAY;input.value=addDays(base,+b.getAttribute('data-add'));check();
+    });});
+    save.addEventListener('click',function(){
+      var v=input.value;
+      if(v&&v<TODAY){askConfirm('Bloquear '+m.name+'?','A validade '+fmtDate(v)+' já passou. O painel e as vendas de '+m.name+' ficam bloqueados agora.','Bloquear e salvar',function(){commit();});}
+      else commit();
+      function commit(){m.until=v;m.status=!v?'none':(v<TODAY?'expired':(v<=addDays(TODAY,7)?'expiring':'active'));renderManagers();closeDrawer();toast('Validade de '+m.name+' salva: '+(v?fmtDate(v):'sem prazo')+'.');}
+    });
+  }
+  $('#m-rows').addEventListener('click',function(e){var tr=e.target.closest('tr[data-m]');if(tr)openManager(tr.getAttribute('data-m'));});
+  $('#m-rows').addEventListener('keydown',function(e){var tr=e.target.closest('tr[data-m]');if(tr&&(e.key==='Enter'||e.key===' ')){e.preventDefault();openManager(tr.getAttribute('data-m'));}});
+
+  $('#m-new').addEventListener('click',function(){
+    var html='<form id="nm" class="c-sect" novalidate>'+
+      '<div class="c-field"><label for="nm-name">Nome</label><input id="nm-name" autocomplete="off" placeholder="Nome do gestor"></div>'+
+      '<div class="c-field"><label for="nm-org">Box ou organização</label><input id="nm-org" autocomplete="off" placeholder="Nome do box"></div>'+
+      '<div class="c-field"><label for="nm-mail">E-mail de acesso</label><input id="nm-mail" type="email" autocomplete="off" placeholder="gestor@email.com"></div>'+
+      '<div class="c-field"><label for="nm-pass">Senha provisória</label><div class="c-row" style="flex-wrap:nowrap"><input id="nm-pass" type="text" autocomplete="off" placeholder="Mínimo de 8 caracteres"><button type="button" class="c-btn quiet" id="nm-gen">Gerar</button></div><small id="nm-pass-h">Mínimo de 8 caracteres. Envie ao gestor por um canal seu.</small></div>'+
+      '<div class="c-field"><label for="nm-until">Validade do acesso (opcional)</label><input id="nm-until" type="date"></div>'+
+      '<p class="c-warnline" id="nm-err" hidden></p>'+
+      '<div><button type="submit" class="c-btn" id="nm-submit">Criar gestor</button></div></form>';
+    openDrawer('Novo gestor','A conta já nasce com o papel de gestor',html);
+    $('#nm-gen').addEventListener('click',function(){var c='ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789',s='';for(var i=0;i<12;i++)s+=c[Math.floor(Math.random()*c.length)];$('#nm-pass').value=s;});
+    $('#nm').addEventListener('submit',function(e){
+      e.preventDefault();
+      var err=$('#nm-err'),pass=$('#nm-pass').value;
+      if(!$('#nm-name').value||!$('#nm-org').value||!$('#nm-mail').value){err.innerHTML=ic('i-alert')+'<span>Preencha nome, box e e-mail.</span>';err.hidden=false;return;}
+      if(pass.length<8){err.innerHTML=ic('i-alert')+'<span>A senha precisa ter pelo menos 8 caracteres.</span>';err.hidden=false;return;}
+      var btn=$('#nm-submit');btn.disabled=true;btn.textContent='Criando…';
+      setTimeout(function(){closeDrawer();toast('Gestor '+$('#nm-name').value+' criado (maquete).');},500);
+    });
+  });
+
+  function openEvent(id){
+    var e=EVENTS.filter(function(x){return x.id===id;})[0];
+    var html=
+      '<div class="c-row">'+sev(ESTATUS[e.st])+'<span class="c-cur">'+e.cur+'</span><span class="c-hint">'+e.date+'</span></div>'+
+      '<div class="c-tabs" role="tablist"><button type="button" role="tab" aria-selected="true" data-t="res">Resumo</button><button type="button" role="tab" aria-selected="false" data-t="rank">Ranking</button></div>'+
+      '<div data-p="res" class="c-sect">'+
+        '<div class="c-stats"><div><span>Pago pelos atletas</span><b>'+e.col+'</b></div><div><span>Taxa WODArena</span><b style="color:var(--a-primary)">'+e.fee+'</b></div><div><span>Repassado ao gestor</span><b>'+e.net+'</b></div><div><span>Ocupação</span><b>'+Math.round(e.sold/e.cap*100)+'%</b></div></div>'+
+        '<p class="c-lbl">Inscrições</p><ul class="c-list"><li><span>Aprovadas</span><b class="num">'+e.sold+'</b></li><li><span>Aguardando pagamento ou em análise</span><b class="num">'+e.pend+'</b></li><li><span>Recusadas</span><b class="num">'+e.failed+'</b></li><li><span>Canceladas</span><b class="num">'+e.cancel+'</b></li></ul>'+
+        '<p class="c-hint">Recusadas e canceladas não entram em nenhum valor.</p>'+
+      '</div>'+
+      '<div data-p="rank" class="c-sect" hidden><p class="c-hint">Aqui entra o componente <b>Leaderboard</b> de hoje, já com este evento selecionado. A aba Leaderboards separada deixa de existir.</p><ul class="c-list"><li><span>1º · Atleta Exemplo A</span><b class="num">12 pts</b></li><li><span>2º · Atleta Exemplo B</span><b class="num">19 pts</b></li><li><span>3º · Atleta Exemplo C</span><b class="num">23 pts</b></li></ul></div>'+
+      '<div class="c-row"><button type="button" class="c-btn quiet">Abrir página pública</button></div>';
+    openDrawer(e.name,'Gestor: '+e.mgr,html);
+    $$('.c-tabs button',drawer).forEach(function(t){t.addEventListener('click',function(){
+      $$('.c-tabs button',drawer).forEach(function(x){x.setAttribute('aria-selected',String(x===t));});
+      $$('[data-p]',$('#d-body')).forEach(function(p){p.hidden=p.getAttribute('data-p')!==t.getAttribute('data-t');});
+    });});
+  }
+  ['#e-rows','#ov-events'].forEach(function(sel){
+    $(sel).addEventListener('click',function(ev){var tr=ev.target.closest('tr[data-e]');if(tr)openEvent(tr.getAttribute('data-e'));});
+    $(sel).addEventListener('keydown',function(ev){var tr=ev.target.closest('tr[data-e]');if(tr&&(ev.key==='Enter'||ev.key===' ')){ev.preventDefault();openEvent(tr.getAttribute('data-e'));}});
+  });
+
+  /* ---------- confirmação e aviso ---------- */
+  var dlg=$('#c-dialog'),dlgCb=null;
+  function askConfirm(t,p,ok,cb){$('#dlg-t').textContent=t;$('#dlg-p').textContent=p;$('#dlg-ok').textContent=ok;dlgCb=cb;dlg.hidden=false;$('#dlg-cancel').focus();}
+  function closeDlg(){dlg.hidden=true;dlgCb=null;}
+  $('#dlg-cancel').addEventListener('click',closeDlg);
+  $('#dlg-ok').addEventListener('click',function(){var cb=dlgCb;closeDlg();if(cb)cb();});
+  var feeOn=true;
+  $('#fee-toggle').addEventListener('click',function(){
+    if(feeOn){askConfirm('Desligar a taxa de serviço?','Os pagamentos criados a partir de agora, em todos os eventos, não terão a taxa WODArena. Inscrições já pagas não mudam.','Desligar taxa',flip);}
+    else{askConfirm('Ligar a taxa de serviço?','Os pagamentos criados a partir de agora voltam a ter 10% de taxa WODArena, pago pelo atleta ou pelo gestor conforme a escolha de cada um.','Ligar taxa',flip);}
+  });
+  function flip(){
+    feeOn=!feeOn;
+    var s=$('#fee-state');s.className='c-sev '+(feeOn?'ok':'crit');s.innerHTML=ic(feeOn?'i-check':'i-x')+(feeOn?'Ligada':'Desligada');
+    var b=$('#fee-toggle');b.textContent=feeOn?'Desligar taxa':'Ligar taxa';b.className='c-btn'+(feeOn?' danger':'');
+    toast(feeOn?'Taxa de serviço ligada.':'Taxa de serviço desligada.');
+  }
+  $('#feat-save').addEventListener('click',function(){toast('Destaque da home salvo (maquete).');});
+  var toastTimer=null;
+  function toast(t){var el=$('#c-toast');$('#c-toast-t').textContent=t;el.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(function(){el.hidden=true;},2600);}
+  document.addEventListener('keydown',function(e){if(e.key==='Escape'){if(!dlg.hidden)closeDlg();else closeDrawer();}});
+
+  /* ---------- início ---------- */
+  setPeriod('d30');drawChart();renderAtt();renderOverviewEvents();renderEvents();renderManagers();renderLeads();
+})();
+</script>
+
+</body></html>

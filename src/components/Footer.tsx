@@ -4,11 +4,17 @@ import React from 'react';
 import NextLink from 'next/link';
 import { ArrowUpRight } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { usePathname } from 'next/navigation';
 import { Link } from '@/i18n/navigation';
+import { isStandalonePanelPath } from '@/lib/panelChrome';
 
 export function Footer() {
   const t = useTranslations('Footer');
   const currentYear = new Date().getFullYear();
+  const pathname = usePathname();
+
+  // O /owner tem moldura própria (Story 1.123).
+  if (isStandalonePanelPath(pathname)) return null;
 
   return (
     <footer className="mt-auto border-t border-hairline-light bg-surface-soft-light text-ink">

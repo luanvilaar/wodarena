@@ -2,38 +2,43 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { ClipboardList, Dumbbell, Eye, EyeOff, Loader2, Lock, LogIn, Mail, Scale } from 'lucide-react';
+import { BarChart3, ClipboardList, Dumbbell, Eye, EyeOff, Loader2, Lock, LogIn, Mail, Scale, SlidersHorizontal, Users } from 'lucide-react';
 
 // Tela de login do painel (Story 1.92, proposta C de docs/design/login-novo/):
 // um login só, a área vem da conta. As três áreas aparecem ao lado só como
 // informação. Recuperar e redefinir senha usam o mesmo painel. A fonte de
 // display (--font-login-display) vem do wrapper em src/app/admin/page.tsx.
+// A variante `owner` (Story 1.123, decisão D6 de docs/design/painel-proprietario/)
+// é a mesma tela para o /owner: título do proprietário, só o formulário de login
+// e, ao lado, o que o painel tem. O login() com ownerOnly não muda.
 
 export type AdminLoginMode = 'login' | 'forgot' | 'reset';
 export type AdminLoginNotice = { text: string; tone: 'success' | 'error' };
 
 type AdminLoginScreenProps = {
+  /** `panel` (padrão): /admin. `owner`: /owner, sem lembrar e-mail, recuperação nem criação de conta. */
+  variant?: 'panel' | 'owner';
   mode: AdminLoginMode;
   notice: AdminLoginNotice | null;
   login: {
     email: string;
     password: string;
-    remember: boolean;
+    remember?: boolean;
     submitting: boolean;
     onEmailChange: (value: string) => void;
     onPasswordChange: (value: string) => void;
-    onRememberChange: (value: boolean) => void;
+    onRememberChange?: (value: boolean) => void;
     onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
-    onForgotPassword: () => void;
+    onForgotPassword?: () => void;
   };
-  forgot: {
+  forgot?: {
     email: string;
     submitting: boolean;
     onEmailChange: (value: string) => void;
     onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
     onBack: () => void;
   };
-  reset: {
+  reset?: {
     password: string;
     confirm: string;
     submitting: boolean;
@@ -63,6 +68,17 @@ const COPY: Record<AdminLoginMode, { title: string; subtitle: string }> = {
     subtitle: 'Escolha uma nova senha para entrar na sua conta.'
   }
 };
+
+const OWNER_COPY = {
+  title: 'Painel do proprietário',
+  subtitle: 'Acesso restrito à conta proprietária da WODArena.'
+};
+
+const OWNER_SECTIONS = [
+  { id: 'numbers', Icon: BarChart3, name: 'Números da plataforma', description: 'Receita, vendas e taxa, por moeda e período' },
+  { id: 'people', Icon: Users, name: 'Gestores e eventos', description: 'Validade de acesso, vendas e ranking' },
+  { id: 'settings', Icon: SlidersHorizontal, name: 'Comercial e configurações', description: 'Leads, taxa de serviço e vitrine da home' }
+] as const;
 
 const AREAS = [
   { id: 'admin', Icon: ClipboardList, name: 'Área administrativa', description: 'Se você organiza eventos' },
@@ -171,12 +187,17 @@ function SubmitButton({ busy, label, busyLabel, Icon }: SubmitButtonProps) {
   );
 }
 
-export function AdminLoginScreen({ mode, notice, login, forgot, reset }: AdminLoginScreenProps) {
-  const copy = COPY[mode];
+export function AdminLoginScreen({ variant = 'panel', mode, notice, login, forgot, reset }: AdminLoginScreenProps) {
+  const isOwner = variant === 'owner';
+  const copy = isOwner ? OWNER_COPY : COPY[mode];
   const noticeElement = <AuthNotice notice={notice} />;
+  const fieldPrefix = isOwner ? 'owner' : 'admin';
+  // O /owner não tem o menu do site nem um segundo <main> (o layout já tem um).
+  const Root = isOwner ? 'div' : 'main';
+  const asideItems = isOwner ? OWNER_SECTIONS : AREAS;
 
   return (
-    <main className="flex min-h-[calc(100vh-64px)] items-center justify-center bg-background px-4 py-8 sm:px-6 sm:py-12">
+    <Root className={`flex items-center justify-center bg-background px-4 py-8 sm:px-6 sm:py-12 ${isOwner ? 'min-h-screen' : 'min-h-[calc(100vh-64px)]'}`}>
       <div className="grid w-full max-w-[980px] overflow-hidden rounded-sm border border-card-border bg-dark-gray md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
         <section aria-labelledby="admin-login-title" className="flex flex-col gap-8 p-6 sm:p-10">
           <div className="space-y-3">
@@ -186,10 +207,10 @@ export function AdminLoginScreen({ mode, notice, login, forgot, reset }: AdminLo
             <p className="max-w-[46ch] text-base leading-6 text-muted">{copy.subtitle}</p>
           </div>
 
-          {mode === 'login' && (
+          {(isOwner || mode === 'login') && (
             <form onSubmit={login.onSubmit} className="space-y-4">
               <Field
-                id="admin-email"
+                id={`${fieldPrefix}-email`}
                 label="E-mail"
                 type="email"
                 autoComplete="email"
@@ -198,7 +219,7 @@ export function AdminLoginScreen({ mode, notice, login, forgot, reset }: AdminLo
                 onChange={login.onEmailChange}
               />
               <PasswordField
-                id="admin-password"
+                id={`${fieldPrefix}-password`}
                 label="Senha"
                 autoComplete="current-password"
                 placeholder="Digite sua senha"
@@ -206,24 +227,27 @@ export function AdminLoginScreen({ mode, notice, login, forgot, reset }: AdminLo
                 onChange={login.onPasswordChange}
               />
 
-              <div className="flex flex-wrap items-center justify-between gap-x-4 text-sm">
-                <label className="flex min-h-11 items-center gap-2 text-muted">
-                  <input
-                    type="checkbox"
-                    checked={login.remember}
-                    onChange={(event) => login.onRememberChange(event.target.checked)}
-                    className={`h-4 w-4 rounded-sm border-card-border bg-background accent-primary ${focusRingClassName}`}
-                  />
-                  <span>Lembrar meu e-mail</span>
-                </label>
-                <button type="button" onClick={login.onForgotPassword} className={linkButtonClassName}>
-                  Esqueci minha senha
-                </button>
-              </div>
+              {!isOwner && (
+                <div className="flex flex-wrap items-center justify-between gap-x-4 text-sm">
+                  <label className="flex min-h-11 items-center gap-2 text-muted">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(login.remember)}
+                      onChange={(event) => login.onRememberChange?.(event.target.checked)}
+                      className={`h-4 w-4 rounded-sm border-card-border bg-background accent-primary ${focusRingClassName}`}
+                    />
+                    <span>Lembrar meu e-mail</span>
+                  </label>
+                  <button type="button" onClick={login.onForgotPassword} className={linkButtonClassName}>
+                    Esqueci minha senha
+                  </button>
+                </div>
+              )}
 
               {noticeElement}
               <SubmitButton busy={login.submitting} label="Entrar" busyLabel="Entrando…" Icon={LogIn} />
 
+              {!isOwner && (
               <p className="text-sm leading-6 text-muted">
                 Ainda não tem conta? Ela é criada na sua primeira inscrição.{' '}
                 <Link
@@ -233,10 +257,11 @@ export function AdminLoginScreen({ mode, notice, login, forgot, reset }: AdminLo
                   Ver eventos
                 </Link>
               </p>
+              )}
             </form>
           )}
 
-          {mode === 'forgot' && (
+          {!isOwner && mode === 'forgot' && forgot && (
             <form onSubmit={forgot.onSubmit} className="space-y-4">
               <Field
                 id="forgot-password-email"
@@ -255,7 +280,7 @@ export function AdminLoginScreen({ mode, notice, login, forgot, reset }: AdminLo
             </form>
           )}
 
-          {mode === 'reset' && (
+          {!isOwner && mode === 'reset' && reset && (
             <form onSubmit={reset.onSubmit} className="space-y-4">
               <PasswordField
                 id="reset-password-new"
@@ -282,9 +307,9 @@ export function AdminLoginScreen({ mode, notice, login, forgot, reset }: AdminLo
         </section>
 
         <aside aria-labelledby="admin-login-areas" className="border-t border-card-border bg-background p-6 sm:p-10 md:flex md:flex-col md:justify-center md:border-l md:border-t-0">
-          <h2 id="admin-login-areas" className="text-sm font-semibold text-muted">Depois de entrar, você vai para</h2>
+          <h2 id="admin-login-areas" className="text-sm font-semibold text-muted">{isOwner ? 'Neste painel' : 'Depois de entrar, você vai para'}</h2>
           <ul className="mt-5 divide-y divide-card-border">
-            {AREAS.map(({ id, Icon, name, description }) => (
+            {asideItems.map(({ id, Icon, name, description }) => (
               <li key={id} className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-0.5 py-5 first:pt-0 last:pb-0">
                 <span className="row-span-2 flex h-11 w-11 items-center justify-center bg-primary text-ink">
                   <Icon className="h-5 w-5" aria-hidden="true" />
@@ -296,6 +321,6 @@ export function AdminLoginScreen({ mode, notice, login, forgot, reset }: AdminLo
           </ul>
         </aside>
       </div>
-    </main>
+    </Root>
   );
 }

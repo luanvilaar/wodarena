@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getManagerAccessStatus, normalizeServiceValidUntil } from '@/lib/managerAccess';
+import { getManagerAccessStatus, MANAGER_PASSWORD_MIN_LENGTH, normalizeServiceValidUntil } from '@/lib/managerAccess';
 import {
   createSupabaseAdmin,
   hashPassword,
@@ -15,8 +15,13 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { name, email, password, organization, serviceValidUntil } = body;
 
-    if (!name || !email || !password || !organization) {
-      return NextResponse.json({ error: 'Todos os campos (name, email, password, organization) são obrigatórios.' }, { status: 400 });
+    if (!String(name || '').trim() || !String(email || '').trim() || !password || !String(organization || '').trim()) {
+      return NextResponse.json({ error: 'Preencha nome, e-mail, senha e organização do gestor.' }, { status: 400 });
+    }
+
+    // Mesma regra das subcontas de equipe (Story 1.121).
+    if (String(password).length < MANAGER_PASSWORD_MIN_LENGTH) {
+      return NextResponse.json({ error: `A senha temporária precisa ter pelo menos ${MANAGER_PASSWORD_MIN_LENGTH} caracteres.` }, { status: 400 });
     }
 
     const supabaseAdmin = createSupabaseAdmin();
@@ -45,10 +50,10 @@ export async function POST(request: Request) {
       .from('users')
       .insert({
         id: newUserId,
-        name: name.trim(),
+        name: String(name).trim(),
         email: normalizedEmail,
         role: 'manager',
-        organization: organization.trim(),
+        organization: String(organization).trim(),
         service_valid_until: normalizedServiceValidUntil || null
       });
 
@@ -77,10 +82,10 @@ export async function POST(request: Request) {
       success: true,
       user: {
         id: newUserId,
-        name: name.trim(),
+        name: String(name).trim(),
         email: normalizedEmail,
         role: 'manager',
-        organization: organization.trim(),
+        organization: String(organization).trim(),
         serviceValidUntil: normalizedServiceValidUntil,
         managerAccessStatus: getManagerAccessStatus(normalizedServiceValidUntil)
       }
@@ -117,7 +122,7 @@ export async function PUT(request: Request) {
       .maybeSingle();
 
     if (targetUserError || !targetUser || targetUser.role !== 'manager') {
-      return NextResponse.json({ error: 'Gestor nao encontrado para atualizar a validade.' }, { status: 404 });
+      return NextResponse.json({ error: 'Gestor não encontrado para atualizar a validade.' }, { status: 404 });
     }
 
     const { data: updatedUser, error: updateError } = await supabaseAdmin

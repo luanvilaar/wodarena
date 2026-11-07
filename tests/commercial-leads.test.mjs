@@ -13,7 +13,8 @@ const resend = read('../src/lib/resend.ts');
 const homePage = read('../src/app/[locale]/HomeView.tsx');
 const banner = read('../src/components/home/FeaturedEventBanner.tsx');
 const combinedSource = homePage + '\n' + banner;
-const ownerPage = read('../src/app/owner/page.tsx');
+// Story 1.126: a seção Comercial virou componente; a página busca os leads.
+const ownerPage = `${read('../src/app/owner/page.tsx')}\n${read('../src/components/owner/OwnerCommercialSection.tsx')}`;
 const story = read('../docs/stories/1.14.story.md');
 const ptBrMessages = read('../src/messages/pt-br.json');
 
@@ -96,8 +97,11 @@ test('homepage renders the commercial campaign and inline form with privacy cons
 });
 
 test('owner panel exposes a dedicated leads tab with email notification status', () => {
-  assert.match(ownerPage, /'dashboard' \| 'managers' \| 'events' \| 'banner' \| 'leaderboards' \| 'leads'/);
-  assert.match(ownerPage, /Leads Comerciais/);
+  // Story 1.123: as abas viraram as cinco seções; os leads ficam em "Comercial".
+  const ownerSections = read('../src/lib/ownerSections.ts');
+  assert.match(ownerSections, /'visao-geral', 'gestores', 'eventos', 'comercial', 'configuracoes'/);
+  assert.match(ownerPage, /activeSection === 'comercial' && \(/);
+  assert.match(ownerPage, /Total de leads/);
   assert.match(ownerPage, /fetch\('\/api\/commercial-leads'\)/);
   assert.match(ownerPage, /ownerEmailNotificationStatus/);
   assert.match(ownerPage, /getCommercialLeadEmailStatusLabel/);

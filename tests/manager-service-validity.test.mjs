@@ -62,11 +62,14 @@ test('owner routes and sales flows enforce manager validity server-side', () => 
 });
 
 test('owner and admin interfaces expose renewal workflow and blocked manager surface', () => {
-  assert.match(ownerPage, /Gestores e Vendas/);
-  assert.match(ownerPage, /Validade de Uso/);
-  assert.match(ownerPage, /Carteira de Gestores/);
-  assert.match(ownerPage, /Painel e vendas bloqueados/);
-  assert.match(ownerPage, /handleSaveManagerValidity/);
+  // Story 1.125: a carteira virou a seção Gestores, com o painel lateral do gestor.
+  const managersSection = read('../src/components/owner/OwnerManagersSection.tsx');
+  const newManagerForm = read('../src/components/owner/OwnerNewManagerForm.tsx');
+  assert.match(managersSection, /Renovar acesso/);
+  assert.match(newManagerForm, />Validade de uso</);
+  assert.match(managersSection, /Painel e vendas bloqueados/);
+  assert.match(managersSection, /onSaveValidity\(manager, draft\)/);
+  assert.match(ownerPage, /onSaveValidity=\{handleSaveManagerValidity\}/);
   assert.match(adminPage, /Seu periodo de uso da plataforma expirou/);
   assert.match(adminPage, /As funções operacionais do painel e as vendas online dos seus eventos estão temporariamente bloqueadas/);
   assert.match(adminPage, /getManagerAccessStatusLabel/);

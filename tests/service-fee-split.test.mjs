@@ -85,7 +85,9 @@ test('owner controls the global switch and checkout shows the fee breakdown', ()
   assert.match(ownerRoute, /requireSession\(request, \['owner'\]\)/);
   assert.match(ownerRoute, /service_fee_enabled: enabled/);
   assert.match(ownerPage, />Taxa de serviço<\/p>/);
-  assert.match(ownerPage, /Receita Real de Taxas/);
+  // Story 1.124: o cartão da receita de taxas é o "Receita WODArena" da Visão geral nova.
+  const overviewSection = read('../src/components/owner/OwnerOverviewSection.tsx');
+  assert.match(overviewSection, />Receita WODArena<\/p>/);
   assert.match(registerModal, /t\('serviceFeeLabel', \{ percent: serviceFeeConfig\.percent \}\)/);
   assert.match(registerModal, /calculateServiceFee\(totalPaid, serviceFeeConfig\.percent, serviceFeeConfig\.enabled, serviceFeeConfig\.payer\)/);
   assert.match(registerModal, /amountCollectedPreview/);

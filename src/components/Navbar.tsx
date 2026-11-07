@@ -5,7 +5,9 @@ import NextLink from 'next/link';
 import Image from 'next/image';
 import { Calendar, LayoutDashboard, Menu, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { usePathname } from 'next/navigation';
 import { Link } from '@/i18n/navigation';
+import { isStandalonePanelPath } from '@/lib/panelChrome';
 import { BrandLogo } from '@/components/BrandLogo';
 import { LocaleSwitcher } from '@/components/LocaleSwitcher';
 
@@ -13,7 +15,12 @@ export function Navbar() {
   const t = useTranslations('Nav');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
+  const pathname = usePathname();
+
   const closeMenu = () => setIsMenuOpen(false);
+
+  // O /owner tem moldura própria (Story 1.123).
+  if (isStandalonePanelPath(pathname)) return null;
 
   return (
     <header className="sticky top-0 z-50 border-b border-card-border bg-background">

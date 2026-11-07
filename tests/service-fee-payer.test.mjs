@@ -212,7 +212,19 @@ test('o painel do dono só lê quem paga a taxa e o saldo do gestor desconta a t
   const ownerPage = read('../src/app/owner/page.tsx');
   assert.match(ownerRoute, /requireSession\(request, \['owner'\]\)/);
   assert.match(ownerRoute, /\.from\('manager_payment_settings'\)\s*\.select\(/);
-  assert.match(ownerPage, /Quem paga a taxa/);
-  assert.match(ownerPage, /resolveManagerReceived\(r\)/);
+  // Story 1.125: "Quem paga a taxa" fica na seção Gestores; o saldo do gestor vem da rota
+  // do proprietário (ownerOverview.ts → ownerFinance.ts → buildEventFinanceRow, em que
+  // resolveManagerReceived desconta a taxa absorvida).
+  const managersSection = read('../src/components/owner/OwnerManagersSection.tsx');
+  const ownerOverview = read('../src/lib/ownerOverview.ts');
+  const serverOverview = read('../src/lib/serverOwnerOverview.ts');
+  const ownerFinance = read('../src/lib/ownerFinance.ts');
+  const managerFinance = read('../src/lib/managerFinance.ts');
+  assert.match(managersSection, /Quem paga a taxa/);
+  assert.match(ownerOverview, /buildOwnerManagerRows\(users, allTime\)/);
+  assert.match(serverOverview, /\.from\('manager_payment_settings'\)\s*\.select\('user_id, service_fee_payer'\)/);
+  assert.match(ownerFinance, /buildEventFinanceRow\(event,/);
+  assert.match(managerFinance, /netRevenue = approved\.reduce\(\(sum, registration\) => sum \+ resolveManagerReceived\(registration\), 0\)/);
   assert.doesNotMatch(ownerPage, /manager_payment_settings/);
+  assert.doesNotMatch(managersSection, /manager_payment_settings/);
 });

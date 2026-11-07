@@ -1,5 +1,8 @@
 export const MANAGER_EXPIRING_SOON_DAYS = 7;
 
+/** Senha mínima do cadastro de gestor pelo proprietário (Story 1.121), igual à das subcontas. */
+export const MANAGER_PASSWORD_MIN_LENGTH = 8;
+
 export type ManagerAccessStatus = 'active' | 'expired' | 'expiring_soon' | 'unconfigured';
 
 const BUSINESS_TIME_ZONE = 'America/Fortaleza';
@@ -58,5 +61,5 @@ export const getManagerAccessStatusLabel = (status?: ManagerAccessStatus | null)
   if (status === 'active') return 'Ativo';
   if (status === 'expired') return 'Expirado';
   if (status === 'expiring_soon') return 'Vence em breve';
-  return 'Sem configuracao';
+  return 'Sem prazo';
 };

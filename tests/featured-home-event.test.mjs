@@ -11,7 +11,9 @@ const bootstrapPayload = read('../src/lib/bootstrapPayload.ts');
 const authenticatedBootstrapRoute = read('../src/app/api/app/bootstrap/route.ts');
 const appContext = read('../src/context/AppContext.tsx');
 const adminPage = read('../src/app/admin/page.tsx');
-const ownerPage = read('../src/app/owner/page.tsx');
+// Story 1.126: a vitrine da home foi para a seção Configurações (OwnerHomeShowcase).
+const ownerPageOnly = read('../src/app/owner/page.tsx');
+const ownerPage = `${ownerPageOnly}\n${read('../src/components/owner/OwnerHomeShowcase.tsx')}`;
 const adminPersistence = read('../src/app/api/admin/persistence/route.ts');
 const featuredBanner = read('../src/components/home/FeaturedEventBanner.tsx');
 const globalsCss = read('../src/app/globals.css');
@@ -199,7 +201,9 @@ test('owner banner tab previews the pending selection and never keeps a phantom 
 
   // Rascunho é descartado ao salvar e ao sair da aba.
   assert.match(ownerPage, /setFeaturedHomeDraftId\(null\);/);
-  assert.match(ownerPage, /if \(tabId !== 'banner'\) setFeaturedHomeDraftId\(null\);/);
+  // Story 1.123: a vitrine da home fica na seção Configurações.
+  // O componente só existe dentro de Configurações: sair da seção desmonta e descarta o rascunho.
+  assert.match(ownerPageOnly, /activeSection === 'configuracoes' && \([\s\S]*?<OwnerHomeShowcase events=\{events\} setFeaturedHomeEvent=\{setFeaturedHomeEvent\} onSaved=\{reloadOverview\} \/>/);
 
   // Avisos de estado: destaque fora do ar e alteração ainda não publicada.
   assert.match(ownerPage, /const featuredHomeEventIsOffAir = Boolean\(featuredHomeEvent\)/);
