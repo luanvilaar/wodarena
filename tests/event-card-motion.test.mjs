@@ -8,7 +8,7 @@ import { importServerModule } from './support/serverModuleHarness.mjs';
 // docs/design/cards-eventos-animados/. A contagem é função pura; o resto é
 // contrato estático (o projeto não sobe navegador nos testes).
 
-const { EVENT_CARD_MOTION, easeOutExpo, getCountValue, getShineDelayMs, swapCountInText } =
+const { EVENT_CARD_MOTION, countText, easeOutExpo, getCountValue, getShineDelayMs, swapCountInText } =
   await importServerModule('lib/eventCardMotion.ts');
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
@@ -96,6 +96,17 @@ test('contagem de divisões mantém o texto traduzido e o plural do valor final'
   assert.equal(swapCountInText('1 divisão disponível', 1, 1), '1 divisão disponível');
 });
 
+test('contagem usa o plural do número mostrado (Story 1.127)', () => {
+  const one = '1 divisão disponível';
+  const many = '2 divisões disponíveis';
+  assert.equal(countText(1, one, many, 2), '1 divisão disponível', 'nunca "1 divisões"');
+  assert.equal(countText(0, one, many, 2), '0 divisões disponíveis', 'nunca "0 divisão"');
+  assert.equal(countText(5, one, many, 2), '5 divisões disponíveis');
+  assert.equal(countText(2, one, many, 2), '2 divisões disponíveis');
+  assert.equal(countText(1, '1 division available', '2 divisions available', 2), '1 division available');
+  assert.equal(countText(12, '1 division available', '2 divisions available', 2), '12 divisions available');
+});
+
 test('a entrada do card vive fora do namespace home-broadcast-* e usa fill-mode backwards', () => {
   assert.doesNotMatch(eventCard, /home-broadcast-/);
   assert.doesNotMatch(homeView, /home-broadcast-event-card/);
@@ -155,19 +166,19 @@ test('o EventCard marca os cinco blocos da cascata e o brilho só no Garantir Va
   }
   assert.match(eventCard, /className="event-cta event-cta-shine flex min-h-12/);
   assert.equal((eventCard.match(/event-cta-shine/g) ?? []).length, 1, 'brilho só no Garantir Vaga');
-  assert.equal((eventCard.match(/event-cta /g) ?? []).length + (eventCard.match(/event-cta"/g) ?? []).length, 4);
+  // Story 1.130: um botão por estado (fechado, Garantir Vaga ou Leaderboard); o "Ver evento" saiu.
+  assert.equal((eventCard.match(/event-cta /g) ?? []).length + (eventCard.match(/event-cta"/g) ?? []).length, 3);
   // Story 1.72: card fechado não tem mais botão desabilitado; tem um só link na largura toda.
   assert.equal((eventCard.match(/<button\s+type="button"\s+disabled/g) ?? []).length, 0);
   assert.match(eventCard, /className="event-cta col-span-2 flex min-h-12/);
 });
 
-test('preço e divisões contam só visualmente: leitor de tela lê o texto final', () => {
+test('o preço conta só visualmente: leitor de tela lê o texto final', () => {
   assert.match(eventCard, /<span className="sr-only">\{priceLabel\}<\/span>/);
   assert.match(eventCard, /<span className="font-number text-primary tabular-nums" aria-hidden="true">\{priceDisplayLabel\}<\/span>/);
-  assert.match(eventCard, /const divisionsFinalText = t\('divisionsAvailable', \{ count: divisionCount \}\);/);
-  assert.match(eventCard, /<span className="sr-only">\{divisionsFinalText\}<\/span>/);
-  assert.match(eventCard, /<span aria-hidden="true">\{swapCountInText\(divisionsFinalText, divisionCount, animatedDivisions\)\}<\/span>/);
   assert.match(eventCard, /minPrice !== null && minPrice > 0\s*\?\s*formatMoney\(animatedPrice/, 'preço gratuito não conta');
+  // Story 1.130: a contagem de divisões saiu do card (fica na página do evento).
+  assert.doesNotMatch(eventCard, /divisionsAvailable|animatedDivisions/);
 });
 
 test('useRevealOnView: uma vez por evento, sem suporte ou com movimento reduzido nasce pronto', () => {
@@ -197,8 +208,6 @@ test('useShineOnView: observa o botão, dispara uma vez e só depois de o card e
   assert.match(eventCard, /'--ec-shine-delay': `\$\{shineDelayMs\}ms`/);
 });
 
-test('o carrossel do topo e o resto da home continuam como estavam', () => {
-  const featured = read('../src/components/home/FeaturedEventBanner.tsx');
-  assert.doesNotMatch(featured, /event-card|ec-block|data-reveal/);
+test('o hero institucional (agora em /organizadores) mantém o próprio movimento', () => {
   assert.match(globals, /\.home-broadcast-chip,\s*\.home-broadcast-tile \{\s*animation: home-broadcast-rise 380ms/);
 });

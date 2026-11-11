@@ -8,7 +8,7 @@ import { useTranslations } from 'next-intl';
 import { usePathname } from 'next/navigation';
 import { Link } from '@/i18n/navigation';
 import { isStandalonePanelPath } from '@/lib/panelChrome';
-import { BrandLogo } from '@/components/BrandLogo';
+import { shouldShowBottomNav } from '@/lib/bottomNav';
 import { LocaleSwitcher } from '@/components/LocaleSwitcher';
 
 export function Navbar() {
@@ -22,19 +22,23 @@ export function Navbar() {
   // O /owner tem moldura própria (Story 1.123).
   if (isStandalonePanelPath(pathname)) return null;
 
+  // Nas páginas públicas o celular navega pela barra do rodapé (Story 1.129):
+  // o topo fica com logotipo e idioma, sem o menu ☰.
+  const hasBottomNav = shouldShowBottomNav(pathname);
+
   return (
     <header className="sticky top-0 z-50 border-b border-card-border bg-background">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between gap-4">
-          <Link href="/" className="group flex min-w-0 items-center gap-2.5" onClick={closeMenu} aria-label={t('homeAriaLabel')}>
-            <BrandLogo className="h-11 w-11 rounded-sm border border-card-border transition-transform group-hover:scale-[1.02]" priority />
+          {/* Um logotipo só: o selo quadrado repetia o wordmark (Story 1.127). */}
+          <Link href="/" className="flex min-h-11 min-w-0 items-center" onClick={closeMenu} aria-label={t('homeAriaLabel')}>
             <Image
               src="/Ativo_1.svg"
               alt="WODArena"
-              width={146}
-              height={18}
+              width={162}
+              height={20}
               priority
-              className="h-4.5 w-auto object-contain shrink-0"
+              className="h-5 w-auto object-contain shrink-0"
             />
           </Link>
 
@@ -59,19 +63,25 @@ export function Navbar() {
             </NextLink>
           </nav>
 
-          <button
-            type="button"
-            className="flex h-11 w-11 items-center justify-center rounded-md border border-card-border bg-card text-white transition-colors hover:border-primary md:hidden"
-            aria-label={isMenuOpen ? t('closeMenu') : t('openMenu')}
-            aria-expanded={isMenuOpen}
-            onClick={() => setIsMenuOpen((open) => !open)}
-          >
-            {isMenuOpen ? <X className="h-5 w-5" aria-hidden="true" /> : <Menu className="h-5 w-5" aria-hidden="true" />}
-          </button>
+          {hasBottomNav ? (
+            <div className="flex min-h-11 items-center md:hidden">
+              <LocaleSwitcher variant="mobile" />
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="flex h-11 w-11 items-center justify-center rounded-md border border-card-border bg-card text-white transition-colors hover:border-primary md:hidden"
+              aria-label={isMenuOpen ? t('closeMenu') : t('openMenu')}
+              aria-expanded={isMenuOpen}
+              onClick={() => setIsMenuOpen((open) => !open)}
+            >
+              {isMenuOpen ? <X className="h-5 w-5" aria-hidden="true" /> : <Menu className="h-5 w-5" aria-hidden="true" />}
+            </button>
+          )}
         </div>
       </div>
 
-      {isMenuOpen && (
+      {isMenuOpen && !hasBottomNav && (
         <nav className="border-t border-card-border bg-background px-4 py-5 md:hidden" aria-label={t('mobileNavigation')}>
           <div className="mx-auto flex max-w-7xl flex-col gap-2">
             <Link href="/" onClick={closeMenu} className="flex h-12 items-center gap-3 rounded-md px-3 text-sm font-semibold text-white hover:bg-card">

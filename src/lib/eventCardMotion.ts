@@ -33,6 +33,14 @@ export function swapCountInText(finalText: string, finalValue: number, shownValu
   return finalText.replace(String(finalValue), String(shownValue));
 }
 
+// Frase da contagem com o plural do número que está na tela (Story 1.127): o
+// singular vem pronto (`singularText`, traduzido com 1) e os outros números saem
+// da frase no plural (`pluralText`, traduzida com `pluralValue`). Assim a
+// contagem mostra "1 divisão disponível" e "0 divisões disponíveis".
+export function countText(shownValue: number, singularText: string, pluralText: string, pluralValue: number): string {
+  return shownValue === 1 ? singularText : swapCountInText(pluralText, pluralValue, shownValue);
+}
+
 // Valor exibido a `elapsedMs` do início da entrada. Antes do atraso é 0, no fim é
 // exatamente `target` (sem arredondar); no meio é sempre um inteiro abaixo do
 // alvo, para o número final nunca aparecer antes da hora.

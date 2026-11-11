@@ -1,0 +1,421 @@
+<title>Hero da home com vídeo</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@125,800&family=IBM+Plex+Sans:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: folha de proposta na própria pele escura da WODArena; maquetes no centro (celular primeiro), números e decisões no fim. */
+:root {
+  color-scheme: dark;
+  --bg: #0b0e11;
+  --surface: #12161b;
+  --card: #1e2329;
+  --line: #2b3139;
+  --fg: #eaecef;
+  --muted: #929aa5;
+  --accent: #fcd535;
+  --ink: #181a20;
+  --danger: #f6465d;
+  --ok: #2ebd85;
+  --bezel: #050607;
+  --f-display: "Archivo", "Inter", system-ui, sans-serif;
+  --f-body: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --f-num: "IBM Plex Sans", "Inter", system-ui, sans-serif;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--f-body);
+  font-size: 16px;
+  line-height: 1.6;
+}
+.page {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 40px 96px;
+  display: grid;
+  gap: 72px;
+}
+.display {
+  font-family: var(--f-display);
+  font-stretch: 125%;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  text-wrap: balance;
+  margin: 0;
+}
+p { margin: 0; }
+code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: .86em; background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
+
+/* Cabeçalho */
+.top { display: grid; gap: 18px; max-width: 760px; }
+.status { display: inline-flex; align-items: center; gap: 10px; font: 600 12px/1.3 var(--f-num); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.status .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; }
+.top h1 { font-size: clamp(2rem, 6vw, 3.5rem); }
+.lead { font-size: 1.125rem; color: #c4cad2; max-width: 64ch; }
+
+/* Blocos */
+.block { display: grid; gap: 28px; }
+.block-head { display: grid; gap: 12px; max-width: 760px; }
+.tag { font: 600 12px/1.3 var(--f-num); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.tag.plain { color: var(--muted); }
+.h2 { font-size: clamp(1.5rem, 3.6vw, 2.25rem); }
+.block-head p:not(.tag) { color: #c4cad2; max-width: 64ch; }
+
+/* Dispositivos escalados: a tela é montada no tamanho real e reduzida para caber */
+.slot { width: 100%; min-width: 0; }
+.device { position: relative; overflow: hidden; width: calc(var(--w) * var(--s) * 1px); height: calc(var(--h) * var(--s) * 1px); margin: 0 auto; background: var(--bg); }
+.screen { position: absolute; top: 0; left: 0; width: calc(var(--w) * 1px); height: calc(var(--h) * 1px); transform: scale(var(--s)); transform-origin: 0 0; overflow: hidden; background: var(--bg); }
+.phone { border-radius: calc(40px * var(--s)); box-shadow: 0 0 0 calc(9px * var(--s)) var(--bezel), 0 0 0 calc(9px * var(--s) + 1px) var(--line), 0 24px 60px rgba(0, 0, 0, .55); }
+.phone-wrap { padding: 14px; }
+.crop { display: block; width: 390px; }
+.crop.d { width: 1280px; }
+
+.browser { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--bezel); box-shadow: 0 24px 60px rgba(0, 0, 0, .5); }
+.browser-bar { height: 34px; display: flex; align-items: center; gap: 7px; padding: 0 12px; border-bottom: 1px solid var(--line); }
+.browser-bar i { width: 10px; height: 10px; border-radius: 50%; background: var(--line); flex: none; }
+.browser-bar span { margin-left: 10px; flex: 0 1 280px; min-width: 0; height: 20px; border-radius: 6px; background: var(--card); color: var(--muted); font: 500 11px/20px var(--f-num); padding: 0 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.browser .device { margin: 0; }
+
+figure { margin: 0; display: grid; gap: 14px; min-width: 0; }
+figcaption { font: 500 13px/1.4 var(--f-num); color: var(--muted); text-align: center; }
+
+/* Faixa de raias (réplica da home: mesmas medidas da página real) */
+.band { position: relative; overflow: hidden; background: #0b0e11; border-bottom: 1px solid #2b3139; }
+.band-m { height: 238px; }
+.band-d { height: 358px; }
+.band-m.with-frame { height: 459px; }
+.band-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 40%; display: block; }
+.band-d .band-bg { object-position: 50% 45%; }
+.band-shade { position: absolute; inset: 0; }
+.band-m.has-video .band-shade { background: linear-gradient(180deg, rgba(11,14,17,.62) 0%, rgba(11,14,17,.5) 40%, rgba(11,14,17,.78) 80%, rgba(11,14,17,.96) 100%); }
+.band-d.has-video .band-shade { background: linear-gradient(90deg, rgba(11,14,17,.9) 0%, rgba(11,14,17,.72) 40%, rgba(11,14,17,.3) 75%, rgba(11,14,17,.22) 100%), linear-gradient(180deg, rgba(11,14,17,0) 62%, rgba(11,14,17,.88) 100%); }
+/* Sem raias (versão 2): o título fica na mesma altura de antes e o espaço dos nomes das raias passa para o vídeo. */
+.band-in { position: relative; padding: 57px 16px 28px; }
+.band-d .band-in { padding: 81px 32px 40px; }
+.band-title { max-width: 768px; font-family: var(--f-display); font-stretch: 125%; font-weight: 800; text-transform: uppercase; letter-spacing: -0.01em; line-height: 1; font-size: 28px; color: #fff; text-wrap: balance; }
+.band-d .band-title { font-size: 56px; }
+.band-sub { margin-top: 12px; max-width: 576px; font-size: 16px; line-height: 28px; color: #929aa5; }
+.has-video .band-sub { color: #c4cad2; }
+.frame { position: relative; margin-top: 20px; height: 201px; border-radius: 16px; overflow: hidden; border: 1px solid #2b3139; background: #1e2329; }
+.frame video { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.pause { position: absolute; display: grid; place-items: center; border-radius: 50%; border: 1px solid rgba(234, 236, 239, .28); background: rgba(11, 14, 17, .66); color: #fff; cursor: pointer; padding: 0; }
+.pause svg { width: 45%; height: 45%; }
+.pause:hover { border-color: var(--accent); }
+.pause:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.band-m .pause { top: 10px; right: 12px; width: 36px; height: 36px; }
+.band-d .pause { bottom: 28px; right: 32px; width: 44px; height: 44px; }
+.frame .pause { bottom: 10px; right: 10px; width: 36px; height: 36px; }
+
+/* Marcações da maquete */
+.mk { position: absolute; width: 24px; height: 24px; margin: -12px 0 0 -12px; border-radius: 50%; background: var(--accent); color: var(--ink); font: 700 13px/24px var(--f-num); text-align: center; box-shadow: 0 0 0 3px rgba(11, 14, 17, .85); pointer-events: none; z-index: 3; }
+.marks-off .mk { display: none; }
+.ln { position: absolute; left: 0; right: 0; border-top: 3px dashed var(--accent); z-index: 3; pointer-events: none; }
+.ln span { position: absolute; right: 10px; bottom: 8px; background: var(--accent); color: var(--ink); font: 700 17px/1 var(--f-num); padding: 6px 9px; border-radius: 5px; white-space: nowrap; }
+.ln.bad { border-top-color: var(--danger); }
+.ln.bad span { background: var(--danger); color: var(--ink); }
+
+/* Proposta A */
+.a-grid { display: grid; gap: 32px; align-items: start; }
+@media (min-width: 900px) { .a-grid { grid-template-columns: 400px minmax(0, 1fr); gap: 48px; } }
+.legend { display: grid; gap: 20px; min-width: 0; }
+.switch { display: inline-flex; align-items: center; gap: 10px; font-weight: 600; font-size: 14px; cursor: pointer; width: fit-content; }
+.switch input { width: 18px; height: 18px; accent-color: var(--accent); margin: 0; }
+.legend ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; border-top: 1px solid var(--line); }
+.legend li { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 14px; padding: 16px 0; border-bottom: 1px solid var(--line); }
+.legend li b.n { width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: var(--ink); font: 700 13px/24px var(--f-num); text-align: center; margin-top: 1px; }
+.legend li strong { display: block; color: #fff; font-weight: 600; }
+.legend li span { color: var(--muted); font-size: 15px; }
+
+/* Comparação */
+.cmp { display: grid; gap: 40px; }
+@media (min-width: 760px) { .cmp { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; } }
+.cmp figcaption { display: grid; gap: 2px; }
+.cmp figcaption strong { color: #fff; font: 600 15px/1.4 var(--f-body); }
+.cmp figcaption em { font-style: normal; }
+.cmp .slot { padding: 12px; }
+
+.tbl-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+table { width: 100%; border-collapse: collapse; font-size: 15px; min-width: 520px; }
+th, td { text-align: left; padding: 13px 16px; border-bottom: 1px solid var(--line); vertical-align: top; }
+thead th { font: 600 12px/1.3 var(--f-num); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); background: var(--surface); }
+tbody tr:last-child td { border-bottom: 0; }
+td.num { font-family: var(--f-num); font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+.yes { color: var(--ok); font-weight: 600; }
+.no { color: var(--danger); font-weight: 600; }
+tr.pick td { background: rgba(252, 213, 53, .06); }
+.note { color: var(--muted); font-size: 14px; max-width: 80ch; }
+
+/* Mudanças e decisões */
+.changes { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; border-top: 1px solid var(--line); max-width: 860px; }
+.changes li { padding: 14px 0; border-bottom: 1px solid var(--line); color: #c4cad2; }
+.changes li strong { color: #fff; font-weight: 600; }
+.decisions { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); }
+.version { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; color: #c4cad2; font-size: 15px; }
+.version b { font: 700 12px/1.3 var(--f-num); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.dec { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); padding: 20px; display: grid; gap: 12px; align-content: start; min-width: 0; }
+.dec .id { font: 700 13px/1 var(--f-num); color: var(--accent); letter-spacing: .06em; }
+.dec h3 { margin: 0; font-size: 17px; line-height: 1.35; color: #fff; }
+.dec ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; font-size: 15px; }
+.dec li { display: flex; gap: 8px; align-items: baseline; color: #c4cad2; }
+.dec li::before { content: ""; width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid var(--muted); flex: none; transform: translateY(-1px); }
+.dec li.rec { color: #fff; font-weight: 600; }
+.dec li.rec::before { background: var(--accent); border-color: var(--accent); }
+.reply { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; border: 1px dashed var(--line); border-radius: 12px; padding: 16px 18px; }
+.reply output { font: 600 15px/1.4 var(--f-num); color: #fff; flex: 1 1 260px; min-width: 0; user-select: all; }
+.btn { min-height: 44px; padding: 0 18px; border-radius: 8px; border: 0; background: var(--accent); color: var(--ink); font: 700 14px/1 var(--f-body); cursor: pointer; }
+.btn:hover { background: #f0b90b; }
+.btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+</style>
+
+<main class="page">
+  <header class="top">
+    <p class="status"><span class="dot"></span>Proposta para aprovação · nenhum arquivo do projeto foi alterado</p>
+    <h1 class="display">Hero da home com vídeo</h1>
+    <p class="lead">A home nova da Story 1.132 (ainda sem commit) tirou o vídeo do topo e levou para /organizadores. A proposta devolve o vídeo ao hero da home como fundo do topo, atrás do título. O topo mantém a altura que tem hoje, então a busca e o primeiro evento continuam no mesmo lugar.</p>
+    <p class="version"><b>Versão 2</b><span>Saíram as linhas que simulam raias e os nomes Raia 1 a 8. O título ficou na mesma altura e o espaço dos nomes passou para o vídeo.</span></p>
+  </header>
+
+  <section class="block" aria-labelledby="a-title">
+    <div class="block-head">
+      <p class="tag">Proposta A · recomendada</p>
+      <h2 id="a-title" class="display h2">O vídeo vira o fundo do topo da home</h2>
+      <p>As maquetes juntam o topo novo, com o vídeo de verdade rodando, às capturas da home atual tiradas agora no servidor local. Tudo abaixo do topo é a página real.</p>
+    </div>
+
+    <div class="a-grid">
+      <figure>
+        <div class="slot phone-wrap" id="slot-phone-a">
+          <div class="device phone" style="--w:390;--h:844;--s:.9" data-max="0.95"><div class="screen" id="screen-phone-a"></div></div>
+        </div>
+        <figcaption>Celular · 390 × 844</figcaption>
+      </figure>
+
+      <div class="legend">
+        <label class="switch" for="toggle-marks"><input type="checkbox" id="toggle-marks" checked> Mostrar marcações na maquete</label>
+        <ol>
+          <li><b class="n">1</b><div><strong>O vídeo de hoje, de fundo</strong><span>Mesmo arquivo do topo antigo (arena, barras e Fitness Race em meio-tom), em loop e sem som.</span></div></li>
+          <li><b class="n">2</b><div><strong>Camada escura para o texto</strong><span>Escurece o vídeo atrás do título e da frase e funde com o fundo da página no pé da faixa. No computador o vídeo aparece mais forte à direita, onde não há texto.</span></div></li>
+          <li><b class="n">3</b><div><strong>Botão para pausar</strong><span>Vídeo que se mexe sozinho por mais de 5 segundos ao lado de conteúdo precisa de um jeito de parar (WCAG 2.2.2). O topo antigo não tinha. Com "reduzir movimento" ligado no aparelho, a faixa mostra a imagem parada, como já acontece hoje.</span></div></li>
+          <li><b class="n">4</b><div><strong>Daqui para baixo, nada muda</strong><span>Busca, abas, filtros e o primeiro card ficam onde estão: o topo continua com 238 px no celular e 358 px no computador.</span></div></li>
+        </ol>
+      </div>
+    </div>
+
+    <figure>
+      <div class="browser">
+        <div class="browser-bar" aria-hidden="true"><i></i><i></i><i></i><span>www.wodarena.com.br</span></div>
+        <div class="slot" id="slot-desk-a">
+          <div class="device" style="--w:1280;--h:800;--s:.8" data-max="1"><div class="screen" id="screen-desk-a"></div></div>
+        </div>
+      </div>
+      <figcaption>Computador · 1280 × 800</figcaption>
+    </figure>
+  </section>
+
+  <section class="block" aria-labelledby="cmp-title">
+    <div class="block-head">
+      <p class="tag plain">Celular · 390 × 844</p>
+      <h2 id="cmp-title" class="display h2">Onde começa o primeiro evento</h2>
+      <p>A alternativa B coloca o vídeo num quadro 16:9 abaixo da frase, como era o topo antigo. O quadro soma 221 px e o primeiro card sai da primeira tela.</p>
+    </div>
+
+    <div class="cmp">
+      <figure>
+        <div class="slot" id="slot-cmp-now"><div class="device phone" style="--w:390;--h:844;--s:.6" data-max="0.66"><div class="screen" id="screen-cmp-now"></div></div></div>
+        <figcaption><strong>Hoje, sem vídeo</strong><em>1º card em 593 px</em></figcaption>
+      </figure>
+      <figure>
+        <div class="slot" id="slot-cmp-a"><div class="device phone" style="--w:390;--h:844;--s:.6" data-max="0.66"><div class="screen" id="screen-cmp-a"></div></div></div>
+        <figcaption><strong>A · vídeo de fundo</strong><em>1º card em 593 px</em></figcaption>
+      </figure>
+      <figure>
+        <div class="slot" id="slot-cmp-b"><div class="device phone" style="--w:390;--h:844;--s:.6" data-max="0.66"><div class="screen" id="screen-cmp-b"></div></div></div>
+        <figcaption><strong>B · vídeo em quadro 16:9</strong><em>1º card em cerca de 814 px, fora da 1ª tela</em></figcaption>
+      </figure>
+    </div>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Versão da home</th><th>1º card começa em</th><th>Aparece na 1ª tela?</th></tr></thead>
+        <tbody>
+          <tr><td>Antes da 1.132 (vídeo, 8 caixas, card "100%" e carrossel)</td><td class="num">2.253 px</td><td class="no">Não</td></tr>
+          <tr><td>Hoje, sem vídeo</td><td class="num">593 px</td><td class="yes">Sim</td></tr>
+          <tr class="pick"><td>A · vídeo de fundo no topo</td><td class="num">593 px</td><td class="yes">Sim</td></tr>
+          <tr><td>B · vídeo em quadro 16:9</td><td class="num">≈ 814 px</td><td class="no">Não</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Medido agora no servidor local, Chrome em 390 × 844, com um evento em destaque. A 1.132 registrou 499 px antes das abas e dos filtros da 1.133; hoje são 593 px, e a barra do rodapé começa em 787 px. Sobram 7 px para a meta de 600 px da 1.132, por isso a proposta A não acrescenta altura no celular.</p>
+  </section>
+
+  <section class="block" aria-labelledby="chg-title">
+    <div class="block-head">
+      <p class="tag plain">Depois da aprovação</p>
+      <h2 id="chg-title" class="display h2">O que muda no código</h2>
+    </div>
+    <ul class="changes">
+      <li><strong>Home</strong> (<code>HomeView.tsx</code>): saem as linhas de raia e os nomes Raia 1 a 8; o topo ganha o vídeo atrás do título, a camada escura e o botão de pausa. Altura igual à de hoje.</li>
+      <li><strong>Textos e estilos das raias</strong>: sai a chave <code>laneLabel</code> dos três idiomas. A classe <code>lane-lines</code> continua só se /ajuda mantiver as linhas (D4).</li>
+      <li><strong>Um componente de vídeo só</strong>, tirado de <code>SectionOperations.tsx</code> e usado na home e em /organizadores: mesmo arquivo, mesma imagem de capa e a mesma regra de "reduzir movimento".</li>
+      <li><strong>Versão leve no celular</strong> (D2): 960 × 540 em MP4, 2,8 MB, contra 8,9 MB do MP4 e 9,0 MB do WebM de hoje. Gerei o arquivo para medir; o vídeo desta página já é ele.</li>
+      <li><strong>Textos</strong> "Pausar vídeo" e "Reproduzir vídeo" em pt-BR, pt-PT e en-GB.</li>
+      <li><strong>Testes</strong>: <code>home-athlete-first</code> passa a exigir o vídeo no topo, sem raias, e mantém a ordem título, busca, eventos; <code>brand-identity</code> acompanha o que sobrar das raias.</li>
+      <li><strong>Story 1.136</strong>, criada depois da aprovação, com esta maquete copiada para <code>docs/design/mobile-competitivo/</code> e citada nos critérios de aceite.</li>
+    </ul>
+  </section>
+
+  <section class="block" aria-labelledby="dec-title">
+    <div class="block-head">
+      <p class="tag plain">Para aprovar</p>
+      <h2 id="dec-title" class="display h2">Decisões</h2>
+    </div>
+    <div class="decisions">
+      <div class="dec">
+        <span class="id">D1</span>
+        <h3>Como o vídeo entra no hero</h3>
+        <ul><li class="rec">A · fundo do topo, atrás do título (recomendado)</li><li>B · quadro 16:9 abaixo da frase</li></ul>
+      </div>
+      <div class="dec">
+        <span class="id">D2</span>
+        <h3>Versão leve do vídeo no celular</h3>
+        <ul><li class="rec">Sim, 2,8 MB (recomendado)</li><li>Não, o mesmo arquivo de 8,9 MB</li></ul>
+      </div>
+      <div class="dec">
+        <span class="id">D3</span>
+        <h3>/organizadores continua com o vídeo no topo</h3>
+        <ul><li class="rec">Sim, sem mudança lá (recomendado)</li><li>Não, o vídeo fica só na home</li></ul>
+      </div>
+      <div class="dec">
+        <span class="id">D4</span>
+        <h3>/ajuda também tem as linhas de raia no topo: tirar também?</h3>
+        <ul><li class="rec">Sim, para a home e a ajuda ficarem iguais (recomendado)</li><li>Não, a ajuda fica como está</li></ul>
+      </div>
+    </div>
+    <div class="reply">
+      <output id="reply-text">Aprovo D1 = A, D2 = sim, D3 = sim, D4 = sim</output>
+      <button type="button" class="btn" id="copy-reply">Copiar resposta</button>
+    </div>
+  </section>
+</main>
+
+<script>
+(function () {
+  var ICON_PAUSE = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>';
+  var ICON_PLAY = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12-7.5a1 1 0 0 0 0-1.72l-12-7.5A1 1 0 0 0 7 4.5z"/></svg>';
+  var TITLE = 'Encontre sua próxima competição';
+  var SUB = 'Inscrições, cronograma e resultados ao vivo de Functional Fitness e Fitness Race.';
+
+  function video(cls) {
+    return '<video class="' + cls + '" muted loop playsinline preload="auto" poster="../../../../public/hero-vertical-poster.jpg"><source src="../../../../public/hero-vertical-960.mp4" type="video/mp4"></video>';
+  }
+  function pause() {
+    return '<button type="button" class="pause" aria-label="Pausar vídeo">' + ICON_PAUSE + '</button>';
+  }
+  function band(size, mode) {
+    var isVideo = mode === 'bg';
+    return '<div class="band band-' + size + (isVideo ? ' has-video' : '') + (mode === 'frame' ? ' with-frame' : '') + '">' +
+      (isVideo ? video('band-bg') + '<div class="band-shade"></div>' : '') +
+      '<div class="band-in">' +
+        '<div class="band-title">' + TITLE + '</div>' +
+        '<p class="band-sub">' + SUB + '</p>' +
+        (mode === 'frame' ? '<div class="frame">' + video('') + pause() + '</div>' : '') +
+      '</div>' +
+      (isVideo ? pause() : '') +
+    '</div>';
+  }
+  function img(src, h, cls) {
+    return '<img class="crop' + (cls ? ' ' + cls : '') + '" src="' + src + '" alt="" height="' + h + '" decoding="async">';
+  }
+  function mark(n, x, y) {
+    return '<span class="mk" style="left:' + x + 'px;top:' + y + 'px">' + n + '</span>';
+  }
+  function line(y, text, bad) {
+    return '<div class="ln' + (bad ? ' bad' : '') + '" style="top:' + y + 'px"><span>' + text + '</span></div>';
+  }
+
+  var phoneA = img('m-nav.jpg', 65) + band('m', 'bg') + img('m-below.jpg', 541);
+
+  document.getElementById('screen-phone-a').innerHTML = phoneA +
+    mark(1, 334, 172) + mark(2, 368, 286) + mark(3, 334, 72) + mark(4, 362, 313);
+  document.getElementById('screen-desk-a').innerHTML =
+    img('d-nav.jpg', 65, 'd') + band('d', 'bg') + img('d-below.jpg', 377, 'd');
+  document.getElementById('screen-cmp-now').innerHTML = img('m-hoje.jpg', 844) + line(593, '1º card · 593 px');
+  document.getElementById('screen-cmp-a').innerHTML = phoneA + line(593, '1º card · 593 px');
+  document.getElementById('screen-cmp-b').innerHTML =
+    img('m-nav.jpg', 65) + band('m', 'frame') + img('m-below-b.jpg', 263) + img('m-bottomnav.jpg', 57) +
+    line(787, 'fim da 1ª tela · card em ≈ 814 px', true);
+
+  // Escala de cada aparelho conforme a largura disponível.
+  var devices = Array.prototype.slice.call(document.querySelectorAll('.device'));
+  function fit() {
+    devices.forEach(function (d) {
+      var slot = d.closest('.slot');
+      var w = parseFloat(getComputedStyle(d).getPropertyValue('--w'));
+      var max = parseFloat(d.getAttribute('data-max')) || 1;
+      var cs = getComputedStyle(slot);
+      var avail = slot.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+      if (avail > 0) d.style.setProperty('--s', Math.min(max, avail / w).toFixed(4));
+    });
+  }
+  fit();
+  if ('ResizeObserver' in window) {
+    var ro = new ResizeObserver(fit);
+    Array.prototype.forEach.call(document.querySelectorAll('.slot'), function (s) { ro.observe(s); });
+  } else {
+    window.addEventListener('resize', fit);
+  }
+
+  // Vídeos: tocam sem som; com "reduzir movimento" ficam na imagem de capa.
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function setButton(btn, playing) {
+    btn.innerHTML = playing ? ICON_PAUSE : ICON_PLAY;
+    btn.setAttribute('aria-label', playing ? 'Pausar vídeo' : 'Reproduzir vídeo');
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('.band, .frame'), function (box) {
+    var v = box.querySelector(':scope > video, :scope > .band-bg');
+    var btn = box.querySelector(':scope > .pause');
+    if (!v || !btn) return;
+    v.muted = true;
+    if (reduce) {
+      setButton(btn, false);
+    } else {
+      var p = v.play();
+      if (p && p.catch) p.catch(function () { setButton(btn, false); });
+    }
+    btn.addEventListener('click', function () {
+      if (v.paused) { var q = v.play(); if (q && q.catch) q.catch(function () {}); setButton(btn, true); }
+      else { v.pause(); setButton(btn, false); }
+    });
+  });
+
+  document.getElementById('toggle-marks').addEventListener('change', function (e) {
+    document.getElementById('screen-phone-a').classList.toggle('marks-off', !e.target.checked);
+  });
+
+  var copyBtn = document.getElementById('copy-reply');
+  var replyText = document.getElementById('reply-text');
+  copyBtn.addEventListener('click', function () {
+    var text = replyText.textContent;
+    function selectIt() {
+      var r = document.createRange();
+      r.selectNodeContents(replyText);
+      var sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(r);
+      copyBtn.textContent = 'Texto selecionado';
+    }
+    try {
+      navigator.clipboard.writeText(text).then(function () { copyBtn.textContent = 'Copiado'; }, selectIt);
+    } catch (err) {
+      selectIt();
+    }
+  });
+})();
+</script>

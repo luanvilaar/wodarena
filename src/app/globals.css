@@ -131,6 +131,75 @@ table th {
   font-variant-numeric: tabular-nums;
 }
 
+/* Identidade (Story 1.128, P9 opção A, docs/design/mobile-competitivo/):
+   títulos públicos em letra larga, que ecoa o wordmark "WOD ARENA". Inter fica
+   de reserva se a fonte não carregar. As linhas de raia saíram do topo da home
+   e da ajuda (Story 1.136, D4); o rótulo .lane-label segue nos passos. */
+.type-display {
+  font-family: var(--font-display, var(--font-body));
+  font-stretch: 125%;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+  line-height: 1;
+}
+
+/* Topo da home com o vídeo de fundo (Story 1.136, docs/design/mobile-competitivo/
+   hero-com-video/): escurece o vídeo atrás do título e funde com o fundo da
+   página no pé; a partir de 1024 px o vídeo aparece mais forte à direita, onde
+   não há texto. */
+.home-hero-shade {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--background) 62%, transparent) 0%,
+    color-mix(in srgb, var(--background) 50%, transparent) 40%,
+    color-mix(in srgb, var(--background) 78%, transparent) 80%,
+    color-mix(in srgb, var(--background) 96%, transparent) 100%
+  );
+}
+
+/* Botão de pausar do vídeo: canto superior direito no celular, inferior direito
+   a partir de 640 px, alinhado à margem do conteúdo (max-w-7xl + px-8). */
+.home-hero-toggle {
+  top: 0.5rem;
+  right: 0.5rem;
+}
+
+@media (min-width: 640px) {
+  .home-hero-toggle {
+    top: auto;
+    bottom: 1.75rem;
+    right: 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .home-hero-shade {
+    background:
+      linear-gradient(
+        90deg,
+        color-mix(in srgb, var(--background) 90%, transparent) 0%,
+        color-mix(in srgb, var(--background) 72%, transparent) 40%,
+        color-mix(in srgb, var(--background) 30%, transparent) 75%,
+        color-mix(in srgb, var(--background) 22%, transparent) 100%
+      ),
+      linear-gradient(180deg, transparent 62%, color-mix(in srgb, var(--background) 88%, transparent) 100%);
+  }
+
+  .home-hero-toggle {
+    right: max(2rem, calc((100% - 80rem) / 2 + 2rem));
+  }
+}
+
+.lane-label {
+  font-family: var(--font-number);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
 .text-balance {
   text-wrap: balance;
 }
@@ -258,15 +327,17 @@ input[type=number] {
   }
 }
 
+/* O topo do recorte fica 0,3em acima da caixa: com entrelinha de 0,92 os acentos
+   das maiúsculas (o til de "GESTÃO") passam da caixa e eram cortados (Story 1.127). */
 @keyframes home-broadcast-title {
   from {
     opacity: 0;
-    clip-path: inset(0 0 18% 0);
+    clip-path: inset(-0.3em 0 18% 0);
     transform: translate3d(0, 24px, 0);
   }
   to {
     opacity: 1;
-    clip-path: inset(0 0 0 0);
+    clip-path: inset(-0.3em 0 0 0);
     transform: translate3d(0, 0, 0);
   }
 }
@@ -292,70 +363,6 @@ input[type=number] {
   to {
     opacity: 1;
     transform: translate3d(0, 0, 0) scale(1);
-  }
-}
-
-/* Carrossel do hero da home. Vive fora do namespace home-broadcast-* de
-   proposito: aquelas regras aplicam animation com fill-mode "both", que fixa
-   opacity: 1 no nivel de cascata de animacoes e anula a troca de slides. */
-.wa-hero__scrim {
-  pointer-events: none;
-  /* Mobile: a coluna de texto ocupa a largura toda, entao a faixa de leitura
-     so pode vir do eixo vertical. O terco superior fica limpo para a arte. */
-  background: linear-gradient(
-    180deg,
-    rgba(11, 14, 17, 0.34) 0%,
-    rgba(11, 14, 17, 0.16) 18%,
-    rgba(11, 14, 17, 0.82) 40%,
-    rgba(11, 14, 17, 0.95) 66%,
-    rgba(11, 14, 17, 0.98) 100%
-  );
-}
-
-@media (min-width: 640px) {
-  /* A partir de sm o texto ocupa so a coluna esquerda: alivia o escurecimento
-     vertical e devolve area limpa a arte do organizador. */
-  .wa-hero__scrim {
-    background:
-      linear-gradient(
-        180deg,
-        rgba(11, 14, 17, 0.24) 0%,
-        rgba(11, 14, 17, 0.06) 26%,
-        rgba(11, 14, 17, 0.58) 64%,
-        rgba(11, 14, 17, 0.96) 100%
-      ),
-      linear-gradient(
-        90deg,
-        rgba(11, 14, 17, 0.92) 0%,
-        rgba(11, 14, 17, 0.6) 32%,
-        rgba(11, 14, 17, 0) 66%
-      );
-  }
-}
-
-/* O gradiente sozinho nao cobre toda arte possivel: o organizador envia o
-   banner que quiser. A sombra garante o contraste do texto sem precisar
-   escurecer a imagem inteira. Nao se aplica aos botoes, que tem fundo proprio. */
-.wa-hero__text {
-  text-shadow: 0 2px 16px rgba(11, 14, 17, 0.72);
-}
-
-@keyframes wa-hero-copy-in {
-  from {
-    opacity: 0;
-    transform: translate3d(0, 14px, 0);
-  }
-  to {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-  }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  /* backwards, nunca "both": a animacao so pinta o estado inicial durante o
-     delay e devolve o controle ao valor natural quando termina. */
-  .wa-hero__copy {
-    animation: wa-hero-copy-in 420ms var(--motion-broadcast-ease) backwards;
   }
 }
 

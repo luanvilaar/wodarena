@@ -1,28 +1,11 @@
 'use client';
 
-import Image from 'next/image';
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { useTranslations } from 'next-intl';
-
-const HERO_VIDEO_POSTER = '/hero-vertical-poster.jpg';
+import { HeroVideo } from '@/components/home/HeroVideo';
 
 export function SectionOperations() {
   const t = useTranslations('SectionOperations');
-  const [reducedMotion, setReducedMotion] = useState(true);
-
-  useEffect(() => {
-    const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const updateMotionPreference = () => setReducedMotion(motionQuery.matches);
-    const animationFrame = window.requestAnimationFrame(() => {
-      updateMotionPreference();
-    });
-
-    motionQuery.addEventListener('change', updateMotionPreference);
-    return () => {
-      window.cancelAnimationFrame(animationFrame);
-      motionQuery.removeEventListener('change', updateMotionPreference);
-    };
-  }, []);
 
   const features = t.raw('features') as string[];
   const sportsTags = t.raw('sportsTags') as string[];
@@ -32,7 +15,7 @@ export function SectionOperations() {
       <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         {/* Área Hero de Operações */}
         <div className="flex flex-col gap-3 pb-8 sm:gap-4 sm:pb-12">
-          <h1 className="home-broadcast-title max-w-2xl text-3xl font-black uppercase leading-[0.92] tracking-[-0.04em] text-foreground sm:text-5xl lg:text-6xl">
+          <h1 className="home-broadcast-title type-display max-w-4xl text-[1.75rem] leading-[0.98] text-foreground sm:text-5xl lg:text-6xl">
             {t('heroTitleLine1')}<br />{t('heroTitleLine2')}<br />{t('heroTitleLine3')}
           </h1>
           <p className="home-broadcast-support max-w-md text-sm leading-relaxed text-foreground sm:text-base">
@@ -56,32 +39,14 @@ export function SectionOperations() {
           </div>
         </div>
 
-        {/* Vídeo da Hero — 16:9 fixo em todos os breakpoints */}
+        {/* Vídeo da Hero — 16:9 fixo em todos os breakpoints; mídia no HeroVideo (Story 1.136) */}
         <div className="home-broadcast-video relative aspect-video w-full overflow-hidden rounded-2xl border border-card-border bg-dark-gray">
-          {reducedMotion ? (
-            <Image
-              src={HERO_VIDEO_POSTER}
-              alt={t('heroVideoAlt')}
-              fill
-              sizes="(min-width: 1280px) 1216px, 100vw"
-              className="object-cover"
-              priority
-            />
-          ) : (
-            <video
-              className="h-full w-full object-cover"
-              poster={HERO_VIDEO_POSTER}
-              aria-label={t('heroVideoAriaLabel')}
-              autoPlay
-              loop
-              muted
-              playsInline
-              preload="metadata"
-            >
-              <source src="/hero-vertical.webm" type="video/webm" />
-              <source src="/hero-vertical-h264.mp4" type="video/mp4" />
-            </video>
-          )}
+          <HeroVideo
+            alt={t('heroVideoAlt')}
+            ariaLabel={t('heroVideoAriaLabel')}
+            sizes="(min-width: 1280px) 1216px, 100vw"
+            priority
+          />
         </div>
 
         {/* Feature Grid */}

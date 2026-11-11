@@ -85,8 +85,9 @@ test('EventView: card só na aba Detalhes, abaixo de "Sobre o Evento", oculto na
   }
 });
 
-test('EventView: cabeçalho e "Local das Baterias" seguem iguais', () => {
-  assert.match(eventView, /<MapPin className="h-3\.5 w-3\.5 text-muted shrink-0" \/>\s*<span className="font-semibold text-white">\{event\.location\}<\/span>/);
+test('EventView: cabeçalho mostra o local e "Local das Baterias" segue igual', () => {
+  // Story 1.131: o topo novo mostra o local cadastrado com a cidade/UF ao lado.
+  assert.match(eventView, /<MapPin className="mt-0\.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" \/>\s*<span className="min-w-0">\s*<span className="font-semibold text-white">\{event\.location\}<\/span>/);
   assert.match(eventView, /\{event\.eventType === 'functional_fitness_qualifier' \? tDetails\('modalityHeading'\) : tDetails\('venueHeading'\)\}/);
   assert.match(eventView, /\{event\.eventType === 'functional_fitness_qualifier' \? tDetails\('onlineQualifier'\) : event\.location\}/);
 });
@@ -386,7 +387,8 @@ test('i18n: Event.map com as mesmas chaves nos três idiomas, sem valor vazio, e
   assert.equal(messages['pt-br'].Event.map.touchPan, 'Use dois dedos para mover o mapa');
   assert.equal(messages['en-gb'].Event.map.touchPan, 'Use two fingers to move the map');
   // O namespace inteiro de Event já chega à página pública.
-  assert.match(read('../src/app/[locale]/event/[id]/page.tsx'), /getScopedMessages\(\['Event', 'Checkout'\]\)/);
+  // Story 1.131: a página também recebe EventCard (contagem de tempo do topo).
+  assert.match(read('../src/app/[locale]/event/[id]/page.tsx'), /getScopedMessages\(\['Event', 'EventCard', 'Checkout'\]\)/);
 });
 
 test('package.json: só o mapbox-gl entra como dependência nova', () => {

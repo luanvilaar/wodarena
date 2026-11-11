@@ -157,7 +157,7 @@ export default function OwnerPage() {
     return {
       gestores: { count: managersNeedingAction, tone: 'warn', label: `${managersNeedingAction} gestores expirados ou vencendo` },
       comercial: { count: leadStats.newCount, tone: 'neutral', label: `${leadStats.newCount} leads novos` },
-      configuracoes: { count: featuredHomeEventIsOffAir ? 1 : 0, tone: 'warn', label: 'Destaque da home fora do carrossel' }
+      configuracoes: { count: featuredHomeEventIsOffAir ? 1 : 0, tone: 'warn', label: 'Destaque da home fora do ar' }
     };
   }, [overview, leadStats.newCount, featuredHomeEventIsOffAir]);
 

@@ -128,7 +128,7 @@ test('settings: fee card says the effect and the home showcase keeps the Story 1
 
   const html = renderToStaticMarkup(createElement(OwnerHomeShowcase, { events: offAir, setFeaturedHomeEvent: async () => {}, onSaved: () => {} }));
   assert.match(html, /Vitrine da home/);
-  assert.match(html, /Este evento encerrou e não aparece mais no carrossel/);
+  assert.match(html, /Este evento encerrou e não aparece mais na home/);
   assert.match(html, /<option value="e1">Desafio Litoral<\/option>/);
   assert.doesNotMatch(html, /<option value="past">/, 'encerrado não é candidato');
 });

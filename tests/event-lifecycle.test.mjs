@@ -8,7 +8,6 @@ const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
 const eventStatus = read('../src/lib/eventStatus.ts');
 const eventCard = read('../src/components/EventCard.tsx');
 const homePage = read('../src/app/[locale]/HomeView.tsx');
-const featuredBanner = read('../src/components/home/FeaturedEventBanner.tsx');
 const eventPage = read('../src/app/[locale]/event/[id]/EventView.tsx');
 const serverCheckout = read('../src/lib/serverCheckout.ts');
 const registrationStart = read('../src/app/api/registrations/start/route.ts');
@@ -108,14 +107,15 @@ test('home splits events into chronological upcoming list and past events sectio
   assert.match(homePage, /if \(lifecycle === 'finished'\) \{\s*past\.push\(event\);/);
   assert.match(homePage, /upcomingEvents: upcoming\.sort\(compareEventsByDateAsc\)/);
   assert.match(homePage, /pastEvents: past\.sort\(compareEventsByDateDesc\)/);
-  assert.match(homePage, /id="eventos-passados"/);
-  assert.match(homePage, /t\('pastTitle'\)/);
-  assert.match(ptBrMessages, /"pastTitle": "Eventos passados"/);
-  assert.match(homePage, /\{pastEvents\.length > 0 && \(/);
+  // Story 1.133: realizados ficam na aba Resultados, agrupados por mês do mais recente.
+  assert.match(homePage, /const shownEvents = tab === 'upcoming' \? listedUpcoming : pastEvents;/);
+  assert.match(homePage, /groupByMonth\(shownEvents, tab === 'upcoming' \? 'asc' : 'desc'\)/);
+  assert.match(ptBrMessages, /"tabResults": "Resultados"/);
 });
 
-test('home banner fallback follows the chronological order of eligible events', () => {
-  assert.match(featuredBanner, /\.sort\(compareEventsByDateAsc\), \[events\]\);/);
+test('home: o destaque do dono sai da lista cronológica de próximos (Story 1.132)', () => {
+  assert.match(homePage, /const featuredEvent = upcomingEvents\.find\(/);
+  assert.match(homePage, /upcomingEvents\.filter\(\(event\) => event\.id !== featuredEvent\.id\)/);
 });
 
 test('public surfaces consistently hide registration for derived finished events', () => {
@@ -127,9 +127,9 @@ test('public surfaces consistently hide registration for derived finished events
   assert.match(eventCard, /t\('realizedAux', \{ date: pastDateLabel \}\)/);
   assert.match(ptBrMessages, /"realizedBadge": "Realizado"/);
   assert.match(ptBrMessages, /"realizedAux": "Aconteceu em \{date\}\."/);
-  assert.match(homePage, /statusFilter === 'finished' && lifecycle === 'finished'/);
-  assert.match(homePage, /statusFilter === 'upcoming' && event\.status === 'upcoming' && lifecycle !== 'finished'/);
-  assert.match(featuredBanner, /getEventStatus\(event\) !== 'finished'/);
+  // Story 1.133: realizado vai sempre para Resultados; "Ao vivo" exige status live e não encerrado.
+  assert.match(homePage, /if \(lifecycle === 'finished'\) \{\s*past\.push\(event\);/);
+  assert.match(read('../src/lib/homeFilters.ts'), /return event\.status === 'live' && getEventStatus\(event\) !== 'finished';/);
   assert.match(eventPage, /const registrationsAvailable = \(isQualifierEvent \|\| event\.status === 'upcoming'\)/);
   assert.match(eventPage, /disabled=\{!registrationsAvailable\}/);
 });
@@ -156,9 +156,6 @@ test('manual ticketing closure has one public signal and blocks only new checkou
   assert.match(eventCard, /t\('registrationClosedBadge'\)/);
   assert.match(eventCard, /t\('upcomingClosedAux'\)/);
   assert.match(ptBrMessages, /"registrationClosedBadge": "Inscrições Encerradas"/);
-  assert.match(featuredBanner, /const activeAvailability = activeEvent \? getRegistrationAvailability\(activeEvent\) : null;/);
-  assert.match(featuredBanner, /t\('salesClosedBadge'\)/);
-  assert.match(ptBrMessages, /"salesClosedBadge": "Vendas encerradas"/);
   assert.match(eventPage, /const registrationAvailability = getRegistrationAvailability\(event\)/);
   assert.match(eventPage, /t\('statusLabels\.salesClosed'\)/);
   assert.match(ptBrMessages, /"statusLabels": \{[\s\S]*?"salesClosed": "Vendas Encerradas"/);

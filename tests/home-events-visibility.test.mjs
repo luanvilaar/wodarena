@@ -9,8 +9,9 @@ const globals = read('../src/app/globals.css');
 const homePage = read('../src/app/[locale]/HomeView.tsx');
 const eventCard = read('../src/components/EventCard.tsx');
 const adminPage = read('../src/app/admin/page.tsx');
-const featuredBanner = read('../src/components/home/FeaturedEventBanner.tsx');
+const organizersView = read('../src/app/[locale]/organizadores/OrganizersView.tsx');
 const sectionOperations = read('../src/components/home/SectionOperations.tsx');
+const heroVideo = read('../src/components/home/HeroVideo.tsx');
 
 const probeMedia = (path) => JSON.parse(execFileSync('ffprobe', [
   '-v', 'error',
@@ -19,24 +20,19 @@ const probeMedia = (path) => JSON.parse(execFileSync('ffprobe', [
   new URL(path, import.meta.url).pathname,
 ], { encoding: 'utf8' }));
 
-test('home opens with the hero video, then the featured event, then event listings', () => {
-  const institutionalIndex = homePage.indexOf('<SectionOperations');
-  const featuredBannerIndex = homePage.indexOf('<FeaturedEventBanner');
+test('home abre com os eventos, deixa os realizados por último e fecha com a história do produto (Story 1.132)', () => {
   const openEventsIndex = homePage.indexOf('id="eventos"');
-  const pastEventsIndex = homePage.indexOf('id="eventos-passados"');
+  const productStoryIndex = homePage.indexOf('<ProductStory withCta />');
 
-  for (const [label, index] of Object.entries({
-    institutionalIndex,
-    featuredBannerIndex,
-    openEventsIndex,
-    pastEventsIndex,
-  })) {
+  for (const [label, index] of Object.entries({ openEventsIndex, productStoryIndex })) {
     assert.notEqual(index, -1, `missing home section: ${label}`);
   }
-
-  assert.ok(institutionalIndex < featuredBannerIndex, 'hero video must open the home');
-  assert.ok(featuredBannerIndex < openEventsIndex, 'featured banner must render before open events');
-  assert.ok(openEventsIndex < pastEventsIndex, 'past events must stay last');
+  // Story 1.133: realizados ficam na aba Resultados, dentro da mesma seção.
+  assert.ok(openEventsIndex < productStoryIndex, 'product story closes the home');
+  // O hero institucional e o carrossel saíram da home; o vídeo voltou só como
+  // fundo do topo, pelo HeroVideo (Story 1.136).
+  assert.doesNotMatch(homePage, /<SectionOperations|<FeaturedEventBanner/);
+  assert.match(organizersView, /<SectionOperations \/>\s*<ProductStory \/>/);
 });
 
 test('event card renders artwork in the same 5:2 ratio required on upload', () => {
@@ -57,19 +53,14 @@ test('event card uses the established flat surfaces, tokens, and type hierarchy'
   assert.doesNotMatch(eventCard, /backdrop-blur|shadow-\[|font-black|#[0-9a-fA-F]{3,8}/);
 });
 
-test('featured banner shows the full artwork through next/image instead of a stretched background, at every screen size', () => {
-  assert.match(featuredBanner, /^import Image from 'next\/image';$/m);
-  assert.match(featuredBanner, /sizes="100vw"/);
-  assert.match(featuredBanner, /className="object-cover"/);
-  assert.doesNotMatch(featuredBanner, /backgroundImage/);
-});
-
-test('hero video opens the home with optimized WODArena media and safe fallbacks', () => {
-  assert.match(sectionOperations, /HERO_VIDEO_POSTER = '\/hero-vertical-poster\.jpg'/);
-  assert.match(sectionOperations, /prefers-reduced-motion: reduce/);
-  assert.match(sectionOperations, /preload="metadata"/);
-  assert.match(sectionOperations, /<source src="\/hero-vertical\.webm" type="video\/webm" \/>/);
-  assert.match(sectionOperations, /<source src="\/hero-vertical-h264\.mp4" type="video\/mp4" \/>/);
+test('hero video of the organizers page uses optimized WODArena media and safe fallbacks', () => {
+  // Story 1.136: a mídia mora no HeroVideo, usado também no topo da home.
+  assert.match(sectionOperations, /<HeroVideo\s/);
+  assert.match(heroVideo, /HERO_VIDEO_POSTER = '\/hero-vertical-poster\.jpg'/);
+  assert.match(heroVideo, /prefers-reduced-motion: reduce/);
+  assert.match(heroVideo, /preload="metadata"/);
+  assert.match(heroVideo, /<source src="\/hero-vertical\.webm" type="video\/webm" \/>/);
+  assert.match(heroVideo, /<source src="\/hero-vertical-h264\.mp4" type="video\/mp4" \/>/);
   assert.doesNotMatch(sectionOperations, /rochafit-hero/);
   assert.doesNotMatch(sectionOperations, /rochafit-logo-alpha|ROCHAFIT_LOGO_FALLBACK|mix-blend-screen/);
 
@@ -114,20 +105,15 @@ test('home entrance motion follows the Arena Broadcast package with reduced-moti
   assert.match(sectionOperations, /home-broadcast-title/);
   assert.match(sectionOperations, /home-broadcast-video/);
   assert.match(sectionOperations, /home-broadcast-chip/);
-  // O carrossel do hero tem pacote de movimento proprio (wa-hero-*). Ele saiu
-  // do namespace home-broadcast-* porque aquelas regras usam fill-mode "both",
-  // que fixa opacity: 1 e impedia a troca de slides, e porque reduced-motion
-  // forca opacity: 1 !important em todo [class*="home-broadcast-"].
-  assert.doesNotMatch(featuredBanner, /home-broadcast-/);
-  assert.match(globals, /@keyframes wa-hero-copy-in/);
-  assert.match(globals, /@media \(prefers-reduced-motion: no-preference\)[\s\S]*\.wa-hero__copy/);
-  assert.match(featuredBanner, /className="wa-hero/);
+  // Story 1.132: o carrossel saiu da home e levou junto o pacote wa-hero-*.
+  assert.doesNotMatch(globals, /wa-hero/);
   // Story 1.65: os cards saíram do namespace home-broadcast-* (entrada no
   // carregamento) e entram quando chegam na tela, via data-reveal no EventCard.
   // O wrapper só leva a coluna de cada card para a cascata entre colunas.
   assert.doesNotMatch(homePage, /home-broadcast-event-card/);
-  assert.equal((homePage.match(/className="event-card-slot h-full"/g) ?? []).length, 2);
-  assert.equal((homePage.match(/'--ec-col-sm': index % 2, '--ec-col-lg': index % 3/g) ?? []).length, 2);
+  // Story 1.132: uma grade só (EventGrid) para destaque, próximos e realizados.
+  assert.equal((homePage.match(/className="event-card-slot h-full"/g) ?? []).length, 1);
+  assert.equal((homePage.match(/'--ec-col-sm': index % 2, '--ec-col-lg': index % 3/g) ?? []).length, 1);
 });
 
 test('hero master and optimized derivatives keep the intended codecs and file weights', () => {
@@ -162,10 +148,8 @@ test('hero master and optimized derivatives keep the intended codecs and file we
   assert.ok(poster.size < 300_000, 'poster should stay under 300 KB');
 });
 
-test('featured banner opens the home, so its first artwork is the prioritized LCP candidate', () => {
-  // O banner voltou a ser o primeiro bloco visivel da home: a arte do slide
-  // inicial e o elemento LCP real e nao pode entrar por lazy loading. As
-  // demais artes continuam sob demanda.
-  assert.match(featuredBanner, /priority=\{isFirstSlide\}/);
-  assert.match(featuredBanner, /loading=\{isFirstSlide \? undefined : 'lazy'\}/);
+test('o primeiro card da home é o candidato a LCP e carrega com prioridade', () => {
+  assert.match(homePage, /<EventCard event=\{event\} priority=\{priorityFirst && index === 0\} \/>/);
+  assert.match(homePage, /<EventCard event=\{featuredEvent\} priority featured wide \/>/);
+  assert.match(homePage, /<EventGrid events=\{group\.events\} priorityFirst=\{index === 0 && !featuredEvent\} \/>/);
 });

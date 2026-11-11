@@ -318,8 +318,6 @@ test('card: três estados com textos nos três idiomas', () => {
 
   // Realizado: sem preço, sem divisões, botão de resultados; inscrição encerrada: "Ver programação".
   assert.match(eventCard, /\{priceLabel && !isPast && \(/);
-  assert.match(eventCard, /const showDivisions = divisionCount > 0 && isRegistrationAvailable;/);
-  assert.match(eventCard, /\{showDivisions && \(/);
   assert.match(eventCard, /href=\{isPast \? `\/event\/\$\{event\.id\}\/leaderboard` : `\/event\/\$\{event\.id\}`\}/);
   assert.match(eventCard, /\{isPast \? t\('viewResults'\) : t\('viewSchedule'\)\}/);
   assert.doesNotMatch(eventCard, /opacity-70 grayscale-\[30%\]/, 'o card inteiro não fica mais apagado');

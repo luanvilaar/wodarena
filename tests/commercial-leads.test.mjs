@@ -10,9 +10,11 @@ const migration = read('../supabase/migrations/20260620110000_commercial_leads.s
 const fixOwnerEmailMigration = read('../supabase/migrations/20260620123000_fix_owner_email_for_commercial_leads.sql');
 const route = read('../src/app/api/commercial-leads/route.ts');
 const resend = read('../src/lib/resend.ts');
-const homePage = read('../src/app/[locale]/HomeView.tsx');
-const banner = read('../src/components/home/FeaturedEventBanner.tsx');
-const combinedSource = homePage + '\n' + banner;
+// Story 1.132: o formulário saiu do modal da home para /organizadores.
+const leadForm = read('../src/components/home/CommercialLeadForm.tsx');
+const productStory = read('../src/components/home/ProductStory.tsx');
+const organizersView = read('../src/app/[locale]/organizadores/OrganizersView.tsx');
+const combinedSource = `${leadForm}\n${productStory}\n${organizersView}`;
 // Story 1.126: a seção Comercial virou componente; a página busca os leads.
 const ownerPage = `${read('../src/app/owner/page.tsx')}\n${read('../src/components/owner/OwnerCommercialSection.tsx')}`;
 const story = read('../docs/stories/1.14.story.md');
@@ -73,7 +75,7 @@ test('resend service exposes dedicated owner notification template', () => {
   assert.match(resend, /Data\/Hora do Cadastro/);
 });
 
-test('homepage renders the commercial campaign and inline form with privacy consent', () => {
+test('organizers page renders the commercial campaign and inline form with privacy consent', () => {
   // Copy foi extraída para src/messages/*.json (i18n) — o teste verifica que
   // o componente referencia as chaves de tradução certas e que o dicionário
   // pt-BR ainda carrega o texto original.

@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import NextLink from 'next/link';
 import Image from 'next/image';
 import { useLocale, useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
@@ -8,19 +9,24 @@ import { useApp } from '@/context/AppContext';
 import { RegisterModal } from '@/components/RegisterModal';
 import { RegistrationVoucher } from '@/components/RegistrationVoucher';
 import { EventLocationCard } from '@/components/EventLocationCard';
+import { EventRulesSheet } from '@/components/EventRulesSheet';
+import { EventBuyBar } from '@/components/EventBuyBar';
 import {
   Calendar, MapPin, Trophy, Share2, Ticket, Clock,
   Dumbbell, AlignLeft, ShieldCheck, ChevronRight, UserCheck, Medal,
-  Sparkles, Footprints, Lock, ChevronDown
+  Sparkles, Footprints, Lock, ChevronDown, FileText, ArrowRight
 } from 'lucide-react';
 import type { AppLocale, Registration, Athlete, EventScheduleItem, Workout } from '@/types';
-import { getEventStatus, getRegistrationAvailability } from '@/lib/eventStatus';
+import { getEventStatus, getEventTiming, getRegistrationAvailability } from '@/lib/eventStatus';
+import { formatEventPlace } from '@/lib/eventPlace';
 import { getHeatSlotLabel, resolveHeatParticipantSlots } from '@/lib/scheduleParticipants';
 import { getTeamDisplayName } from '@/lib/teamDisplay';
 import { getHeatGroupKey, isStageHeat } from '@/lib/heatStages';
 import { formatMoney } from '@/lib/intl/format';
 import { normalizeShirtMode } from '@/lib/shirtPricing';
 import { toBcp47 } from '@/i18n/locales';
+import { resolveGateway } from '@/lib/paymentGateway';
+import { publicDescription } from '@/lib/publicText';
 
 interface ScheduleHeatGroup {
   id: string;
@@ -147,6 +153,8 @@ export function EventView({ eventId }: { eventId: string }) {
   const tMap = useTranslations('Event.map');
   const tWorkouts = useTranslations('Event.workouts');
   const tSidebar = useTranslations('Event.sidebar');
+  const tTop = useTranslations('Event.top');
+  const tCard = useTranslations('EventCard');
   const locale = useLocale() as AppLocale;
 
   const {
@@ -163,6 +171,8 @@ export function EventView({ eventId }: { eventId: string }) {
   const [activeTab, setActiveTab] = useState<'details' | 'divisions' | 'schedule' | 'workouts'>('details');
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
   const [shareFeedback, setShareFeedback] = useState(false);
+  const [isRulesOpen, setIsRulesOpen] = useState(false);
+  const closeRules = useCallback(() => setIsRulesOpen(false), []);
   const [paymentNotice, setPaymentNotice] = useState<{ text: string; tone: 'success' | 'error' } | null>(null);
   const [confirmedVoucher, setConfirmedVoucher] = useState<{ registration: Registration; athlete: Athlete } | null>(null);
   const [selectedDivisionForCourseId, setSelectedDivisionForCourseId] = useState<string>('');
@@ -550,6 +560,33 @@ export function EventView({ eventId }: { eventId: string }) {
     ? formatMoney(shirtAddonPrice, event.currency ?? 'BRL', locale)
     : null;
 
+  // Topo e barra fixa (Story 1.131, P5 de docs/design/mobile-competitivo/).
+  const activeDivisions = (event.divisions ?? []).filter((division) => division.isActive !== false);
+  const cheapestDivision = [...activeDivisions].sort((a, b) => a.price - b.price)[0];
+  const priceUnitLabel = !cheapestDivision
+    ? null
+    : cheapestDivision.type === 'individual'
+      ? tTop('perAthlete')
+      : cheapestDivision.type === 'duo'
+        ? tTop('perDuo')
+        : cheapestDivision.type === 'trio'
+          ? tTop('perTrio')
+          : tTop('perTeam');
+  const rulesText = (event.rules ?? '').trim();
+  const placeLabel = event.city ? formatEventPlace({ city: event.city, state: event.state }) : '';
+  const showPlaceSuffix = Boolean(placeLabel) && !event.location.toLowerCase().includes((event.city ?? '').trim().toLowerCase());
+  const timing = getEventTiming(event);
+  const timingLabel = !timing || lifecycle === 'finished'
+    ? null
+    : timing.kind === 'upcoming'
+      ? (timing.days === 1 ? tCard('timingTomorrow') : tCard('timingInDays', { count: timing.days }))
+      : timing.kind === 'today'
+        ? tCard('timingToday')
+        : timing.kind === 'ongoing'
+          ? tCard('timingOngoing')
+          : null;
+  const showResultsInBar = lifecycle === 'finished' || event.status === 'live';
+
   // Copiar link para compartilhar
   const handleShare = () => {
     if (typeof window !== 'undefined') {
@@ -636,115 +673,124 @@ export function EventView({ eventId }: { eventId: string }) {
   return (
     <div className="min-h-screen bg-background pb-16">
 
-      {/* Hero Banner */}
-      <section className="relative h-[390px] w-full overflow-hidden border-b border-card-border bg-dark-gray md:h-[470px]">
-        {event.bannerUrl ? (
-          <Image
-            src={event.bannerUrl}
-            alt={`${event.name} banner`}
-            width="1600"
-            height="640"
-            unoptimized
-            priority
-            className="h-full w-full object-cover opacity-55"
-          />
-        ) : (
-          <div className="h-full w-full bg-gradient-to-br from-dark-gray to-background opacity-55" />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/45 to-black/50"></div>
-
-        {/* Informações Sobrepostas no Banner */}
-        <div className="absolute bottom-0 left-0 right-0 py-8">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row md:items-end justify-between gap-6">
-
-            {/* Esquerda: Logo e Infos Básicas */}
-            <div className="flex flex-col sm:flex-row items-center sm:items-end gap-5 text-center sm:text-left">
-              <div className="h-24 w-24 shrink-0 overflow-hidden rounded-xl border border-card-border bg-background p-2 md:h-32 md:w-32">
-                {event.logoUrl ? (
-                  <Image
-                    src={event.logoUrl}
-                    alt={`${event.name} logo`}
-                    width="128"
-                    height="128"
-                    unoptimized
-                    className="h-full w-full rounded-lg object-cover"
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center rounded-lg bg-primary/10 text-2xl font-black uppercase text-primary">
-                    {event.name.substring(0, 2)}
-                  </div>
-                )}
+      {/* Topo (Story 1.131): banner inteiro e, abaixo dele (ao lado no computador),
+          status, nome, data, local, formato e documentos. */}
+      <section className="border-b border-card-border">
+        <div className="mx-auto grid max-w-7xl gap-5 sm:px-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] lg:items-center lg:gap-10 lg:px-8 lg:py-10">
+          <div className="relative aspect-[5/2] w-full overflow-hidden bg-dark-gray sm:mt-6 sm:rounded-xl sm:border sm:border-card-border lg:mt-0">
+            {event.bannerUrl ? (
+              <Image
+                src={event.bannerUrl}
+                alt={`${event.name} banner`}
+                fill
+                unoptimized
+                priority
+                sizes="(max-width: 1024px) 100vw, 60vw"
+                className="object-cover"
+              />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center">
+                <span className="type-display text-4xl text-primary">{event.name.substring(0, 2)}</span>
               </div>
+            )}
+          </div>
 
-              <div className="space-y-2">
-                <div className="flex items-center justify-center sm:justify-start gap-2">
-                  {getStatusLabel()}
-                </div>
-                <h1 className="text-balance text-3xl font-extrabold uppercase tracking-tight text-white sm:text-5xl">
-                  {event.name}
-                </h1>
-
-                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-3 gap-y-1.5 text-xs text-muted">
-                  <span className="flex items-center gap-1.5">
-                    <Calendar className="h-3.5 w-3.5 text-muted shrink-0" />
-                    <span className="font-semibold text-white">{event.date}</span>
-                  </span>
-                  <span className="text-card-border/60 hidden sm:inline">•</span>
-                  <span className="flex items-center gap-1.5">
-                    <MapPin className="h-3.5 w-3.5 text-muted shrink-0" />
-                    <span className="font-semibold text-white">{event.location}</span>
-                  </span>
-                  <span className="text-card-border/60 hidden sm:inline">•</span>
-                  <span className="flex items-center gap-1.5 capitalize">
-                    <Dumbbell className="h-3.5 w-3.5 text-muted shrink-0" />
-                    <span className="font-semibold text-white">{t('formatLabel', { format: event.format || 'individual' })}</span>
-                  </span>
-                </div>
-              </div>
+          <div className="flex min-w-0 flex-col gap-4 px-4 pb-6 sm:px-0 lg:pb-0">
+            <div className="flex flex-wrap items-center gap-2">
+              {getStatusLabel()}
+              {timingLabel && (
+                <span className="inline-flex items-center gap-1.5 rounded-[2px] border border-card-border px-2 py-0.5 font-number text-[10px] font-bold uppercase tracking-wider text-foreground tabular-nums">
+                  <Clock className="h-3 w-3" aria-hidden="true" />
+                  {timingLabel}
+                </span>
+              )}
             </div>
 
-            {/* Direita: Botões Rápidos */}
-            <div className="flex flex-row justify-center md:justify-end gap-3 w-full md:w-auto">
+            <h1 className="type-display text-balance text-[1.75rem] text-white sm:text-5xl">
+              {event.name}
+            </h1>
+
+            <div className="grid gap-2 text-sm text-muted">
+              <span className="flex items-start gap-2">
+                <Calendar className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                <span className="font-semibold text-white">{event.date}{event.time ? ` · ${event.time}` : ''}</span>
+              </span>
+              <span className="flex items-start gap-2">
+                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                <span className="min-w-0">
+                  <span className="font-semibold text-white">{event.location}</span>
+                  {showPlaceSuffix && <span> · {placeLabel}</span>}
+                </span>
+              </span>
+              <span className="flex items-start gap-2">
+                <Dumbbell className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                <span className="font-semibold capitalize text-white">
+                  {t('formatLabel', { format: event.format || 'individual' })}
+                  {activeDivisions.length > 0 && <span className="normal-case text-muted"> · {tTop('divisionsCount', { count: activeDivisions.length })}</span>}
+                </span>
+              </span>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {rulesText && (
+                <button
+                  type="button"
+                  onClick={() => setIsRulesOpen(true)}
+                  className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-md border border-card-border bg-dark-gray px-4 text-sm font-bold text-white transition-colors hover:border-primary sm:flex-initial"
+                >
+                  <FileText className="h-4 w-4 text-primary" aria-hidden="true" />
+                  {tTop('rules')}
+                </button>
+              )}
               <button
+                type="button"
                 onClick={handleShare}
-                className="flex flex-1 sm:flex-initial min-h-11 items-center justify-center gap-1.5 rounded-md border border-card-border bg-dark-gray px-5 py-3 text-xs font-bold text-white transition-colors hover:border-primary"
+                className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-md border border-card-border bg-dark-gray px-4 text-sm font-bold text-white transition-colors hover:border-primary sm:flex-initial"
               >
-                <Share2 className="h-4 w-4 text-white" />
+                <Share2 className="h-4 w-4 text-primary" aria-hidden="true" />
                 <span>{shareFeedback ? t('copied') : t('share')}</span>
               </button>
 
+              {/* No computador a barra fixa some; o botão principal fica no topo. */}
               {(event.status === 'upcoming' || isQualifierEvent) && (
                 <button
+                  type="button"
                   disabled={!registrationsAvailable}
                   onClick={() => {
                     if (registrationsAvailable) setIsRegisterOpen(true);
                   }}
-                  className={`flex flex-1 sm:flex-initial min-h-11 items-center justify-center gap-1.5 rounded-md px-6 py-3 text-xs font-bold uppercase transition-colors ${
+                  className={`hidden min-h-11 items-center justify-center gap-2 rounded-md px-6 text-sm font-bold uppercase tracking-wider transition-colors lg:flex ${
                     registrationsAvailable
-                      ? 'bg-primary text-ink hover:bg-primary-hover active:scale-95'
-                      : 'bg-muted/10 text-muted border border-card-border cursor-not-allowed'
+                      ? 'bg-primary text-ink hover:bg-primary-hover'
+                      : 'cursor-not-allowed border border-card-border bg-muted/10 text-muted'
                   }`}
                 >
-                  <Ticket className="h-4 w-4" />
+                  <Ticket className="h-4 w-4" aria-hidden="true" />
                   <span>{registrationsAvailable ? t('buyTicket') : registrationAvailability.reason === 'sales_closed' ? t('salesClosed') : t('registrationsClosed')}</span>
                 </button>
               )}
             </div>
 
+            {registrationsAvailable && (
+              <NextLink href="/admin#inscricoes" className="inline-flex min-h-11 items-center gap-1.5 self-start text-sm font-bold text-primary hover:underline">
+                {tTop('alreadyRegistered')}
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </NextLink>
+            )}
+
             {registrationAvailability.reason === 'sales_closed' && (event.status === 'upcoming' || isQualifierEvent) && (
-              <p role="status" className="text-center text-xs font-semibold text-gray-300 md:text-right">
+              <p role="status" className="text-xs font-semibold text-muted">
                 {t('salesClosedNotice')}
               </p>
             )}
-
           </div>
         </div>
       </section>
 
-      {/* Navegação por Abas Rápidas */}
-      <section className="sticky top-16 z-40 border-b border-card-border bg-background">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex overflow-x-auto gap-1.5 py-3 scrollbar-none sm:gap-2">
+      {/* Abas (Story 1.131): nomes do atleta, sublinhado na ativa, Ranking na mesma aba. */}
+      <section className="sticky top-16 z-20 border-b border-card-border bg-background">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="flex gap-6 overflow-x-auto scrollbar-none">
             {[
               { id: 'details', label: t('tabs.details'), icon: AlignLeft, isLink: false },
               { id: 'divisions', label: t('tabs.divisions'), icon: Trophy, isLink: false },
@@ -753,22 +799,15 @@ export function EventView({ eventId }: { eventId: string }) {
               { id: 'leaderboard', label: t('tabs.leaderboard'), icon: Medal, isLink: true }
             ].map((tab) => {
               const Icon = tab.icon;
-              const classes = `flex min-h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border px-3 py-2 text-xs font-extrabold uppercase tracking-wider transition-colors sm:px-4 ${
-                activeTab === tab.id
-                  ? 'bg-primary/10 border-primary text-primary font-black'
-                  : 'bg-transparent text-muted border-transparent hover:text-white hover:border-card-border'
+              const isActive = activeTab === tab.id;
+              const classes = `flex min-h-12 shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 text-sm font-bold transition-colors ${
+                isActive ? 'border-primary text-white' : 'border-transparent text-muted hover:text-white'
               }`;
 
               if (tab.isLink) {
                 return (
-                  <Link
-                    key={tab.id}
-                    href={`/event/${event.id}/leaderboard`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={classes}
-                  >
-                    <Icon className="h-3.5 w-3.5" />
+                  <Link key={tab.id} href={`/event/${event.id}/leaderboard`} className={classes}>
+                    <Icon className="h-4 w-4" aria-hidden="true" />
                     <span>{tab.label}</span>
                   </Link>
                 );
@@ -777,10 +816,12 @@ export function EventView({ eventId }: { eventId: string }) {
               return (
                 <button
                   key={tab.id}
+                  type="button"
+                  aria-current={isActive ? 'page' : undefined}
                   onClick={() => handleTabChange(tab.id as typeof activeTab)}
                   className={classes}
                 >
-                  <Icon className="h-3.5 w-3.5" />
+                  <Icon className="h-4 w-4" aria-hidden="true" />
                   <span>{tab.label}</span>
                 </button>
               );
@@ -816,9 +857,11 @@ export function EventView({ eventId }: { eventId: string }) {
                   <h3 className="text-lg font-black text-white uppercase tracking-wider border-b border-card-border pb-3">
                     {tDetails('heading')}
                   </h3>
-                  <p className="text-sm text-muted leading-relaxed whitespace-pre-wrap font-normal">
-                    {event.description}
-                  </p>
+                  {publicDescription(event.description) && (
+                    <p className="text-sm text-muted leading-relaxed whitespace-pre-wrap font-normal">
+                      {publicDescription(event.description)}
+                    </p>
+                  )}
                   <div className="pt-4 border-t border-card-border/50 grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <h4 className="text-xs font-bold text-primary uppercase tracking-wider">{tDetails('scheduleHeading')}</h4>
@@ -1328,9 +1371,11 @@ export function EventView({ eventId }: { eventId: string }) {
                                   {tWorkouts('formatLabel', { format: tWorkouts(formatKey) })}
                                 </span>
                               </div>
-                              <p className="text-xs text-muted leading-relaxed whitespace-pre-line font-medium">
-                                {totalWorkout.description}
-                              </p>
+                              {publicDescription(totalWorkout.description) && (
+                                <p className="text-xs text-muted leading-relaxed whitespace-pre-line font-medium">
+                                  {publicDescription(totalWorkout.description)}
+                                </p>
+                              )}
                             </div>
                           );
                         })()}
@@ -1440,9 +1485,11 @@ export function EventView({ eventId }: { eventId: string }) {
                               )}
                             </div>
                           </div>
-                          <p className="text-xs text-muted leading-relaxed whitespace-pre-line font-medium">
-                            {wod.description}
-                          </p>
+                          {publicDescription(wod.description) && (
+                            <p className="text-xs text-muted leading-relaxed whitespace-pre-line font-medium">
+                              {publicDescription(wod.description)}
+                            </p>
+                          )}
                         </div>
                       );
                     })}
@@ -1457,8 +1504,9 @@ export function EventView({ eventId }: { eventId: string }) {
           <div className="space-y-6">
 
             {/* Card de Inscrição na Lateral */}
+            {/* Abaixo de 1024 px a barra fixa faz o papel deste card (Story 1.131). */}
             {registrationsAvailable && (
-              <div className="space-y-4 rounded-xl border border-card-border bg-card p-6 transition-colors hover:border-primary">
+              <div className="hidden space-y-4 rounded-xl border border-card-border bg-card p-6 transition-colors hover:border-primary lg:block">
                 <h4 className="text-sm font-bold text-white uppercase tracking-wider">{tSidebar('registrationHeading')}</h4>
                 <p className="text-xs text-muted font-normal leading-relaxed">
                   {tSidebar('registrationDescription')}
@@ -1476,10 +1524,11 @@ export function EventView({ eventId }: { eventId: string }) {
                       })}
                     </p>
                   )}
-                  <div className="flex justify-between items-center text-xs text-muted">
-                    <span>{tSidebar('secureGateway')}</span>
-                    <span className="text-white font-semibold flex items-center gap-1">
-                      <ShieldCheck className="h-4 w-4 text-muted" /> {tSidebar('sandbox')}
+                  <div className="flex justify-between items-center gap-3 text-xs text-muted">
+                    <span>{tSidebar('securePayment')}</span>
+                    <span className="text-white font-semibold flex items-center gap-1 text-right">
+                      <ShieldCheck className="h-4 w-4 shrink-0 text-muted" aria-hidden="true" />
+                      {resolveGateway(event) === 'stripe' ? tSidebar('gatewayStripe') : tSidebar('gatewayMercadoPago')}
                     </span>
                   </div>
                 </div>
@@ -1518,43 +1567,79 @@ export function EventView({ eventId }: { eventId: string }) {
               </div>
             )}
 
-            {/* Suporte Técnico / Dúvidas */}
-            <div className="space-y-2 rounded-xl border border-card-border bg-card p-5 text-center">
-              <UserCheck className="h-5 w-5 text-muted mx-auto" />
-              <h4 className="text-xs font-bold text-white uppercase tracking-wider">{tSidebar('supportHeading')}</h4>
-              <p className="text-[10px] text-muted leading-relaxed">
-                {tSidebar('supportDescription')}
-              </p>
-              {(event.instagram || event.website) && (
-                <div className="pt-2 flex flex-col gap-1.5 items-center">
-                  {event.instagram && (
-                    <a
-                      href={`https://instagram.com/${event.instagram.replace(/^@/, '')}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[10px] font-bold text-primary hover:underline uppercase tracking-wider"
-                    >
-                      {tSidebar('instagramLink')}
-                    </a>
-                  )}
-                  {event.website && (
-                    <a
-                      href={event.website.startsWith('http') ? event.website : `https://${event.website}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[10px] font-bold text-primary hover:underline uppercase tracking-wider"
-                    >
-                      {tSidebar('websiteLink')}
-                    </a>
-                  )}
-                </div>
-              )}
+            {/* Organização do evento (Story 1.135): contatos visíveis e a central de ajuda. */}
+            <div className="space-y-3 rounded-xl border border-card-border bg-card p-5">
+              <h4 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-white">
+                <UserCheck className="h-4 w-4 text-primary" aria-hidden="true" />
+                {tSidebar('organizerHeading')}
+              </h4>
+              <p className="text-sm leading-6 text-muted">{tSidebar('organizerDescription')}</p>
+              <div className="flex flex-col">
+                {event.instagram && (
+                  <a
+                    href={`https://instagram.com/${event.instagram.replace(/^@/, '')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex min-h-11 items-center gap-2 text-sm font-bold text-primary hover:underline"
+                  >
+                    {tSidebar('instagramLink')} · @{event.instagram.replace(/^@/, '')}
+                  </a>
+                )}
+                {event.website && (
+                  <a
+                    href={event.website.startsWith('http') ? event.website : `https://${event.website}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex min-h-11 items-center gap-2 text-sm font-bold text-primary hover:underline"
+                  >
+                    {tSidebar('websiteLink')}
+                  </a>
+                )}
+                <Link href="/ajuda" className="inline-flex min-h-11 items-center gap-2 text-sm font-bold text-white hover:text-primary">
+                  {tSidebar('helpCenterLink')}
+                  <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                </Link>
+              </div>
             </div>
 
           </div>
 
         </div>
       </section>
+
+      {registrationsAvailable ? (
+        <EventBuyBar
+          mode="register"
+          fromLabel={tTop('from')}
+          priceLabel={formattedMinPrice}
+          unitLabel={priceUnitLabel}
+          ctaLabel={t('buyTicket')}
+          onRegister={() => setIsRegisterOpen(true)}
+        />
+      ) : showResultsInBar ? (
+        <EventBuyBar
+          mode="results"
+          notice={lifecycle === 'finished' ? t('statusLabels.finished') : t('statusLabels.live')}
+          ctaLabel={tTop('viewResults')}
+          href={`/event/${event.id}/leaderboard`}
+        />
+      ) : (
+        <EventBuyBar
+          mode="schedule"
+          notice={t('registrationsClosed')}
+          ctaLabel={tTop('viewSchedule')}
+          onSchedule={() => handleTabChange('schedule')}
+        />
+      )}
+
+      <EventRulesSheet
+        open={isRulesOpen}
+        title={tTop('rules')}
+        eventName={event.name}
+        rules={rulesText}
+        closeLabel={tTop('closeRules')}
+        onClose={closeRules}
+      />
 
       <RegisterModal
         event={event}

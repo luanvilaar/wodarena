@@ -7,7 +7,7 @@ import { getEventStatus } from '@/lib/eventStatus';
 export const isFeaturedHomeCandidate = (event: Pick<Event, 'status' | 'date' | 'registrationDeadline'> & Partial<Pick<Event, 'startDate' | 'endDate' | 'timeZone'>>) =>
   (event.status === 'live' || event.status === 'upcoming') && getEventStatus(event) !== 'finished';
 
-/** Destaque salvo que saiu do carrossel; null quando não há destaque ou ele segue no ar. */
+/** Destaque salvo que saiu da home; null quando não há destaque ou ele segue no ar. */
 export const findFeaturedHomeEventOffAir = <T extends Pick<Event, 'isFeatured'> & Parameters<typeof isFeaturedHomeCandidate>[0]>(events: T[]): T | null => {
   const featured = events.find(event => event.isFeatured);
   return featured && !isFeaturedHomeCandidate(featured) ? featured : null;

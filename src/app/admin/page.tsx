@@ -1892,7 +1892,7 @@ export default function AdminPage() {
         startDate: eventDates.startDate,
         endDate: eventDates.endDate,
         location: eventLocation,
-        description: eventDescription || 'Sem descrição cadastrada.',
+        description: eventDescription.trim(),
         status: eventStatus,
         logoUrl: eventLogo || 'https://images.unsplash.com/photo-1599058917212-d750089bc07e?q=80&w=200&auto=format&fit=crop',
         bannerUrl: eventBanner || 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?q=80&w=1200&auto=format&fit=crop',
@@ -2503,7 +2503,7 @@ export default function AdminPage() {
     try {
       const workoutData: Omit<Workout, 'id'> = {
         name: wodName,
-        description: wodDescription || 'Sem descrição cadastrada.',
+        description: wodDescription.trim(),
         type: legacyFields ? legacyFields.type : wodType,
         timeCap: (legacyFields ? legacyFields.timeCap : wodTimeCap) || undefined,
         code: wodCode,

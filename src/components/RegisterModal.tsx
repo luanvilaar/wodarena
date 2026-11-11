@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useMemo, useState, useEffect, useCallback } from 'react';
-import { Check, CreditCard, ShieldCheck, Ticket, X, Lock } from 'lucide-react';
+import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
+import { ArrowLeft, ArrowRight, Check, CreditCard, ShieldCheck, X, Lock } from 'lucide-react';
 import Script from 'next/script';
 import { useLocale, useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
@@ -12,6 +12,7 @@ import { normalizeInstagram } from '@/lib/fitnessRacing';
 import { getRegistrationAvailability } from '@/lib/eventStatus';
 import { calculateServiceFee } from '@/lib/serviceFee';
 import { formatMoney, toMinorUnits } from '@/lib/intl/format';
+import { clearRegistrationDraft, readRegistrationDraft, writeRegistrationDraft } from '@/lib/registrationDraft';
 import {
   calculateRegistrationAmounts,
   getDivisionParticipantCount,
@@ -98,6 +99,21 @@ const createEmptyParticipant = (): ParticipantForm => ({
   shirtSize: ''
 });
 
+// sessionStorage pode lançar em aba privada ou com dados do site bloqueados.
+const getSessionStorage = (): Storage | null => {
+  try {
+    return typeof window === 'undefined' ? null : window.sessionStorage;
+  } catch {
+    return null;
+  }
+};
+
+type CheckoutStep = 1 | 2 | 3;
+
+const fieldClass =
+  'w-full min-h-12 rounded-lg border border-card-border bg-dark-gray px-4 text-base text-white placeholder:text-muted focus:border-primary focus:outline-none sm:text-sm';
+const labelClass = 'mb-1.5 block text-xs font-bold text-foreground';
+
 const generateUniqueId = (prefix: string) => {
   return `${prefix}-${Date.now()}`;
 };
@@ -165,6 +181,11 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess: onSuccessProp
   const [serverUpdatedCheckout, setServerUpdatedCheckout] = useState<ServerUpdatedCheckout | null>(null);
   const [amountsUpdatedNotice, setAmountsUpdatedNotice] = useState<string | null>(null);
   const [confirmedVoucher, setConfirmedVoucher] = useState<{ registration: Registration; athlete: Athlete } | null>(null);
+  // Etapas da inscrição (Story 1.134): categoria, atletas (um por vez) e pagamento.
+  const [step, setStep] = useState<CheckoutStep>(1);
+  const [athleteStep, setAthleteStep] = useState(0);
+  const [stepError, setStepError] = useState<string | null>(null);
+  const stepBodyRef = useRef<HTMLDivElement>(null);
 
   // Sucesso da inscrição (Pix aprovado ou gratuita): o comprovante único abre aqui, em
   // qualquer tela que use o modal (Story 1.73). O onSuccess de quem chamou só é avisado.
@@ -189,7 +210,40 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess: onSuccessProp
     setSecurityCode('');
     setAthletePassword('');
     setAthletePasswordConfirmation('');
+    setStep(1);
+    setAthleteStep(0);
+    setStepError(null);
+    // Rascunho da mesma aba (Story 1.134): volta o que já foi digitado, nunca senha ou CPF.
+    const draft = isOpen ? readRegistrationDraft(getSessionStorage(), event.id) : null;
+    if (draft) {
+      if (event.divisions.some((division) => division.id === draft.divisionId)) setSelectedDivisionId(draft.divisionId);
+      setTeamName(draft.teamName);
+      setBox(draft.box);
+      if (draft.participants.length > 0) {
+        setParticipants(draft.participants.map((participant) => ({
+          ...createEmptyParticipant(),
+          ...participant,
+          gender: participant.gender === 'female' ? 'female' : 'male'
+        })));
+      }
+    }
   }
+
+  useEffect(() => {
+    if (!isOpen || isSuccess || confirmedVoucher) return;
+    writeRegistrationDraft(getSessionStorage(), event.id, {
+      divisionId: selectedDivisionId,
+      teamName,
+      box,
+      participants: participants.map(({ name, email, phone, gender, instagram, shirtSize, birthDate, city, state }) => ({
+        name, email, phone, gender, instagram, shirtSize, birthDate, city, state
+      }))
+    });
+  }, [isOpen, isSuccess, confirmedVoucher, event.id, selectedDivisionId, teamName, box, participants]);
+
+  useEffect(() => {
+    if (isSuccess || confirmedVoucher) clearRegistrationDraft(getSessionStorage(), event.id);
+  }, [isSuccess, confirmedVoucher, event.id]);
 
   // Polling para verificar status do pagamento Pix
   useEffect(() => {
@@ -437,7 +491,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess: onSuccessProp
     }
 
     const hasMissingRequiredParticipantData = visibleParticipants.some((participant) => {
-      if (!participant.name || !participant.gender || !participant.shirtSize || !participant.email || !participant.phone || !participant.instagram) return true;
+      if (!participant.name || !participant.gender || !participant.shirtSize || !participant.email || !participant.phone) return true;
       if (isFitnessRacing) return !participant.birthDate || !participant.city || !participant.state;
       return false;
     });
@@ -713,19 +767,19 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess: onSuccessProp
     const isSalesClosed = registrationAvailability.reason === 'sales_closed';
     return (
       <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4">
-        <div className="transactional-surface relative w-full max-w-md rounded-xl p-6 text-center" role="alertdialog" aria-modal="true" aria-labelledby="registration-unavailable-title">
+        <div className="relative w-full max-w-md rounded-2xl border border-card-border bg-card p-6 text-center" role="alertdialog" aria-modal="true" aria-labelledby="registration-unavailable-title">
           <button
             onClick={onClose}
-            className="absolute right-3 top-3 flex h-11 w-11 items-center justify-center rounded-md text-muted-soft transition-colors hover:bg-surface-soft-light hover:text-ink"
+            className="absolute right-3 top-3 flex h-11 w-11 items-center justify-center rounded-md text-muted transition-colors hover:bg-elevated hover:text-white"
             aria-label={t('closeNoticeAria')}
           >
             <X className="h-5 w-5" aria-hidden="true" />
           </button>
           <Lock className="mx-auto h-10 w-10 text-muted" aria-hidden="true" />
-          <h3 id="registration-unavailable-title" className="mt-4 text-lg font-bold text-ink">
+          <h3 id="registration-unavailable-title" className="mt-4 text-lg font-bold text-white">
             {isSalesClosed ? t('salesClosedTitle') : t('registrationsClosedTitle')}
           </h3>
-          <p className="mt-2 text-sm leading-6 text-muted-soft">
+          <p className="mt-2 text-sm leading-6 text-muted">
             {isSalesClosed
               ? t('salesClosedDescription')
               : t('registrationsClosedDescription')}
@@ -738,43 +792,130 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess: onSuccessProp
     );
   }
 
+  // Navegação entre etapas (Story 1.134). "Continuar" valida só os campos da
+  // tela atual; as telas anteriores já passaram pela mesma checagem.
+  const typeLabel = (type: Division['type'] | undefined) => {
+    switch (type) {
+      case 'duo': return t('typeDuo');
+      case 'trio': return t('typeTrio');
+      case 'team': return t('typeTeam');
+      case 'team4': return t('typeTeam4');
+      case 'team6': return t('typeTeam6');
+      default: return t('typeIndividual');
+    }
+  };
+
+  const scrollStepToTop = () => {
+    stepBodyRef.current?.closest('[data-checkout-scroll]')?.scrollTo({ top: 0 });
+  };
+
+  const validateCurrentStep = () => {
+    const fields = stepBodyRef.current?.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input, select') ?? [];
+    for (const field of Array.from(fields)) {
+      if (!field.checkValidity()) {
+        field.reportValidity();
+        return false;
+      }
+    }
+    if (step === 2 && athleteStep === 0 && athletePassword !== athletePasswordConfirmation) {
+      setStepError(t('passwordMismatch'));
+      return false;
+    }
+    setStepError(null);
+    return true;
+  };
+
+  const goNext = () => {
+    if (!validateCurrentStep()) return;
+    if (step === 1) {
+      setStep(2);
+      setAthleteStep(0);
+    } else if (step === 2 && athleteStep < participantCount - 1) {
+      setAthleteStep(athleteStep + 1);
+    } else {
+      setStep(3);
+    }
+    scrollStepToTop();
+  };
+
+  const goBack = () => {
+    setStepError(null);
+    if (step === 3) {
+      setStep(2);
+      setAthleteStep(Math.max(0, participantCount - 1));
+    } else if (step === 2 && athleteStep > 0) {
+      setAthleteStep(athleteStep - 1);
+    } else {
+      setStep(1);
+    }
+    scrollStepToTop();
+  };
+
+  const canGoBack = !isSuccess && !pixData && (step > 1 || athleteStep > 0);
+  const stepLabels = [t('stepCategory'), t('stepAthletes'), t('stepPayment')];
+  const currentParticipant = visibleParticipants[athleteStep] || createEmptyParticipant();
+  const index = athleteStep;
+  const participant = currentParticipant;
+
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4">
-      <div className="transactional-surface relative flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-xl" role="dialog" aria-modal="true" aria-labelledby="registration-title">
-        <div className="flex items-center justify-between border-b border-hairline-light px-5 py-4">
+    <div className="fixed inset-0 z-[60] flex bg-background sm:items-center sm:justify-center sm:bg-black/80 sm:p-4">
+      <div className="relative flex h-[100dvh] w-full flex-col overflow-hidden bg-background text-foreground sm:h-auto sm:max-h-[92vh] sm:max-w-xl sm:rounded-2xl sm:border sm:border-card-border" role="dialog" aria-modal="true" aria-labelledby="registration-title">
+        <div className="border-b border-card-border px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] sm:px-5 sm:pt-4">
           <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary">
-              <Ticket className="h-4 w-4 text-ink" aria-hidden="true" />
+            {canGoBack ? (
+              <button
+                type="button"
+                onClick={goBack}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-card-border text-white transition-colors hover:border-primary"
+                aria-label={t('backStepAria')}
+              >
+                <ArrowLeft className="h-5 w-5" aria-hidden="true" />
+              </button>
+            ) : null}
+            <div className="min-w-0 flex-1">
+              <h3 id="registration-title" className="truncate text-base font-bold text-white">{event.name}</h3>
+              <p className="text-xs text-muted">{t('title')}</p>
             </div>
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#9a7200]">{t('kicker')}</p>
-              <h3 id="registration-title" className="text-base font-bold text-ink">{t('title')}</h3>
-            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-card-border text-white transition-colors hover:border-primary"
+              aria-label={t('closeModalAria')}
+            >
+              <X className="h-5 w-5" aria-hidden="true" />
+            </button>
           </div>
-          <button
-            onClick={onClose}
-            className="flex h-11 w-11 items-center justify-center rounded-md text-muted-soft transition-colors hover:bg-surface-soft-light hover:text-ink"
-            aria-label={t('closeModalAria')}
-          >
-            <X className="h-5 w-5" aria-hidden="true" />
-          </button>
+
+          {!isSuccess && !pixData && (
+            <div className="mt-3" aria-label={t('stepProgress', { current: step, total: 3 })}>
+              <div className="grid grid-cols-3 gap-1.5" aria-hidden="true">
+                {[1, 2, 3].map((item) => (
+                  <span key={item} className={`h-1 rounded-full ${item <= step ? 'bg-primary' : 'bg-card-border'}`} />
+                ))}
+              </div>
+              <div className="mt-2 flex items-center justify-between text-xs font-semibold">
+                <span className="text-white">{stepLabels[step - 1]}</span>
+                <span className="text-muted">{t('stepCounter', { current: step, total: 3 })}</span>
+              </div>
+            </div>
+          )}
         </div>
 
-        <div className="flex-1 space-y-6 overflow-y-auto overscroll-contain p-6">
-          {isSuccess ? (
+        {isSuccess ? (
+          <div className="flex-1 overflow-y-auto overscroll-contain p-6">
             <div className="text-center py-4 space-y-6" role="status" aria-live="polite">
               <div className="space-y-2">
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 border border-primary/20">
                   <Check className="h-6 w-6 text-primary" aria-hidden="true" />
                 </div>
-                <h4 className="text-xl font-black tracking-tight text-ink uppercase">{t('successTitle')}</h4>
-                <p className="mx-auto max-w-sm text-xs leading-relaxed text-muted-soft">
+                <h4 className="type-display text-xl text-white">{t('successTitle')}</h4>
+                <p className="mx-auto max-w-sm text-sm leading-relaxed text-muted">
                   {t('successDescription')}
                 </p>
               </div>
 
               {amountsUpdatedNotice && (
-                <p className="mx-auto max-w-sm rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs font-semibold leading-5 text-ink">
+                <p className="mx-auto max-w-sm rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs font-semibold leading-5 text-white">
                   {amountsUpdatedNotice}
                 </p>
               )}
@@ -783,22 +924,24 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess: onSuccessProp
               <div className="space-y-3 pt-2">
                 <button
                   onClick={onClose}
-                  className="h-12 w-full rounded-md bg-primary font-black uppercase text-ink tracking-wider text-xs transition-colors hover:bg-primary-hover shadow-lg cursor-pointer"
+                  className="h-12 w-full rounded-md bg-primary font-black uppercase text-ink tracking-wider text-xs transition-colors hover:bg-primary-hover cursor-pointer"
                 >
                   {t('backToEvents')}
                 </button>
               </div>
             </div>
-          ) : pixData ? (
+          </div>
+        ) : pixData ? (
+          <div className="flex-1 overflow-y-auto overscroll-contain p-6">
             <div className="space-y-6 py-4" role="region" aria-label={t('pixRegionAria')}>
               <div className="text-center space-y-2">
-                <p className="text-xs font-bold uppercase tracking-widest text-[#9a7200]">{t('preRegisteredLabel')}</p>
-                <h4 className="text-lg font-black text-ink uppercase">{t('payWithPixTitle')}</h4>
-                <p className="text-xs text-muted-soft leading-relaxed">{t('pixInstructions')}</p>
+                <p className="text-xs font-bold uppercase tracking-widest text-primary">{t('preRegisteredLabel')}</p>
+                <h4 className="type-display text-lg text-white">{t('payWithPixTitle')}</h4>
+                <p className="text-sm text-muted leading-relaxed">{t('pixInstructions')}</p>
               </div>
 
-              {/* QR Code */}
-              <div className="flex justify-center items-center p-4 bg-white rounded-xl border border-hairline-light max-w-[220px] mx-auto shadow-sm">
+              {/* QR Code: fundo branco para o leitor do banco */}
+              <div className="flex justify-center items-center p-4 bg-white rounded-xl max-w-[220px] mx-auto">
                 <img
                   src={`data:image/png;base64,${pixData.qr_code_base64}`}
                   alt={t('qrCodeAlt')}
@@ -808,13 +951,14 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess: onSuccessProp
 
               {/* Código Pix Copia e Cola */}
               <div className="space-y-2">
-                <label className="block text-xs font-bold text-ink">{t('copyPasteLabel')}</label>
+                <label htmlFor="pix-copy-paste" className="block text-xs font-bold text-foreground">{t('copyPasteLabel')}</label>
                 <div className="flex gap-2">
                   <input
+                    id="pix-copy-paste"
                     type="text"
                     readOnly
                     value={pixData.qr_code}
-                    className="flex-1 rounded-md border border-hairline-light bg-surface-soft-light px-3 py-2 text-xs font-mono text-ink focus:outline-none"
+                    className="min-h-11 flex-1 rounded-md border border-card-border bg-dark-gray px-3 py-2 text-xs font-mono text-white focus:outline-none"
                     onClick={(e) => (e.target as HTMLInputElement).select()}
                   />
                   <button
@@ -824,7 +968,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess: onSuccessProp
                       setCopiado(true);
                       setTimeout(() => setCopiado(false), 2000);
                     }}
-                    className="px-4 py-2 bg-primary font-bold text-ink text-xs rounded-md uppercase tracking-wider hover:bg-primary-hover active:scale-95 transition-colors"
+                    className="min-h-11 px-4 py-2 bg-primary font-bold text-ink text-xs rounded-md uppercase tracking-wider hover:bg-primary-hover transition-colors"
                   >
                     {copiado ? t('copied') : t('copy')}
                   </button>
@@ -834,7 +978,7 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess: onSuccessProp
               {/* Status de Confirmação */}
               <div className="flex items-center justify-center gap-2 rounded-lg border border-primary/20 bg-primary/5 p-4 text-center">
                 <div className="w-2.5 h-2.5 bg-primary rounded-full animate-ping shrink-0"></div>
-                <p className="text-xs font-bold text-ink uppercase tracking-wider">{t('waitingPayment')}</p>
+                <p className="text-xs font-bold text-white uppercase tracking-wider">{t('waitingPayment')}</p>
               </div>
 
               {/* Botões de Ação */}
@@ -844,234 +988,216 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess: onSuccessProp
                   onClick={() => {
                     setPixData(null);
                   }}
-                  className="w-full h-11 border border-hairline-light hover:border-muted-soft text-muted-soft text-xs font-bold uppercase rounded-md transition-colors"
+                  className="w-full h-11 border border-card-border hover:border-muted text-muted text-xs font-bold uppercase rounded-md transition-colors"
                 >
                   {t('changePaymentMethod')}
                 </button>
               </div>
             </div>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-5">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-[#9a7200]">{t('subscribingTo')}</p>
-                <h4 className="mt-1 text-lg font-bold text-ink">{event.name}</h4>
-                <p className="mt-1 text-xs text-muted-soft">{event.location}</p>
-              </div>
-
-              <div className="my-4 border-t border-hairline-light"></div>
-
-              {/* Escolha da Divisão */}
-              <div>
-                <label htmlFor="registration-division" className="mb-2 block text-xs font-bold text-ink">{t('divisionLabelForm')}</label>
-                <select
-                  id="registration-division"
-                  name="division"
-                  value={selectedDivisionId}
-                  onChange={(e) => {
-                    setSelectedDivisionId(e.target.value);
-                    clearAppliedCoupon();
-                    setCouponNotice(null);
-                  }}
-                  className="w-full rounded-md border border-hairline-light bg-white px-4 py-3 text-sm font-medium text-ink focus:border-primary focus:outline-none"
-                >
-                  {event.divisions.map((div) => (
-                    <option key={div.id} value={div.id}>
-                      {div.name} - {formatMoney(getPrice(div), event.currency ?? 'BRL', locale)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Cupom de Desconto */}
-              <div>
-                <label htmlFor="checkout-coupon" className="mb-2 block text-xs font-bold text-ink">{t('couponLabel')}</label>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <input
-                    id="checkout-coupon"
-                    type="text"
-                    placeholder={t('couponPlaceholder')}
-                    value={couponCode}
-                    aria-describedby={showCouponShirtNotice ? 'checkout-coupon-shirt-notice' : undefined}
-                    onChange={(e) => {
-                      setCouponCode(e.target.value);
-                      if (appliedCoupon && e.target.value.trim().toUpperCase() !== appliedCoupon) {
-                        clearAppliedCoupon();
-                      }
-                    }}
-                    className="flex-1 rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none uppercase"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleApplyCoupon}
-                    disabled={isApplyingCoupon}
-                    className="min-h-11 rounded-md bg-ink px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white transition-colors hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-70 sm:min-h-0"
-                  >
-                    {isApplyingCoupon ? t('applying') : t('apply')}
-                  </button>
-                </div>
-                {/* Região viva sempre montada: os avisos do cupom aparecem depois de
-                    "Aplicar" e precisam ser anunciados pelo leitor de tela. */}
-                <div aria-live="polite">
-                  {couponNotice && (
-                    <p className={`mt-1.5 text-xs font-semibold ${couponNotice.tone === 'success' ? 'text-[#00875A]' : 'text-[#DE350B]'}`}>
-                      {couponNotice.text}
-                    </p>
-                  )}
-                  {showCouponShirtNotice && (
-                    <p id="checkout-coupon-shirt-notice" className="mt-1.5 text-xs leading-5 text-muted-soft">
-                      {t('couponShirtNotice')}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Dados do Atleta */}
-              <div className="space-y-4">
-                <p className="mt-2 text-[10px] font-bold uppercase tracking-widest text-[#9a7200]">
-                  {isTeamCategory ? t('participantsDataTeam', { count: participantCount }) : t('participantDataSingle')}
-                </p>
-
-                {/* Nome da Equipe (para duplas/trios/equipes) */}
-                {isTeamCategory && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label htmlFor="team-name" className="mb-1 block text-xs font-bold text-ink">{t('teamNameLabel')}</label>
-                      <input
-                        id="team-name"
-                        name="teamName"
-                        type="text"
-                        required
-                        placeholder={t('teamNamePlaceholder')}
-                        value={teamName}
-                        onChange={(e) => setTeamName(e.target.value)}
-                        className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none"
-                      />
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} noValidate={false} className="flex min-h-0 flex-1 flex-col">
+            <div data-checkout-scroll className="flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-5">
+              <div ref={stepBodyRef} className="space-y-5">
+                {/* Etapa 1: categoria */}
+                {step === 1 && (
+                  <fieldset className="min-w-0 space-y-3">
+                    <legend className="type-display text-xl text-white">{t('stepCategoryTitle')}</legend>
+                    <p className="pt-2 text-sm text-muted">{event.location}</p>
+                    <div role="radiogroup" aria-label={t('divisionLabelForm')} className="grid gap-2.5 pt-1">
+                      {event.divisions.map((div) => {
+                        const isSelected = selectedDivisionId === div.id;
+                        return (
+                          <label
+                            key={div.id}
+                            className={`flex min-h-16 cursor-pointer items-center gap-3 rounded-xl border p-4 transition-colors ${
+                              isSelected ? 'border-primary bg-primary/10' : 'border-card-border bg-card hover:border-muted'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="division"
+                              value={div.id}
+                              checked={isSelected}
+                              required
+                              onChange={(e) => {
+                                setSelectedDivisionId(e.target.value);
+                                clearAppliedCoupon();
+                                setCouponNotice(null);
+                              }}
+                              className="h-5 w-5 shrink-0 accent-primary"
+                            />
+                            <span className="min-w-0 flex-1">
+                              <span className="block font-bold leading-snug text-white">{div.name}</span>
+                              <span className="text-xs text-muted">
+                                {typeLabel(div.type)}
+                                {div.slotsLimit > 0 ? ` · ${t('slotsLimit', { count: div.slotsLimit })}` : ''}
+                              </span>
+                            </span>
+                            <span className="shrink-0 font-number text-base font-bold text-white tabular-nums">
+                              {formatMoney(getPrice(div), event.currency ?? 'BRL', locale)}
+                            </span>
+                          </label>
+                        );
+                      })}
                     </div>
-                  </div>
+                  </fieldset>
                 )}
 
-                {visibleParticipants.map((participant, index) => (
-                  <fieldset key={index} className="space-y-3 rounded-lg border border-hairline-light bg-surface-soft-light p-4">
-                    <legend className="px-1 text-[10px] font-bold uppercase tracking-widest text-[#9a7200]">
-                      {isTeamCategory ? t('athleteFieldsetLegendTeam', { index: index + 1, captain: index === 0 ? t('captainSuffix') : '' }) : t('athleteFieldsetLegendSingle')}
-                    </legend>
+                {/* Etapa 2: atletas, um por vez */}
+                {step === 2 && (
+                  <div className="space-y-4">
+                    <h4 className="type-display text-xl text-white">
+                      {isTeamCategory
+                        ? t('athleteStepTitle', { index: athleteStep + 1, total: participantCount })
+                        : t('participantDataSingle')}
+                    </h4>
+                    {isTeamCategory && athleteStep === 0 && (
+                      <p className="text-sm text-muted">{t('captainHint')}</p>
+                    )}
 
-                    <div>
-                      <label htmlFor={`athlete-${index}-name`} className="mb-1 block text-xs font-bold text-ink">{t('fullNameLabel')}</label>
-                      <input
-                        id={`athlete-${index}-name`}
-                        name={`participants.${index}.name`}
-                        autoComplete={index === 0 ? 'name' : 'off'}
-                        type="text"
-                        required
-                        placeholder={t('fullNamePlaceholder')}
-                        value={participant.name}
-                        onChange={(e) => updateParticipant(index, 'name', e.target.value)}
-                        className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Nome da Equipe (para duplas/trios/equipes) */}
+                    {isTeamCategory && athleteStep === 0 && (
                       <div>
-                        <label htmlFor={`athlete-${index}-email`} className="mb-1 block text-xs font-bold text-ink">{t('emailLabel')}</label>
+                        <label htmlFor="team-name" className={labelClass}>{t('teamNameLabel')}</label>
                         <input
-                          id={`athlete-${index}-email`}
-                          name={`participants.${index}.email`}
-                          autoComplete={index === 0 ? 'email' : 'off'}
-                          spellCheck="false"
-                          type="email"
+                          id="team-name"
+                          name="teamName"
+                          type="text"
                           required
-                          placeholder={t('emailPlaceholder')}
-                          value={participant.email}
-                          onChange={(e) => updateParticipant(index, 'email', e.target.value)}
-                          className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none"
+                          placeholder={t('teamNamePlaceholder')}
+                          value={teamName}
+                          onChange={(e) => setTeamName(e.target.value)}
+                          className={fieldClass}
                         />
                       </div>
+                    )}
+
+                    <fieldset key={index} className="min-w-0 space-y-4 rounded-xl border border-card-border bg-card p-4">
+                      <legend className="px-1 text-xs font-bold uppercase tracking-wider text-primary">
+                        {isTeamCategory ? t('athleteFieldsetLegendTeam', { index: index + 1, captain: index === 0 ? t('captainSuffix') : '' }) : t('athleteFieldsetLegendSingle')}
+                      </legend>
+
                       <div>
-                        <label htmlFor={`athlete-${index}-phone`} className="mb-1 block text-xs font-bold text-ink">{t('phoneLabel')}</label>
+                        <label htmlFor={`athlete-${index}-name`} className={labelClass}>{t('fullNameLabel')}</label>
                         <input
-                          id={`athlete-${index}-phone`}
-                          name={`participants.${index}.phone`}
-                          autoComplete={index === 0 ? 'tel' : 'off'}
-                          type="tel"
+                          id={`athlete-${index}-name`}
+                          name={`participants.${index}.name`}
+                          autoComplete={index === 0 ? 'name' : 'off'}
+                          type="text"
                           required
-                          placeholder={t('phonePlaceholder')}
-                          value={participant.phone}
-                          onChange={(e) => updateParticipant(index, 'phone', e.target.value)}
-                          className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none"
+                          placeholder={t('fullNamePlaceholder')}
+                          value={participant.name}
+                          onChange={(e) => updateParticipant(index, 'name', e.target.value)}
+                          className={fieldClass}
                         />
                       </div>
-                    </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div>
+                          <label htmlFor={`athlete-${index}-email`} className={labelClass}>{t('emailLabel')}</label>
+                          <input
+                            id={`athlete-${index}-email`}
+                            name={`participants.${index}.email`}
+                            autoComplete={index === 0 ? 'email' : 'off'}
+                            spellCheck="false"
+                            type="email"
+                            inputMode="email"
+                            required
+                            placeholder={t('emailPlaceholder')}
+                            value={participant.email}
+                            onChange={(e) => updateParticipant(index, 'email', e.target.value)}
+                            className={fieldClass}
+                          />
+                        </div>
+                        <div>
+                          <label htmlFor={`athlete-${index}-phone`} className={labelClass}>{t('phoneLabel')}</label>
+                          <input
+                            id={`athlete-${index}-phone`}
+                            name={`participants.${index}.phone`}
+                            autoComplete={index === 0 ? 'tel' : 'off'}
+                            type="tel"
+                            inputMode="tel"
+                            required
+                            placeholder={t('phonePlaceholder')}
+                            value={participant.phone}
+                            onChange={(e) => updateParticipant(index, 'phone', e.target.value)}
+                            className={fieldClass}
+                          />
+                        </div>
+                      </div>
+
                       <fieldset>
-                        <legend className="mb-1 block text-xs font-bold text-ink">{t('genderLegend')}</legend>
-                        <div className="flex gap-2 h-[42px]">
+                        <legend className={labelClass}>{t('genderLegend')}</legend>
+                        <div className="grid grid-cols-2 gap-2">
                           <button
                             type="button"
+                            aria-pressed={participant.gender === 'male'}
                             onClick={() => updateParticipant(index, 'gender', 'male')}
-                            className={`flex-1 rounded-xl text-xs uppercase font-bold tracking-wider transition-colors border ${
+                            className={`min-h-11 rounded-lg border text-xs font-bold uppercase tracking-wider transition-colors ${
                               participant.gender === 'male'
                                 ? 'border-primary bg-primary text-ink'
-                                : 'border-hairline-light bg-white text-muted-soft hover:border-primary hover:text-ink'
+                                : 'border-card-border bg-dark-gray text-muted hover:border-primary hover:text-white'
                             }`}
                           >
                             {t('male')}
                           </button>
                           <button
                             type="button"
+                            aria-pressed={participant.gender === 'female'}
                             onClick={() => updateParticipant(index, 'gender', 'female')}
-                            className={`flex-1 rounded-xl text-xs uppercase font-bold tracking-wider transition-colors border ${
+                            className={`min-h-11 rounded-lg border text-xs font-bold uppercase tracking-wider transition-colors ${
                               participant.gender === 'female'
                                 ? 'border-primary bg-primary text-ink'
-                                : 'border-hairline-light bg-white text-muted-soft hover:border-primary hover:text-ink'
+                                : 'border-card-border bg-dark-gray text-muted hover:border-primary hover:text-white'
                             }`}
                           >
                             {t('female')}
                           </button>
                         </div>
                       </fieldset>
-                      <div>
-                        <label htmlFor={`athlete-${index}-instagram`} className="mb-1 block text-xs font-bold text-ink">{t('instagramLabel')}</label>
-                        <input
-                          id={`athlete-${index}-instagram`}
-                          name={`participants.${index}.instagram`}
-                          type="text"
-                          required
-                          placeholder={t('instagramPlaceholder')}
-                          value={participant.instagram}
-                          onChange={(e) => updateParticipant(index, 'instagram', e.target.value)}
-                          className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label htmlFor={`athlete-${index}-shirt-size`} className="mb-1 block text-xs font-bold text-ink">{t('shirtSizeLabel')}</label>
-                        <select
-                          id={`athlete-${index}-shirt-size`}
-                          name={`participants.${index}.shirtSize`}
-                          required
-                          value={participant.shirtSize}
-                          onChange={(e) => updateParticipant(index, 'shirtSize', e.target.value)}
-                          className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none"
-                        >
-                          <option value="">{t('selectPlaceholder')}</option>
-                          {SHIRT_SIZES.map(size => (
-                            <option key={size} value={size}>
-                              {isOptionalShirt ? t('shirtSizeAddonOption', { size, amount: shirtAddonPriceLabel }) : size}
-                            </option>
-                          ))}
-                          {isOptionalShirt && (
-                            <option value={SHIRT_NONE}>{t('shirtNoneOption')}</option>
-                          )}
-                        </select>
-                      </div>
-                    </div>
 
-                    {isFitnessRacing && (
-                      <>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div>
+                          <label htmlFor={`athlete-${index}-shirt-size`} className={labelClass}>{t('shirtSizeLabel')}</label>
+                          <select
+                            id={`athlete-${index}-shirt-size`}
+                            name={`participants.${index}.shirtSize`}
+                            required
+                            value={participant.shirtSize}
+                            onChange={(e) => updateParticipant(index, 'shirtSize', e.target.value)}
+                            className={fieldClass}
+                          >
+                            <option value="">{t('selectPlaceholder')}</option>
+                            {SHIRT_SIZES.map(size => (
+                              <option key={size} value={size}>
+                                {isOptionalShirt ? t('shirtSizeAddonOption', { size, amount: shirtAddonPriceLabel }) : size}
+                              </option>
+                            ))}
+                            {isOptionalShirt && (
+                              <option value={SHIRT_NONE}>{t('shirtNoneOption')}</option>
+                            )}
+                          </select>
+                        </div>
+                        <div>
+                          <label htmlFor={`athlete-${index}-instagram`} className={labelClass}>{t('instagramLabel')}</label>
+                          <input
+                            id={`athlete-${index}-instagram`}
+                            name={`participants.${index}.instagram`}
+                            type="text"
+                            autoCapitalize="none"
+                            placeholder={t('instagramPlaceholder')}
+                            value={participant.instagram}
+                            onChange={(e) => updateParticipant(index, 'instagram', e.target.value)}
+                            className={fieldClass}
+                          />
+                        </div>
+                      </div>
+
+                      {isFitnessRacing && (
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                           <div>
-                            <label htmlFor={`athlete-${index}-birth-date`} className="mb-1 block text-xs font-bold text-ink">{t('birthDateLabel')}</label>
+                            <label htmlFor={`athlete-${index}-birth-date`} className={labelClass}>{t('birthDateLabel')}</label>
                             <input
                               id={`athlete-${index}-birth-date`}
                               name={`participants.${index}.birthDate`}
@@ -1079,11 +1205,11 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess: onSuccessProp
                               required
                               value={participant.birthDate}
                               onChange={(e) => updateParticipant(index, 'birthDate', e.target.value)}
-                              className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none"
+                              className={fieldClass}
                             />
                           </div>
                           <div>
-                            <label htmlFor={`athlete-${index}-city`} className="mb-1 block text-xs font-bold text-ink">{t('cityLabel')}</label>
+                            <label htmlFor={`athlete-${index}-city`} className={labelClass}>{t('cityLabel')}</label>
                             <input
                               id={`athlete-${index}-city`}
                               name={`participants.${index}.city`}
@@ -1091,11 +1217,11 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess: onSuccessProp
                               required
                               value={participant.city}
                               onChange={(e) => updateParticipant(index, 'city', e.target.value)}
-                              className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none"
+                              className={fieldClass}
                             />
                           </div>
                           <div>
-                            <label htmlFor={`athlete-${index}-state`} className="mb-1 block text-xs font-bold text-ink">{t('stateLabel')}</label>
+                            <label htmlFor={`athlete-${index}-state`} className={labelClass}>{t('stateLabel')}</label>
                             <input
                               id={`athlete-${index}-state`}
                               name={`participants.${index}.state`}
@@ -1105,243 +1231,320 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess: onSuccessProp
                               placeholder={t('stateUfPlaceholder')}
                               value={participant.state}
                               onChange={(e) => updateParticipant(index, 'state', e.target.value.toUpperCase())}
-                              className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm uppercase text-ink focus:border-primary focus:outline-none"
+                              className={`${fieldClass} uppercase`}
                             />
+                          </div>
+                        </div>
+                      )}
+                    </fieldset>
+
+                    {athleteStep === 0 && (
+                      <>
+                        {/* Box / Afiliado */}
+                        <div>
+                          <label htmlFor="athlete-box" className={labelClass}>{t('boxLabel', { required: isFitnessRacing ? '*' : '' })}</label>
+                          <input
+                            id="athlete-box"
+                            name="box"
+                            autoComplete="organization"
+                            type="text"
+                            required={isFitnessRacing}
+                            placeholder={t('boxPlaceholder')}
+                            value={box}
+                            onChange={(e) => setBox(e.target.value)}
+                            className={fieldClass}
+                          />
+                        </div>
+
+                        {/* Senha da conta do atleta */}
+                        <div className="space-y-4 rounded-xl border border-card-border bg-card p-4">
+                          <div>
+                            <p className="text-xs font-bold uppercase tracking-wider text-primary">{t('athleteAccessTitle')}</p>
+                            <p className="mt-1 text-sm text-muted">{t('athleteAccessDescription')}</p>
+                          </div>
+                          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <div>
+                              <label htmlFor="athlete-panel-password" className={labelClass}>{t('panelPasswordLabel')}</label>
+                              <input
+                                id="athlete-panel-password"
+                                name="athletePanelPassword"
+                                type="password"
+                                autoComplete="new-password"
+                                required
+                                minLength={6}
+                                placeholder={t('panelPasswordPlaceholder')}
+                                value={athletePassword}
+                                onChange={(e) => setAthletePassword(e.target.value)}
+                                className={fieldClass}
+                              />
+                            </div>
+                            <div>
+                              <label htmlFor="athlete-panel-password-confirmation" className={labelClass}>{t('confirmPasswordLabel')}</label>
+                              <input
+                                id="athlete-panel-password-confirmation"
+                                name="athletePanelPasswordConfirmation"
+                                type="password"
+                                autoComplete="new-password"
+                                required
+                                minLength={6}
+                                placeholder={t('confirmPasswordPlaceholder')}
+                                value={athletePasswordConfirmation}
+                                onChange={(e) => setAthletePasswordConfirmation(e.target.value)}
+                                className={fieldClass}
+                              />
+                            </div>
                           </div>
                         </div>
                       </>
                     )}
-                  </fieldset>
-                ))}
-
-                {/* Box / Afiliado */}
-                <div>
-                  <label htmlFor="athlete-box" className="mb-1 block text-xs font-bold text-ink">{t('boxLabel', { required: isFitnessRacing ? '*' : '' })}</label>
-                  <input
-                    id="athlete-box"
-                    name="box"
-                    autoComplete="organization"
-                    type="text"
-                    required={isFitnessRacing}
-                    placeholder={t('boxPlaceholder')}
-                    value={box}
-                    onChange={(e) => setBox(e.target.value)}
-                    className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none"
-                  />
-                </div>
-
-                {/* Senha do painel do atleta */}
-                <div className="space-y-3 rounded-lg border border-hairline-light bg-white p-4">
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-[#9a7200]">{t('athleteAccessTitle')}</p>
-                    <p className="mt-1 text-xs text-muted-soft">
-                      {t('athleteAccessDescription')}
-                    </p>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                )}
+
+                {/* Etapa 3: pagamento */}
+                {step === 3 && (
+                  <div className="space-y-5">
+                    <h4 className="type-display text-xl text-white">{t('stepPaymentTitle')}</h4>
+
+                    {/* Cupom de Desconto */}
                     <div>
-                      <label htmlFor="athlete-panel-password" className="mb-1 block text-xs font-bold text-ink">{t('panelPasswordLabel')}</label>
+                      <label htmlFor="checkout-coupon" className={labelClass}>{t('couponLabel')}</label>
+                      <div className="flex gap-2">
+                        <input
+                          id="checkout-coupon"
+                          type="text"
+                          placeholder={t('couponPlaceholder')}
+                          value={couponCode}
+                          aria-describedby={showCouponShirtNotice ? 'checkout-coupon-shirt-notice' : undefined}
+                          onChange={(e) => {
+                            setCouponCode(e.target.value);
+                            if (appliedCoupon && e.target.value.trim().toUpperCase() !== appliedCoupon) {
+                              clearAppliedCoupon();
+                            }
+                          }}
+                          className={`${fieldClass} flex-1 uppercase`}
+                        />
+                        <button
+                          type="button"
+                          onClick={handleApplyCoupon}
+                          disabled={isApplyingCoupon}
+                          className="min-h-12 shrink-0 rounded-lg border border-card-border bg-elevated px-4 text-xs font-bold uppercase tracking-wider text-white transition-colors hover:border-primary disabled:cursor-not-allowed disabled:opacity-70"
+                        >
+                          {isApplyingCoupon ? t('applying') : t('apply')}
+                        </button>
+                      </div>
+                      {/* Região viva sempre montada: os avisos do cupom aparecem depois de
+                          "Aplicar" e precisam ser anunciados pelo leitor de tela. */}
+                      <div aria-live="polite">
+                        {couponNotice && (
+                          <p className={`mt-1.5 text-xs font-semibold ${couponNotice.tone === 'success' ? 'text-trading-up' : 'text-trading-down'}`}>
+                            {couponNotice.text}
+                          </p>
+                        )}
+                        {showCouponShirtNotice && (
+                          <p id="checkout-coupon-shirt-notice" className="mt-1.5 text-xs leading-5 text-muted">
+                            {t('couponShirtNotice')}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Seleção do Método de Pagamento — só exibida quando há mais de uma opção (Pix é exclusivo do Brasil) */}
+                    {pixSupported && (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="block text-xs font-bold text-foreground">{t('paymentMethodLabelForm')}</span>
+                          <img src="/mercadopago-logo.png" alt="Mercado Pago" className="h-5 w-auto rounded-sm bg-white object-contain p-0.5" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <button
+                            type="button"
+                            aria-pressed={paymentMethod === 'pix'}
+                            onClick={() => setPaymentMethod('pix')}
+                            className={`flex min-h-12 items-center justify-center gap-2 rounded-lg border text-xs font-bold uppercase transition-colors ${
+                              paymentMethod === 'pix'
+                                ? 'border-primary bg-primary/10 text-white'
+                                : 'border-card-border bg-dark-gray text-muted hover:border-muted'
+                            }`}
+                          >
+                            <span className="h-2 w-2 rounded-full bg-primary" />
+                            {t('pixOption')}
+                          </button>
+                          <button
+                            type="button"
+                            aria-pressed={paymentMethod === 'credit_card'}
+                            onClick={() => setPaymentMethod('credit_card')}
+                            className={`flex min-h-12 items-center justify-center gap-2 rounded-lg border text-xs font-bold uppercase transition-colors ${
+                              paymentMethod === 'credit_card'
+                                ? 'border-primary bg-primary/10 text-white'
+                                : 'border-card-border bg-dark-gray text-muted hover:border-muted'
+                            }`}
+                          >
+                            <span className="h-2 w-2 rounded-full bg-muted" />
+                            {t('cardOption')}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* CPF do Pagador para Pix */}
+                    {paymentMethod === 'pix' && pixSupported && (
+                      <div>
+                        <label htmlFor="athlete-cpf" className={labelClass}>{t('cpfPayerLabel')}</label>
+                        <input
+                          id="athlete-cpf"
+                          name="cpf"
+                          type="text"
+                          inputMode="numeric"
+                          required
+                          placeholder={t('cpfPlaceholder')}
+                          value={cpf}
+                          onChange={(e) => {
+                            let val = e.target.value.replace(/\D/g, '');
+                            if (val.length > 11) val = val.substring(0, 11);
+                            if (val.length > 9) {
+                              val = `${val.substring(0, 3)}.${val.substring(3, 6)}.${val.substring(6, 9)}-${val.substring(9)}`;
+                            } else if (val.length > 6) {
+                              val = `${val.substring(0, 3)}.${val.substring(3, 6)}.${val.substring(6)}`;
+                            } else if (val.length > 3) {
+                              val = `${val.substring(0, 3)}.${val.substring(3)}`;
+                            }
+                            setCpf(val);
+                          }}
+                          className={`${fieldClass} font-mono`}
+                        />
+                      </div>
+                    )}
+
+                    {/* Mensagem de Redirecionamento para Cartão de Crédito */}
+                    {paymentMethod === 'credit_card' && (
+                      <div className="rounded-lg border border-info/30 bg-info/10 p-4 text-xs space-y-2 text-foreground">
+                        <p className="font-semibold text-white flex items-center gap-1.5">
+                          <Lock className="h-4 w-4" aria-hidden="true" />
+                          {t('secureRedirectTitle')}
+                        </p>
+                        <p className="leading-5 text-muted">
+                          {t('secureRedirectDescription')}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Resumo do Pedido e Pagamento */}
+                    <div className="space-y-3 rounded-xl border border-card-border bg-card p-4">
+                      <div className="flex justify-between items-center gap-3 text-sm">
+                        <span className="font-medium text-muted">{t('orderSummaryRegistration', { division: selectedDivision?.name ?? '' })}</span>
+                        <span className="font-number font-bold text-white">{formatMoney(ticketPrice, event.currency ?? 'BRL', locale)}</span>
+                      </div>
+                      {registrationAmounts.shirtAddonAmount > 0 && (
+                        <div className="flex justify-between items-center gap-3 text-sm">
+                          <span className="font-medium text-muted">{t('orderSummaryShirts', { count: shirtAddonCount, amount: shirtAddonPriceLabel })}</span>
+                          <span className="font-number font-bold text-white">+ {formatMoney(registrationAmounts.shirtAddonAmount, event.currency ?? 'BRL', locale)}</span>
+                        </div>
+                      )}
+                      {/* Desconto já limitado ao valor da inscrição: um cupom fixo maior que a
+                          categoria não pode abater a camisa, e o resumo precisa fechar a conta. */}
+                      {appliedCoupon && registrationAmounts.discount > 0 && (
+                        <div className="flex justify-between items-center gap-3 text-sm text-trading-up">
+                          <span className="font-semibold">{t('discountLabel', { code: appliedCoupon })}</span>
+                          <span className="font-number font-bold">- {formatMoney(registrationAmounts.discount, event.currency ?? 'BRL', locale)}</span>
+                        </div>
+                      )}
+                      {serviceFeePreview > 0 && serviceFeeConfig.payer === 'athlete' && (
+                        <div className="flex justify-between items-center gap-3 text-sm text-muted">
+                          <span className="font-semibold">{t('serviceFeeLabel', { percent: serviceFeeConfig.percent })}</span>
+                          <span className="font-number font-bold">{formatMoney(serviceFeePreview, event.currency ?? 'BRL', locale)}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between border-t border-card-border pt-2 text-base">
+                        <span className="font-extrabold uppercase tracking-wider text-white">{t('totalLabel')}</span>
+                        <span className="font-number font-black text-white">{formatMoney(amountCollectedPreview, event.currency ?? 'BRL', locale)}</span>
+                      </div>
+                      <div className="flex items-start gap-2 border-t border-card-border pt-3 text-xs text-muted leading-normal">
+                        <ShieldCheck className="h-4 w-4 text-primary shrink-0 mt-0.5" aria-hidden="true" />
+                        <div className="flex-1">
+                          <p className="font-bold text-white">{t('paymentProcessedTitle')}</p>
+                          <p className="mt-0.5">{t('paymentProcessedDescription')}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Checkbox de Aceite dos Termos */}
+                    <div className="flex items-start gap-3 rounded-xl border border-card-border bg-card p-4">
                       <input
-                        id="athlete-panel-password"
-                        name="athletePanelPassword"
-                        type="password"
-                        autoComplete="new-password"
-                        required
-                        minLength={6}
-                        placeholder={t('panelPasswordPlaceholder')}
-                        value={athletePassword}
-                        onChange={(e) => setAthletePassword(e.target.value)}
-                        className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none"
+                        id="accept-terms"
+                        type="checkbox"
+                        checked={acceptedTerms}
+                        onChange={(e) => setAcceptedTerms(e.target.checked)}
+                        className="mt-0.5 h-5 w-5 shrink-0 accent-primary"
                       />
+                      <label htmlFor="accept-terms" className="text-xs leading-relaxed text-muted select-none">
+                        {t.rich('acceptTermsNotice', {
+                          terms: (chunks) => (
+                            <Link href="/termos" target="_blank" className="font-bold text-white underline transition-colors hover:text-primary">
+                              {chunks}
+                            </Link>
+                          ),
+                          privacy: (chunks) => (
+                            <Link href="/termos#privacidade" target="_blank" className="font-bold text-white underline transition-colors hover:text-primary">
+                              {chunks}
+                            </Link>
+                          )
+                        })}
+                      </label>
                     </div>
-                    <div>
-                      <label htmlFor="athlete-panel-password-confirmation" className="mb-1 block text-xs font-bold text-ink">{t('confirmPasswordLabel')}</label>
-                      <input
-                        id="athlete-panel-password-confirmation"
-                        name="athletePanelPasswordConfirmation"
-                        type="password"
-                        autoComplete="new-password"
-                        required
-                        minLength={6}
-                        placeholder={t('confirmPasswordPlaceholder')}
-                        value={athletePasswordConfirmation}
-                        onChange={(e) => setAthletePasswordConfirmation(e.target.value)}
-                        className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none"
-                      />
-                    </div>
-                  </div>
-                </div>
 
-                {/* Seleção do Método de Pagamento — só exibida quando há mais de uma opção (Pix é exclusivo do Brasil) */}
-                {pixSupported && (
-                  <div className="space-y-3 pt-2">
-                    <div className="flex items-center justify-between">
-                      <span className="block text-xs font-bold text-ink">{t('paymentMethodLabelForm')}</span>
-                      <img src="/mercadopago-logo.png" alt="Mercado Pago" className="h-4.5 w-auto object-contain opacity-80" />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <button
-                        type="button"
-                        onClick={() => setPaymentMethod('pix')}
-                        className={`flex items-center justify-center gap-2 rounded-md border py-3 text-xs font-bold uppercase transition-colors ${
-                          paymentMethod === 'pix'
-                            ? 'border-primary bg-primary/5 text-ink'
-                            : 'border-hairline-light bg-white text-muted-soft hover:border-muted-soft'
-                        }`}
-                      >
-                        <span className="h-2 w-2 rounded-full bg-primary" />
-                        {t('pixOption')}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setPaymentMethod('credit_card')}
-                        className={`flex items-center justify-center gap-2 rounded-md border py-3 text-xs font-bold uppercase transition-colors ${
-                          paymentMethod === 'credit_card'
-                            ? 'border-primary bg-primary/5 text-ink'
-                            : 'border-hairline-light bg-white text-muted-soft hover:border-muted-soft'
-                        }`}
-                      >
-                        <span className="h-2 w-2 rounded-full bg-muted" />
-                        {t('cardOption')}
-                      </button>
-                    </div>
+                    {amountsUpdatedNotice && (
+                      <p role="alert" className="rounded-lg border border-trading-down/40 bg-trading-down/10 p-3 text-xs font-semibold leading-5 text-white">
+                        {amountsUpdatedNotice}
+                      </p>
+                    )}
                   </div>
                 )}
 
-                {/* CPF do Pagador (obrigatório para Pix e Cartão) */}
-                {/* CPF do Pagador para Pix */}
-                {paymentMethod === 'pix' && pixSupported && (
-                  <div>
-                    <label htmlFor="athlete-cpf" className="mb-1 block text-xs font-bold text-ink">{t('cpfPayerLabel')}</label>
-                    <input
-                      id="athlete-cpf"
-                      name="cpf"
-                      type="text"
-                      required
-                      placeholder={t('cpfPlaceholder')}
-                      value={cpf}
-                      onChange={(e) => {
-                        let val = e.target.value.replace(/\D/g, '');
-                        if (val.length > 11) val = val.substring(0, 11);
-                        if (val.length > 9) {
-                          val = `${val.substring(0, 3)}.${val.substring(3, 6)}.${val.substring(6, 9)}-${val.substring(9)}`;
-                        } else if (val.length > 6) {
-                          val = `${val.substring(0, 3)}.${val.substring(3, 6)}.${val.substring(6)}`;
-                        } else if (val.length > 3) {
-                          val = `${val.substring(0, 3)}.${val.substring(3)}`;
-                        }
-                        setCpf(val);
-                      }}
-                      className="w-full rounded-md border border-hairline-light bg-white px-4 py-2.5 text-sm text-ink focus:border-primary focus:outline-none font-mono"
-                    />
-                  </div>
-                )}
-
-                {/* Mensagem de Redirecionamento para Cartão de Crédito */}
-                {paymentMethod === 'credit_card' && (
-                  <div className="rounded-lg border border-info/20 bg-info/5 p-4 text-xs space-y-2 text-ink">
-                    <p className="font-semibold text-info flex items-center gap-1.5">
-                      <Lock className="h-4 w-4" />
-                      {t('secureRedirectTitle')}
-                    </p>
-                    <p className="leading-5 text-muted-soft">
-                      {t('secureRedirectDescription')}
-                    </p>
-                  </div>
+                {stepError && (
+                  <p role="alert" className="rounded-lg border border-trading-down/40 bg-trading-down/10 p-3 text-sm font-semibold text-white">
+                    {stepError}
+                  </p>
                 )}
               </div>
+            </div>
 
-              {/* Resumo do Pedido e Pagamento */}
-              <div className="space-y-3 rounded-lg border border-hairline-light bg-surface-soft-light p-4">
-                <div className="flex justify-between items-center text-sm">
-                  <span className="font-medium text-muted-soft">{t('orderSummaryRegistration', { division: selectedDivision?.name ?? '' })}</span>
-                  <span className="font-number font-bold text-ink">{formatMoney(ticketPrice, event.currency ?? 'BRL', locale)}</span>
-                </div>
-                {registrationAmounts.shirtAddonAmount > 0 && (
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="font-medium text-muted-soft">{t('orderSummaryShirts', { count: shirtAddonCount, amount: shirtAddonPriceLabel })}</span>
-                    <span className="font-number font-bold text-ink">+ {formatMoney(registrationAmounts.shirtAddonAmount, event.currency ?? 'BRL', locale)}</span>
-                  </div>
-                )}
-                {/* Desconto já limitado ao valor da inscrição: um cupom fixo maior que a
-                    categoria não pode abater a camisa, e o resumo precisa fechar a conta. */}
-                {appliedCoupon && registrationAmounts.discount > 0 && (
-                  <div className="flex justify-between items-center text-sm text-[#00875A]">
-                    <span className="font-semibold">{t('discountLabel', { code: appliedCoupon })}</span>
-                    <span className="font-number font-bold">- {formatMoney(registrationAmounts.discount, event.currency ?? 'BRL', locale)}</span>
-                  </div>
-                )}
-                {serviceFeePreview > 0 && serviceFeeConfig.payer === 'athlete' && (
-                  <div className="flex justify-between items-center text-sm text-muted-soft">
-                    <span className="font-semibold">{t('serviceFeeLabel', { percent: serviceFeeConfig.percent })}</span>
-                    <span className="font-number font-bold">{formatMoney(serviceFeePreview, event.currency ?? 'BRL', locale)}</span>
-                  </div>
-                )}
-                <div className="flex items-center justify-between border-t border-hairline-light pt-2 text-base">
-                  <span className="font-extrabold uppercase tracking-wider text-ink">{t('totalLabel')}</span>
-                  <span className="font-number font-black text-ink">{formatMoney(amountCollectedPreview, event.currency ?? 'BRL', locale)}</span>
-                </div>
-                <div className="flex items-start gap-2 border-t border-hairline-light pt-3 text-[10px] text-muted-soft leading-normal">
-                  <ShieldCheck className="h-4 w-4 text-[#9a7200] shrink-0 mt-0.5" aria-hidden="true" />
-                  <div className="flex-1">
-                    <p className="font-bold text-ink">{t('paymentProcessedTitle')}</p>
-                    <p className="mt-0.5">{t('paymentProcessedDescription')}</p>
-                  </div>
-                  <img src="/mercadopago-logo.png" alt="Mercado Pago" className="h-4.5 w-auto object-contain shrink-0 ml-auto" />
-                </div>
-              </div>
-
-              {/* Checkbox de Aceite dos Termos */}
-              <div className="flex items-start gap-2.5 rounded-lg border border-hairline-light bg-surface-soft-light p-3">
-                <input
-                  id="accept-terms"
-                  type="checkbox"
-                  checked={acceptedTerms}
-                  onChange={(e) => setAcceptedTerms(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 shrink-0 rounded border-hairline-light text-primary focus:ring-primary focus:ring-offset-0 focus:ring-1"
-                />
-                <label htmlFor="accept-terms" className="text-xs leading-relaxed text-muted-soft select-none">
-                  {t.rich('acceptTermsNotice', {
-                    terms: (chunks) => (
-                      <Link href="/termos" target="_blank" className="font-bold text-ink underline transition-colors hover:text-[#9a7200]">
-                        {chunks}
-                      </Link>
-                    ),
-                    privacy: (chunks) => (
-                      <Link href="/termos#privacidade" target="_blank" className="font-bold text-ink underline transition-colors hover:text-[#9a7200]">
-                        {chunks}
-                      </Link>
-                    )
-                  })}
-                </label>
-              </div>
-
-              {amountsUpdatedNotice && (
-                <p role="alert" className="rounded-lg border border-[#DE350B]/30 bg-[#DE350B]/5 p-3 text-xs font-semibold leading-5 text-[#DE350B]">
-                  {amountsUpdatedNotice}
-                </p>
+            {/* Rodapé fixo: total e a ação da etapa (Story 1.134) */}
+            <div className="flex items-center justify-between gap-4 border-t border-card-border bg-card px-4 pb-[calc(0.875rem+env(safe-area-inset-bottom))] pt-3.5 sm:px-5">
+              <p className="min-w-0 leading-tight">
+                <span className="block text-xs font-semibold text-muted">{t('totalLabel')}</span>
+                <span className="font-number text-xl font-bold text-white tabular-nums">{formatMoney(amountCollectedPreview, event.currency ?? 'BRL', locale)}</span>
+              </p>
+              {step < 3 ? (
+                <button
+                  type="button"
+                  onClick={goNext}
+                  className="flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-md bg-primary px-6 text-sm font-bold uppercase tracking-wider text-ink transition-colors hover:bg-primary-hover"
+                >
+                  {t('continue')}
+                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={isProcessing || !acceptedTerms}
+                  className="flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-md bg-primary px-5 text-sm font-black text-ink transition-colors hover:bg-primary-hover disabled:bg-primary-disabled disabled:text-muted"
+                >
+                  {isProcessing ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
+                      <span>{t('processingPayment')}</span>
+                    </>
+                  ) : (
+                    <>
+                      <CreditCard className="h-5 w-5" aria-hidden="true" />
+                      <span>{t('confirmAndPay')}</span>
+                    </>
+                  )}
+                </button>
               )}
-
-              <button
-                type="submit"
-                disabled={isProcessing || !acceptedTerms}
-                className="flex h-12 w-full items-center justify-center gap-2 rounded-md bg-primary font-black text-ink transition-colors hover:bg-primary-hover disabled:bg-[#e0d7a6] disabled:text-muted-soft"
-              >
-                {isProcessing ? (
-                  <>
-                    <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
-                    <span>{t('processingPayment')}</span>
-                  </>
-                ) : (
-                  <>
-                    <CreditCard className="h-5 w-5" />
-                    <span>{t('confirmAndPay')}</span>
-                  </>
-                )}
-              </button>
-            </form>
-          )}
-        </div>
+            </div>
+          </form>
+        )}
       </div>
       <Script 
         src="https://sdk.mercadopago.com/js/v2" 

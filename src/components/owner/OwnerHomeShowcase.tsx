@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
-import { Megaphone, ShieldAlert, Star } from 'lucide-react';
+import { ShieldAlert, Star } from 'lucide-react';
 import type { Event } from '@/types';
 import { compareEventsByDateAsc } from '@/lib/eventStatus';
 import { findFeaturedHomeEventOffAir, isFeaturedHomeCandidate } from '@/lib/homeShowcase';
@@ -13,7 +13,7 @@ import { findFeaturedHomeEventOffAir, isFeaturedHomeCandidate } from '@/lib/home
 
 const listFeaturedHomeCandidates = (events: Event[]) => events.filter(isFeaturedHomeCandidate).sort(compareEventsByDateAsc);
 
-/** Destaque salvo que saiu do carrossel (encerrou ou deixou de ser candidato). */
+/** Destaque salvo que saiu da home (encerrou ou deixou de ser candidato). */
 export const isFeaturedHomeEventOffAir = (events: Event[]) => findFeaturedHomeEventOffAir(events) !== null;
 
 type Props = {
@@ -51,29 +51,21 @@ export function OwnerHomeShowcase({ events, setFeaturedHomeEvent, onSaved }: Pro
     ? (featuredHomeDraftId as string)
     : selectableFeaturedHomeEventId;
 
-  // Destaque salvo que já encerrou continua no banco, mas sai do carrossel —
-  // o painel precisa avisar em vez de apenas exibir o nome como "atual".
+  // Destaque salvo que já encerrou continua no banco, mas sai da home — o
+  // painel precisa avisar em vez de apenas exibir o nome como "atual".
   const featuredHomeEventIsOffAir = Boolean(featuredHomeEvent)
     && !featuredHomeCandidates.some(event => event.id === featuredHomeEvent?.id);
 
   const featuredHomeHasPendingChange = selectedFeaturedHomeDraftId !== (featuredHomeEvent?.id || '');
 
-  // Ordem real dos slides do carrossel: espelha a regra de FeaturedEventBanner
-  // (destaque primeiro, resto por data, ate 4 eventos) aplicada à seleção em
-  // tela, para o owner ver o efeito da escolha antes de salvar.
-  const BANNER_MAX_EVENT_SLIDES = 4;
-  const bannerSlideOrder = useMemo(() => {
+  // Ordem real da lista de eventos da home (Story 1.132): o destaque abre a
+  // lista no grupo "Em destaque" e os demais seguem por data, como em
+  // HomeView, aplicada à seleção em tela para o owner ver o efeito antes de salvar.
+  const homeEventOrder = useMemo(() => {
     const featured = featuredHomeCandidates.filter(event => event.id === selectedFeaturedHomeDraftId);
     const rest = featuredHomeCandidates.filter(event => event.id !== selectedFeaturedHomeDraftId);
-    return [...featured, ...rest].slice(0, BANNER_MAX_EVENT_SLIDES);
+    return [...featured, ...rest];
   }, [featuredHomeCandidates, selectedFeaturedHomeDraftId]);
-
-  // Candidatos ativos que não couberam no limite de slides — o owner precisa
-  // saber que existem eventos no ar fora do carrossel.
-  const bannerOverflowEvents = useMemo(() => {
-    const slideIds = new Set(bannerSlideOrder.map(event => event.id));
-    return featuredHomeCandidates.filter(event => !slideIds.has(event.id));
-  }, [bannerSlideOrder, featuredHomeCandidates]);
 
   const handleSaveFeaturedHomeEvent = async () => {
     const targetEventId = selectedFeaturedHomeDraftId;
@@ -87,7 +79,7 @@ export function OwnerHomeShowcase({ events, setFeaturedHomeEvent, onSaved }: Pro
       setFeaturedHomeDraftId(null);
       onSaved();
       setFeaturedHomeNotice({
-        text: eventName ? `Banner da home atualizado para ${eventName}.` : 'Banner da home voltou para seleção automática.',
+        text: eventName ? `Destaque da home atualizado para ${eventName}.` : 'A home ficou sem destaque: os eventos seguem por data.',
         isError: false
       });
     } catch (err) {
@@ -115,18 +107,18 @@ export function OwnerHomeShowcase({ events, setFeaturedHomeEvent, onSaved }: Pro
         </h3>
 
         <p className="max-w-2xl text-xs leading-5 text-muted">
-          Selecione qual evento ativo abre o carrossel do banner principal. Os demais eventos ativos completam os próximos slides automaticamente, por ordem de data. Eventos encerrados ficam fora da lista de candidatos.
+          Selecione qual evento ativo abre a lista de eventos da home, no grupo Em destaque. Os demais eventos ativos seguem por ordem de data. Eventos encerrados ficam fora da lista de candidatos.
         </p>
 
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-1">
             <p className="text-[11px] text-muted-soft">
-              Atual: <span className="font-bold text-white">{featuredHomeEvent?.name || 'Seleção automática'}</span>
+              Atual: <span className="font-bold text-white">{featuredHomeEvent?.name || 'Sem destaque'}</span>
             </p>
             {featuredHomeEventIsOffAir && (
               <p role="status" className="flex items-start gap-1.5 text-[11px] font-bold text-amber-300">
                 <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                <span>Este evento encerrou e não aparece mais no carrossel. Escolha outro destaque ou salve a seleção automática.</span>
+                <span>Este evento encerrou e não aparece mais na home. Escolha outro destaque ou salve sem destaque.</span>
               </p>
             )}
           </div>
@@ -140,7 +132,7 @@ export function OwnerHomeShowcase({ events, setFeaturedHomeEvent, onSaved }: Pro
               onChange={(e) => setFeaturedHomeDraftId(e.target.value)}
               className="min-h-11 flex-1 rounded-md border border-card-border bg-dark-gray px-3 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"
             >
-              <option value="">Seleção automática</option>
+              <option value="">Sem destaque</option>
               {featuredHomeCandidates.map(event => (
                 <option key={event.id} value={event.id}>
                   {event.name}
@@ -169,10 +161,10 @@ export function OwnerHomeShowcase({ events, setFeaturedHomeEvent, onSaved }: Pro
       <div className="space-y-4 rounded-xl border border-card-border bg-card p-4 sm:p-6">
         <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-card-border pb-3">
           <h3 className="text-lg font-bold text-white uppercase tracking-wider">
-            Ordem do Carrossel
+            Ordem na home
           </h3>
           <span className="text-[11px] text-muted-soft">
-            {bannerSlideOrder.length + 1} de {BANNER_MAX_EVENT_SLIDES + 1} slides em uso
+            {homeEventOrder.length} {homeEventOrder.length === 1 ? 'evento ativo' : 'eventos ativos'}
           </span>
         </div>
 
@@ -184,20 +176,11 @@ export function OwnerHomeShowcase({ events, setFeaturedHomeEvent, onSaved }: Pro
         )}
 
         <p className="text-[11px] text-muted-soft">
-          Clique em um evento para escolhê-lo como destaque. Os demais seguem a ordem de data e o slide comercial é sempre o primeiro.
+          Clique em um evento para escolhê-lo como destaque. Os demais seguem a ordem de data.
         </p>
 
         <ol className="space-y-2">
-          <li className="flex items-center gap-3 rounded-xl border border-card-border bg-dark-gray/30 p-3">
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-card-border bg-dark-gray text-[11px] font-bold text-muted">1</span>
-            <Megaphone className="h-4 w-4 shrink-0 text-muted" aria-hidden="true" />
-            <div className="min-w-0">
-              <p className="truncate text-sm font-bold uppercase text-white">Slide comercial</p>
-              <p className="text-[11px] text-muted-soft">Convite fixo para organizar um evento na WODArena</p>
-            </div>
-          </li>
-
-          {bannerSlideOrder.map((event, index) => {
+          {homeEventOrder.map((event, index) => {
             const isFeatured = event.id === selectedFeaturedHomeDraftId;
             return (
               <li key={event.id}>
@@ -212,7 +195,7 @@ export function OwnerHomeShowcase({ events, setFeaturedHomeEvent, onSaved }: Pro
                   }`}
                 >
                   <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-card-border bg-dark-gray text-[11px] font-bold text-muted">
-                    {index + 2}
+                    {index + 1}
                   </span>
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded border border-card-border bg-dark-gray p-0.5">
                     {event.logoUrl ? (
@@ -236,19 +219,12 @@ export function OwnerHomeShowcase({ events, setFeaturedHomeEvent, onSaved }: Pro
             );
           })}
 
-          {bannerSlideOrder.length === 0 && (
+          {homeEventOrder.length === 0 && (
             <li className="rounded-xl border border-dashed border-card-border p-4 text-xs text-muted-soft">
-              Nenhum evento ativo disponível. O banner exibe apenas o slide comercial.
+              Nenhum evento ativo disponível. A home mostra só os eventos realizados.
             </li>
           )}
         </ol>
-
-        {bannerOverflowEvents.length > 0 && (
-          <p className="text-[11px] leading-5 text-amber-300">
-            <span className="font-bold">Fora do carrossel:</span>{' '}
-            {bannerOverflowEvents.map(event => event.name).join(', ')} — o banner exibe no máximo {BANNER_MAX_EVENT_SLIDES} eventos. Escolher um deles como destaque o traz para o primeiro slide.
-          </p>
-        )}
       </div>
     </div>
   );
