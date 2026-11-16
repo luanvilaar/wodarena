@@ -44,9 +44,11 @@ test('every server-side approval path contabilizes coupon usage', () => {
   }
 
   // Cada um só contabiliza na transição/condição de aprovação.
-  assert.match(cardRoute, /paymentStatus === 'payment_approved'\)\s*\{\s*await applyCouponUsageForApprovedRegistration/);
-  assert.match(pixRoute, /paymentData\.status === 'approved'\)\s*\{\s*await applyCouponUsageForApprovedRegistration/);
-  assert.match(statusRoute, /paymentData\.status === 'approved'\)\s*\{\s*await applyCouponUsageForApprovedRegistration/);
+  // Story 1.137: cartão e PIX contam quando a gravação de fato aprovou a inscrição;
+  // a consulta de status, quando o pagamento aprovado foi aplicado.
+  assert.match(cardRoute, /transition\.becameApproved\)\s*\{\s*await applyCouponUsageForApprovedRegistration/);
+  assert.match(pixRoute, /transition\.becameApproved\)\s*\{\s*await applyCouponUsageForApprovedRegistration/);
+  assert.match(statusRoute, /paymentData\.status === 'approved' && transition\.outcome === 'applied'\)\s*\{\s*await applyCouponUsageForApprovedRegistration/);
   assert.match(startRoute, /paymentStatus === 'payment_approved'\)\s*\{\s*await applyCouponUsageForApprovedRegistration/);
 });
 

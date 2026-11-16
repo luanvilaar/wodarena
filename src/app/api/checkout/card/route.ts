@@ -9,29 +9,38 @@ import { ManagerAccessError, assertManagerSalesAccessForEvent, managerAccessErro
 import {
   applyCouponUsageForApprovedRegistration,
   assertEventRegistrationAvailable,
+  assertRegistrationAcceptsNewPayment,
   assertRegistrationAccess,
   loadRegistrationCheckoutSnapshot,
   RegistrationAccessError,
-  triggerRegistrationApprovedEmail
+  triggerRegistrationApprovedEmail,
+  type SecureCheckoutSnapshot
 } from '@/lib/serverCheckout';
+import type { RegistrationPaymentStatusValue } from '@/lib/paymentStatusTransition';
+import { writePaymentTransition } from '@/lib/serverPaymentTransition';
 import { checkRateLimit, createSupabaseAdmin, getClientIp } from '@/lib/serverSecurity';
 import { calculateServiceFee } from '@/lib/serviceFee';
 import { CheckoutGatewayError, resolveEventPaymentContext } from '@/lib/checkoutGateway';
 
 const supabaseAdmin = createSupabaseAdmin();
 
-const toRegistrationPaymentStatus = (status?: string) => {
+const toRegistrationPaymentStatus = (status?: string): RegistrationPaymentStatusValue => {
   if (status === 'approved') return 'payment_approved';
   if (status === 'in_process' || status === 'pending') return 'payment_in_review';
   if (status === 'cancelled') return 'payment_cancelled';
   return 'payment_failed';
 };
 
+// Grava o resultado da cobrança pela regra única (Story 1.137). O cartão é a
+// tentativa nova: substitui a que estava em andamento, mas nunca desfaz uma
+// inscrição aprovada nem a cancelada pelo gestor.
 const updateRegistrationPayment = async (
-  registrationId: string | undefined,
+  snapshot: Pick<SecureCheckoutSnapshot, 'registrationId' | 'paymentRow'>,
   payload: {
-    paymentStatus: string;
+    paymentStatus: RegistrationPaymentStatusValue;
+    gatewayStatus?: string;
     paymentId?: string | number;
+    approvedAt?: string;
     statusDetail?: string;
     errorMessage?: string;
     totalPaid?: number;
@@ -42,47 +51,39 @@ const updateRegistrationPayment = async (
     applicationFeeCharged?: number;
   }
 ) => {
-  if (!registrationId) return;
-
-  const updateFields: {
-    payment_status: string;
-    payment_method: string;
-    payment_id: string | null;
-    payment_status_detail: string | null;
-    payment_error_message: string | null;
-    updated_at: string;
-    total_paid?: number;
-    service_fee_percent?: number;
-    service_fee_amount?: number;
-    service_fee_payer?: string;
-    amount_collected?: number;
-    application_fee_charged?: number;
-  } = {
-    payment_status: payload.paymentStatus,
+  const fields: Record<string, unknown> = {
     payment_method: 'credit_card',
     payment_id: payload.paymentId ? String(payload.paymentId) : null,
     payment_status_detail: payload.statusDetail || null,
-    payment_error_message: payload.errorMessage || null,
-    updated_at: new Date().toISOString()
+    payment_error_message: payload.errorMessage || null
   };
 
-  if (payload.totalPaid !== undefined) {
-    updateFields.total_paid = payload.totalPaid;
-  }
-  if (payload.serviceFeePercent !== undefined) updateFields.service_fee_percent = payload.serviceFeePercent;
-  if (payload.serviceFeeAmount !== undefined) updateFields.service_fee_amount = payload.serviceFeeAmount;
-  if (payload.serviceFeePayer !== undefined) updateFields.service_fee_payer = payload.serviceFeePayer;
-  if (payload.amountCollected !== undefined) updateFields.amount_collected = payload.amountCollected;
-  if (payload.applicationFeeCharged !== undefined) updateFields.application_fee_charged = payload.applicationFeeCharged;
+  if (payload.totalPaid !== undefined) fields.total_paid = payload.totalPaid;
+  if (payload.serviceFeePercent !== undefined) fields.service_fee_percent = payload.serviceFeePercent;
+  if (payload.serviceFeeAmount !== undefined) fields.service_fee_amount = payload.serviceFeeAmount;
+  if (payload.serviceFeePayer !== undefined) fields.service_fee_payer = payload.serviceFeePayer;
+  if (payload.amountCollected !== undefined) fields.amount_collected = payload.amountCollected;
+  if (payload.applicationFeeCharged !== undefined) fields.application_fee_charged = payload.applicationFeeCharged;
 
-  const { error } = await supabaseAdmin
-    .from('registrations')
-    .update(updateFields)
-    .eq('id', registrationId);
+  const transition = await writePaymentTransition(supabaseAdmin, {
+    source: 'mp-card',
+    registrationId: snapshot.registrationId,
+    registration: snapshot.paymentRow,
+    payment: {
+      gateway: 'mercadopago',
+      id: payload.paymentId,
+      status: payload.gatewayStatus,
+      approvedAt: payload.approvedAt
+    },
+    nextStatus: payload.paymentStatus,
+    isNewAttempt: true,
+    fields
+  });
 
-  if (error) {
-    console.error('[MercadoPago Card API] Erro ao atualizar status da inscrição:', error);
+  if (transition.error) {
+    console.error('[MercadoPago Card API] Erro ao atualizar status da inscrição:', transition.error);
   }
+  return transition;
 };
 
 export async function POST(request: Request) {
@@ -109,6 +110,8 @@ export async function POST(request: Request) {
 
     const checkoutSnapshot = await loadRegistrationCheckoutSnapshot(supabaseAdmin, registrationData.id);
     const { registrationData: safeRegistrationData, athleteProfile, transactionAmount } = checkoutSnapshot;
+    // Inscrição paga ou cancelada pelo gestor não recebe cobrança nova (Story 1.137).
+    assertRegistrationAcceptsNewPayment(checkoutSnapshot);
     await assertEventRegistrationAvailable(supabaseAdmin, checkoutSnapshot.eventId);
 
     // Este endpoint fala o protocolo de tokenização de cartão do Mercado Pago
@@ -190,7 +193,7 @@ export async function POST(request: Request) {
       const errorData = await response.json();
       console.error("[MercadoPago Card API] Erro ao criar pagamento com Cartão no Mercado Pago:", errorData);
       const statusDetail = errorData?.cause?.[0]?.description || errorData?.message;
-      await updateRegistrationPayment(checkoutSnapshot.registrationId, {
+      await updateRegistrationPayment(checkoutSnapshot, {
         paymentStatus: 'payment_failed',
         statusDetail,
         errorMessage: 'Erro ao processar cobrança do cartão.',
@@ -208,8 +211,10 @@ export async function POST(request: Request) {
 
     const paymentData = await response.json();
     const paymentStatus = toRegistrationPaymentStatus(paymentData.status);
-    await updateRegistrationPayment(checkoutSnapshot.registrationId, {
+    const transition = await updateRegistrationPayment(checkoutSnapshot, {
       paymentStatus,
+      gatewayStatus: paymentData.status,
+      approvedAt: paymentData.date_approved,
       paymentId: paymentData.id,
       statusDetail: paymentData.status_detail,
       errorMessage: paymentStatus === 'payment_failed' ? 'Pagamento não processado pelo cartão.' : undefined,
@@ -221,7 +226,7 @@ export async function POST(request: Request) {
       applicationFeeCharged: extractApplicationFeeCharged(paymentData)
     });
 
-    if (paymentStatus === 'payment_approved') {
+    if (transition.becameApproved) {
       await applyCouponUsageForApprovedRegistration(supabaseAdmin, checkoutSnapshot.registrationId);
       await triggerRegistrationApprovedEmail(supabaseAdmin, checkoutSnapshot.registrationId).catch(err =>
         console.error('[MercadoPago Card API] Erro ao disparar e-mail:', err)

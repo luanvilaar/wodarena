@@ -10,6 +10,7 @@ import { extractApplicationFeeCharged, getStripeClient, StripeConfigError } from
 import { fromMinorUnits } from '@/lib/intl/format';
 import { PAYMENT_INTEGRITY_STATUS_DETAIL } from '@/lib/paymentIntegrity';
 import { reviewPaymentBeforeApproval } from '@/lib/serverPaymentIntegrity';
+import { writePaymentTransition } from '@/lib/serverPaymentTransition';
 import type { EventCurrency } from '@/types';
 
 const supabaseAdmin = createSupabaseAdmin();
@@ -43,7 +44,6 @@ const updateRegistrationFromIntent = async (paymentIntent: Stripe.PaymentIntent)
     return;
   }
 
-  const wasApproved = existingRegistration.payment_status === 'payment_approved';
   const currency = (existingRegistration.currency || 'BRL') as EventCurrency;
   const amountCollected = fromMinorUnits(paymentIntent.amount_received || paymentIntent.amount, currency);
   const applicationFeeCharged = fromMinorUnits(extractApplicationFeeCharged(paymentIntent), currency);
@@ -65,27 +65,35 @@ const updateRegistrationFromIntent = async (paymentIntent: Stripe.PaymentIntent)
   });
   const nextPaymentStatus: RegistrationPaymentStatus = holdForReview ? 'payment_in_review' : toRegistrationPaymentStatus(paymentIntent.status);
 
-  const { error: updateError } = await supabaseAdmin
-    .from('registrations')
-    .update({
-      payment_status: nextPaymentStatus,
+  // Regra única (Story 1.137): aviso de outra tentativa não desfaz a inscrição
+  // aprovada nem a cancelada pelo gestor.
+  const transition = await writePaymentTransition(supabaseAdmin, {
+    source: 'stripe-webhook',
+    registrationId,
+    eventId,
+    registration: existingRegistration,
+    payment: {
+      gateway: 'stripe',
+      id: paymentIntent.id,
+      status: paymentIntent.status
+    },
+    nextStatus: nextPaymentStatus,
+    fields: {
       payment_method: 'credit_card',
       payment_id: paymentIntent.id,
       payment_status_detail: holdForReview ? PAYMENT_INTEGRITY_STATUS_DETAIL : (paymentIntent.last_payment_error?.code || null),
       payment_error_message: paymentIntent.last_payment_error?.message || null,
       ...(amountCollected > 0 ? { amount_collected: amountCollected } : {}),
-      ...(applicationFeeCharged > 0 ? { application_fee_charged: applicationFeeCharged } : {}),
-      updated_at: new Date().toISOString()
-    })
-    .eq('id', registrationId)
-    .eq('event_id', eventId);
+      ...(applicationFeeCharged > 0 ? { application_fee_charged: applicationFeeCharged } : {})
+    }
+  });
 
-  if (updateError) {
-    console.error('[Stripe Webhook] Erro ao atualizar inscrição:', updateError);
+  if (transition.error) {
+    console.error('[Stripe Webhook] Erro ao atualizar inscrição:', transition.error);
     return;
   }
 
-  if (nextPaymentStatus === 'payment_approved' && !wasApproved) {
+  if (transition.becameApproved) {
     await applyCouponUsageForApprovedRegistration(supabaseAdmin, registrationId);
     await triggerRegistrationApprovedEmail(supabaseAdmin, registrationId).catch(err =>
       console.error('[Stripe Webhook] Erro ao disparar e-mail:', err)

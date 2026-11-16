@@ -15,6 +15,7 @@ import {
 import { createSupabaseAdmin, getRequestSession } from '@/lib/serverSecurity';
 import { PAYMENT_INTEGRITY_STATUS_DETAIL } from '@/lib/paymentIntegrity';
 import { reviewPaymentBeforeApproval } from '@/lib/serverPaymentIntegrity';
+import { writePaymentTransition } from '@/lib/serverPaymentTransition';
 
 const supabaseAdmin = createSupabaseAdmin();
 
@@ -23,6 +24,8 @@ const toRegistrationPaymentStatus = (status?: string) => {
   if (status === 'in_process') return 'payment_in_review';
   if (status === 'cancelled') return 'payment_cancelled';
   if (status === 'rejected') return 'payment_failed';
+  // Estorno e contestação (Story 1.137): a inscrição sai de aprovada como cancelada.
+  if (status === 'refunded' || status === 'charged_back') return 'payment_cancelled';
   return 'payment_pending';
 };
 
@@ -176,7 +179,6 @@ export async function GET(request: Request) {
       .eq('event_id', eventId)
       .maybeSingle();
 
-    const wasAlreadyApproved = currentReg?.payment_status === 'payment_approved';
     const amountCollected = Number(paymentData.transaction_amount || 0);
     const applicationFeeCharged = extractApplicationFeeCharged(paymentData);
 
@@ -197,28 +199,54 @@ export async function GET(request: Request) {
       }
     });
 
-    await supabaseAdmin
-      .from('registrations')
-      .update({
-        payment_status: holdForReview ? 'payment_in_review' : toRegistrationPaymentStatus(paymentData.status),
+    // Regra única (Story 1.137): consultar uma tentativa antiga não desfaz a
+    // inscrição aprovada por outro pagamento nem a cancelada pelo gestor.
+    const transition = await writePaymentTransition(supabaseAdmin, {
+      source: 'mp-status',
+      registrationId,
+      eventId,
+      registration: currentReg,
+      payment: {
+        gateway: 'mercadopago',
+        id: paymentData.id,
+        status: paymentData.status,
+        approvedAt: paymentData.date_approved
+      },
+      nextStatus: holdForReview ? 'payment_in_review' : toRegistrationPaymentStatus(paymentData.status),
+      fields: {
         payment_method: paymentData.payment_method_id || null,
         payment_id: String(paymentData.id),
         payment_status_detail: holdForReview ? PAYMENT_INTEGRITY_STATUS_DETAIL : (paymentData.status_detail || null),
         payment_error_message: paymentData.status === 'rejected' ? 'Pagamento não processado.' : null,
         ...(amountCollected > 0 ? { amount_collected: amountCollected } : {}),
-        ...(applicationFeeCharged > 0 ? { application_fee_charged: applicationFeeCharged } : {}),
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', registrationId)
-      .eq('event_id', eventId);
+        ...(applicationFeeCharged > 0 ? { application_fee_charged: applicationFeeCharged } : {})
+      }
+    });
 
-    if (!holdForReview && paymentData.status === 'approved') {
+    if (transition.error) {
+      console.error('[MercadoPago Status API] Erro ao atualizar a inscrição:', transition.error);
+    }
+
+    if (transition.status === 'payment_approved' && paymentData.status === 'approved' && transition.outcome === 'applied') {
       await applyCouponUsageForApprovedRegistration(supabaseAdmin, registrationId);
-      if (!wasAlreadyApproved) {
+      if (transition.becameApproved) {
         await triggerRegistrationApprovedEmail(supabaseAdmin, registrationId).catch(err =>
           console.error('[MercadoPago Status API] Erro ao disparar e-mail:', err)
         );
       }
+    }
+
+    // Inscrição cancelada pelo gestor: o pagamento não a reabre, e o atleta não
+    // recebe o comprovante de uma inscrição que não vale.
+    const keptCancelledByManager = transition.outcome === 'paid_after_cancellation'
+      || (transition.decision.action === 'ignore' && transition.decision.reason === 'cancelled_by_manager');
+    if (keptCancelledByManager) {
+      return NextResponse.json({
+        status: 'registration_cancelled',
+        registrationData: null,
+        athleteProfile: null,
+        cpf: ''
+      });
     }
 
     try {

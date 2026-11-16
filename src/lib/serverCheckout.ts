@@ -8,6 +8,8 @@ import { getRegistrationAvailability } from '@/lib/eventStatus';
 import { selectEventWithDates, toEventLifecycleInput, type EventLifecycleRow } from '@/lib/serverEventLifecycle';
 import { calculateRegistrationAmounts, getDivisionParticipantCount, normalizeShirtMode, resolveParticipantShirts } from '@/lib/shirtPricing';
 import { createAthleteId, createRegistrationId } from '@/lib/registrationIds';
+import { getNewPaymentBlockReason, NEW_PAYMENT_BLOCK_MESSAGES } from '@/lib/paymentStatusTransition';
+import type { PaymentTransitionRow } from '@/lib/serverPaymentTransition';
 import { Registration } from '@/types';
 
 type RegistrationInput = Record<string, unknown>;
@@ -19,6 +21,9 @@ export type SecureCheckoutSnapshot = {
   transactionAmount: number;
   eventId: string;
   registrationId: string;
+  // Estado do pagamento como está no banco (Story 1.137): decide se a inscrição
+  // aceita uma cobrança nova e entra na regra única de mudança de status.
+  paymentRow: PaymentTransitionRow;
 };
 
 export type CouponValidationResult = {
@@ -301,7 +306,7 @@ export const calculateSecureRegistrationSnapshot = async (
   supabaseAdmin: SupabaseClient,
   registrationData: RegistrationInput,
   athleteProfile: AthleteInput
-): Promise<SecureCheckoutSnapshot> => {
+): Promise<Omit<SecureCheckoutSnapshot, 'paymentRow'>> => {
   const eventId = asString(registrationData.eventId);
   const divisionId = asString(registrationData.divisionId);
   if (!eventId || !divisionId) {
@@ -503,8 +508,28 @@ export const loadRegistrationCheckoutSnapshot = async (
     athleteProfile,
     transactionAmount: totalPaid > 0 && totalPaid < 1 ? 1 : totalPaid,
     eventId: registration.event_id,
-    registrationId
+    registrationId,
+    paymentRow: {
+      payment_status: registration.payment_status ?? null,
+      payment_id: registration.payment_id ?? null,
+      payment_method: registration.payment_method ?? null,
+      cancelled_by: registration.cancelled_by ?? null,
+      cancelled_at: registration.cancelled_at ?? null
+    }
   };
+};
+
+/**
+ * Story 1.137: inscrição aprovada já está paga e inscrição cancelada pelo gestor
+ * não volta por pagamento do atleta. As rotas de PIX, cartão e link chamam isto
+ * antes de criar a cobrança, para não cobrar duas vezes nem reabrir a inscrição.
+ */
+export const assertRegistrationAcceptsNewPayment = (snapshot: Pick<SecureCheckoutSnapshot, 'paymentRow'>) => {
+  const reason = getNewPaymentBlockReason({
+    paymentStatus: snapshot.paymentRow.payment_status,
+    cancelledBy: snapshot.paymentRow.cancelled_by
+  });
+  if (reason) throw new RegistrationAccessError(NEW_PAYMENT_BLOCK_MESSAGES[reason], 409);
 };
 
 export const triggerRegistrationApprovedEmail = async (

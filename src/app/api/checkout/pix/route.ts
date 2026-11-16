@@ -9,6 +9,7 @@ import { ManagerAccessError, assertManagerSalesAccessForEvent, managerAccessErro
 import {
   applyCouponUsageForApprovedRegistration,
   assertEventRegistrationAvailable,
+  assertRegistrationAcceptsNewPayment,
   assertRegistrationAccess,
   loadRegistrationCheckoutSnapshot,
   RegistrationAccessError
@@ -17,6 +18,8 @@ import { checkRateLimit, createSupabaseAdmin, getClientIp } from '@/lib/serverSe
 import { calculateServiceFee } from '@/lib/serviceFee';
 import { CheckoutGatewayError, resolveEventPaymentContext } from '@/lib/checkoutGateway';
 import { isPixSupported } from '@/lib/paymentGateway';
+import { NEW_PAYMENT_BLOCK_MESSAGES } from '@/lib/paymentStatusTransition';
+import { writePaymentTransition } from '@/lib/serverPaymentTransition';
 
 const supabaseAdmin = createSupabaseAdmin();
 
@@ -44,6 +47,8 @@ export async function POST(request: Request) {
 
     const checkoutSnapshot = await loadRegistrationCheckoutSnapshot(supabaseAdmin, registrationData.id);
     const { registrationData: safeRegistrationData, athleteProfile, transactionAmount } = checkoutSnapshot;
+    // Inscrição paga ou cancelada pelo gestor não recebe cobrança nova (Story 1.137).
+    assertRegistrationAcceptsNewPayment(checkoutSnapshot);
     await assertEventRegistrationAvailable(supabaseAdmin, checkoutSnapshot.eventId);
     await assertManagerSalesAccessForEvent(supabaseAdmin, checkoutSnapshot.eventId);
 
@@ -131,10 +136,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Dados da transação Pix não gerados.' }, { status: 500 });
     }
 
-    await supabaseAdmin
-      .from('registrations')
-      .update({
-        payment_status: paymentData.status === 'approved' ? 'payment_approved' : 'payment_pending',
+    // Regra única (Story 1.137). O PIX novo passa a ser a tentativa atual; se a
+    // inscrição foi aprovada ou cancelada pelo gestor enquanto ele era gerado, nada
+    // é gravado e o QR não é devolvido.
+    const transition = await writePaymentTransition(supabaseAdmin, {
+      source: 'mp-pix',
+      registrationId: checkoutSnapshot.registrationId,
+      registration: checkoutSnapshot.paymentRow,
+      payment: {
+        gateway: 'mercadopago',
+        id: paymentData.id,
+        status: paymentData.status,
+        approvedAt: paymentData.date_approved
+      },
+      nextStatus: paymentData.status === 'approved' ? 'payment_approved' : 'payment_pending',
+      isNewAttempt: true,
+      fields: {
         payment_method: 'pix',
         payment_id: paymentData.id ? String(paymentData.id) : null,
         payment_status_detail: paymentData.status_detail || null,
@@ -144,12 +161,20 @@ export async function POST(request: Request) {
         service_fee_amount: serviceFee.serviceFeeAmount,
         service_fee_payer: checkoutConfig.serviceFeePayer,
         amount_collected: serviceFee.amountCollected,
-        application_fee_charged: extractApplicationFeeCharged(paymentData),
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', checkoutSnapshot.registrationId);
+        application_fee_charged: extractApplicationFeeCharged(paymentData)
+      }
+    });
 
-    if (paymentData.status === 'approved') {
+    if (transition.error) {
+      console.error('[MercadoPago Pix API] Erro ao gravar o PIX na inscrição:', transition.error);
+    }
+
+    if (transition.outcome !== 'applied') {
+      const reason = transition.status === 'payment_approved' ? 'already_paid' : 'cancelled_by_manager';
+      return NextResponse.json({ error: NEW_PAYMENT_BLOCK_MESSAGES[reason] }, { status: 409 });
+    }
+
+    if (transition.becameApproved) {
       await applyCouponUsageForApprovedRegistration(supabaseAdmin, checkoutSnapshot.registrationId);
     }
 

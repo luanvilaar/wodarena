@@ -13,6 +13,7 @@ import {
 } from '@/lib/mercadopagoServer';
 import { PAYMENT_INTEGRITY_STATUS_DETAIL } from '@/lib/paymentIntegrity';
 import { reviewPaymentBeforeApproval } from '@/lib/serverPaymentIntegrity';
+import { writePaymentTransition } from '@/lib/serverPaymentTransition';
 
 const supabaseAdmin = createSupabaseAdmin();
 
@@ -21,6 +22,8 @@ const toRegistrationPaymentStatus = (status?: string): RegistrationPaymentStatus
   if (status === 'in_process') return 'payment_in_review';
   if (status === 'cancelled') return 'payment_cancelled';
   if (status === 'rejected') return 'payment_failed';
+  // Estorno e contestação (Story 1.137): a inscrição sai de aprovada como cancelada.
+  if (status === 'refunded' || status === 'charged_back') return 'payment_cancelled';
   return 'payment_pending';
 };
 
@@ -141,33 +144,39 @@ export async function POST(request: Request) {
       }
     });
     const nextPaymentStatus: RegistrationPaymentStatus = holdForReview ? 'payment_in_review' : toRegistrationPaymentStatus(status);
-    const wasApproved = existingRegistration.payment_status === 'payment_approved';
     const amountCollected = Number(paymentData.transaction_amount || 0);
     const applicationFeeCharged = extractApplicationFeeCharged(paymentData);
 
-    const { data: updatedRegistration, error: updateError } = await supabaseAdmin
-      .from('registrations')
-      .update({
-        payment_status: nextPaymentStatus,
+    // Regra única (Story 1.137): o aviso de uma tentativa antiga (um PIX que
+    // expirou, por exemplo) não desfaz a inscrição aprovada por outro pagamento.
+    const transition = await writePaymentTransition(supabaseAdmin, {
+      source: 'mp-webhook',
+      registrationId: metadataRegistrationId,
+      eventId,
+      registration: existingRegistration,
+      payment: {
+        gateway: 'mercadopago',
+        id: paymentData.id,
+        status,
+        approvedAt: paymentData.date_approved
+      },
+      nextStatus: nextPaymentStatus,
+      fields: {
         payment_method: paymentData.payment_method_id || null,
         payment_id: String(paymentData.id),
         payment_status_detail: holdForReview ? PAYMENT_INTEGRITY_STATUS_DETAIL : (paymentData.status_detail || null),
         payment_error_message: status === 'rejected' ? 'Pagamento nao processado.' : null,
         ...(amountCollected > 0 ? { amount_collected: amountCollected } : {}),
-        ...(applicationFeeCharged > 0 ? { application_fee_charged: applicationFeeCharged } : {}),
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', metadataRegistrationId)
-      .eq('event_id', eventId)
-      .select('*')
-      .maybeSingle();
+        ...(applicationFeeCharged > 0 ? { application_fee_charged: applicationFeeCharged } : {})
+      }
+    });
 
-    if (updateError || !updatedRegistration) {
-      console.error('[MercadoPago Webhook] Erro ao atualizar inscricao:', updateError);
+    if (transition.error) {
+      console.error('[MercadoPago Webhook] Erro ao atualizar inscricao:', transition.error);
       return NextResponse.json({ error: 'Erro ao atualizar inscricao.' }, { status: 500 });
     }
 
-    if (nextPaymentStatus === 'payment_approved' && !wasApproved) {
+    if (transition.becameApproved) {
       await applyCouponUsageForApprovedRegistration(supabaseAdmin, metadataRegistrationId);
       await triggerRegistrationApprovedEmail(supabaseAdmin, metadataRegistrationId).catch(err =>
         console.error('[MercadoPago Webhook] Erro ao disparar e-mail:', err)

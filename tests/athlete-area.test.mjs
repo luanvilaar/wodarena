@@ -42,14 +42,18 @@ test('registration start endpoint creates athlete user, secret, athlete and pend
 
 test('credit card failures update existing registrations as failed', () => {
   assert.match(cardRoute, /paymentStatus: 'payment_failed'/);
-  assert.match(cardRoute, /payment_status: payload\.paymentStatus/);
+  // Story 1.137: o status passa pela regra única de mudança de status.
+  assert.match(cardRoute, /nextStatus: payload\.paymentStatus/);
+  assert.match(cardRoute, /await writePaymentTransition\(/);
   assert.match(cardRoute, /payment_error_message/);
   assert.match(registerModal, /Pagamento não processado\. Sua inscrição foi registrada/);
 });
 
 test('webhook updates registration payment status by registration id', () => {
   assert.match(webhookRoute, /toRegistrationPaymentStatus/);
-  assert.match(webhookRoute, /payment_status: nextPaymentStatus/);
+  // Story 1.137: o status passa pela regra única de mudança de status.
+  assert.match(webhookRoute, /nextStatus: nextPaymentStatus/);
+  assert.match(webhookRoute, /registrationId: metadataRegistrationId/);
   assert.match(webhookRoute, /metadataRegistrationId/);
   assert.match(webhookRoute, /\.eq\('id', metadataRegistrationId\)/);
   assert.match(webhookRoute, /\.eq\('event_id', eventId\)/);

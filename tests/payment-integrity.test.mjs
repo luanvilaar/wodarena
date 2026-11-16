@@ -467,7 +467,8 @@ test('as rotas que aprovam a partir de um pagamento passam pela conferência ant
     assert.match(source, /import \{ PAYMENT_INTEGRITY_STATUS_DETAIL \} from '@\/lib\/paymentIntegrity';/, name);
     assert.match(source, /import \{ reviewPaymentBeforeApproval \} from '@\/lib\/serverPaymentIntegrity';/, name);
     const reviewAt = source.indexOf('await reviewPaymentBeforeApproval(');
-    const updateAt = source.search(/\.from\('registrations'\)\s*\.update\(/);
+    // Story 1.137: a gravação passa pela regra única de mudança de status.
+    const updateAt = source.indexOf('await writePaymentTransition(');
     assert.ok(reviewAt > 0 && updateAt > reviewAt, `${name}: conferência antes do update`);
     assert.match(source, /holdForReview \? PAYMENT_INTEGRITY_STATUS_DETAIL : /, name);
   }

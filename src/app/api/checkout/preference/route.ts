@@ -5,13 +5,44 @@ import {
 } from '@/lib/mercadopagoServer';
 import { StripeConfigError, buildStripeIdempotencyKey, getStripeClient, resolveStripeCheckoutConfig } from '@/lib/stripeServer';
 import { ManagerAccessError, assertManagerSalesAccessForEvent, managerAccessErrorResponse } from '@/lib/serverManagerAccess';
-import { assertEventRegistrationAvailable, assertRegistrationAccess, loadRegistrationCheckoutSnapshot, RegistrationAccessError } from '@/lib/serverCheckout';
+import { assertEventRegistrationAvailable, assertRegistrationAcceptsNewPayment, assertRegistrationAccess, loadRegistrationCheckoutSnapshot, RegistrationAccessError } from '@/lib/serverCheckout';
+import { getNewPaymentBlockReason, NEW_PAYMENT_BLOCK_MESSAGES } from '@/lib/paymentStatusTransition';
 import { createSupabaseAdmin } from '@/lib/serverSecurity';
 import { calculateServiceFee } from '@/lib/serviceFee';
 import { CheckoutGatewayError, resolveEventPaymentContext } from '@/lib/checkoutGateway';
 import { toMinorUnits } from '@/lib/intl/format';
 
 const supabaseAdmin = createSupabaseAdmin();
+
+const CHECKOUT_CHANGED_MESSAGE = 'A situação desta inscrição mudou enquanto o pagamento era preparado. Atualize a página.';
+
+// Grava a cobrança nova só se o status da inscrição ainda for o que foi lido
+// (Story 1.137). Se ela foi aprovada ou cancelada pelo gestor nesse meio tempo,
+// devolve a resposta 409 e o link não chega ao atleta.
+const writePendingCheckout = async (
+  registrationId: string,
+  expectedStatus: string | null | undefined,
+  patch: Record<string, unknown>
+): Promise<NextResponse | null> => {
+  let query = supabaseAdmin.from('registrations').update(patch).eq('id', registrationId);
+  query = expectedStatus ? query.eq('payment_status', expectedStatus) : query.is('payment_status', null);
+  const { data, error } = await query.select('payment_status');
+  if (error) {
+    console.error('[Checkout Preference API] Erro ao gravar a cobrança na inscrição:', error);
+    return null;
+  }
+  if (Array.isArray(data) && data.length > 0) return null;
+
+  const { data: current } = await supabaseAdmin
+    .from('registrations')
+    .select('payment_status, cancelled_by')
+    .eq('id', registrationId)
+    .maybeSingle();
+  const reason = current
+    ? getNewPaymentBlockReason({ paymentStatus: current.payment_status, cancelledBy: current.cancelled_by })
+    : null;
+  return NextResponse.json({ error: reason ? NEW_PAYMENT_BLOCK_MESSAGES[reason] : CHECKOUT_CHANGED_MESSAGE }, { status: 409 });
+};
 
 const createStripeCheckoutSession = async (
   eventId: string,
@@ -81,6 +112,8 @@ export async function POST(request: Request) {
 
     const checkoutSnapshot = await loadRegistrationCheckoutSnapshot(supabaseAdmin, registrationData.id);
     const { registrationData: safeRegistrationData, athleteProfile, transactionAmount } = checkoutSnapshot;
+    // Inscrição paga ou cancelada pelo gestor não recebe cobrança nova (Story 1.137).
+    assertRegistrationAcceptsNewPayment(checkoutSnapshot);
     await assertEventRegistrationAvailable(supabaseAdmin, checkoutSnapshot.eventId);
     await assertManagerSalesAccessForEvent(supabaseAdmin, checkoutSnapshot.eventId);
 
@@ -100,11 +133,12 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Link de pagamento inválido retornado pela Stripe.' }, { status: 500 });
       }
 
-      await supabaseAdmin
-        .from('registrations')
-        .update({
+      const stripeBlocked = await writePendingCheckout(checkoutSnapshot.registrationId, checkoutSnapshot.paymentRow.payment_status, {
           payment_status: 'payment_pending',
           payment_method: 'stripe_checkout',
+          // Sessão nova é a tentativa atual: o intent da anterior deixa de valer
+          // (Story 1.137), para o aviso dela não ser confundido com o desta.
+          payment_id: null,
           payment_status_detail: null,
           payment_error_message: null,
           total_paid: transactionAmount,
@@ -116,8 +150,8 @@ export async function POST(request: Request) {
           amount_collected: serviceFee.amountCollected,
           application_fee_charged: 0,
           updated_at: new Date().toISOString()
-        })
-        .eq('id', checkoutSnapshot.registrationId);
+        });
+      if (stripeBlocked) return stripeBlocked;
 
       return NextResponse.json({ redirectUrl, gateway: 'stripe' });
     }
@@ -198,9 +232,7 @@ export async function POST(request: Request) {
     }
 
     const preferenceData = await mpResponse.json();
-    await supabaseAdmin
-      .from('registrations')
-      .update({
+    const preferenceBlocked = await writePendingCheckout(checkoutSnapshot.registrationId, checkoutSnapshot.paymentRow.payment_status, {
         payment_status: 'payment_pending',
         payment_method: 'mercadopago_preference',
         payment_id: preferenceData.id ? String(preferenceData.id) : null,
@@ -213,8 +245,8 @@ export async function POST(request: Request) {
         amount_collected: serviceFee.amountCollected,
         application_fee_charged: 0,
         updated_at: new Date().toISOString()
-      })
-      .eq('id', checkoutSnapshot.registrationId);
+      });
+    if (preferenceBlocked) return preferenceBlocked;
 
     return NextResponse.json({
       gateway: 'mercadopago',
