@@ -136,6 +136,7 @@ import {
   type QualifierWorkoutLock
 } from '@/lib/workoutEdit';
 import { SCORE_TIE_BREAKER_SPLIT_KEY, shouldUseTimeTieBreaker } from '@/lib/scoring';
+import { describeRegistrationPaymentStatus } from '@/lib/registrationPaymentStatusLabel';
 import {
   ATHLETE_SECTIONS,
   getAthleteRegistrationElementId,
@@ -3346,20 +3347,18 @@ export default function AdminPage() {
     }
   };
 
-  const getPaymentStatusMeta = (status?: Registration['paymentStatus']) => {
-    switch (status) {
-      case 'payment_approved':
-        return { label: 'Aprovado', tone: 'success' as const };
-      case 'payment_failed':
-        return { label: 'Pagamento falhou', tone: 'danger' as const };
-      case 'payment_in_review':
-        return { label: 'Em análise', tone: 'warning' as const };
-      case 'payment_cancelled':
-        return { label: 'Cancelado', tone: 'danger' as const };
-      case 'payment_pending':
-      default:
-        return { label: 'Pendente', tone: 'warning' as const };
-    }
+  // Story 1.138: o rótulo diz de onde veio o status (PIX expirado, cancelado
+  // pelo gestor, estornado...), não só "Cancelado".
+  const getPaymentStatusMeta = (
+    status?: Registration['paymentStatus'],
+    registration?: Pick<Registration, 'paymentStatusDetail' | 'cancelledBy'>
+  ) => {
+    const { label, tone } = describeRegistrationPaymentStatus({
+      paymentStatus: status,
+      paymentStatusDetail: registration?.paymentStatusDetail,
+      cancelledBy: registration?.cancelledBy
+    });
+    return { label, tone };
   };
 
   const getPaymentStatusClassName = (tone: 'success' | 'danger' | 'warning') => {
@@ -3803,7 +3802,7 @@ export default function AdminPage() {
                       {athleteRegistrations.map(reg => {
                         const event = getRegistrationEvent(reg);
                         const division = event?.divisions.find(div => div.id === reg.divisionId);
-                        const statusMeta = getPaymentStatusMeta(reg.paymentStatus);
+                        const statusMeta = getPaymentStatusMeta(reg.paymentStatus, reg);
                         const needsPayment = reg.paymentStatus === 'payment_failed' || reg.paymentStatus === 'payment_pending';
                         const registrationElementId = getAthleteRegistrationElementId(reg.id);
                         const registrationTitleId = `${registrationElementId}-title`;
@@ -7740,7 +7739,7 @@ export default function AdminPage() {
         const div = divisions.find(d => d.id === reg.divisionId);
         const athleteInfo = resolveRegistrationAthlete(reg);
         const teamMembers = getAthleteTeamMembers(athleteInfo);
-        const statusMeta = getPaymentStatusMeta(reg.paymentStatus);
+        const statusMeta = getPaymentStatusMeta(reg.paymentStatus, reg);
         const baseRow = {
           evento: selectedEventToManage.name,
           categoria: div?.name || reg.ticketType,
@@ -8330,7 +8329,8 @@ export default function AdminPage() {
               <div className="space-y-2.5">
                 {filteredRegs.map((reg) => {
                   const div = divisions.find(d => d.id === reg.divisionId);
-                  const statusMeta = getPaymentStatusMeta(reg.paymentStatus);
+                  const statusMeta = getPaymentStatusMeta(reg.paymentStatus, reg);
+                  const cancellationInfo = describeRegistrationPaymentStatus(reg).cancellation;
                   const athleteInfo = resolveRegistrationAthlete(reg);
                   const isExpanded = expandedRegistrationId === reg.id;
                   const teamMembers = getAthleteTeamMembers(athleteInfo);
@@ -8355,7 +8355,10 @@ export default function AdminPage() {
                     || reg.paymentStatus === 'payment_failed'
                   );
                   const canCancel = reg.paymentStatus !== 'payment_cancelled' && reg.paymentStatus !== 'payment_failed';
-                  const canMarkRefunded = reg.paymentStatus === 'payment_cancelled' && reg.refundStatus !== 'manual_refunded';
+                  // Sem dinheiro recebido (PIX expirado, pagamento cancelado pelo atleta) não há o que reembolsar.
+                  const canMarkRefunded = reg.paymentStatus === 'payment_cancelled'
+                    && reg.refundStatus !== 'manual_refunded'
+                    && cancellationInfo?.moneyReceived !== false;
                   const canConfirmManualPayment = reg.paymentMethod === 'manual' && reg.paymentStatus === 'payment_pending';
 
                   return (
@@ -8460,25 +8463,34 @@ export default function AdminPage() {
                             <p className="text-[10px] text-trading-down">{reg.paymentErrorMessage || 'Pagamento não processado.'}</p>
                           )}
 
-                          {reg.paymentStatus === 'payment_cancelled' && (
+                          {reg.paymentStatus === 'payment_cancelled' && cancellationInfo && (
                             <div className="rounded-lg border border-trading-down/20 bg-trading-down/10 p-3 text-[11px] text-muted-soft">
                               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                                 <div>
-                                  <p className="font-bold uppercase tracking-wider text-trading-down font-sans">Inscrição cancelada</p>
+                                  <p className="font-bold uppercase tracking-wider text-trading-down font-sans">{cancellationInfo.title}</p>
                                   <p className="mt-1">
-                                    {reg.cancellationReason || 'Cancelamento registrado pelo gestor.'}
+                                    {cancellationInfo.origin === 'manager'
+                                      ? (reg.cancellationReason || cancellationInfo.description)
+                                      : cancellationInfo.description}
                                     {reg.cancelledAt ? ` · ${new Date(reg.cancelledAt).toLocaleDateString('pt-BR')}` : ''}
                                   </p>
+                                  {cancellationInfo.origin === 'paid_after_cancellation' && reg.cancellationReason && (
+                                    <p className="mt-1 text-[10px] text-muted">Motivo do cancelamento: {reg.cancellationReason}</p>
+                                  )}
                                 </div>
-                                <span className="shrink-0 rounded border border-primary/25 bg-primary/10 px-2.5 py-1 text-[9px] font-bold uppercase text-primary">
-                                  {getRefundStatusLabel(reg.refundStatus)}
-                                </span>
+                                {cancellationInfo.moneyReceived && (
+                                  <span className="shrink-0 rounded border border-primary/25 bg-primary/10 px-2.5 py-1 text-[9px] font-bold uppercase text-primary">
+                                    {getRefundStatusLabel(reg.refundStatus)}
+                                  </span>
+                                )}
                               </div>
-                              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
-                                <RegDetail label="Valor reembolso" value={reg.refundAmount !== undefined ? currencyFormatter.format(reg.refundAmount) : '-'} />
-                                <RegDetail label="Método reembolso" value={reg.refundMethod || '-'} />
-                                <RegDetail label="Processado em" value={reg.refundProcessedAt ? new Date(reg.refundProcessedAt).toLocaleDateString('pt-BR') : '-'} />
-                              </div>
+                              {cancellationInfo.moneyReceived && (
+                                <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                                  <RegDetail label="Valor reembolso" value={reg.refundAmount !== undefined ? currencyFormatter.format(reg.refundAmount) : '-'} />
+                                  <RegDetail label="Método reembolso" value={reg.refundMethod || '-'} />
+                                  <RegDetail label="Processado em" value={reg.refundProcessedAt ? new Date(reg.refundProcessedAt).toLocaleDateString('pt-BR') : '-'} />
+                                </div>
+                              )}
                               {reg.refundNote && (
                                 <p className="mt-2 text-[10px] leading-relaxed text-muted">{reg.refundNote}</p>
                               )}

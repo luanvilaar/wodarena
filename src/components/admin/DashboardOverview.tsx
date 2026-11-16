@@ -27,7 +27,10 @@ type DashboardOverviewProps = {
   finance: ManagerFinanceSummary;
   onSelectEvent: (event: Event) => void;
   onCreateEvent: () => void;
-  getPaymentStatusMeta: (status?: Registration['paymentStatus']) => { label: string; tone: PaymentStatusTone };
+  getPaymentStatusMeta: (
+    status?: Registration['paymentStatus'],
+    registration?: Pick<Registration, 'paymentStatusDetail' | 'cancelledBy'>
+  ) => { label: string; tone: PaymentStatusTone };
   getPaymentStatusClassName: (tone: PaymentStatusTone) => string;
 };
 
@@ -427,7 +430,7 @@ export const DashboardOverview = ({
               {/* Quatro colunas não cabem em telas estreitas: lista empilhada. */}
               <ul className="mt-4 space-y-3 md:hidden">
                 {stats.latestRegistrations.map(reg => {
-                  const statusMeta = getPaymentStatusMeta(reg.paymentStatus);
+                  const statusMeta = getPaymentStatusMeta(reg.paymentStatus, reg);
                   return (
                     <li key={reg.id} className="rounded-lg border border-card-border/60 bg-dark-gray/25 p-3">
                       <div className="flex items-start justify-between gap-3">
@@ -461,7 +464,7 @@ export const DashboardOverview = ({
                   </thead>
                   <tbody className="divide-y divide-card-border/30 text-xs">
                     {stats.latestRegistrations.map(reg => {
-                      const statusMeta = getPaymentStatusMeta(reg.paymentStatus);
+                      const statusMeta = getPaymentStatusMeta(reg.paymentStatus, reg);
                       return (
                         <tr key={reg.id} className="transition-colors hover:bg-dark-gray/30">
                           <td className="w-full py-2.5 pr-3">
