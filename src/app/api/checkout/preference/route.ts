@@ -26,6 +26,9 @@ const writePendingCheckout = async (
 ): Promise<NextResponse | null> => {
   let query = supabaseAdmin.from('registrations').update(patch).eq('id', registrationId);
   query = expectedStatus ? query.eq('payment_status', expectedStatus) : query.is('payment_status', null);
+  // A checagem de cobrança nova já exigiu que ninguém tenha cancelado; o
+  // cancelamento pelo gestor no meio do caminho (mesmo sem mudar o status) barra a gravação.
+  query = query.is('cancelled_by', null);
   const { data, error } = await query.select('payment_status');
   if (error) {
     // Falha de gravação segue com o link, como antes: o pagamento leva o

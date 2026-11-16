@@ -23,7 +23,9 @@ const toRegistrationPaymentStatus = (status?: string): RegistrationPaymentStatus
   return 'payment_pending';
 };
 
-const updateRegistrationFromIntent = async (paymentIntent: Stripe.PaymentIntent) => {
+// approvedAt: hora do evento do Stripe (o PaymentIntent não traz a da aprovação).
+// Separa o pagamento aprovado depois do cancelamento pelo gestor (Story 1.137).
+const updateRegistrationFromIntent = async (paymentIntent: Stripe.PaymentIntent, approvedAt?: string) => {
   const registrationId = paymentIntent.metadata?.registration_id;
   const eventId = paymentIntent.metadata?.event_id;
 
@@ -75,7 +77,8 @@ const updateRegistrationFromIntent = async (paymentIntent: Stripe.PaymentIntent)
     payment: {
       gateway: 'stripe',
       id: paymentIntent.id,
-      status: paymentIntent.status
+      status: paymentIntent.status,
+      approvedAt
     },
     nextStatus: nextPaymentStatus,
     fields: {
@@ -123,12 +126,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Assinatura Stripe inválida.' }, { status: 401 });
     }
 
+    const eventAt = new Date(event.created * 1000).toISOString();
     switch (event.type) {
       case 'payment_intent.succeeded':
       case 'payment_intent.payment_failed':
       case 'payment_intent.canceled':
       case 'payment_intent.processing':
-        await updateRegistrationFromIntent(event.data.object as Stripe.PaymentIntent);
+        await updateRegistrationFromIntent(event.data.object as Stripe.PaymentIntent, eventAt);
         break;
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
@@ -138,7 +142,7 @@ export async function POST(request: Request) {
             {},
             { stripeAccount: session.metadata?.stripe_account_id || undefined }
           );
-          await updateRegistrationFromIntent(intent);
+          await updateRegistrationFromIntent(intent, eventAt);
         }
         break;
       }

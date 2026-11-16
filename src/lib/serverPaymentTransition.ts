@@ -164,6 +164,10 @@ export const writePaymentTransition = async (
   let query = supabaseAdmin.from('registrations').update(patch).eq('id', input.registrationId);
   if (input.eventId) query = query.eq('event_id', input.eventId);
   query = currentStatus === null ? query.is('payment_status', null) : query.eq('payment_status', currentStatus);
+  // O gestor pode cancelar sem mudar o status (inscrição já cancelada pelo PIX
+  // expirado): o autor do cancelamento também precisa ser o que foi lido.
+  const currentCancelledBy = input.registration?.cancelled_by ?? null;
+  query = currentCancelledBy === null ? query.is('cancelled_by', null) : query.eq('cancelled_by', currentCancelledBy);
   const { data, error } = await query.select('payment_status');
 
   if (error) {

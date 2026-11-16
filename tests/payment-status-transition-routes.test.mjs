@@ -551,3 +551,33 @@ test('webhook: PIX criado direto antes do link expira sem derrubar o link em and
   assert.deepEqual(outcome.row, before);
   assert.equal(outcome.transitions[0].reason, 'older_attempt');
 });
+
+test('webhook do Stripe: o mesmo intent aprovado depois do cancelamento pelo gestor fica marcado pela hora do evento', async (t) => {
+  const { run } = setup(t);
+  const intent = {
+    id: 'pi_tentativa_unica',
+    object: 'payment_intent',
+    status: 'succeeded',
+    amount: 15000,
+    amount_received: 15000,
+    currency: 'eur',
+    last_payment_error: null,
+    metadata: { registration_id: EURO_REG_ID, event_id: EURO_EVENT_ID }
+  };
+  // Cancelada pelo gestor em 2026-11-10; o evento do Stripe é de agora.
+  const outcome = await run({
+    registrations: [euroRegistration({ payment_status: 'payment_cancelled', payment_status_detail: 'manager_cancelled', payment_id: 'pi_tentativa_unica', cancelled_by: MANAGER_ID, cancelled_at: CANCELLED_AT })],
+    request: stripeWebhook(intent, 'payment_intent.succeeded'),
+    registrationId: EURO_REG_ID
+  });
+  assert.equal(outcome.row.payment_status, 'payment_cancelled');
+  assert.equal(outcome.row.payment_status_detail, 'paid_after_cancellation');
+  assert.equal(outcome.emails, 0);
+});
+
+test('a gravação compara também o autor do cancelamento lido', async () => {
+  const { readFileSync } = await import('node:fs');
+  const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
+  assert.match(read('../src/lib/serverPaymentTransition.ts'), /query = currentCancelledBy === null \? query\.is\('cancelled_by', null\) : query\.eq\('cancelled_by', currentCancelledBy\);/);
+  assert.match(read('../src/app/api/checkout/preference/route.ts'), /query = query\.is\('cancelled_by', null\);/);
+});
