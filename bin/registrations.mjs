@@ -55,7 +55,29 @@ const printHelp = () => {
   console.log(`Uso:
   npm run registrations:cli -- cancel --event EVENT_ID --registration REG_ID --reason "Solicitado pelo atleta" [--amount 60.00] [--method pix] [--note "Taxas de credito nao reembolsadas"]
   npm run registrations:cli -- refund --event EVENT_ID --registration REG_ID --amount 57.20 --method pix [--note "Comprovante enviado por WhatsApp"]
-  npm run registrations:cli -- show --registration REG_ID`);
+  npm run registrations:cli -- show --registration REG_ID
+  npm run registrations:cli -- history --registration REG_ID
+  npm run registrations:cli -- history --event EVENT_ID [--limit 200]`);
+};
+
+// Story 1.140: histórico de status de pagamento (tabela registration_status_events,
+// gravada pelo gatilho do banco). Mostra de onde veio cada mudança.
+const showHistory = async (supabase, args) => {
+  if (!args.registration && !args.event) {
+    throw new Error('Informe --registration ou --event para ver o histórico.');
+  }
+  const limit = Math.min(Math.max(Number(args.limit) || 200, 1), 1000);
+
+  let query = supabase
+    .from('registration_status_events')
+    .select('registration_id, event_id, old_status, new_status, old_payment_id, new_payment_id, old_status_detail, new_status_detail, old_cancelled_by, new_cancelled_by, changed_at')
+    .order('changed_at', { ascending: true })
+    .limit(limit);
+  query = args.registration ? query.eq('registration_id', args.registration) : query.eq('event_id', args.event);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  console.log(JSON.stringify(data, null, 2));
 };
 
 const showRegistration = async (supabase, args) => {
@@ -166,6 +188,11 @@ const main = async () => {
 
   if (command === 'show') {
     await showRegistration(supabase, args);
+    return;
+  }
+
+  if (command === 'history') {
+    await showHistory(supabase, args);
     return;
   }
 
