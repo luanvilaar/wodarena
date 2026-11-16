@@ -210,7 +210,8 @@ export async function GET(request: Request) {
         gateway: 'mercadopago',
         id: paymentData.id,
         status: paymentData.status,
-        approvedAt: paymentData.date_approved
+        approvedAt: paymentData.date_approved,
+        checkoutKind: paymentData.metadata?.checkout
       },
       nextStatus: holdForReview ? 'payment_in_review' : toRegistrationPaymentStatus(paymentData.status),
       fields: {

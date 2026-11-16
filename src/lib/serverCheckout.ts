@@ -513,6 +513,7 @@ export const loadRegistrationCheckoutSnapshot = async (
       payment_status: registration.payment_status ?? null,
       payment_id: registration.payment_id ?? null,
       payment_method: registration.payment_method ?? null,
+      payment_status_detail: registration.payment_status_detail ?? null,
       cancelled_by: registration.cancelled_by ?? null,
       cancelled_at: registration.cancelled_at ?? null
     }

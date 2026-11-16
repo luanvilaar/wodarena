@@ -235,3 +235,39 @@ test('nova cobrança: inscrição aprovada já está paga; cancelada pelo gestor
     assert.equal(getNewPaymentBlockReason({ paymentStatus, cancelledBy: null }), null, String(paymentStatus));
   }
 });
+
+test('pendente pelo link: PIX ou cartão criados direto antes do link não derrubam o link; pagamentos do link e sem marca aplicam', () => {
+  const preference = { paymentStatus: 'payment_pending', paymentId: '299411356-abc', paymentMethod: 'mercadopago_preference' };
+  for (const checkoutKind of ['pix', 'card']) {
+    assert.deepEqual(
+      decidePaymentTransition({ registration: preference, payment: mp(PIX_OLD, 'cancelled', { checkoutKind }), nextStatus: 'payment_cancelled' }),
+      { action: 'ignore', reason: 'older_attempt' },
+      checkoutKind
+    );
+  }
+  assert.deepEqual(
+    decidePaymentTransition({ registration: preference, payment: mp(CARD, 'rejected', { checkoutKind: 'preference' }), nextStatus: 'payment_failed' }),
+    { action: 'apply', status: 'payment_failed' }
+  );
+  // PIX direto aprovado depois do link: o dinheiro entrou, vale.
+  assert.deepEqual(
+    decidePaymentTransition({ registration: preference, payment: mp(PIX_OLD, 'approved', { checkoutKind: 'pix' }), nextStatus: 'payment_approved' }),
+    { action: 'apply', status: 'payment_approved' }
+  );
+});
+
+test('estornada: a leitura atrasada do mesmo pagamento como aprovado não reabre; outro pagamento aprovado vale', () => {
+  for (const detail of ['refunded', 'charged_back']) {
+    const refunded = { paymentStatus: 'payment_cancelled', paymentId: CARD, paymentMethod: 'master', paymentStatusDetail: detail, cancelledBy: null };
+    assert.deepEqual(
+      decidePaymentTransition({ registration: refunded, payment: mp(CARD, 'approved'), nextStatus: 'payment_approved' }),
+      { action: 'ignore', reason: 'refunded_payment' },
+      detail
+    );
+    assert.deepEqual(
+      decidePaymentTransition({ registration: refunded, payment: mp(PIX_NEW, 'approved'), nextStatus: 'payment_approved' }),
+      { action: 'apply', status: 'payment_approved' },
+      detail
+    );
+  }
+});

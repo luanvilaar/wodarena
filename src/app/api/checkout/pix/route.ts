@@ -100,7 +100,9 @@ export async function POST(request: Request) {
       },
       metadata: {
         registration_id: checkoutSnapshot.registrationId,
-        event_id: checkoutSnapshot.eventId
+        event_id: checkoutSnapshot.eventId,
+        // Por onde a cobrança nasceu (Story 1.137): separa este PIX de um link criado depois.
+        checkout: 'pix'
       },
       ...(!isLocalhost ? { notification_url: `${origin}/api/webhooks/mercadopago?event_id=${checkoutSnapshot.eventId}` } : {})
     };

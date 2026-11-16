@@ -21,9 +21,15 @@ const functionBody = (sql, name) => {
   return sql.slice(start, end);
 };
 
-test('as duas migrations vêm depois da última migration existente, na ordem do trava → histórico', () => {
+// Última migration antes destas stories.
+const BASELINE = '20261107120000_users_created_at.sql';
+
+test('as duas migrations vêm depois da base, na ordem trava → histórico', () => {
   const files = readdirSync(new URL('../supabase/migrations/', import.meta.url)).filter((name) => name.endsWith('.sql')).sort();
-  assert.deepEqual(files.slice(-2), [GUARD, HISTORY]);
+  const baseline = files.indexOf(BASELINE);
+  const guardAt = files.indexOf(GUARD);
+  const historyAt = files.indexOf(HISTORY);
+  assert.ok(baseline >= 0 && guardAt > baseline && historyAt > guardAt, files.slice(-4).join(', '));
 });
 
 test('1.139: só sai de aprovada por cancelamento do gestor ou pelo próprio pagamento que aprovou', () => {

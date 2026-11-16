@@ -28,6 +28,9 @@ const writePendingCheckout = async (
   query = expectedStatus ? query.eq('payment_status', expectedStatus) : query.is('payment_status', null);
   const { data, error } = await query.select('payment_status');
   if (error) {
+    // Falha de gravação segue com o link, como antes: o pagamento leva o
+    // registration_id no metadata e o webhook o liga à inscrição. Barrar aqui
+    // impediria o atleta de pagar por uma falha passageira do banco.
     console.error('[Checkout Preference API] Erro ao gravar a cobrança na inscrição:', error);
     return null;
   }
@@ -167,7 +170,9 @@ export async function POST(request: Request) {
 
     const metadataPayload = {
       registration_id: checkoutSnapshot.registrationId,
-      event_id: checkoutSnapshot.eventId
+      event_id: checkoutSnapshot.eventId,
+      // Por onde a cobrança nasceu (Story 1.137): os pagamentos do link herdam a marca.
+      checkout: 'preference'
     };
 
     const isLocalhost = origin.includes('localhost') || origin.includes('127.0.0.1');

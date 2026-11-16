@@ -529,3 +529,25 @@ test('PIX, cartão e link recusam cobrança nova para inscrição cancelada pelo
     assert.deepEqual(outcome.row, before, label);
   }
 });
+
+test('PIX, cartão e link marcam no metadata por onde a cobrança nasceu; webhook e status repassam a marca', async () => {
+  const { readFileSync } = await import('node:fs');
+  const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
+  assert.match(read('../src/app/api/checkout/pix/route.ts'), /metadata: \{[\s\S]*?checkout: 'pix'\s*\}/);
+  assert.match(read('../src/app/api/checkout/card/route.ts'), /metadata: \{[\s\S]*?checkout: 'card'\s*\}/);
+  assert.match(read('../src/app/api/checkout/preference/route.ts'), /const metadataPayload = \{[\s\S]*?checkout: 'preference'\s*\}/);
+  assert.match(read('../src/app/api/webhooks/mercadopago/route.ts'), /checkoutKind: paymentData\.metadata\?\.checkout/);
+  assert.match(read('../src/app/api/checkout/status/route.ts'), /checkoutKind: paymentData\.metadata\?\.checkout/);
+});
+
+test('webhook: PIX criado direto antes do link expira sem derrubar o link em andamento', async (t) => {
+  const { run } = setup(t);
+  const before = registration({ payment_status: 'payment_pending', payment_method: 'mercadopago_preference', payment_id: '299411356-pref', payment_status_detail: null, application_fee_charged: 0 });
+  const outcome = await run({
+    registrations: [before],
+    payments: [mpPayment(OLD_PIX_ID, { status: 'cancelled', status_detail: 'expired', date_approved: null, fee_details: [], metadata: { registration_id: REG_ID, event_id: EVENT_ID, checkout: 'pix' } })],
+    request: mpWebhook(OLD_PIX_ID)
+  });
+  assert.deepEqual(outcome.row, before);
+  assert.equal(outcome.transitions[0].reason, 'older_attempt');
+});

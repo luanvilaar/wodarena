@@ -158,7 +158,8 @@ export async function POST(request: Request) {
         gateway: 'mercadopago',
         id: paymentData.id,
         status,
-        approvedAt: paymentData.date_approved
+        approvedAt: paymentData.date_approved,
+        checkoutKind: paymentData.metadata?.checkout
       },
       nextStatus: nextPaymentStatus,
       fields: {

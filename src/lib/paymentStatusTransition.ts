@@ -20,6 +20,7 @@ export type PaymentTransitionRegistration = {
   paymentStatus?: unknown;
   paymentId?: unknown;
   paymentMethod?: unknown;
+  paymentStatusDetail?: unknown;
   cancelledBy?: unknown;
   cancelledAt?: unknown;
 };
@@ -32,6 +33,9 @@ export type PaymentTransitionPayment = {
   status?: unknown;
   // Quando o gateway aprovou o pagamento (ISO), se a resposta trouxer.
   approvedAt?: unknown;
+  // Por onde a cobrança foi criada ('pix' | 'card' | 'preference'), gravado no
+  // metadata do pagamento pelas rotas de checkout. Pagamentos antigos não têm.
+  checkoutKind?: unknown;
 };
 
 export type PaymentTransitionIgnoreReason =
@@ -44,7 +48,9 @@ export type PaymentTransitionIgnoreReason =
   // Inscrição cancelada pelo gestor: aviso de pagamento não muda o status.
   | 'cancelled_by_manager'
   // Tentativa antiga não derruba a tentativa atual.
-  | 'older_attempt';
+  | 'older_attempt'
+  // Aprovação atrasada de um pagamento que já foi estornado ou contestado.
+  | 'refunded_payment';
 
 export type PaymentRefundKind = 'refunded' | 'charged_back';
 
@@ -159,8 +165,19 @@ export const decidePaymentTransition = ({
   }
 
   // 3. Pendente, em análise, recusada ou cancelada sem o gestor (PIX expirado).
-  //    Pagamento aprovado sempre vale: o dinheiro entrou.
-  if (approved) return { action: 'apply', status: nextStatus };
+  //    Pagamento aprovado sempre vale: o dinheiro entrou. Exceção: a leitura
+  //    atrasada do pagamento que já foi estornado não reabre a inscrição.
+  if (approved) {
+    const refundedDetail = asText(registration.paymentStatusDetail);
+    if (
+      current === 'payment_cancelled'
+      && samePayment
+      && (refundedDetail === 'refunded' || refundedDetail === 'charged_back')
+    ) {
+      return ignore('refunded_payment');
+    }
+    return { action: 'apply', status: nextStatus };
+  }
 
   if (refund) {
     return samePayment
@@ -170,14 +187,16 @@ export const decidePaymentTransition = ({
 
   // Aviso não aprovado de outra tentativa não derruba a tentativa em andamento.
   const attemptInProgress = current === 'payment_pending' || current === 'payment_in_review';
-  if (
-    !isNewAttempt
-    && attemptInProgress
-    && Boolean(currentId)
-    && !samePayment
-    && asText(registration.paymentMethod) !== PREFERENCE_PAYMENT_METHOD
-  ) {
-    return ignore('older_attempt');
+  if (!isNewAttempt && attemptInProgress && !samePayment) {
+    // Tentativa atual pelo link: o payment_id guardado é o da preferência, então
+    // o id não diz nada. Um PIX ou cartão criados direto (marcados no metadata)
+    // são anteriores ao link e não o derrubam; pagamento sem marca aplica como hoje.
+    if (asText(registration.paymentMethod) === PREFERENCE_PAYMENT_METHOD) {
+      const kind = asText(payment.checkoutKind);
+      if (kind === 'pix' || kind === 'card') return ignore('older_attempt');
+    } else if (currentId) {
+      return ignore('older_attempt');
+    }
   }
 
   return { action: 'apply', status: nextStatus };

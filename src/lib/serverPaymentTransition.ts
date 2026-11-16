@@ -20,6 +20,7 @@ export type PaymentTransitionRow = {
   payment_status?: string | null;
   payment_id?: string | null;
   payment_method?: string | null;
+  payment_status_detail?: string | null;
   cancelled_by?: string | null;
   cancelled_at?: string | null;
 };
@@ -75,14 +76,14 @@ const loadTransitionRow = async (
   supabaseAdmin: SupabaseClient,
   registrationId: string,
   eventId?: string | null
-): Promise<PaymentTransitionRow | null> => {
+): Promise<{ row: PaymentTransitionRow | null; error: unknown | null }> => {
   let query = supabaseAdmin
     .from('registrations')
-    .select('payment_status, payment_id, payment_method, cancelled_by, cancelled_at')
+    .select('payment_status, payment_id, payment_method, payment_status_detail, cancelled_by, cancelled_at')
     .eq('id', registrationId);
   if (eventId) query = query.eq('event_id', eventId);
-  const { data } = await query.maybeSingle();
-  return (data as PaymentTransitionRow | null) ?? null;
+  const { data, error } = await query.maybeSingle();
+  return { row: (data as PaymentTransitionRow | null) ?? null, error: error ?? null };
 };
 
 const buildPatch = (
@@ -143,6 +144,7 @@ export const writePaymentTransition = async (
       paymentStatus: currentStatus,
       paymentId: input.registration?.payment_id,
       paymentMethod: input.registration?.payment_method,
+      paymentStatusDetail: input.registration?.payment_status_detail,
       cancelledBy: input.registration?.cancelled_by,
       cancelledAt: input.registration?.cancelled_at
     },
@@ -171,11 +173,15 @@ export const writePaymentTransition = async (
   const written = Array.isArray(data) ? data : (data ? [data] : []);
   if (written.length === 0) {
     // O status mudou desde a leitura (ou a inscrição não existe): relê e decide de novo.
-    const reloaded = attempt === 0
-      ? await loadTransitionRow(supabaseAdmin, input.registrationId, input.eventId)
-      : null;
-    if (reloaded) {
-      return writePaymentTransition(supabaseAdmin, { ...input, registration: reloaded }, attempt + 1);
+    if (attempt === 0) {
+      const reloaded = await loadTransitionRow(supabaseAdmin, input.registrationId, input.eventId);
+      // Falha ao reler sobe como erro: o webhook responde 500 e o gateway reenvia o aviso.
+      if (reloaded.error) {
+        return { outcome: OUTCOME_BY_ACTION[decision.action], decision, status: currentStatus, becameApproved: false, error: reloaded.error };
+      }
+      if (reloaded.row) {
+        return writePaymentTransition(supabaseAdmin, { ...input, registration: reloaded.row }, attempt + 1);
+      }
     }
     logTransition(input, { decision: 'not_written', reason: 'registration_changed_or_missing' });
     return { outcome: 'ignored', decision, status: currentStatus, becameApproved: false, error: null };
