@@ -1,0 +1,881 @@
+<title>Organização das Súmulas</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@500;600;700&family=Inter:wght@400;500;600;700;800&display=swap">
+<style>
+/* Layout: coluna de leitura de 1120px; a maquete usa as cores e fontes do painel do gestor (tema escuro único, como o admin). */
+:root {
+  --bg: #0b0e11;
+  --panel: #1e2329;
+  --line: #2b3139;
+  --sunk: #181a20;
+  --raise: #2b3139;
+  --fg: #eaecef;
+  --muted: #929aa5;
+  --soft: #868f9c;
+  --down-text: #ff7b8c;
+  --accent: #fcd535;
+  --ink: #181a20;
+  --up: #0ecb81;
+  --down: #f6465d;
+  --info: #3b82f6;
+  --up-bg: rgba(14, 203, 129, .12);
+  --down-bg: rgba(246, 70, 93, .12);
+  --accent-bg: rgba(252, 213, 53, .12);
+  --veil: rgba(11, 14, 17, .72);
+  --f-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --f-num: "IBM Plex Sans", "JetBrains Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 15px; line-height: 1.55; }
+button, input { font: inherit; color: var(--fg); }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.num { font-family: var(--f-num); font-variant-numeric: tabular-nums; }
+code { font-family: var(--f-num); font-size: .86em; background: var(--sunk); border: 1px solid var(--line); border-radius: 4px; padding: 0 .3em; }
+
+.wrap { background: var(--bg); color: var(--fg); max-width: 1120px; margin: 0 auto; padding-block: 40px 72px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 56px; }
+section { display: grid; gap: 20px; min-width: 0; }
+.eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--accent); margin: 0; }
+h1 { font-size: clamp(26px, 4vw, 36px); line-height: 1.12; margin: 6px 0 0; font-weight: 800; text-wrap: balance; letter-spacing: -.01em; }
+h2 { font-size: 22px; line-height: 1.2; margin: 4px 0 0; font-weight: 800; text-wrap: balance; }
+h3 { font-size: 16px; line-height: 1.3; margin: 0; font-weight: 700; text-wrap: balance; }
+p { margin: 0; }
+.lede { color: var(--muted); max-width: 68ch; font-size: 16px; }
+.sub { color: var(--muted); max-width: 70ch; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.chip.is-wait { color: var(--accent); border-color: rgba(252, 213, 53, .45); }
+.chip .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+/* Números do evento */
+.stats { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.stat { padding: 16px; display: grid; gap: 2px; align-content: start; min-width: 0; }
+.stat + .stat { border-left: 1px solid var(--line); }
+.stat b { font-family: var(--f-num); font-size: 28px; line-height: 1.1; font-weight: 700; }
+.stat span { font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+.stat.alert b { color: var(--accent); }
+@media (max-width: 900px) { .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); } .stat:nth-child(4) { border-left: 0; } .stat:nth-child(n+4) { border-top: 1px solid var(--line); } }
+@media (max-width: 520px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .stat { border-left: 0 !important; } .stat:nth-child(even) { border-left: 1px solid var(--line) !important; } .stat:nth-child(n+3) { border-top: 1px solid var(--line); } }
+
+.diag { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 760px) { .diag { grid-template-columns: 1fr; } }
+.diag article { border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; display: grid; gap: 8px; align-content: start; background: var(--panel); min-width: 0; }
+.diag p { color: var(--muted); font-size: 14px; }
+.diag p strong { color: var(--fg); font-weight: 600; }
+.tag { justify-self: start; font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; border-radius: 4px; padding: 2px 6px; border: 1px solid var(--line); color: var(--muted); }
+.tag.t-main { color: var(--down-text); border-color: rgba(246, 70, 93, .45); }
+.tag.t-gap { color: var(--accent); border-color: rgba(252, 213, 53, .45); }
+
+/* Simulador */
+.sim-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; padding: 3px; background: var(--sunk); }
+.seg button { border: 0; background: transparent; padding: 8px 16px; border-radius: 7px; font-size: 13px; font-weight: 700; color: var(--muted); min-height: 38px; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--ink); }
+.sim-note { font-size: 13px; color: var(--muted); }
+.sim-note b { color: var(--fg); font-family: var(--f-num); }
+
+.mock { border: 1px solid var(--line); border-radius: 14px; background: var(--bg); overflow: hidden; min-width: 0; }
+.mock-tabs { display: flex; gap: 2px; overflow-x: auto; border-bottom: 1px solid var(--line); background: var(--sunk); padding: 0 12px; }
+.mock-tabs span { white-space: nowrap; padding: 11px 12px; font-size: 12px; font-weight: 600; color: var(--soft); border-bottom: 2px solid transparent; }
+.mock-tabs span.on { color: var(--fg); border-bottom-color: var(--accent); }
+.mock-body { padding: 16px; display: grid; gap: 20px; min-width: 0; }
+.mock-scroll { max-height: 780px; overflow: auto; }
+
+/* --- Hoje (cópia fiel do painel) --- */
+.h-card { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); padding: 20px; display: grid; gap: 16px; min-width: 0; }
+.h-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 8px; }
+.h-eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--accent); }
+.h-title { font-size: 18px; font-weight: 700; text-transform: uppercase; margin-top: 4px; }
+.h-hint { font-size: 11px; color: var(--muted); }
+.h-group { display: grid; gap: 8px; }
+.h-group h4 { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.h-group h4 span { font-weight: 400; color: var(--muted); }
+.h-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.h-item { border: 1px solid var(--line); border-radius: 8px; background: rgba(24, 26, 32, .3); padding: 12px; display: grid; gap: 8px; min-width: 0; }
+.h-item.is-off { opacity: .6; }
+.h-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+.h-who { min-width: 0; flex: 1 1 260px; }
+.h-name { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.h-name .hl { font-family: var(--f-num); color: var(--muted); margin-right: 8px; }
+.h-name .bx { font-size: 12px; font-weight: 400; color: var(--muted); margin-left: 6px; }
+.h-meta { font-size: 12px; color: var(--muted); }
+.h-res { display: flex; align-items: center; gap: 8px; }
+.h-res .v { font-family: var(--f-num); font-size: 14px; font-weight: 700; }
+.fix { margin-left: 6px; border: 1px solid rgba(252, 213, 53, .5); color: var(--accent); border-radius: 4px; padding: 0 4px; font-size: 10px; text-transform: uppercase; font-weight: 600; }
+.h-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.sbtn { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; border: 1px solid var(--line); border-radius: 6px; background: var(--sunk); padding: 0 10px; font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.sbtn:hover { border-color: var(--accent); }
+.sbtn svg { width: 14px; height: 14px; }
+.h-judges input { width: 100%; border: 1px solid var(--line); border-radius: 6px; background: var(--sunk); padding: 8px 12px; font-size: 14px; }
+.h-judges form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 560px) { .h-judges form { grid-template-columns: 1fr; } }
+.pbtn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; border: 0; border-radius: 6px; background: var(--accent); color: var(--ink); padding: 0 16px; font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.jrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid var(--line); border-radius: 6px; background: rgba(24, 26, 32, .3); padding: 12px; }
+.jrow p { font-size: 14px; font-weight: 700; }
+.jrow small { display: block; font-size: 12px; color: var(--muted); font-weight: 400; }
+.jrow button { border: 0; background: none; color: var(--down); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; min-height: 36px; }
+
+/* Pílulas de status (mesmas cores do painel) */
+.pill { display: inline-flex; align-items: center; white-space: nowrap; border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.pill.s-submitted { border-color: rgba(14, 203, 129, .6); color: var(--up); }
+.pill.s-in_progress { border-color: rgba(252, 213, 53, .6); color: var(--accent); }
+.pill.s-returned { border-color: rgba(246, 70, 93, .6); color: var(--down); }
+.pill.s-missing { border-style: dashed; color: var(--muted); }
+
+/* --- Proposta --- */
+.p-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.p-views { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; padding: 3px; background: var(--sunk); }
+.p-views button { border: 0; background: none; border-radius: 6px; padding: 6px 14px; font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); min-height: 34px; }
+.p-views button[aria-pressed="true"] { background: var(--raise); color: var(--fg); }
+.p-sync { font-size: 11.5px; color: var(--soft); }
+.p-attn { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; border: 1px solid rgba(252, 213, 53, .35); background: var(--accent-bg); border-radius: 10px; padding: 10px 12px; }
+.p-attn > span { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); margin-right: 4px; }
+.attn-btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--sunk); border-radius: 999px; padding: 4px 12px; font-size: 12.5px; font-weight: 600; min-height: 32px; }
+.attn-btn b { font-family: var(--f-num); }
+.attn-btn.zero { color: var(--soft); }
+.attn-btn i { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+.attn-btn i.miss { background: transparent; border: 1px dashed var(--muted); }
+.attn-btn i.ret { background: var(--down); }
+
+.p-provas { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
+.prova-chip { flex: 0 0 auto; display: grid; gap: 2px; text-align: left; border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 8px 12px; min-width: 112px; position: relative; }
+.prova-chip[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.prova-chip strong { font-size: 12.5px; font-weight: 800; letter-spacing: .03em; }
+.prova-chip span { font-family: var(--f-num); font-size: 12px; color: var(--muted); }
+.prova-chip .bar { height: 3px; border-radius: 2px; background: var(--line); overflow: hidden; margin-top: 4px; }
+.prova-chip .bar i { display: block; height: 100%; background: var(--up); }
+.prova-chip em { position: absolute; top: 7px; right: 8px; font-style: normal; font-family: var(--f-num); font-size: 10.5px; font-weight: 700; color: var(--ink); background: var(--accent); border-radius: 999px; padding: 0 6px; line-height: 17px; }
+
+.p-sheet { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); display: grid; min-width: 0; }
+.p-sheet-head { padding: 14px 16px; display: grid; gap: 12px; border-bottom: 1px solid var(--line); }
+.p-sheet-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
+.p-sheet-title h3 { font-size: 17px; font-weight: 800; letter-spacing: .02em; }
+.p-sheet-title span { font-size: 12.5px; color: var(--muted); }
+.p-tools { display: grid; gap: 10px; }
+.search { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--sunk); padding: 0 10px; max-width: 420px; }
+.search svg { width: 15px; height: 15px; color: var(--soft); flex: none; }
+.search input { border: 0; background: none; padding: 9px 0; width: 100%; font-size: 14px; outline: none; }
+.search:focus-within { border-color: rgba(252, 213, 53, .6); }
+.filters { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.cat-btn { border: 1px solid var(--line); background: transparent; border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 600; color: var(--muted); min-height: 30px; }
+.cat-btn b { font-family: var(--f-num); font-weight: 600; color: var(--soft); margin-left: 3px; }
+.cat-btn[aria-pressed="true"] { background: var(--fg); color: var(--ink); border-color: var(--fg); }
+.cat-btn[aria-pressed="true"] b { color: var(--ink); }
+.toggles { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-left: auto; }
+.toggles label { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); min-height: 30px; cursor: pointer; }
+.toggles input { accent-color: var(--accent); width: 15px; height: 15px; }
+@media (max-width: 720px) { .toggles { margin-left: 0; } }
+
+.heats { display: grid; }
+.heat + .heat { border-top: 1px solid var(--line); }
+.heat-btn { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto auto 18px; align-items: center; gap: 12px; border: 0; background: none; text-align: left; padding: 12px 16px; min-height: 52px; }
+.heat-btn:hover { background: rgba(43, 49, 57, .35); }
+.heat-name { min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.heat-name strong { font-size: 13.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
+.heat-name .t { font-family: var(--f-num); font-size: 12.5px; color: var(--muted); }
+.heat-name .c { font-size: 12px; color: var(--soft); }
+.lanes { display: inline-flex; gap: 3px; }
+.lanes i { width: 12px; height: 8px; border-radius: 2px; background: var(--line); }
+.lanes i.l-submitted { background: var(--up); }
+.lanes i.l-in_progress { background: var(--accent); }
+.lanes i.l-returned { background: var(--down); }
+.lanes i.l-missing { background: transparent; border: 1px dashed var(--muted); }
+.heat-count { font-family: var(--f-num); font-size: 12.5px; color: var(--muted); white-space: nowrap; text-align: right; min-width: 92px; }
+.heat-count.done { color: var(--up); }
+.heat-count.warn { color: var(--accent); }
+.chev { width: 16px; height: 16px; color: var(--soft); transition: transform .15s; }
+.heat-btn[aria-expanded="true"] .chev { transform: rotate(90deg); }
+@media (max-width: 620px) {
+  .heat-btn { grid-template-columns: minmax(0, 1fr) auto 18px; }
+  .heat-btn .lanes { grid-column: 1 / 2; grid-row: 2; }
+  .heat-count { min-width: 0; }
+}
+.rows { list-style: none; margin: 0; padding: 0 8px 10px; display: grid; gap: 2px; }
+.subhead { padding: 10px 10px 4px; font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--soft); }
+.row { width: 100%; display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 4px 12px; border: 1px solid transparent; border-radius: 8px; background: none; text-align: left; padding: 8px 10px; min-height: 52px; }
+.row:hover { background: var(--sunk); border-color: var(--line); }
+.row.is-off { opacity: .55; }
+.row.is-miss { border: 1px dashed var(--line); }
+.lane-no { font-family: var(--f-num); font-size: 13px; font-weight: 700; color: var(--muted); }
+.who { min-width: 0; }
+.who b { display: block; font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.who b small { font-weight: 400; font-size: 12px; color: var(--muted); margin-left: 6px; }
+.who span { display: block; font-size: 12px; color: var(--soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cat-tag { color: var(--muted); }
+.res { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+.res .v { font-family: var(--f-num); font-size: 15px; font-weight: 700; min-width: 48px; text-align: right; }
+.res .v.none { color: var(--soft); font-weight: 500; }
+.res .more { font-size: 11px; color: var(--soft); white-space: nowrap; }
+@media (max-width: 560px) { .res { flex-direction: column; align-items: flex-end; gap: 4px; } .res .more { display: none; } }
+.empty { padding: 18px 16px; color: var(--muted); font-size: 13.5px; }
+.noheat-note { padding: 12px 16px 0; font-size: 12.5px; color: var(--soft); }
+
+/* Painel de detalhe */
+.veil { position: fixed; inset: 0; background: var(--veil); z-index: 40; }
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(440px, 100vw); z-index: 41; background: var(--panel); border-left: 1px solid var(--line); display: grid; grid-template-rows: auto minmax(0, 1fr); padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); padding-right: env(safe-area-inset-right, 0px); box-shadow: -24px 0 48px rgba(0, 0, 0, .4); }
+.d-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px 18px; border-bottom: 1px solid var(--line); }
+.d-head p { font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+.d-head h3 { font-size: 18px; margin-top: 4px; }
+.d-head small { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+.d-close { border: 1px solid var(--line); background: var(--sunk); border-radius: 8px; width: 38px; height: 38px; display: grid; place-items: center; flex: none; }
+.d-body { overflow: auto; padding: 16px 18px 24px; display: grid; gap: 18px; align-content: start; }
+.d-result { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; border: 1px solid var(--line); background: var(--sunk); border-radius: 10px; padding: 14px; }
+.d-result .v { font-family: var(--f-num); font-size: 30px; font-weight: 700; line-height: 1; }
+.d-result .meta { flex-basis: 100%; font-size: 12.5px; color: var(--muted); }
+.d-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.d-sec { display: grid; gap: 8px; }
+.d-sec h4 { margin: 0; font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--soft); }
+.hist { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; border-left: 1px solid var(--line); padding-left: 12px; }
+.hist li { font-size: 12.5px; color: var(--muted); display: grid; gap: 1px; }
+.hist li b { color: var(--fg); font-weight: 600; }
+.hist .q { color: var(--muted); font-style: italic; }
+.d-form { display: grid; gap: 10px; border-top: 1px solid var(--line); padding-top: 14px; }
+.d-form label { font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); display: grid; gap: 4px; }
+.d-form input[type="text"] { border: 1px solid var(--line); border-radius: 6px; background: var(--sunk); padding: 8px 12px; font-size: 14px; text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--fg); }
+.d-form .ack { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--fg); }
+.d-form .ack input { accent-color: var(--accent); margin-top: 2px; }
+.d-form .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.d-note { border: 1px solid rgba(59, 130, 246, .45); background: rgba(59, 130, 246, .1); border-radius: 8px; padding: 10px 12px; font-size: 12.5px; color: var(--fg); }
+.other { display: grid; gap: 6px; }
+.other div { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; color: var(--muted); }
+.other div b { color: var(--fg); font-weight: 600; }
+
+/* Tabelas e decisões */
+.tbl-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; }
+table { border-collapse: collapse; width: 100%; min-width: 720px; font-size: 14px; }
+th, td { text-align: left; vertical-align: top; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+thead th { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--soft); background: var(--panel); font-weight: 700; }
+tbody tr:last-child td { border-bottom: 0; }
+td:first-child { font-weight: 600; width: 26%; }
+td.today { color: var(--muted); }
+td.prop { color: var(--fg); }
+
+.decisions { display: grid; gap: 10px; }
+.dec { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; gap: 4px 16px; align-items: start; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); padding: 14px 16px; }
+.dec .id { font-family: var(--f-num); font-weight: 700; color: var(--accent); font-size: 15px; }
+.dec h3 { font-size: 15px; }
+.dec p { grid-column: 2 / 3; color: var(--muted); font-size: 13.5px; }
+.dec .rec { grid-row: 1; grid-column: 3; font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--up); border: 1px solid rgba(14, 203, 129, .5); border-radius: 999px; padding: 2px 9px; white-space: nowrap; }
+@media (max-width: 600px) { .dec { grid-template-columns: 40px minmax(0, 1fr); } .dec .rec { grid-column: 2; grid-row: auto; justify-self: start; } }
+
+.scope { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 760px) { .scope { grid-template-columns: 1fr; } }
+.scope article { border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.scope ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; color: var(--muted); font-size: 14px; }
+.scope ul strong { color: var(--fg); font-weight: 600; }
+.foot { color: var(--soft); font-size: 12.5px; border-top: 1px solid var(--line); padding-top: 16px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header style="display:grid;gap:14px">
+    <p class="eyebrow">Painel do gestor · aba Súmulas e Judges · Functional Fitness</p>
+    <h1>Súmulas organizadas por prova e bateria</h1>
+    <p class="lede">No Hibrido Games (15/11), a aba de súmulas virou uma lista única de 186 cartões. Esta página mostra o que aconteceu, a tela de hoje e a proposta com o mesmo volume de dados, e as decisões que faltam antes de qualquer código.</p>
+    <div class="chips">
+      <span class="chip is-wait"><span class="dot"></span>Aguardando aprovação</span>
+      <span class="chip">Só eventos de Functional Fitness</span>
+      <span class="chip">Só a tela do gestor</span>
+      <span class="chip">Sem banco, API, autenticação ou infra</span>
+      <span class="chip">16/11/2026</span>
+    </div>
+  </header>
+
+  <section aria-labelledby="diag-title">
+    <div>
+      <p class="eyebrow">Diagnóstico</p>
+      <h2 id="diag-title">O que aconteceu no Hibrido Games</h2>
+      <p class="sub" style="margin-top:6px">Lido em <code>src/components/admin/ScoresheetsPanel.tsx</code>, no HTML da aba que você salvou em <code>analise.md</code> e no banco (só consulta), em 16/11.</p>
+    </div>
+    <div class="stats" role="list">
+      <div class="stat" role="listitem"><b>186</b><span>cartões numa rolagem só, todos abertos</span></div>
+      <div class="stat" role="listitem"><b>640</b><span>botões na tela (4 por súmula publicada)</span></div>
+      <div class="stat" role="listitem"><b>12 de 14</b><span>grupos com título repetido, como “PROVA 2 · PROVA 2”</span></div>
+      <div class="stat" role="listitem"><b>32</b><span>canceladas misturadas com as válidas</span></div>
+      <div class="stat alert" role="listitem"><b>4</b><span>ainda “Em andamento” um dia depois, sem aviso</span></div>
+      <div class="stat alert" role="listitem"><b>9</b><span>raias do cronograma sem súmula ativa, invisíveis na tela</span></div>
+    </div>
+    <div class="diag">
+      <article>
+        <span class="tag t-main">Principal</span>
+        <h3>O grupo é a prova de cada categoria, e o título não diz qual</h3>
+        <p>A tela faz um grupo por prova cadastrada. Como cada categoria tem a sua “PROVA 2”, aparecem <strong>cinco grupos “PROVA 2 · PROVA 2”</strong>, cinco “PROVA 4 · PROVA 4” e dois “PROVA 5 · PROVA 5”. Nem o título nem o cartão mostram a categoria, embora o servidor já mande essa informação em cada súmula.</p>
+      </article>
+      <article>
+        <span class="tag t-main">Principal</span>
+        <h3>A bateria da quadra fica partida em grupos diferentes</h3>
+        <p>O cronograma monta as baterias por prova do evento, com até 5 categorias juntas. Na tela, a Bateria 3 da Prova 2 aparece em dois grupos. <strong>6 das 19 baterias</strong> com súmula ficaram partidas assim. Para saber se uma bateria terminou, o gestor junta os pedaços de cabeça.</p>
+      </article>
+      <article>
+        <span class="tag">Volume</span>
+        <h3>Tudo aberto, o tempo todo</h3>
+        <p>Não há busca, filtro, nem como recolher um grupo. Cada súmula publicada tem quatro botões. O cadastro de judges fica no fim, depois das 186 súmulas.</p>
+      </article>
+      <article>
+        <span class="tag">Ruído</span>
+        <h3>Canceladas no meio das válidas, e a contagem não bate</h3>
+        <p>No grupo do Rx Individual da Prova 2, <strong>15 dos 27 cartões são cancelados</strong>, intercalados com os publicados da mesma raia. O título diz “12 súmulas”, porque a contagem ignora as canceladas, mas a lista mostra as 27.</p>
+      </article>
+      <article>
+        <span class="tag t-gap">Lacuna</span>
+        <h3>Pendência não aparece</h3>
+        <p>As 4 súmulas “Em andamento” (Provas 3.2, 4 e 5) estão espalhadas entre 150 publicadas. A tela não lê o cronograma, então não sabe que <strong>9 raias</strong> (3 na Prova 2, 2 na 3.1 e 4 na 4) terminaram sem súmula ativa. Podem ser ausências ou desistências, mas hoje só se descobre conferindo raia por raia.</p>
+      </article>
+      <article>
+        <span class="tag t-gap">Lacuna</span>
+        <h3>Prova sem bateria vira fila pela hora de abertura</h3>
+        <p>As 40 súmulas da Prova 3.2 não têm bateria nem raia. Elas aparecem pela ordem em que os judges abriram, sem a categoria. Para achar um atleta, só lendo a lista inteira. O selo de atleta ausente também chega do servidor e não aparece na tela.</p>
+      </article>
+    </div>
+  </section>
+
+  <section aria-labelledby="sim-title">
+    <div>
+      <p class="eyebrow">Simulador</p>
+      <h2 id="sim-title">Hoje e a proposta, com o mesmo volume</h2>
+      <p class="sub" style="margin-top:6px">Dados de exemplo no formato do Hibrido Games: 186 súmulas, 5 categorias, as mesmas provas e as mesmas proporções de canceladas e pendentes. Nomes, times e boxes são inventados. Nada é gravado.</p>
+    </div>
+    <div class="sim-bar">
+      <div class="seg" role="group" aria-label="Versão da tela">
+        <button type="button" data-mode="hoje" aria-pressed="true">Hoje</button>
+        <button type="button" data-mode="proposta" aria-pressed="false">Proposta</button>
+      </div>
+      <p class="sim-note" id="sim-note"></p>
+    </div>
+    <div class="mock" id="mock">
+      <div class="mock-tabs" aria-hidden="true">
+        <span>Informações Gerais</span><span>Categorias</span><span>Inscrições</span><span>Cronograma</span><span>Leaderboard</span><span class="on">Súmulas e Judges</span><span>Telão</span>
+      </div>
+      <div class="mock-body" id="mock-body"></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="cmp-title">
+    <div>
+      <p class="eyebrow">Comparação</p>
+      <h2 id="cmp-title">O que o gestor faz durante o evento</h2>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th scope="col">Tarefa</th><th scope="col">Hoje</th><th scope="col">Proposta</th></tr></thead>
+        <tbody>
+          <tr><td>Achar a súmula de um atleta que contestou</td><td class="today">Rolar até 186 cartões. O nome pode estar em qualquer um dos cinco grupos “PROVA 2”.</td><td class="prop">Busca por atleta, time ou box dentro da prova.</td></tr>
+          <tr><td>Saber se uma bateria terminou</td><td class="today">Conferir raia por raia, às vezes em dois grupos.</td><td class="prop">Uma marca por raia no título da bateria. Bateria completa fica recolhida.</td></tr>
+          <tr><td>Ver o que está pendente</td><td class="today">Não há resumo. As 4 “Em andamento” ficaram espalhadas.</td><td class="prop">Faixa “Precisa de atenção” no topo, número em cada prova e filtro “Só pendências”.</td></tr>
+          <tr><td>Saber quem ficou sem súmula</td><td class="today">A tela não sabe. Só comparando com o cronograma.</td><td class="prop">Raia “Sem súmula”, com o nome do atleta, vinda do cronograma.</td></tr>
+          <tr><td>Olhar uma categoria</td><td class="today">Adivinhar qual dos grupos “PROVA 2” é.</td><td class="prop">Filtro de categoria, com a contagem de atletas.</td></tr>
+          <tr><td>Corrigir, devolver ou cancelar</td><td class="today">Quatro botões em cada cartão. O formulário abre no meio da lista.</td><td class="prop">Um toque na linha abre o painel com as ações e o histórico. É um toque a mais.</td></tr>
+          <tr><td>Súmulas canceladas</td><td class="today">Misturadas com as válidas (15 de 27 num grupo).</td><td class="prop">Escondidas. A linha do atleta mostra “+2 canceladas”, e um botão mostra todas.</td></tr>
+          <tr><td>Cadastrar ou remover judge</td><td class="today">No fim da rolagem, depois de todas as súmulas.</td><td class="prop">Sub-aba “Judges”, com o mesmo formulário.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="dec-title">
+    <div>
+      <p class="eyebrow">Para aprovar</p>
+      <h2 id="dec-title">Decisões</h2>
+      <p class="sub" style="margin-top:6px">A proposta do simulador já segue a recomendação de cada uma. Responda com “sim” ou com a mudança que quiser.</p>
+    </div>
+    <div class="decisions">
+      <div class="dec"><span class="id">D1</span><h3>Uma prova por código, juntando as categorias</h3><span class="rec">Recomendo: sim</span><p>As cinco “PROVA 2” viram uma prova só; 3.1 e 3.2 ficam separadas porque têm códigos diferentes. É o texto que você digitou na aba Provas. A alternativa (seguir a prova do evento do cronograma) juntaria códigos diferentes, mas deixaria a 3.2 e a 5, que não têm bateria, sem regra.</p></div>
+      <div class="dec"><span class="id">D2</span><h3>Dentro da prova, a lista segue as baterias, raia por raia</h3><span class="rec">Recomendo: sim</span><p>Mesma ordem da quadra e do cronograma. A categoria vira filtro. Prova sem bateria no cronograma usa a bateria gravada em cada súmula; sem bateria nenhuma, como a 3.2, a lista vai por categoria e nome.</p></div>
+      <div class="dec"><span class="id">D3</span><h3>Canceladas escondidas por padrão</h3><span class="rec">Recomendo: sim</span><p>A linha do atleta avisa “+1 cancelada”, o painel de detalhe mostra o motivo, e a opção “Canceladas” mostra todas na lista.</p></div>
+      <div class="dec"><span class="id">D4</span><h3>As ações saem do cartão e vão para o painel de detalhe</h3><span class="rec">Recomendo: sim</span><p>Corrigir, devolver e cancelar continuam com os mesmos formulários, regras e textos. Custa um toque a mais, e o histórico fica sempre à vista na hora de decidir.</p></div>
+      <div class="dec"><span class="id">D5</span><h3>Mostrar as raias do cronograma que estão sem súmula</h3><span class="rec">Recomendo: sim</span><p>Só para provas com bateria no cronograma. Na Prova 3.2, que não tem bateria, a tela não tem como saber quem faltou e não mostra faltantes.</p></div>
+      <div class="dec"><span class="id">D6</span><h3>Judges numa sub-aba própria</h3><span class="rec">Recomendo: sim</span><p>O cadastro e a lista de judges não mudam, só saem do fim da rolagem.</p></div>
+      <div class="dec"><span class="id">D7</span><h3>A aba abre na prova com a súmula mais recente</h3><span class="rec">Recomendo: sim</span><p>Durante o evento, é a prova que está acontecendo. Bateria completa começa recolhida; com busca ou filtro ligado, todas abrem. A maquete abre na Prova 2 só para mostrar o caso mais cheio.</p></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="scope-title">
+    <div>
+      <p class="eyebrow">Escopo</p>
+      <h2 id="scope-title">O que muda e o que fica igual</h2>
+    </div>
+    <div class="scope">
+      <article>
+        <h3>Muda</h3>
+        <ul>
+          <li><strong>A tela da aba “Súmulas e Judges”</strong> (<code>ScoresheetsPanel.tsx</code>), que já só aparece em eventos de Functional Fitness.</li>
+          <li><strong>Um módulo puro novo</strong> para agrupar súmulas por prova e bateria, usando as regras de bateria que o cronograma, a quadra e o telão já usam (<code>heatStages.ts</code>), com testes próprios.</li>
+          <li>A tela passa a usar dados que já chegam e hoje são ignorados: a categoria e o selo de ausente de cada súmula, e as baterias do cronograma.</li>
+        </ul>
+      </article>
+      <article>
+        <h3>Fica igual</h3>
+        <ul>
+          <li>Banco, API de súmulas, autenticação e infra.</li>
+          <li>As regras e os textos de corrigir, devolver e cancelar, e o histórico.</li>
+          <li>A atualização a cada 20 segundos. O painel aberto não fecha quando a lista atualiza.</li>
+          <li>A Quadra do judge, o telão, o leaderboard e o lançamento manual.</li>
+          <li>Eventos de Fitness Race e a aba “Súmula Fitness Race”.</li>
+        </ul>
+      </article>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th scope="col">Story</th><th scope="col">Entrega</th><th scope="col">Tamanho</th></tr></thead>
+        <tbody>
+          <tr><td class="num">1.141</td><td class="prop">Estrutura da aba: sub-abas Súmulas e Judges, provas por código com progresso, faixa “Precisa de atenção”, busca, filtro de categoria, canceladas escondidas (D1, D3, D6, D7).</td><td class="today">M</td></tr>
+          <tr><td class="num">1.142</td><td class="prop">Baterias recolhíveis com uma linha por raia, raias sem súmula vindas do cronograma, prova sem bateria agrupada por categoria, selo de ausente (D2, D5).</td><td class="today">M</td></tr>
+          <tr><td class="num">1.143</td><td class="prop">Painel de detalhe: ações com os formulários atuais, histórico sempre visível, outras súmulas do atleta na prova (D4).</td><td class="today">M</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="sub">Testes estáticos que leem o painel (<code>court-ui</code>, <code>sheet-view-distance</code>) seguem valendo: os textos dos formulários não mudam. A maquete aprovada vai para <code>docs/design/</code> e é citada nos critérios de aceite.</p>
+  </section>
+
+  <p class="foot">Fontes: <code>src/components/admin/ScoresheetsPanel.tsx</code>, <code>src/lib/serverScoresheets.ts</code> (<code>listSheetsForManager</code>, <code>toSheetDto</code>), <code>src/lib/heatStages.ts</code>, HTML da aba em <code>analise.md</code> e consulta ao banco em 16/11/2026 (súmulas, provas e cronograma do Hibrido Games). Nenhum arquivo do projeto foi alterado.</p>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ---------- dados de exemplo ----------
+  var seed = 20261115;
+  function rng() { seed |= 0; seed = seed + 0x6D2B79F5 | 0; var t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function toMin(s) { var p = s.split(':'); return Number(p[0]) * 60 + Number(p[1]); }
+  function hm(min) { return pad(Math.floor(min / 60)) + ':' + pad(min % 60); }
+  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function norm(s) { return String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+
+  var CATS = [
+    { id: 'rxi', name: 'Rx Individual Masculino', short: 'Rx Ind. M' },
+    { id: 'drx', name: 'Dupla Rx Masculino', short: 'Rx Dupla M' },
+    { id: 'dim', name: 'Dupla Intermediário Masculino', short: 'Int. Dupla M' },
+    { id: 'dif', name: 'Dupla Intermediário Feminino', short: 'Int. Dupla F' },
+    { id: 'dsm', name: 'Dupla Scaled Masculino', short: 'Scaled Dupla M' }
+  ];
+  var CAT = {}; CATS.forEach(function (c) { CAT[c.id] = c; });
+  var ORDER = ['rxi', 'drx', 'dim', 'dif', 'dsm'];
+  var JUDGES = ['Iara', 'Caio', 'Denis', 'Edu', 'Flávia', 'Gui', 'Bia', 'Jonas', 'Lia', 'Marcos', 'Nina'];
+  var BOXES = ['CF Litoral', 'Box 83', 'Arena Norte', 'CT Maré Alta', 'Forja Training', 'Cross Sertão', 'Base 7', 'Iron Coast', 'Box Atlântico', 'CT Mangue'];
+  var RAW = {
+    rxi: ['Lucas Barros', 'Mateus Farias', 'Rafael Nogueira', 'Bruno Pacheco', 'Thiago Lacerda', 'Diego Macedo', 'Caio Rezende', 'Felipe Duarte', 'Gustavo Siqueira', 'Renan Holanda', 'Igor Valença', 'Vitor Queiroz'],
+    drx: [['Sem Freio', 'André Gomes', 'Danilo Teixeira'], ['Barra Pesada', 'Henrique Almeida', 'Murilo Cardoso'], ['Último Round', 'Otávio Esteves', 'Paulo Xavier'], ['Chalk Brothers', 'Rodrigo Barros', 'Samuel Farias'], ['Dois de Paus', 'Tales Nogueira', 'Wesley Pacheco']],
+    dim: [['Os Insistentes', 'Yuri Lacerda', 'Breno Macedo'], ['Fôlego Curto', 'Cauã Rezende', 'Davi Duarte'], ['Sobe e Desce', 'Elias Siqueira', 'Fábio Holanda'], ['Calo na Mão', 'Gabriel Valença', 'Hugo Queiroz'], ['Café com WOD', 'Ítalo Gomes', 'João Teixeira'], ['Força Bruta', 'Kauê Almeida', 'Leandro Cardoso'], ['Turma do Fundo', 'Marcelo Esteves', 'Nícolas Xavier'], ['Sem Pausa', 'Pedro Barros', 'Lucas Farias'], ['Tamo Junto', 'Mateus Nogueira', 'Rafael Pacheco']],
+    dif: [['As Imparáveis', 'Ana Lacerda', 'Bruna Macedo'], ['Meninas do Rope', 'Carla Rezende', 'Débora Duarte'], ['Leves e Soltas', 'Elisa Siqueira', 'Fernanda Holanda'], ['Garra Total', 'Giovana Valença', 'Helena Queiroz'], ['Ritmo Forte', 'Isabela Gomes', 'Júlia Teixeira'], ['Dupla Improvável', 'Karina Almeida', 'Larissa Cardoso']],
+    dsm: [['Pé no Chão', 'Bruno Esteves', 'Thiago Xavier'], ['Time Out', 'Diego Barros', 'Caio Farias'], ['Burpee Club', 'Felipe Nogueira', 'Gustavo Pacheco'], ['Capivaras', 'Renan Lacerda', 'Igor Macedo'], ['Kipping de Domingo', 'Vitor Rezende', 'André Duarte'], ['Tudo ou Nada', 'Danilo Siqueira', 'Henrique Holanda']]
+  };
+  var athletesBy = {}; var n = 0;
+  ORDER.forEach(function (c) {
+    athletesBy[c] = RAW[c].map(function (x) {
+      n += 1;
+      var a = typeof x === 'string' ? { name: x, members: null } : { name: x[0], members: [x[1], x[2]] };
+      a.id = 'a' + n; a.cat = c; a.box = BOXES[(n * 3) % BOXES.length];
+      a.full = a.members ? a.name + ' (' + a.members[0] + ' / ' + a.members[1] + ')' : a.name;
+      return a;
+    });
+  });
+
+  var RESULT_HINT = { fortime: 'Tempo (MM:SS)', amrap: 'Total de repetições', maxweight: 'Carga em kg', reps: 'Repetições' };
+  var PROVAS = [
+    { code: 'PROVA 2', name: 'PROVA 2', type: 'amrap', label: 'AMRAP', perCat: true, cats: ORDER, mode: 'stage', lanes: 7, start: '10:10', step: 18,
+      missing: ['2-7', '4-7'], prog: [], corrected: ['1-4', '1-7', '2-2'],
+      cancelled: { '1-1': 2, '1-2': 1, '1-3': 2, '1-5': 1, '1-6': 2, '2-1': 1, '2-2': 2, '2-3': 1, '2-4': 2, '2-5': 1, '3-1': 1, '5-6': 1, '6-2': 1, '5-1': 1 }, eve: ['1-1', '1-3', '2-2', '2-4'] },
+    { code: 'PROVA 3.1', name: 'PROVA 3', type: 'maxweight', label: 'Carga máxima', perCat: false, cats: ORDER, mode: 'stage', lanes: 8, start: '13:10', step: 17,
+      missing: ['2-5', '2-8'], prog: [], corrected: [], cancelled: { '1-3': 1, '2-1': 1, '3-4': 2, '4-2': 1, '5-6': 1 }, eve: ['1-3', '2-1'] },
+    { code: 'PROVA 3.2', name: 'PROVA 3.2', type: 'maxweight', label: 'Carga máxima', perCat: false, cats: ORDER, mode: 'none', start: '14:40', step: 0, skipMissingOf: 'PROVA 3.1',
+      missing: [], prog: ['x-17'], corrected: ['x-9'], cancelled: { 'x-3': 1, 'x-12': 1, 'x-20': 1, 'x-31': 1 }, eve: ['x-3', 'x-12'] },
+    { code: 'PROVA 4', name: 'PROVA 4', type: 'reps', label: 'Repetições', perCat: true, cats: ORDER, mode: 'stage', lanes: 7, start: '15:00', step: 23,
+      missing: ['1-7', '2-2', '2-6', '2-7'], prog: ['5-2'], corrected: [], cancelled: { '1-3': 1, '3-1': 1 }, eve: [] },
+    { code: 'PROVA 5', name: 'PROVA 5', type: 'fortime', label: 'For time', perCat: true, cats: ['rxi', 'drx'], mode: 'sheet', start: '17:20', step: 20,
+      custom: [{ cat: 'rxi', count: 8, heat: 1 }, { cat: 'drx', count: 4, heat: 2 }],
+      missing: [], prog: ['1-8', '2-4'], corrected: [], cancelled: { '2-2': 1 }, eve: [] }
+  ];
+  var PROVA = {}; PROVAS.forEach(function (p) { PROVA[p.code] = p; });
+
+  function makeResult(type, cat) {
+    if (type === 'amrap') return String(352 + Math.floor(rng() * 62));
+    if (type === 'maxweight') return String((cat === 'rxi' ? 95 : 70) + Math.floor(rng() * 14) * 5);
+    if (type === 'reps') return String(140 + Math.floor(rng() * 120));
+    var s = 7 * 60 + Math.floor(rng() * 420); return pad(Math.floor(s / 60)) + ':' + pad(s % 60);
+  }
+  function bump(type, value, delta) {
+    if (type === 'fortime') { var p = value.split(':'); var s = Number(p[0]) * 60 + Number(p[1]) + delta; return pad(Math.floor(s / 60)) + ':' + pad(s % 60); }
+    return String(Number(value) + delta * (type === 'maxweight' ? 5 : 1));
+  }
+  var CANCEL_REASONS = ['Súmula aberta na raia errada', 'Aberta em duplicidade', 'Atleta trocado de bateria'];
+
+  var SHEETS = []; var SLOTS = {}; var sid = 0; var missingAthletes = {};
+  PROVAS.forEach(function (p) {
+    var slots = [];
+    if (p.mode === 'sheet') {
+      p.custom.forEach(function (c) { athletesBy[c.cat].slice(0, c.count).forEach(function (a, i) { slots.push({ a: a, heat: c.heat, lane: i + 1 }); }); });
+    } else {
+      var list = [];
+      ORDER.forEach(function (c) { if (p.cats.indexOf(c) >= 0) list = list.concat(athletesBy[c]); });
+      if (p.mode === 'none') {
+        var skip = missingAthletes[p.skipMissingOf] || {};
+        list.filter(function (a) { return !skip[a.id]; }).forEach(function (a, i) { slots.push({ a: a, heat: null, lane: null, idx: i + 1 }); });
+      } else {
+        list.forEach(function (a, i) { slots.push({ a: a, heat: Math.floor(i / p.lanes) + 1, lane: (i % p.lanes) + 1 }); });
+      }
+    }
+    missingAthletes[p.code] = {};
+    slots.forEach(function (s) {
+      s.key = s.heat ? s.heat + '-' + s.lane : 'x-' + s.idx;
+      s.prova = p.code;
+      s.workout = p.perCat ? p.code + '|' + s.a.cat : p.code;
+      var hs = toMin(p.start) + (s.heat ? (s.heat - 1) * p.step : Math.floor(s.idx * 1.1));
+      s.time = s.heat && p.mode === 'stage' ? hm(toMin(p.start) + (s.heat - 1) * p.step) : '';
+      var judge = JUDGES[Math.floor(rng() * JUDGES.length)];
+      // canceladas antes da válida
+      var nc = p.cancelled[s.key] || 0;
+      for (var k = 0; k < nc; k++) {
+        var eve = p.eve.indexOf(s.key) >= 0 && k === 0;
+        var cMin = eve ? toMin('17:40') + Math.floor(rng() * 9) : hs - 6 + k * 2;
+        var cj = JUDGES[Math.floor(rng() * JUDGES.length)];
+        var reason = eve ? 'Teste na véspera do evento' : CANCEL_REASONS[(sid + k) % CANCEL_REASONS.length];
+        var cDay = eve ? '14/11' : '15/11';
+        sid += 1;
+        SHEETS.push({ id: 's' + sid, prova: p.code, workout: s.workout, slot: s, a: s.a, heat: s.heat, lane: s.lane, judge: cj, status: 'cancelled', result: null, corrected: false,
+          day: cDay, min: cMin, sortKey: (eve ? -1440 : 0) + cMin, reason: reason,
+          history: [{ t: cDay + ', ' + hm(cMin - 1), label: 'Súmula aberta', by: cj }, { t: cDay + ', ' + hm(cMin), label: 'Súmula cancelada', by: 'Gestor do evento', reason: reason }] });
+      }
+      if (p.missing.indexOf(s.key) >= 0) { s.missing = true; missingAthletes[p.code][s.a.id] = true; return; }
+      var prog = p.prog.indexOf(s.key) >= 0;
+      var opened = hs + 1 + Math.floor(rng() * 2);
+      var sent = hs + 9 + Math.floor(rng() * 6);
+      var sheet = { id: 's' + (sid += 1), prova: p.code, workout: s.workout, slot: s, a: s.a, heat: s.heat, lane: s.lane, judge: judge, status: prog ? 'in_progress' : 'submitted',
+        result: prog ? null : makeResult(p.type, s.a.cat), corrected: false, day: '15/11', min: prog ? opened : sent, sortKey: opened,
+        history: [{ t: '15/11, ' + hm(opened), label: 'Súmula aberta', by: judge }] };
+      if (!prog) sheet.history.push({ t: '15/11, ' + hm(sent), label: 'Enviada e publicada', by: judge, result: sheet.result });
+      if (p.corrected.indexOf(s.key) >= 0) {
+        var prev = bump(p.type, sheet.result, -3);
+        sheet.history[1].result = prev;
+        sheet.corrected = true;
+        var cm = sent + 22 + Math.floor(rng() * 15);
+        sheet.history.push({ t: '15/11, ' + hm(cm), label: 'Resultado corrigido pelo gestor', by: 'Gestor do evento', prev: prev, result: sheet.result, reason: 'Repetições recontadas com o judge no vídeo da raia' });
+        sheet.min = cm;
+      }
+      SHEETS.push(sheet);
+      s.sheet = sheet;
+    });
+    SLOTS[p.code] = slots;
+  });
+
+  // ---------- estado ----------
+  var S = { mode: 'hoje', view: 'sheets', prova: 'PROVA 2', cat: 'all', q: '', pending: false, cancelled: false, open: {}, sel: null, form: null, done: '' };
+  var body = document.getElementById('mock-body');
+  var note = document.getElementById('sim-note');
+
+  var STATUS_LABEL = { in_progress: 'Em andamento', submitted: 'Publicada', returned: 'Devolvida para correção', cancelled: 'Cancelada', missing: 'Sem súmula' };
+  var ICON = {
+    wrench: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z"></path>',
+    undo: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path>',
+    trash: '<path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M3 6h18"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>',
+    hist: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path><path d="M12 7v5l4 2"></path>',
+    chev: '<path d="m9 18 6-6-6-6"></path>',
+    search: '<circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path>',
+    x: '<path d="M18 6 6 18"></path><path d="m6 6 12 12"></path>',
+    user: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><line x1="19" x2="19" y1="8" y2="14"></line><line x1="22" x2="16" y1="11" y2="11"></line>'
+  };
+  function icon(name, cls) { return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"' + (cls ? ' class="' + cls + '"' : '') + '>' + ICON[name] + '</svg>'; }
+
+  // ---------- Hoje ----------
+  var HOJE_GROUPS = [['PROVA 2', 'dsm'], ['PROVA 2', 'rxi'], ['PROVA 2', 'drx'], ['PROVA 2', 'dim'], ['PROVA 2', 'dif'], ['PROVA 3.1', null], ['PROVA 3.2', null], ['PROVA 4', 'dsm'], ['PROVA 4', 'dif'], ['PROVA 4', 'dim'], ['PROVA 4', 'rxi'], ['PROVA 4', 'drx'], ['PROVA 5', 'rxi'], ['PROVA 5', 'drx']];
+  function judgesHtml() {
+    return '<section class="h-card h-judges"><div><p class="h-eyebrow">Equipe de arbitragem</p><p class="h-title">Judges do evento</p><p class="h-meta" style="margin-top:4px">O judge entra com este e-mail e senha, abre a área "Quadra" no celular e escolhe a bateria e a raia.</p></div>' +
+      '<form data-form="judge"><input id="jn" placeholder="Nome do judge" aria-label="Nome do judge"><input id="je" placeholder="E-mail" aria-label="E-mail"><input id="jp" type="password" placeholder="Senha inicial (mín. 8)" aria-label="Senha inicial"><button class="pbtn" type="submit">' + icon('user') + 'Criar judge</button></form>' +
+      '<div style="display:grid;gap:8px">' + JUDGES.map(function (j) { return '<div class="jrow"><p>' + esc(j) + '<small>' + norm(j) + '@exemplo.com</small></p><button type="button" data-act="noop">Remover</button></div>'; }).join('') + '</div></section>';
+  }
+  function renderHoje() {
+    var buttons = 0;
+    var html = '<div class="mock-scroll" tabindex="0" aria-label="Lista de súmulas como é hoje"><div style="display:grid;gap:24px">';
+    html += '<section class="h-card"><div class="h-head"><div><p class="h-eyebrow">Arbitragem na quadra</p><p class="h-title">Súmulas</p></div><p class="h-hint">A súmula enviada já está no ranking. Corrigir, devolver e cancelar ficam no histórico.</p></div>';
+    HOJE_GROUPS.forEach(function (g) {
+      var p = PROVA[g[0]];
+      var key = g[1] ? p.code + '|' + g[1] : p.code;
+      var rows = SHEETS.filter(function (s) { return s.workout === key; }).sort(function (a, b) {
+        return (a.heat || 999) - (b.heat || 999) || (a.lane || 999) - (b.lane || 999) || a.sortKey - b.sortKey;
+      });
+      var active = rows.filter(function (r) { return r.status !== 'cancelled'; }).length;
+      html += '<div class="h-group"><h4>' + esc(p.code) + ' · ' + esc(p.name) + ' <span>(' + active + ' ' + (rows.length === 1 ? 'súmula' : 'súmulas') + ')</span></h4><ul class="h-list">';
+      rows.forEach(function (r) {
+        var hl = r.heat || r.lane ? '<span class="hl">' + (r.heat ? 'B' + r.heat : '') + (r.lane ? ' R' + r.lane : '') + '</span>' : '';
+        html += '<li class="h-item' + (r.status === 'cancelled' ? ' is-off' : '') + '"><div class="h-top"><div class="h-who"><p class="h-name">' + hl + esc(r.a.full) + '<span class="bx">' + esc(r.a.box) + '</span></p><p class="h-meta">' + esc(r.judge) + ' · ' + r.day + ', ' + hm(r.min) + '</p></div>';
+        html += '<div class="h-res">' + (r.result ? '<span class="v">' + esc(r.result) + (r.corrected ? '<span class="fix">corrigido</span>' : '') + '</span>' : '') + '<span class="pill s-' + r.status + '">' + STATUS_LABEL[r.status] + '</span></div></div>';
+        if (r.status !== 'cancelled') {
+          html += '<div class="h-btns">';
+          if (r.status === 'submitted' || r.status === 'returned') { html += '<button type="button" class="sbtn" data-act="noop">' + icon('wrench') + 'Corrigir</button>'; buttons++; }
+          if (r.status === 'submitted') { html += '<button type="button" class="sbtn" data-act="noop">' + icon('undo') + 'Devolver</button>'; buttons++; }
+          html += '<button type="button" class="sbtn" data-act="noop">' + icon('trash') + 'Cancelar</button><button type="button" class="sbtn" data-act="noop">' + icon('hist') + 'Histórico</button></div>';
+          buttons += 2;
+        } else {
+          html += '<div class="h-btns"><button type="button" class="sbtn" data-act="noop">' + icon('hist') + 'Histórico</button></div>';
+          buttons++;
+        }
+        html += '</li>';
+      });
+      html += '</ul></div>';
+    });
+    html += '</section>' + judgesHtml() + '</div></div>';
+    body.innerHTML = html;
+    note.innerHTML = '<b>' + SHEETS.length + '</b> cartões · <b>' + buttons + '</b> botões · 14 grupos abertos. Os botões não fazem nada aqui.';
+  }
+
+  // ---------- Proposta: cálculos ----------
+  function provaStats(code) {
+    var p = PROVA[code];
+    var slots = SLOTS[code];
+    var pub = 0, prog = 0, ret = 0, miss = 0;
+    slots.forEach(function (s) {
+      if (s.missing) { if (p.mode === 'stage') miss++; return; }
+      if (s.sheet.status === 'submitted') pub++;
+      else if (s.sheet.status === 'in_progress') prog++;
+      else if (s.sheet.status === 'returned') ret++;
+    });
+    var total = p.mode === 'stage' ? slots.length : slots.filter(function (s) { return !s.missing; }).length;
+    var cancelled = SHEETS.filter(function (s) { return s.prova === code && s.status === 'cancelled'; }).length;
+    return { pub: pub, prog: prog, ret: ret, miss: miss, total: total, pending: prog + ret + miss, cancelled: cancelled };
+  }
+  function slotState(s) { return s.missing ? 'missing' : s.sheet.status; }
+  function cancelledOf(s) { return SHEETS.filter(function (x) { return x.status === 'cancelled' && x.slot === s; }); }
+  function matches(s) {
+    if (S.cat !== 'all' && s.a.cat !== S.cat) return false;
+    if (S.pending && ['in_progress', 'returned', 'missing'].indexOf(slotState(s)) < 0) return false;
+    if (S.q) {
+      var hay = norm(s.a.name + ' ' + (s.a.members ? s.a.members.join(' ') : '') + ' ' + s.a.box);
+      if (hay.indexOf(norm(S.q.trim())) < 0) return false;
+    }
+    return true;
+  }
+
+  function rowHtml(s, sheet) {
+    var p = PROVA[s.prova];
+    var st = sheet ? sheet.status : 'missing';
+    var off = sheet && sheet.status === 'cancelled';
+    var c = cancelledOf(s).length;
+    var lane = s.lane ? 'R' + s.lane : '—';
+    var meta = [];
+    if (S.cat === 'all') meta.push('<span class="cat-tag">' + esc(CAT[s.a.cat].short) + '</span>');
+    if (s.a.members) meta.push(esc(s.a.members.join(' / ')));
+    if (sheet) meta.push(esc(sheet.judge) + ' · ' + hm(sheet.min));
+    else meta.push(p.mode === 'stage' ? 'no cronograma, sem súmula aberta' : '');
+    var label = sheet ? 'Abrir súmula de ' + s.a.name : 'Raia ' + s.lane + ' sem súmula: ' + s.a.name;
+    return '<li><button type="button" class="row' + (off ? ' is-off' : '') + (sheet ? '' : ' is-miss') + '" data-act="' + (sheet ? 'sheet' : 'missing') + '" data-id="' + (sheet ? sheet.id : s.prova + '#' + s.key) + '" aria-label="' + esc(label) + '">' +
+      '<span class="lane-no">' + lane + '</span>' +
+      '<span class="who"><b>' + esc(s.a.name) + '<small>' + esc(s.a.box) + '</small></b><span>' + meta.filter(Boolean).join(' · ') + '</span></span>' +
+      '<span class="res">' + (!off && c && !S.cancelled ? '<span class="more">+' + c + (c === 1 ? ' cancelada' : ' canceladas') + '</span>' : '') +
+      '<span class="v' + (sheet && sheet.result ? '' : ' none') + '">' + (sheet && sheet.result ? esc(sheet.result) + (sheet.corrected ? '<span class="fix">corrigido</span>' : '') : '—') + '</span>' +
+      '<span class="pill s-' + st + '">' + STATUS_LABEL[st] + '</span></span></button></li>';
+  }
+  function slotRows(s) {
+    var out = '';
+    if (S.cancelled) cancelledOf(s).forEach(function (c) { out += rowHtml(s, c); });
+    out += rowHtml(s, s.missing ? null : s.sheet);
+    return out;
+  }
+
+  function renderList() {
+    var p = PROVA[S.prova];
+    var slots = SLOTS[S.prova];
+    var holder = document.getElementById('p-list');
+    if (!holder) return;
+    var filtered = S.q || S.pending || S.cat !== 'all';
+    var html = '';
+    if (p.mode === 'none') {
+      var vis = slots.filter(function (s) { return !(s.missing) && matches(s); });
+      html += '<p class="noheat-note">Esta prova não tem bateria no cronograma. A lista vai por categoria e nome.</p>';
+      if (!vis.length) html += '<p class="empty">Nenhuma súmula com esses filtros.</p>';
+      ORDER.forEach(function (c) {
+        var group = vis.filter(function (s) { return s.a.cat === c; }).sort(function (a, b) { return a.a.name.localeCompare(b.a.name, 'pt-BR'); });
+        if (!group.length) return;
+        html += '<p class="subhead">' + esc(CAT[c].name) + ' · ' + group.length + '</p><ul class="rows">' + group.map(slotRows).join('') + '</ul>';
+      });
+      holder.innerHTML = html;
+      return;
+    }
+    var heats = {};
+    slots.forEach(function (s) { (heats[s.heat] = heats[s.heat] || []).push(s); });
+    var any = false;
+    Object.keys(heats).map(Number).sort(function (a, b) { return a - b; }).forEach(function (h) {
+      var all = heats[h];
+      var vis = all.filter(matches);
+      if (filtered && !vis.length) return;
+      any = true;
+      var states = all.map(slotState);
+      var pub = states.filter(function (x) { return x === 'submitted'; }).length;
+      var pend = states.filter(function (x) { return x !== 'submitted'; }).length;
+      var complete = pend === 0;
+      var key = S.prova + '#' + h;
+      var open = S.open[key] !== undefined ? S.open[key] : (filtered ? true : !complete);
+      var cats = [];
+      all.forEach(function (s) { if (cats.indexOf(s.a.cat) < 0) cats.push(s.a.cat); });
+      var miss = states.filter(function (x) { return x === 'missing'; }).length;
+      var prog = states.filter(function (x) { return x === 'in_progress'; }).length;
+      var countTxt = complete ? all.length + '/' + all.length + ' publicadas' : pub + '/' + all.length + (miss ? ' · ' + miss + ' sem súmula' : '') + (prog ? ' · ' + prog + ' em andamento' : '');
+      html += '<div class="heat"><button type="button" class="heat-btn" data-act="heat" data-id="' + key + '" aria-expanded="' + open + '">' +
+        '<span class="heat-name"><strong>Bateria ' + h + '</strong>' + (all[0].time ? '<span class="t">' + all[0].time + '</span>' : '') + '<span class="c">' + cats.map(function (c) { return esc(CAT[c].short); }).join(', ') + '</span></span>' +
+        '<span class="lanes" aria-hidden="true">' + states.map(function (x) { return '<i class="l-' + x + '"></i>'; }).join('') + '</span>' +
+        '<span class="heat-count ' + (complete ? 'done' : 'warn') + '">' + countTxt + '</span>' + icon('chev', 'chev') + '</button>';
+      if (open) html += '<ul class="rows">' + (filtered ? vis : all).map(slotRows).join('') + '</ul>';
+      html += '</div>';
+    });
+    if (p.mode === 'sheet') html = '<p class="noheat-note">Esta prova não tem bateria no cronograma: as baterias vêm do número gravado em cada súmula, sem raias faltantes.</p>' + html;
+    if (!any) html += '<p class="empty">Nenhuma súmula com esses filtros.</p>';
+    holder.innerHTML = html;
+  }
+
+  function renderProposta() {
+    if (S.view === 'judges') {
+      body.innerHTML = topHtml() + judgesHtml();
+      note.innerHTML = 'Mesmo cadastro de hoje, numa sub-aba própria.';
+      return;
+    }
+    var totals = { prog: 0, ret: 0, miss: 0 };
+    PROVAS.forEach(function (p) { var st = provaStats(p.code); totals.prog += st.prog; totals.ret += st.ret; totals.miss += st.miss; });
+    var html = topHtml();
+    html += '<div class="p-attn" role="group" aria-label="Precisa de atenção"><span>Precisa de atenção</span>' +
+      attnBtn('prog', totals.prog, totals.prog === 1 ? 'em andamento' : 'em andamento', '') +
+      attnBtn('miss', totals.miss, totals.miss === 1 ? 'raia sem súmula' : 'raias sem súmula', 'miss') +
+      attnBtn('ret', totals.ret, totals.ret === 1 ? 'devolvida' : 'devolvidas', 'ret') + '</div>';
+    html += '<div class="p-provas" role="group" aria-label="Provas">' + PROVAS.map(function (p) {
+      var st = provaStats(p.code);
+      var pct = st.total ? Math.round(st.pub / st.total * 100) : 0;
+      return '<button type="button" class="prova-chip" data-act="prova" data-id="' + p.code + '" aria-pressed="' + (S.prova === p.code) + '"><strong>' + esc(p.code) + '</strong><span>' + st.pub + '/' + st.total + ' publicadas</span><span class="bar"><i style="width:' + pct + '%"></i></span>' + (st.pending ? '<em aria-label="' + st.pending + ' pendências">' + st.pending + '</em>' : '') + '</button>';
+    }).join('') + '</div>';
+    var p = PROVA[S.prova];
+    var st = provaStats(S.prova);
+    var slots = SLOTS[S.prova];
+    var catsIn = ORDER.filter(function (c) { return slots.some(function (s) { return s.a.cat === c; }); });
+    var heatsN = p.mode === 'none' ? 0 : slots.reduce(function (m, s) { return Math.max(m, s.heat || 0); }, 0);
+    html += '<div class="p-sheet"><div class="p-sheet-head"><div class="p-sheet-title"><h3>' + esc(p.code) + '</h3><span>' + esc(p.label) + ' · ' + catsIn.length + (catsIn.length === 1 ? ' categoria' : ' categorias') + ' · ' + (heatsN ? heatsN + ' baterias' : 'sem bateria') + ' · ' + slots.length + ' atletas</span></div>' +
+      '<div class="p-tools"><label class="search">' + icon('search') + '<input id="p-search" type="search" placeholder="Buscar atleta, time ou box" value="' + esc(S.q) + '" aria-label="Buscar atleta, time ou box"></label>' +
+      '<div class="filters"><button type="button" class="cat-btn" data-act="cat" data-id="all" aria-pressed="' + (S.cat === 'all') + '">Todas<b>' + slots.length + '</b></button>' +
+      catsIn.map(function (c) { var k = slots.filter(function (s) { return s.a.cat === c; }).length; return '<button type="button" class="cat-btn" data-act="cat" data-id="' + c + '" aria-pressed="' + (S.cat === c) + '">' + esc(CAT[c].short) + '<b>' + k + '</b></button>'; }).join('') +
+      '<span class="toggles"><label><input id="p-pending" type="checkbox"' + (S.pending ? ' checked' : '') + '> Só pendências (' + st.pending + ')</label><label><input id="p-cancel" type="checkbox"' + (S.cancelled ? ' checked' : '') + '> Canceladas (' + st.cancelled + ')</label></span></div></div></div>' +
+      '<div class="heats" id="p-list"></div></div>';
+    body.innerHTML = html;
+    renderList();
+    note.innerHTML = 'Toque numa bateria para abrir ou fechar, e numa linha para ver a súmula. Bateria completa começa recolhida.';
+  }
+  function attnBtn(kind, count, text, cls) {
+    return '<button type="button" class="attn-btn' + (count ? '' : ' zero') + '" data-act="attn" data-id="' + kind + '"' + (count ? '' : ' disabled') + '><i class="' + cls + '"></i><b>' + count + '</b> ' + text + '</button>';
+  }
+  function topHtml() {
+    return '<div class="p-top"><div class="p-views" role="group" aria-label="Seção"><button type="button" data-act="view" data-id="sheets" aria-pressed="' + (S.view === 'sheets') + '">Súmulas</button><button type="button" data-act="view" data-id="judges" aria-pressed="' + (S.view === 'judges') + '">Judges · ' + JUDGES.length + '</button></div><span class="p-sync">Atualiza a cada 20 s</span></div>';
+  }
+
+  // ---------- painel de detalhe ----------
+  var lastTrigger = null;
+  function closeDrawer() {
+    S.sel = null; S.form = null; S.done = '';
+    var d = document.getElementById('drawer'); if (d) d.remove();
+    var v = document.getElementById('veil'); if (v) v.remove();
+    if (lastTrigger) { var t = body.querySelector('[data-id="' + lastTrigger + '"]'); if (t) t.focus(); }
+  }
+  function renderDrawer(focusClose) {
+    var old = document.getElementById('drawer'); if (old) old.remove();
+    var oldV = document.getElementById('veil'); if (oldV) oldV.remove();
+    if (!S.sel) return;
+    var sheet = null, slot = null;
+    if (S.sel.type === 'sheet') { sheet = SHEETS.filter(function (x) { return x.id === S.sel.id; })[0]; slot = sheet.slot; }
+    else { var parts = S.sel.id.split('#'); slot = SLOTS[parts[0]].filter(function (s) { return s.key === parts[1]; })[0]; }
+    var p = PROVA[slot.prova];
+    var where = slot.heat ? 'Bateria ' + slot.heat + ' · Raia ' + slot.lane : 'Sem bateria';
+    var html = '<div class="d-head"><div><p>' + esc(p.code) + ' · ' + where + '</p><h3 id="d-title">' + esc(slot.a.name) + '</h3><small>' + (slot.a.members ? esc(slot.a.members.join(' / ')) + ' · ' : '') + esc(slot.a.box) + ' · ' + esc(CAT[slot.a.cat].name) + '</small></div><button type="button" class="d-close" data-act="close" aria-label="Fechar">' + icon('x') + '</button></div><div class="d-body">';
+    if (!sheet) {
+      html += '<div class="d-result"><span class="pill s-missing">Sem súmula</span><span class="meta">A raia está no cronograma e não tem súmula ativa. O judge abre a súmula pela Quadra e pode marcar o atleta como ausente. O lançamento manual continua onde está hoje.</span></div>';
+    } else {
+      html += '<div class="d-result"><span class="v">' + (sheet.result ? esc(sheet.result) : '—') + '</span>' + (sheet.corrected ? '<span class="fix">corrigido</span>' : '') + '<span class="pill s-' + sheet.status + '">' + STATUS_LABEL[sheet.status] + '</span><span class="meta">Judge ' + esc(sheet.judge) + ' · ' + (sheet.status === 'in_progress' ? 'aberta em ' : 'atualizada em ') + sheet.day + ', ' + hm(sheet.min) + '</span></div>';
+      if (sheet.status !== 'cancelled') {
+        html += '<div class="d-actions">';
+        if (sheet.status === 'submitted' || sheet.status === 'returned') html += '<button type="button" class="sbtn" data-act="form" data-id="correct" aria-expanded="' + (S.form === 'correct') + '">' + icon('wrench') + 'Corrigir</button>';
+        if (sheet.status === 'submitted') html += '<button type="button" class="sbtn" data-act="form" data-id="return" aria-expanded="' + (S.form === 'return') + '">' + icon('undo') + 'Devolver</button>';
+        html += '<button type="button" class="sbtn" data-act="form" data-id="cancel" aria-expanded="' + (S.form === 'cancel') + '">' + icon('trash') + 'Cancelar</button></div>';
+      }
+      if (S.form) html += formHtml(sheet, p);
+      if (S.done) html += '<p class="d-note" role="status">' + S.done + '</p>';
+      html += '<div class="d-sec"><h4>Histórico</h4><ol class="hist">' + sheet.history.map(function (h) {
+        return '<li><span class="num">' + h.t + '</span><span><b>' + h.label + '</b> por ' + esc(h.by) + (h.result ? ' · <span class="num">' + (h.prev ? h.prev + ' → ' : '') + h.result + '</span>' : '') + '</span>' + (h.reason ? '<span class="q">“' + esc(h.reason) + '”</span>' : '') + '</li>';
+      }).join('') + '</ol></div>';
+    }
+    var others = cancelledOf(slot).filter(function (x) { return !sheet || x.id !== sheet.id; });
+    if (others.length) {
+      html += '<div class="d-sec"><h4>Canceladas deste atleta nesta prova</h4><div class="other">' + others.map(function (o) { return '<div><b>' + o.day + ', ' + hm(o.min) + '</b> · judge ' + esc(o.judge) + '<br>“' + esc(o.reason) + '”</div>'; }).join('') + '</div></div>';
+    }
+    html += '</div>';
+    var veil = document.createElement('div'); veil.className = 'veil'; veil.id = 'veil'; veil.setAttribute('data-act', 'close');
+    var d = document.createElement('aside'); d.className = 'drawer'; d.id = 'drawer'; d.setAttribute('role', 'dialog'); d.setAttribute('aria-modal', 'true'); d.setAttribute('aria-labelledby', 'd-title');
+    d.innerHTML = html;
+    document.body.appendChild(veil); document.body.appendChild(d);
+    if (focusClose) { var c = d.querySelector('.d-close'); if (c) c.focus(); }
+  }
+  function formHtml(sheet, p) {
+    var k = S.form;
+    var out = '<form class="d-form" data-form="review">';
+    if (k === 'correct') out += '<div class="grid2"><label>' + (RESULT_HINT[p.type] || 'Resultado') + '<input type="text" id="f-result" class="num" value="' + esc(sheet.result || '') + '" required></label><label>Tie-break (MM:SS, opcional)<input type="text" id="f-tb" class="num"></label></div>';
+    out += '<label>' + (k === 'correct' ? 'Justificativa (fica no histórico)' : k === 'return' ? 'Motivo para o judge' : 'Motivo do cancelamento') + '<input type="text" id="f-reason" required minlength="3"></label>';
+    if (k === 'cancel') out += '<label class="ack"><input type="checkbox" id="f-ack"> Entendo que o resultado desta súmula sai do ranking e que outra súmula poderá ser aberta para o atleta.</label>';
+    out += '<div class="d-actions"><button type="submit" class="pbtn">' + (k === 'correct' ? 'Publicar correção' : k === 'return' ? 'Devolver ao judge' : 'Cancelar súmula') + '</button><button type="button" class="sbtn" data-act="form" data-id="' + k + '">Fechar</button></div></form>';
+    return out;
+  }
+
+  // ---------- render e eventos ----------
+  function render() {
+    document.querySelectorAll('.seg button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-mode') === S.mode)); });
+    if (S.mode === 'hoje') renderHoje(); else renderProposta();
+  }
+  function refocus(act, id) {
+    var el = body.querySelector('[data-act="' + act + '"][data-id="' + id + '"]');
+    if (el) el.focus();
+  }
+  document.querySelectorAll('.seg button').forEach(function (b) {
+    b.addEventListener('click', function () { S.mode = b.getAttribute('data-mode'); closeDrawer(); render(); });
+  });
+  document.addEventListener('click', function (e) {
+    var t = e.target.closest('[data-act]');
+    if (!t) return;
+    var act = t.getAttribute('data-act');
+    var id = t.getAttribute('data-id');
+    if (act === 'noop') return;
+    if (act === 'view') { S.view = id; renderProposta(); refocus('view', id); return; }
+    if (act === 'prova') { S.prova = id; S.cat = 'all'; S.q = ''; renderProposta(); refocus('prova', id); return; }
+    if (act === 'cat') { S.cat = id; renderProposta(); refocus('cat', id); return; }
+    if (act === 'attn') {
+      S.pending = true; S.cat = 'all'; S.q = '';
+      var first = PROVAS.filter(function (p) { var st = provaStats(p.code); return id === 'prog' ? st.prog : id === 'miss' ? st.miss : st.ret; })[0];
+      if (first) S.prova = first.code;
+      renderProposta(); refocus('prova', S.prova); return;
+    }
+    if (act === 'heat') {
+      var cur = t.getAttribute('aria-expanded') === 'true';
+      S.open[id] = !cur; renderList(); refocus('heat', id); return;
+    }
+    if (act === 'sheet' || act === 'missing') { lastTrigger = id; S.sel = { type: act, id: id }; S.form = null; S.done = ''; renderDrawer(true); return; }
+    if (act === 'close') { closeDrawer(); return; }
+    if (act === 'form') { S.form = S.form === id ? null : id; S.done = ''; renderDrawer(false); var f = document.getElementById(S.form === 'correct' ? 'f-result' : 'f-reason'); if (f) f.focus(); else refocusDrawer(id); return; }
+  });
+  function refocusDrawer(id) { var d = document.getElementById('drawer'); if (!d) return; var b = d.querySelector('[data-act="form"][data-id="' + id + '"]'); if (b) b.focus(); }
+  document.addEventListener('submit', function (e) {
+    var f = e.target;
+    if (!f.matches('[data-form]')) return;
+    e.preventDefault();
+    if (f.getAttribute('data-form') === 'judge') { return; }
+    if (S.form === 'cancel') { var ack = document.getElementById('f-ack'); if (ack && !ack.checked) { ack.focus(); return; } }
+    S.done = 'Maquete: nada foi gravado. No painel, esta ação usa a mesma rota de hoje, atualiza o ranking e entra no histórico.';
+    S.form = null; renderDrawer(false);
+    var n = document.querySelector('#drawer .d-note'); if (n) { n.setAttribute('tabindex', '-1'); n.focus(); }
+  });
+  document.addEventListener('input', function (e) {
+    if (e.target.id === 'p-search') { S.q = e.target.value; renderList(); }
+  });
+  document.addEventListener('change', function (e) {
+    if (e.target.id === 'p-pending') { S.pending = e.target.checked; renderList(); }
+    if (e.target.id === 'p-cancel') { S.cancelled = e.target.checked; renderList(); }
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && S.sel) closeDrawer(); });
+
+  render();
+})();
+</script>
