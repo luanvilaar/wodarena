@@ -235,7 +235,7 @@ test('1.141 e 1.143: painel com sub-abas, prova por código, atenção, filtros 
   assert.match(panel, /\{sheet && sheet\.status !== 'cancelled' && \(/, 'Cancelar: não cancelada');
   assert.match(panel, /await load\(\);\s+\/\/ Só recarrega o histórico se o painel ainda está nesta súmula\.\s+if \(historyRequestRef\.current === sheet\.id\) await loadHistory\(sheet\.id\);/, 'lista e histórico recarregados depois da ação, se o painel ainda está na súmula');
   assert.match(panel, /current && current\.entryKey === entryKey \? \{ \.\.\.current, sheetId: sheet\.id \} : current/, 'cancelar não mexe no painel se o gestor trocou de linha');
-  assert.match(panel, /if \(historyRequestRef\.current !== sheetId\) return;/, 'resposta atrasada do histórico é descartada');
+  assert.match(panel, /if \(historyRequestRef\.current !== sheetId \|\| historySeqRef\.current !== seq\) return;/, 'resposta atrasada do histórico (de outra súmula ou mais antiga da mesma) é descartada');
   assert.match(panel, /if \(receiptRequestRef\.current !== sheetId\) return;/, 'resposta atrasada do link é descartada');
   assert.match(panel, /if \(target\) void loadHistory\(target\);/, 'histórico ao abrir');
   assert.match(panel, /O judge abre a súmula pela Quadra e pode marcar o atleta como ausente\./);

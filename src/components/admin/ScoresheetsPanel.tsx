@@ -202,20 +202,23 @@ export function ScoresheetsPanel({ event }: { event: Event }) {
   // ---------------------------------------------------------------------------
 
   // Última súmula pedida em cada busca do painel: resposta atrasada de outra súmula (ou depois de fechar) é descartada.
+  // O número da busca do histórico também descarta uma resposta mais antiga da mesma súmula.
   const historyRequestRef = useRef<string | null>(null);
+  const historySeqRef = useRef(0);
   const receiptRequestRef = useRef<string | null>(null);
 
   const loadHistory = useCallback(async (sheetId: string) => {
     historyRequestRef.current = sheetId;
+    const seq = ++historySeqRef.current;
     setHistory({ sheetId, rows: [], loading: true });
     try {
       const response = await fetch(`/api/sheets?view=sheet&sheetId=${encodeURIComponent(sheetId)}`);
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || 'Erro ao carregar o histórico.');
-      if (historyRequestRef.current !== sheetId) return;
+      if (historyRequestRef.current !== sheetId || historySeqRef.current !== seq) return;
       setHistory({ sheetId, rows: data.reviews || [], loading: false });
     } catch (error) {
-      if (historyRequestRef.current !== sheetId) return;
+      if (historyRequestRef.current !== sheetId || historySeqRef.current !== seq) return;
       setHistory({ sheetId, rows: [], loading: false });
       setNotice(error instanceof Error ? error.message : 'Erro ao carregar o histórico.');
     }
