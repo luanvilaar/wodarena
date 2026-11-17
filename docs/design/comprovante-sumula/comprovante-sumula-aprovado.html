@@ -1,0 +1,517 @@
+<title>Comprovante da Súmula</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@500;600;700&family=Inter:wght@400;500;600;700;800;900&display=swap">
+<style>
+/* Layout: coluna de leitura de 1120px; as maquetes usam as cores do painel (escuro) e da Quadra (claro, alto contraste). Tema escuro único, como o app. */
+:root {
+  --bg: #0b0e11;
+  --panel: #1e2329;
+  --line: #2b3139;
+  --sunk: #181a20;
+  --raise: #2b3139;
+  --fg: #eaecef;
+  --muted: #929aa5;
+  --soft: #868f9c;
+  --accent: #fcd535;
+  --ink: #181a20;
+  --up: #0ecb81;
+  --down: #f6465d;
+  --down-text: #ff7b8c;
+  --info: #3b82f6;
+  --info-text: #7fb0ff;
+  --accent-bg: rgba(252, 213, 53, .12);
+  --up-bg: rgba(14, 203, 129, .12);
+  --down-bg: rgba(246, 70, 93, .12);
+  --court-bg: #ffffff;
+  --court-card: #f3f4f6;
+  --court-line: #b9c0cb;
+  --court-fg: #0b0e11;
+  --court-muted: #3f4652;
+  --court-up: #0a7d52;
+  --f-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --f-num: "IBM Plex Sans", "JetBrains Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 15px; line-height: 1.55; }
+button { font: inherit; color: var(--fg); cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.num { font-family: var(--f-num); font-variant-numeric: tabular-nums; }
+code { font-family: var(--f-num); font-size: .86em; background: var(--sunk); border: 1px solid var(--line); border-radius: 4px; padding: 0 .3em; }
+
+.wrap { background: var(--bg); color: var(--fg); max-width: 1120px; margin: 0 auto; padding-block: 40px 72px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 56px; }
+section { display: grid; gap: 20px; min-width: 0; }
+.eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--accent); margin: 0; }
+h1 { font-size: clamp(26px, 4vw, 36px); line-height: 1.12; margin: 6px 0 0; font-weight: 800; text-wrap: balance; letter-spacing: -.01em; }
+h2 { font-size: 22px; line-height: 1.2; margin: 4px 0 0; font-weight: 800; text-wrap: balance; }
+h3 { font-size: 16px; line-height: 1.3; margin: 0; font-weight: 700; text-wrap: balance; }
+p { margin: 0; }
+.lede { color: var(--muted); max-width: 68ch; font-size: 16px; }
+.sub { color: var(--muted); max-width: 72ch; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.chip.is-wait { color: var(--accent); border-color: rgba(252, 213, 53, .45); }
+.chip .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+.stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.stat { padding: 16px; display: grid; gap: 2px; align-content: start; min-width: 0; }
+.stat + .stat { border-left: 1px solid var(--line); }
+.stat b { font-family: var(--f-num); font-size: 28px; line-height: 1.1; font-weight: 700; }
+.stat span { font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+@media (max-width: 860px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .stat + .stat { border-left: 0; } .stat:nth-child(even) { border-left: 1px solid var(--line); } .stat:nth-child(n+3) { border-top: 1px solid var(--line); } }
+
+.cards3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 820px) { .cards3 { grid-template-columns: 1fr; } }
+.card { border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; display: grid; gap: 8px; align-content: start; background: var(--panel); min-width: 0; }
+.card p { color: var(--muted); font-size: 14px; }
+.card p strong { color: var(--fg); font-weight: 600; }
+.tag { justify-self: start; font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; border-radius: 4px; padding: 2px 6px; border: 1px solid var(--line); color: var(--muted); }
+
+.tbl-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; }
+table { border-collapse: collapse; width: 100%; min-width: 720px; font-size: 14px; }
+th, td { text-align: left; vertical-align: top; padding: 11px 14px; border-bottom: 1px solid var(--line); }
+thead th { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--soft); background: var(--panel); font-weight: 700; }
+tbody tr:last-child td { border-bottom: 0; }
+td:first-child { font-weight: 600; }
+td.m { color: var(--muted); }
+.ok { color: var(--up); font-weight: 600; }
+.warn { color: var(--accent); font-weight: 600; }
+
+/* Simulador */
+.sim-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 10px; padding: 3px; background: var(--sunk); gap: 2px; }
+.seg button { border: 0; background: transparent; padding: 8px 14px; border-radius: 7px; font-size: 13px; font-weight: 700; color: var(--muted); min-height: 38px; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--ink); }
+.states { display: flex; flex-wrap: wrap; gap: 6px; }
+.states button { border: 1px solid var(--line); background: transparent; border-radius: 999px; padding: 4px 12px; font-size: 12.5px; font-weight: 600; color: var(--muted); min-height: 32px; }
+.states button[aria-pressed="true"] { background: var(--fg); color: var(--ink); border-color: var(--fg); }
+.stage { border: 1px solid var(--line); border-radius: 14px; background: var(--sunk); padding: 28px 16px; display: grid; grid-template-columns: minmax(0, 380px) minmax(0, 1fr); gap: 28px; align-items: start; justify-content: center; }
+@media (max-width: 820px) { .stage { grid-template-columns: minmax(0, 1fr); padding: 20px 12px; } }
+.stage-note { display: grid; gap: 12px; align-content: start; min-width: 0; }
+.stage-note h3 { font-size: 17px; }
+.stage-note p, .stage-note li { color: var(--muted); font-size: 14px; }
+.stage-note ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+.stage-note strong { color: var(--fg); font-weight: 600; }
+.phone { width: 100%; max-width: 380px; justify-self: center; border: 1px solid var(--line); border-radius: 26px; padding: 10px; background: #000; }
+.screen { border-radius: 18px; overflow: hidden; background: var(--bg); min-height: 560px; }
+
+/* Comprovante */
+.rc { position: relative; background: var(--bg); color: var(--fg); }
+.rc-strip { height: 6px; background: var(--accent); }
+.rc-head { display: flex; align-items: center; gap: 12px; padding: 18px 18px 14px; border-bottom: 1px solid var(--line); }
+.rc-badge { width: 42px; height: 42px; flex: none; border-radius: 9px; background: var(--accent); color: var(--ink); display: grid; place-items: center; font-weight: 900; font-size: 14px; }
+.rc-head b { display: block; font-size: 13px; font-weight: 900; text-transform: uppercase; letter-spacing: .02em; }
+.rc-head small { display: block; font-size: 11.5px; color: var(--muted); }
+.rc-sec { padding: 14px 18px; border-bottom: 1px solid var(--panel); display: grid; gap: 4px; }
+.rc-kicker { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.rc-kicker span:first-child { font-size: 10.5px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+.rc-prova { font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.rc-name { font-size: 20px; font-weight: 900; line-height: 1.15; }
+.rc-members, .rc-meta { font-size: 12.5px; color: var(--muted); }
+.rc-result { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 12px; }
+.rc-result .v { font-family: var(--f-num); font-size: 44px; font-weight: 700; line-height: 1; letter-spacing: -.02em; }
+.rc-result .v.struck { text-decoration: line-through; color: var(--soft); }
+.rc-result .u { font-size: 14px; color: var(--muted); font-weight: 600; }
+.rc-result .tb { font-family: var(--f-num); font-size: 12.5px; color: var(--muted); }
+.rc-summary { font-size: 12.5px; color: var(--muted); }
+.rc-was { font-size: 12.5px; color: var(--muted); }
+.rc-was b { font-family: var(--f-num); color: var(--fg); }
+.rc-grid { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 14px; font-size: 13px; }
+.rc-grid dt { color: var(--muted); }
+.rc-grid dd { margin: 0; text-align: right; font-weight: 600; }
+.rc-time { list-style: none; margin: 0; padding: 0 0 0 12px; border-left: 1px solid var(--line); display: grid; gap: 8px; font-size: 12.5px; }
+.rc-time li { color: var(--muted); }
+.rc-time li b { color: var(--fg); font-weight: 600; }
+.rc-mov { border: 0; background: none; padding: 0; font-size: 12px; font-weight: 700; color: var(--accent); text-align: left; min-height: 32px; }
+.rc-mov-list { margin: 0; padding-left: 16px; color: var(--muted); font-size: 12.5px; display: grid; gap: 2px; }
+.rc-foot { padding: 14px 18px 18px; display: grid; gap: 12px; }
+.rc-shield { display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 12px; font-size: 12.5px; color: var(--muted); }
+.rc-shield svg { width: 18px; height: 18px; flex: none; margin-top: 1px; }
+.rc-shield b { color: var(--fg); display: block; font-size: 13px; }
+.rc-code { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--soft); }
+.rc-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; border-radius: 7px; border: 1px solid var(--line); background: var(--panel); padding: 0 12px; font-size: 11.5px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+.btn.pri { background: var(--accent); border-color: var(--accent); color: var(--ink); }
+.btn svg { width: 15px; height: 15px; }
+.rc-msg { font-size: 12px; color: var(--muted); text-align: center; min-height: 18px; }
+.pill { display: inline-flex; align-items: center; white-space: nowrap; border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.pill.p-up { border-color: rgba(14, 203, 129, .6); color: var(--up); }
+.pill.p-acc { border-color: rgba(252, 213, 53, .6); color: var(--accent); }
+.pill.p-down { border-color: rgba(246, 70, 93, .6); color: var(--down-text); }
+.pill.p-info { border-color: rgba(59, 130, 246, .6); color: var(--info-text); }
+
+/* Quadra (tema claro) */
+.court { background: var(--court-bg); color: var(--court-fg); min-height: 560px; }
+.court-top { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--court-line); font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+.court-top span { color: var(--court-muted); font-weight: 600; text-transform: none; letter-spacing: 0; }
+.court-body { padding: 16px; display: grid; gap: 14px; }
+.court-ok { border: 2px solid var(--court-up); background: rgba(10, 125, 82, .08); border-radius: 16px; padding: 14px 16px; display: grid; gap: 2px; }
+.court-ok p:first-child { font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--court-up); }
+.court-ok .v { font-family: var(--f-num); font-size: 38px; font-weight: 800; line-height: 1.1; }
+.court-ok .tb { font-size: 13px; font-weight: 600; }
+.court-rc { border: 1px solid var(--court-line); background: var(--court-card); border-radius: 14px; padding: 14px 16px; display: grid; gap: 10px; }
+.court-rc .k { font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--court-muted); }
+.court-rc dl { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; font-size: 13.5px; }
+.court-rc dt { color: var(--court-muted); }
+.court-rc dd { margin: 0; text-align: right; font-weight: 700; }
+.court-rc p { font-size: 12.5px; color: var(--court-muted); }
+.court-btn { min-height: 48px; border-radius: 10px; border: 1px solid var(--court-line); background: var(--court-bg); color: var(--court-fg); font-weight: 800; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; }
+.court-btn.pri { background: #f5c518; border-color: #f5c518; color: var(--court-fg); }
+.new { outline: 2px dashed var(--info); outline-offset: 4px; border-radius: 14px; }
+.new-label { font-size: 10.5px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--info-text); }
+.court .new-label { color: #1f5fd1; }
+
+/* Área do Atleta */
+.ath { padding: 14px; display: grid; gap: 12px; background: var(--bg); min-height: 560px; align-content: start; }
+.ath-tabs { display: flex; gap: 6px; overflow-x: auto; }
+.ath-tabs span { white-space: nowrap; font-size: 11.5px; font-weight: 700; padding: 6px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+.ath-tabs span.on { background: var(--accent); border-color: var(--accent); color: var(--ink); }
+.reg { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); overflow: hidden; }
+.reg-top { padding: 12px 14px; display: grid; gap: 2px; border-bottom: 1px solid var(--line); }
+.reg-top b { font-size: 14px; font-weight: 800; text-transform: uppercase; }
+.reg-top small { font-size: 12px; color: var(--muted); }
+.reg-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; border-top: 1px solid var(--line); font-size: 13px; }
+.reg-row:first-of-type { border-top: 0; }
+.reg-row .l { min-width: 0; }
+.reg-row .l b { display: block; font-weight: 700; }
+.reg-row .l span { display: block; font-size: 12px; color: var(--muted); }
+.reg-row .r { display: flex; align-items: center; gap: 8px; }
+.reg-row .r .v { font-family: var(--f-num); font-weight: 700; }
+.link-btn { border: 1px solid var(--line); background: var(--sunk); border-radius: 6px; padding: 0 10px; min-height: 34px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
+.reg-head { padding: 10px 14px 4px; font-size: 10.5px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--soft); }
+
+/* Painel do gestor */
+.mgr { background: var(--panel); min-height: 560px; display: grid; grid-template-rows: auto 1fr; }
+.mgr-head { display: flex; justify-content: space-between; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.mgr-head p { font-size: 10.5px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+.mgr-head b { display: block; font-size: 17px; margin-top: 2px; }
+.mgr-head small { display: block; font-size: 12px; color: var(--muted); }
+.mgr-body { padding: 14px 16px; display: grid; gap: 14px; align-content: start; }
+.mgr-res { border: 1px solid var(--line); background: rgba(24, 26, 32, .4); border-radius: 10px; padding: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.mgr-res .v { font-family: var(--f-num); font-size: 28px; font-weight: 700; }
+.mgr-res small { flex-basis: 100%; font-size: 12px; color: var(--muted); }
+.mgr-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.mgr-actions .btn { min-height: 36px; font-size: 10.5px; }
+.mgr-h { font-size: 10.5px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--soft); }
+
+/* Estados, plano, decisões */
+.decisions { display: grid; gap: 10px; }
+.dec { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; gap: 4px 16px; align-items: start; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); padding: 14px 16px; }
+.dec .id { font-family: var(--f-num); font-weight: 700; color: var(--accent); font-size: 15px; }
+.dec h3 { font-size: 15px; }
+.dec p { grid-column: 2 / 3; color: var(--muted); font-size: 13.5px; }
+.dec .rec { grid-row: 1; grid-column: 3; font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--up); border: 1px solid rgba(14, 203, 129, .5); border-radius: 999px; padding: 2px 9px; white-space: nowrap; }
+@media (max-width: 600px) { .dec { grid-template-columns: 40px minmax(0, 1fr); } .dec .rec { grid-column: 2; grid-row: auto; justify-self: start; } }
+.risks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 760px) { .risks { grid-template-columns: 1fr; } }
+.scope { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 760px) { .scope { grid-template-columns: 1fr; } }
+.scope article { border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.scope ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; color: var(--muted); font-size: 14px; }
+.scope ul strong { color: var(--fg); font-weight: 600; }
+.foot { color: var(--soft); font-size: 12.5px; border-top: 1px solid var(--line); padding-top: 16px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header style="display:grid;gap:14px">
+    <p class="eyebrow">Plano · Súmula digital · Functional Fitness presencial</p>
+    <h1>Comprovante de envio da súmula</h1>
+    <p class="lede">Quando o judge envia a súmula, o atleta passa a ter um comprovante com a prova, o resultado, o árbitro, a bateria, a raia e os horários. Esta página mostra o que existe hoje, a proposta em quatro telas, o plano em três stories, os riscos e as decisões que faltam antes de qualquer código.</p>
+    <div class="chips">
+      <span class="chip is-wait"><span class="dot"></span>Aguardando aprovação</span>
+      <span class="chip">Só eventos de Functional Fitness</span>
+      <span class="chip">Sem mudança no banco</span>
+      <span class="chip">Sem e-mail novo</span>
+      <span class="chip">16/11/2026</span>
+    </div>
+  </header>
+
+  <section aria-labelledby="hoje-title">
+    <div>
+      <p class="eyebrow">Hoje</p>
+      <h2 id="hoje-title">O envio não deixa registro para o atleta</h2>
+      <p class="sub" style="margin-top:6px">Lido em <code>CourtSheet.tsx</code>, <code>serverScoresheets.ts</code> (<code>submitSheet</code>, <code>reviewSheet</code>) e na Área do Atleta, e no banco (só consulta) com o Hibrido Games de 15/11.</p>
+    </div>
+    <div class="stats" role="list">
+      <div class="stat" role="listitem"><b>173</b><span>envios de súmula num só dia de evento</span></div>
+      <div class="stat" role="listitem"><b>32</b><span>súmulas canceladas</span></div>
+      <div class="stat" role="listitem"><b>4 + 7</b><span>correções do gestor e lançamentos à mão por cima</span></div>
+      <div class="stat" role="listitem"><b>38/38</b><span>inscrições com conta na Área do Atleta</span></div>
+      <div class="stat" role="listitem"><b>0</b><span>comprovantes entregues ao atleta</span></div>
+    </div>
+    <div class="cards3">
+      <article class="card"><span class="tag">Judge</span><h3>Vê só o número</h3><p>Depois de enviar, a Quadra mostra “Publicada no ranking”, o resultado e o tie-break. Não há nada para mostrar ou passar ao atleta.</p></article>
+      <article class="card"><span class="tag">Atleta</span><h3>Vê só o ranking</h3><p>O resultado aparece no leaderboard, mas <strong>sem árbitro, bateria, raia nem horário do envio</strong>. Para contestar, o atleta não tem a que se referir.</p></article>
+      <article class="card"><span class="tag">Gestor</span><h3>Tem o histórico, mas só no painel</h3><p>A súmula guarda quem abriu, quando enviou, correções e cancelamentos. Quando um atleta pergunta, o gestor precisa ler e repassar à mão.</p></article>
+    </div>
+    <div>
+      <h3 style="margin-bottom:10px">Tudo o que o comprovante pede já está gravado</h3>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th scope="col">No comprovante</th><th scope="col">De onde vem</th><th scope="col">Muda depois?</th></tr></thead>
+          <tbody>
+            <tr><td>Prova: código, formato, time cap, movimentos, desempate</td><td class="m">Prova cadastrada e a estrutura copiada na súmula quando ela é aberta</td><td class="ok">Fixo (a estrutura trava com súmula aberta)</td></tr>
+            <tr><td>Atleta ou time, integrantes, box, categoria</td><td class="m">Atleta e categoria do evento</td><td class="m">Só se o gestor editar a inscrição</td></tr>
+            <tr><td>Bateria e raia</td><td class="m">Súmula (<code>heat_number</code>, <code>lane</code>)</td><td class="ok">Fixo</td></tr>
+            <tr><td>Horário da bateria</td><td class="m">Cronograma do evento (bateria da súmula)</td><td class="warn">Muda se o gestor editar o cronograma</td></tr>
+            <tr><td>Árbitro</td><td class="m">Súmula (<code>judge_name</code>, gravado ao abrir)</td><td class="ok">Fixo, mesmo se o judge sair do evento</td></tr>
+            <tr><td>Resultado, tie-break e resumo (“6 rounds + 27”)</td><td class="m">Súmula (resultado oficial) e o resumo recalculado dos registros do judge</td><td class="m">Muda com correção do gestor</td></tr>
+            <tr><td>Abertura, envio e publicação</td><td class="m">Súmula (<code>created_at</code>, <code>submitted_at</code>, <code>published_at</code>)</td><td class="ok">Fixo</td></tr>
+            <tr><td>Correção, devolução, cancelamento, ausente, lançamento à mão</td><td class="m">Histórico da súmula e o resultado atual do ranking</td><td class="m">Cresce, nunca se apaga</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="sim-title">
+    <div>
+      <p class="eyebrow">Proposta</p>
+      <h2 id="sim-title">Um comprovante, quatro lugares</h2>
+      <p class="sub" style="margin-top:6px">Dados de exemplo; atleta, time, box e evento são inventados. Nada é gravado nem copiado. O que é novo nas telas existentes aparece com contorno azul tracejado.</p>
+    </div>
+    <div class="sim-bar">
+      <div class="seg" role="group" aria-label="Tela">
+        <button type="button" data-view="receipt" aria-pressed="true">Comprovante</button>
+        <button type="button" data-view="court" aria-pressed="false">Quadra (judge)</button>
+        <button type="button" data-view="athlete" aria-pressed="false">Área do Atleta</button>
+        <button type="button" data-view="manager" aria-pressed="false">Painel do gestor</button>
+      </div>
+      <div class="states" role="group" aria-label="Estado da súmula" id="states">
+        <button type="button" data-state="published" aria-pressed="true">Publicada</button>
+        <button type="button" data-state="corrected" aria-pressed="false">Corrigida</button>
+        <button type="button" data-state="manual" aria-pressed="false">Lançada à mão</button>
+        <button type="button" data-state="returned" aria-pressed="false">Devolvida</button>
+        <button type="button" data-state="absent" aria-pressed="false">Ausente</button>
+        <button type="button" data-state="cancelled" aria-pressed="false">Cancelada</button>
+      </div>
+    </div>
+    <div class="stage">
+      <div class="phone"><div class="screen" id="screen"></div></div>
+      <div class="stage-note" id="note"></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="states-title">
+    <div>
+      <p class="eyebrow">Regras</p>
+      <h2 id="states-title">O comprovante acompanha a súmula</h2>
+      <p class="sub" style="margin-top:6px">É sempre o estado atual. O que o judge enviou continua visível quando o gestor muda o resultado.</p>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th scope="col">Estado</th><th scope="col">O que o comprovante mostra</th><th scope="col">Ranking</th></tr></thead>
+        <tbody>
+          <tr><td>Publicada</td><td class="m">Resultado, tie-break e resumo enviados pelo judge.</td><td class="m">Conta</td></tr>
+          <tr><td>Corrigida pelo gestor</td><td class="m">Resultado oficial novo, “Enviado pelo judge: 387” e a hora da correção. A justificativa do gestor não aparece.</td><td class="m">Conta o corrigido</td></tr>
+          <tr><td>Lançada à mão por cima</td><td class="m">“Resultado oficial lançado pelo gestor”, com o valor do ranking, e o que o judge enviou.</td><td class="m">Conta o lançado</td></tr>
+          <tr><td>Devolvida ao judge</td><td class="m">Aviso “Devolvida para correção”, com o resultado de antes, que continua no ranking até o novo envio.</td><td class="m">Conta o anterior</td></tr>
+          <tr><td>Atleta ausente</td><td class="m">Selo “Ausente” e o resultado atribuído pela regra da prova.</td><td class="m">Conta como ausente</td></tr>
+          <tr><td>Cancelada</td><td class="m">Resultado riscado, “Súmula cancelada pelo gestor” e a hora. Se outra súmula for aberta para o atleta, ela tem o próprio comprovante.</td><td class="m">Sai</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="plan-title">
+    <div>
+      <p class="eyebrow">Plano de implementação</p>
+      <h2 id="plan-title">Três stories, na ordem</h2>
+      <p class="sub" style="margin-top:6px">Sem migration, sem biblioteca nova e sem e-mail. O link do comprovante é assinado com o mesmo mecanismo do token de inscrição (HMAC do segredo de sessão), com um propósito próprio.</p>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th scope="col">Story</th><th scope="col">Entrega</th><th scope="col">Onde no código</th><th scope="col">Tamanho</th></tr></thead>
+        <tbody>
+          <tr><td class="num">1.144</td><td>Montagem do comprovante no servidor: o modelo com os seis estados, o link assinado sem prazo e o acesso. Pelo link, sem login. Com sessão, o atleta dono da inscrição, o gestor do evento e o judge do evento. Lista de comprovantes do atleta. Só súmulas de eventos de Functional Fitness.</td><td class="m"><code>src/lib/sheetReceipt.ts</code> (novo, puro), <code>serverScoresheets.ts</code>, <code>serverSecurity.ts</code>, <code>/api/sheets</code> (novas visões)</td><td class="m">M</td></tr>
+          <tr><td class="num">1.145</td><td>Página do comprovante: o visual do verso do comprovante de inscrição, os estados, os movimentos recolhidos, “Copiar link” e “Contestar”. Fora de buscadores.</td><td class="m"><code>/[locale]/comprovante/sumula/[token]</code> (nova), componente novo</td><td class="m">M</td></tr>
+          <tr><td class="num">1.146</td><td>Onde aparece: na Quadra, logo depois de enviar ou marcar ausente; na Área do Atleta, no cartão da inscrição; no painel do gestor, no detalhe da súmula (copiar e abrir).</td><td class="m"><code>CourtSheet.tsx</code>, Área do Atleta em <code>admin/page.tsx</code>, <code>ScoresheetsPanel.tsx</code></td><td class="m">M</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="sub">Testes: modelo puro (os seis estados, sem bateria, dupla), link adulterado ou de outro propósito recusado, acesso por papel na rota com o banco em memória, e nenhum e-mail, telefone ou CPF na resposta. Cada story com <code>npm test</code>, lint, typecheck e build; maquete aprovada copiada para <code>docs/design/</code>.</p>
+  </section>
+
+  <section aria-labelledby="risk-title">
+    <div>
+      <p class="eyebrow">Riscos</p>
+      <h2 id="risk-title">Cuidados e como ficam cobertos</h2>
+    </div>
+    <div class="risks">
+      <article class="card"><span class="tag">E-mail</span><h3>Cota diária do Resend</h3><p>Um e-mail por envio daria uns 210 num só dia de evento (173 envios, 32 cancelamentos, 4 correções). Em novembro a cota diária já estourou com 300 e-mails e derrubou confirmação de inscrição e troca de senha até as 21h. <strong>Por isso o comprovante não sai por e-mail nesta etapa.</strong></p></article>
+      <article class="card"><span class="tag">Privacidade</span><h3>Link aberto sem login</h3><p>Mostra o que o ranking já mostra, mais o árbitro e os horários. Sem e-mail, telefone ou CPF. O link é assinado e impossível de adivinhar, e a página fica fora de buscadores. Quem tem o link vê o estado atual, inclusive cancelada.</p></article>
+      <article class="card"><span class="tag">Horário</span><h3>O cronograma pode mudar depois</h3><p>O horário da bateria vem do cronograma vivo. Os horários de abertura e de envio são carimbos fixos da súmula, e são eles que comprovam o envio. A página diz “horário no cronograma”.</p></article>
+      <article class="card"><span class="tag">Dupla e time</span><h3>Só um integrante tem login</h3><p>O comprovante aparece na Área do Atleta de quem fez a inscrição. Os outros recebem o link, que o dono copia ali.</p></article>
+      <article class="card"><span class="tag">Sem bateria</span><h3>Súmula aberta fora do cronograma</h3><p>Como as 40 da Prova 3.2 do Hibrido Games: o comprovante diz “Sem bateria no cronograma” e mostra só os carimbos de abertura e envio.</p></article>
+      <article class="card"><span class="tag">Segredo</span><h3>Troca do segredo de sessão</h3><p>Se o segredo for trocado, os links antigos param de abrir, como as sessões. A Área do Atleta e o painel geram o link de novo na hora.</p></article>
+    </div>
+  </section>
+
+  <section aria-labelledby="dec-title">
+    <div>
+      <p class="eyebrow">Para aprovar</p>
+      <h2 id="dec-title">Decisões</h2>
+      <p class="sub" style="margin-top:6px">A maquete já segue a recomendação de cada uma. Responda com “sim” ou com a mudança que quiser.</p>
+    </div>
+    <div class="decisions">
+      <div class="dec"><span class="id">D1</span><h3>Onde o atleta encontra o comprovante</h3><span class="rec">Recomendo: sim</span><p>Na Área do Atleta, no cartão da inscrição, com um link para compartilhar. A Quadra mostra o resumo logo depois do envio, para o judge mostrar ao atleta ali mesmo. Não muda o menu da Área do Atleta.</p></div>
+      <div class="dec"><span class="id">D2</span><h3>Sem e-mail por envio nesta etapa</h3><span class="rec">Recomendo: sim</span><p>Pela cota diária do Resend. Se depois quiser e-mail, a opção mais segura é um resumo por atleta no fim do dia, numa story própria.</p></div>
+      <div class="dec"><span class="id">D3</span><h3>Árbitro com o nome gravado na súmula</h3><span class="rec">Recomendo: sim</span><p>É o que você pediu. É o nome que o gestor cadastrou para o judge, gravado quando a súmula foi aberta. No e-mail de decisão do Qualifier o nome do judge ficou de fora; aqui ele aparece.</p></div>
+      <div class="dec"><span class="id">D4</span><h3>Correção mostra o enviado e o oficial, sem a justificativa</h3><span class="rec">Recomendo: sim</span><p>“Resultado oficial 391 · Enviado pelo judge 387 · corrigido às 11:31”. A justificativa foi escrita para o histórico interno e continua só no painel.</p></div>
+      <div class="dec"><span class="id">D5</span><h3>Link sem login, sem prazo e fora de buscadores</h3><span class="rec">Recomendo: sim</span><p>Funciona para o parceiro de dupla e para quem não está logado no celular. A página sempre mostra o estado atual da súmula.</p></div>
+      <div class="dec"><span class="id">D6</span><h3>QR Code e imagem para salvar ficam para depois</h3><span class="rec">Recomendo: sim</span><p>O QR exige uma biblioteca nova no projeto. A imagem pode reaproveitar o gerador do pôster da inscrição numa story seguinte. Nesta etapa, o link basta.</p></div>
+      <div class="dec"><span class="id">D7</span><h3>“Contestar” leva à Área do Atleta, em Contestações</h3><span class="rec">Recomendo: sim</span><p>Sem preencher o formulário sozinho nesta etapa. O código do comprovante aparece para o atleta citar na contestação.</p></div>
+      <div class="dec"><span class="id">D8</span><h3>Gestor copia e abre o comprovante no detalhe da súmula</h3><span class="rec">Recomendo: sim</span><p>No painel de detalhe da aba Súmulas e Judges, para responder um atleta sem repassar à mão.</p></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="scope-title">
+    <div>
+      <p class="eyebrow">Escopo</p>
+      <h2 id="scope-title">O que entra e o que fica de fora</h2>
+    </div>
+    <div class="scope">
+      <article>
+        <h3>Entra</h3>
+        <ul>
+          <li><strong>Súmulas digitais</strong> de eventos de Functional Fitness presenciais (Quadra).</li>
+          <li>Comprovante para envio do judge, atleta ausente, correção, devolução, cancelamento e lançamento à mão.</li>
+          <li>Página do comprovante, Área do Atleta, Quadra e painel do gestor.</li>
+        </ul>
+      </article>
+      <article>
+        <h3>Fica de fora</h3>
+        <ul>
+          <li>Fitness Race e a súmula de estações.</li>
+          <li>Qualifier e resultados enviados por vídeo.</li>
+          <li>E-mail, QR Code, imagem para salvar e PDF.</li>
+          <li>Assinatura do atleta na súmula.</li>
+          <li>Banco, migrations, autenticação e infra.</li>
+        </ul>
+      </article>
+    </div>
+  </section>
+
+  <p class="foot">Fontes: <code>src/components/judge/CourtSheet.tsx</code>, <code>src/lib/serverScoresheets.ts</code>, <code>src/lib/scoresheet.ts</code> (<code>computeSheetOutcome</code>), <code>src/lib/serverSecurity.ts</code>, <code>src/lib/resend.ts</code>, <code>src/components/RegistrationVoucher.tsx</code>, <code>docs/design/comprovante/</code>, e consulta ao banco em 16/11/2026 (súmulas, histórico e inscrições do Hibrido Games). Nenhum arquivo do projeto foi alterado.</p>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var S = { view: 'receipt', state: 'published', mov: false, msg: '' };
+  var screen = document.getElementById('screen');
+  var noteEl = document.getElementById('note');
+  var statesEl = document.getElementById('states');
+
+  var ICON = {
+    shield: '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path><path d="m9 12 2 2 4-4"></path>',
+    alert: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path>',
+    link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>',
+    flag: '<path d="M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528"></path>'
+  };
+  function icon(n, color) { return '<svg viewBox="0 0 24 24" fill="none" stroke="' + (color || 'currentColor') + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICON[n] + '</svg>'; }
+
+  var STATE = {
+    published: { pill: ['p-up', 'Publicada'], result: '387', unit: 'reps', tb: '11:12', summary: '6 rounds + 27 (total 387)', shield: ['up', 'Publicada no ranking', 'Enviada pelo judge em 15/11, 10:59.'],
+      time: [['10:47', 'Súmula aberta', 'por Iara'], ['10:59', 'Enviada e publicada', 'por Iara · 387']] },
+    corrected: { pill: ['p-acc', 'Corrigida pelo gestor'], result: '391', unit: 'reps', tb: '11:12', summary: 'Resultado oficial definido pelo gestor', was: 'Enviado pelo judge: <b>387</b>', shield: ['acc', 'Corrigida pelo gestor', 'O ranking usa 391 desde 15/11, 11:31.'],
+      time: [['10:47', 'Súmula aberta', 'por Iara'], ['10:59', 'Enviada e publicada', 'por Iara · 387'], ['11:31', 'Resultado corrigido pelo gestor', '387 → 391']] },
+    manual: { pill: ['p-acc', 'Lançada à mão'], result: '391', unit: 'reps', tb: null, summary: 'Resultado oficial lançado pelo gestor', was: 'Enviado pelo judge: <b>387</b>', shield: ['acc', 'Resultado lançado à mão pelo gestor', 'O ranking usa o resultado lançado desde 15/11, 12:05.'],
+      time: [['10:47', 'Súmula aberta', 'por Iara'], ['10:59', 'Enviada e publicada', 'por Iara · 387'], ['12:05', 'Resultado lançado à mão por cima da súmula', '387 → 391']] },
+    returned: { pill: ['p-down', 'Devolvida'], result: '387', unit: 'reps', tb: '11:12', summary: '6 rounds + 27 (total 387)', shield: ['down', 'Devolvida ao judge para correção', 'O resultado acima continua no ranking até o novo envio.'],
+      time: [['10:47', 'Súmula aberta', 'por Iara'], ['10:59', 'Enviada e publicada', 'por Iara · 387'], ['11:20', 'Devolvida para correção', 'pelo gestor']] },
+    absent: { pill: ['p-info', 'Ausente'], result: '0', unit: 'reps', tb: null, summary: 'Atleta ausente: resultado atribuído pela regra da prova', shield: ['info', 'Atleta ausente', 'Marcado pelo judge em 15/11, 10:52.'],
+      time: [['10:47', 'Súmula aberta', 'por Iara'], ['10:52', 'Atleta ausente', 'por Iara · 0']] },
+    cancelled: { pill: ['p-down', 'Cancelada'], result: '387', unit: 'reps', tb: '11:12', struck: true, summary: 'Este resultado não conta no ranking', shield: ['down', 'Súmula cancelada pelo gestor', 'O resultado saiu do ranking em 15/11, 11:05. Se outra súmula for aberta para o atleta, ela terá o próprio comprovante.'],
+      time: [['10:47', 'Súmula aberta', 'por Iara'], ['10:59', 'Enviada e publicada', 'por Iara · 387'], ['11:05', 'Súmula cancelada', 'pelo gestor']] }
+  };
+  var SHIELD_COLOR = { up: 'var(--up)', acc: 'var(--accent)', down: 'var(--down-text)', info: 'var(--info-text)' };
+
+  function receiptHtml() {
+    var st = STATE[S.state];
+    var h = '<article class="rc" aria-label="Comprovante de envio da súmula">';
+    h += '<div class="rc-strip"></div>';
+    h += '<div class="rc-head"><div class="rc-badge">DL</div><div><b>Desafio Litoral 2026</b><small>15/11/2026 · Arena Norte, Fortaleza</small></div></div>';
+    h += '<div class="rc-sec"><div class="rc-kicker"><span>Comprovante de envio da súmula</span><span class="pill ' + st.pill[0] + '">' + st.pill[1] + '</span></div>';
+    h += '<p class="rc-prova">Prova 2 · AMRAP 12 min</p><p class="rc-name">Os Insistentes</p><p class="rc-members">Yuri Lacerda / Breno Macedo</p><p class="rc-meta">CT Maré Alta · Dupla Intermediário Masculino</p></div>';
+    h += '<div class="rc-sec"><span class="rc-prova">' + (S.state === 'manual' || S.state === 'corrected' ? 'Resultado oficial' : 'Resultado') + '</span>';
+    h += '<div class="rc-result"><span class="v' + (st.struck ? ' struck' : '') + '">' + st.result + '</span><span class="u">' + st.unit + '</span>' + (st.tb ? '<span class="tb">tie-break ' + st.tb + '</span>' : '') + (S.state === 'absent' ? '<span class="pill p-info">Ausente</span>' : '') + '</div>';
+    h += '<p class="rc-summary">' + st.summary + '</p>' + (st.was ? '<p class="rc-was">' + st.was + '</p>' : '') + '</div>';
+    h += '<div class="rc-sec"><dl class="rc-grid"><dt>Bateria</dt><dd class="num">3 · Raia 5</dd><dt>Horário no cronograma</dt><dd class="num">15/11, 10:46</dd><dt>Árbitro</dt><dd>Iara</dd><dt>Súmula aberta</dt><dd class="num">15/11, 10:47</dd><dt>' + (S.state === 'absent' ? 'Ausência marcada' : 'Enviada') + '</dt><dd class="num">15/11, ' + (S.state === 'absent' ? '10:52' : '10:59') + '</dd></dl></div>';
+    h += '<div class="rc-sec"><span class="rc-prova">Linha do tempo</span><ol class="rc-time">' + st.time.map(function (t) { return '<li><span class="num">' + t[0] + '</span> · <b>' + t[1] + '</b> ' + t[2] + '</li>'; }).join('') + '</ol></div>';
+    h += '<div class="rc-sec"><button type="button" class="rc-mov" data-act="mov" aria-expanded="' + S.mov + '">' + (S.mov ? 'Esconder' : 'Ver') + ' movimentos e desempate</button>';
+    if (S.mov) h += '<ul class="rc-mov-list"><li>10 thrusters (40/30 kg)</li><li>15 burpees over the bar</li><li>20 wall balls (9/6 kg)</li><li>Desempate: tempo do último round completo</li></ul>';
+    h += '</div>';
+    h += '<div class="rc-foot"><div class="rc-shield">' + icon(S.state === 'published' ? 'shield' : 'alert', SHIELD_COLOR[st.shield[0]]) + '<div><b>' + st.shield[1] + '</b>' + st.shield[2] + '</div></div>';
+    h += '<div class="rc-code"><span>Código da súmula</span><span class="num">7Q4K2M9X</span></div>';
+    h += '<div class="rc-actions"><button type="button" class="btn" data-act="copy">' + icon('link') + 'Copiar link</button><button type="button" class="btn pri" data-act="contest">' + icon('flag') + 'Contestar</button></div>';
+    h += '<p class="rc-msg" role="status">' + S.msg + '</p></div></article>';
+    return h;
+  }
+
+  function courtHtml() {
+    var absent = S.state === 'absent';
+    var h = '<div class="court"><div class="court-top">Quadra · Prova 2<span>Bateria 3 · Raia 5</span></div><div class="court-body">';
+    h += '<div class="court-ok"><p>Publicada no ranking</p>' + (absent ? '<p style="font-size:18px;font-weight:800">Atleta ausente</p>' : '') + '<p class="v">' + (absent ? '0' : '387') + '</p>' + (absent ? '' : '<p class="tb">Tie-break 11:12</p>') + '</div>';
+    h += '<p class="new-label">Novo</p><div class="court-rc new"><p class="k">Comprovante do atleta</p><dl><dt>Atleta</dt><dd>Os Insistentes</dd><dt>Bateria</dt><dd class="num">3 · Raia 5 · 10:46</dd><dt>Árbitro</dt><dd>Iara</dd><dt>' + (absent ? 'Ausência marcada' : 'Enviada') + '</dt><dd class="num">' + (absent ? '10:52' : '10:59') + '</dd></dl>';
+    h += '<p>O atleta encontra este comprovante na Área do Atleta, em Inscrições.</p><button type="button" class="court-btn" data-act="noop">Ver comprovante</button></div>';
+    h += '<button type="button" class="court-btn pri" data-act="noop">Voltar à bateria</button></div></div>';
+    return h;
+  }
+
+  function athleteHtml() {
+    var st = STATE[S.state];
+    var h = '<div class="ath"><div class="ath-tabs"><span class="on">Inscrições</span><span>Resultados</span><span>Contestar</span><span>Perfil</span></div>';
+    h += '<div class="reg"><div class="reg-top"><b>Desafio Litoral 2026</b><small>Dupla Intermediário Masculino · Os Insistentes</small></div>';
+    h += '<div class="reg-row"><div class="l"><b>Comprovante de inscrição</b><span>Pago · 02/10/2026</span></div><div class="r"><button type="button" class="link-btn" data-act="noop">Abrir</button></div></div>';
+    h += '<div class="new" style="margin:8px"><p class="new-label" style="padding:8px 6px 0">Novo</p><p class="reg-head">Comprovantes das provas</p>';
+    h += '<div class="reg-row"><div class="l"><b>Prova 1</b><span>Bateria 2 · Raia 5 · Árbitro Nina</span></div><div class="r"><span class="v">08:41</span><span class="pill p-up">Publicada</span><button type="button" class="link-btn" data-act="noop">Ver</button></div></div>';
+    h += '<div class="reg-row"><div class="l"><b>Prova 2</b><span>Bateria 3 · Raia 5 · Árbitro Iara</span></div><div class="r"><span class="v">' + st.result + '</span><span class="pill ' + st.pill[0] + '">' + st.pill[1] + '</span><button type="button" class="link-btn" data-act="view-receipt">Ver</button></div></div>';
+    h += '<div class="reg-row"><div class="l"><b>Prova 3.1</b><span>Bateria 4 · 13:44 no cronograma</span></div><div class="r"><span class="pill">Aguardando</span></div></div></div></div></div>';
+    return h;
+  }
+
+  function managerHtml() {
+    var st = STATE[S.state];
+    var h = '<div class="mgr"><div class="mgr-head"><div><p>Prova 2 · Bateria 3 · Raia 5</p><b>Os Insistentes</b><small>Yuri Lacerda / Breno Macedo · CT Maré Alta · Dupla Intermediário Masculino</small></div></div><div class="mgr-body">';
+    h += '<div class="mgr-res"><span class="v">' + st.result + '</span><span class="pill ' + st.pill[0] + '">' + st.pill[1] + '</span><small>Judge Iara · 15/11, 10:59</small></div>';
+    h += '<div class="mgr-actions"><button type="button" class="btn" data-act="noop">Corrigir</button><button type="button" class="btn" data-act="noop">Devolver</button><button type="button" class="btn" data-act="noop">Cancelar</button></div>';
+    h += '<div class="new"><p class="new-label" style="margin-bottom:6px">Novo</p><p class="mgr-h" style="margin-bottom:6px">Comprovante do atleta</p><div class="mgr-actions"><button type="button" class="btn" data-act="copy">' + icon('link') + 'Copiar link</button><button type="button" class="btn" data-act="view-receipt">Abrir comprovante</button></div><p class="rc-msg" role="status" style="text-align:left;margin-top:6px">' + S.msg + '</p></div>';
+    h += '<p class="mgr-h">Histórico</p><ol class="rc-time">' + st.time.map(function (t) { return '<li><span class="num">' + t[0] + '</span> · <b>' + t[1] + '</b> ' + t[2] + '</li>'; }).join('') + '</ol></div></div>';
+    return h;
+  }
+
+  var NOTES = {
+    receipt: '<h3>A página do comprovante</h3><p>É a mesma para o atleta logado, para quem recebe o link e para o gestor. Visual do verso do comprovante de inscrição: faixa amarela, cabeçalho do evento e o selo de status no rodapé.</p><ul><li><strong>Topo:</strong> prova, atleta ou time, integrantes, box e categoria.</li><li><strong>Resultado:</strong> oficial, tie-break e o resumo da súmula (“6 rounds + 27”).</li><li><strong>Onde e quem:</strong> bateria, raia, horário no cronograma, árbitro, abertura e envio.</li><li><strong>Linha do tempo:</strong> cada mudança da súmula, sem as justificativas do gestor.</li><li><strong>Ações:</strong> copiar o link e contestar.</li></ul><p>Troque o estado acima para ver cada caso.</p>',
+    court: '<h3>Quadra, logo depois de enviar</h3><p>O cartão “Publicada no ranking” continua como está. Abaixo dele entra o resumo do comprovante, para o judge mostrar ao atleta ali mesmo, com “Ver comprovante”.</p><ul><li>Vale também para “Atleta ausente” (escolha o estado Ausente).</li><li>A tela segue o tema claro de alto contraste da Quadra.</li><li>Sem QR Code nesta etapa (decisão D6).</li></ul>',
+    athlete: '<h3>Área do Atleta, no cartão da inscrição</h3><p>Sem item novo no menu: os comprovantes das provas ficam dentro do cartão da inscrição, abaixo do comprovante de inscrição.</p><ul><li>Uma linha por prova: bateria, raia, árbitro, resultado e status.</li><li>Prova sem súmula enviada aparece como “Aguardando”.</li><li>“Ver” abre a página do comprovante, onde o atleta copia o link para o parceiro de dupla.</li></ul>',
+    manager: '<h3>Painel do gestor, no detalhe da súmula</h3><p>No painel de detalhe da aba Súmulas e Judges (Story 1.143), um bloco novo com “Copiar link” e “Abrir comprovante”.</p><ul><li>Para responder um atleta sem repassar os dados à mão.</li><li>As ações de corrigir, devolver e cancelar não mudam; cada uma muda o comprovante na hora.</li></ul>'
+  };
+
+  function render() {
+    document.querySelectorAll('[data-view]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-view') === S.view)); });
+    document.querySelectorAll('[data-state]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-state') === S.state)); });
+    screen.innerHTML = S.view === 'receipt' ? receiptHtml() : S.view === 'court' ? courtHtml() : S.view === 'athlete' ? athleteHtml() : managerHtml();
+    noteEl.innerHTML = NOTES[S.view];
+  }
+
+  document.addEventListener('click', function (e) {
+    var v = e.target.closest('[data-view]');
+    if (v) { S.view = v.getAttribute('data-view'); S.msg = ''; render(); return; }
+    var s = e.target.closest('[data-state]');
+    if (s) { S.state = s.getAttribute('data-state'); S.msg = ''; render(); return; }
+    var a = e.target.closest('[data-act]');
+    if (!a) return;
+    var act = a.getAttribute('data-act');
+    if (act === 'mov') { S.mov = !S.mov; render(); var m = screen.querySelector('[data-act="mov"]'); if (m) m.focus(); return; }
+    if (act === 'copy') { S.msg = 'Na maquete nada é copiado. No app, o link vai para a área de transferência.'; render(); return; }
+    if (act === 'contest') { S.msg = 'No app, abre a Área do Atleta em Contestações.'; render(); return; }
+    if (act === 'view-receipt') { S.view = 'receipt'; S.msg = ''; render(); return; }
+  });
+
+  render();
+})();
+</script>

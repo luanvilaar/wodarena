@@ -79,6 +79,33 @@ type RegistrationAccessClaims = {
   exp: number;
 };
 
+/**
+ * Link do comprovante da súmula (Story 1.144, decisão D5 de
+ * docs/design/comprovante-sumula/): assinado com o segredo de sessão e
+ * propósito próprio, sem prazo. O mesmo id sempre gera o mesmo link; trocar o
+ * segredo invalida todos, como as sessões.
+ */
+export const createSheetReceiptToken = (sheetId: string) => {
+  const payload = base64UrlJson({ typ: 'sheet-receipt', sub: sheetId });
+  return `${payload}.${sign(payload, 'sheet-receipt')}`;
+};
+
+/** Id da súmula do link do comprovante, ou null se o link foi adulterado ou não é de comprovante. */
+export const verifySheetReceiptToken = (token: string | null | undefined): string | null => {
+  if (typeof token !== 'string' || token.length > 512 || !token.includes('.')) return null;
+  const [payload, signature, extra] = token.split('.');
+  if (!payload || !signature || extra !== undefined) return null;
+  const actual = Buffer.from(signature);
+  const expected = Buffer.from(sign(payload, 'sheet-receipt'));
+  if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return null;
+  try {
+    const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as { typ?: unknown; sub?: unknown };
+    return decoded?.typ === 'sheet-receipt' && typeof decoded.sub === 'string' && decoded.sub ? decoded.sub : null;
+  } catch {
+    return null;
+  }
+};
+
 export const createSessionToken = (user: SessionUser) => {
   const now = Math.floor(Date.now() / 1000);
   const payload = base64UrlJson({

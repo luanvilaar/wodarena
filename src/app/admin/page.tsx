@@ -10,6 +10,7 @@ import { EventMediaUploadError, uploadEventMedia } from '@/lib/eventMediaUpload'
 
 import { BrandLogo } from '@/components/BrandLogo';
 import { RegistrationVoucher } from '@/components/RegistrationVoucher';
+import { AthleteSheetReceipts } from '@/components/SheetReceiptShortcuts';
 import PixPaymentModal from '@/components/PixPaymentModal';
 import { QualifierAthleteSubmissions } from '@/components/QualifierAthleteSubmissions';
 import { QualifierAthleteContestation } from '@/components/QualifierAthleteContestation';
@@ -3940,6 +3941,10 @@ export default function AdminPage() {
                                 <dd className="min-w-0 break-all font-number">{reg.id}</dd>
                               </div>
                             </dl>
+                            {/* Comprovantes de envio das súmulas (Story 1.146, D1): inscrição aprovada de Functional Fitness. */}
+                            {reg.paymentStatus === 'payment_approved' && (event?.eventType || 'functional_fitness') === 'functional_fitness' && (
+                              <AthleteSheetReceipts registrationId={reg.id} />
+                            )}
                           </article>
                         );
                       })}

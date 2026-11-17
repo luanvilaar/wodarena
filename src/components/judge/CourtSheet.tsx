@@ -5,6 +5,7 @@ import { CheckCircle2, CloudOff, Loader2, Send, TriangleAlert, UserX } from 'luc
 
 import { CourtShell } from '@/components/judge/CourtShell';
 import { useSheetSync } from '@/components/judge/useSheetSync';
+import { CourtSheetReceipt } from '@/components/SheetReceiptShortcuts';
 import { SheetView } from '@/components/sheet/SheetView';
 import { computeAbsentOutcome, computeSheetOutcome, type ScoresheetStatus } from '@/lib/scoresheet';
 import {
@@ -325,6 +326,8 @@ function SheetSession({ payload }: { payload: SheetPayload }) {
           {published.corrected && <p className="text-xs font-semibold text-muted">Corrigida pelo gestor.</p>}
         </div>
       )}
+      {/* Comprovante do atleta (Story 1.146, D1): logo depois de enviar ou marcar ausente, e ao reabrir a súmula enviada. */}
+      {status === 'submitted' && <CourtSheetReceipt sheetId={sheet.id} refreshKey={`${published.result ?? ''}|${published.absent}|${published.corrected}`} />}
       {status === 'cancelled' && (
         <p className="rounded-md border border-card-border bg-card px-3 py-2 text-sm font-semibold">Esta súmula foi cancelada pelo gestor.</p>
       )}
