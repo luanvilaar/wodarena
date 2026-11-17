@@ -897,6 +897,39 @@ export const markSheetAbsent = async (supabaseAdmin: SupabaseClient, actor: Sess
   return publishAbsence(supabaseAdmin, actor, row, null);
 };
 
+/**
+ * O judge libera a súmula que abriu por engano (Story 1.148, D4,
+ * docs/design/quadra-por-raia/): só a dele, em andamento, sem ausência e sem
+ * nenhum registro no servidor. A súmula vazia é apagada (o "aberta" do
+ * histórico vai junto, em cascata): nada foi gravado, ela não vira cancelada e
+ * sai da chamada do telão. Com registro, só o gestor libera para outro judge.
+ */
+export const releaseEmptySheet = async (supabaseAdmin: SupabaseClient, actor: SessionUser, sheetId: unknown) => {
+  const row = await readSheetRow(supabaseAdmin, sheetId);
+  if (row.judge_user_id !== actor.id) throw new SheetError(`Esta súmula está com ${row.judge_name}.`, 403);
+  if (row.status !== 'in_progress' || row.absent) {
+    throw new SheetError('Só uma súmula em andamento e sem registro pode ser liberada por aqui.', 409);
+  }
+  const stored = await readEvents(supabaseAdmin, row.id);
+  if (stored.length > 0) {
+    throw new SheetError('Esta súmula já tem registros. Peça ao gestor para liberar para outro judge.', 409, { serverCount: stored.length });
+  }
+  check(await supabaseAdmin
+    .from('scoresheets')
+    .delete()
+    .eq('id', row.id)
+    .eq('judge_user_id', actor.id)
+    .eq('status', 'in_progress'));
+  return { released: true, sheetId: row.id, eventId: row.event_id };
+};
+
+/** Liberar para outro judge com o CHECK do histórico ainda sem 'released' (migration da Story 1.148 pendente). */
+export const RELEASE_UNAVAILABLE_MESSAGE = 'Liberar para outro judge ainda não está disponível neste ambiente. Aplique a migration 20261117120000_scoresheet_release.sql antes de usar.';
+const isMissingReleasedAction = (error: unknown) => {
+  const details = error && typeof error === 'object' ? error as { code?: unknown; message?: unknown } : null;
+  return details?.code === '23514' && /scoresheet_reviews/.test(String(details?.message ?? ''));
+};
+
 /** O gestor marca ausente sobre uma súmula que existe (AC6): qualquer estado ativo, sem exigir log vazio. */
 const markExistingSheetAbsent = async (supabaseAdmin: SupabaseClient, actor: SessionUser, row: SheetRow, absentColumn: boolean, reason: string) => {
   if (row.status === 'cancelled') throw new SheetError('Esta súmula foi cancelada.', 409);
@@ -1045,7 +1078,8 @@ const removePublishedScore = async (supabaseAdmin: SupabaseClient, row: SheetRow
  * - `return`: devolve ao judge com o motivo; o resultado publicado fica até o reenvio;
  * - `correct`: troca o resultado publicado (com justificativa), sem apagar o que o judge lançou;
  * - `cancel`: cancela a súmula (com o motivo) e tira do ranking o resultado que veio dela;
- * - `absent`: marca o atleta ausente (com o motivo), com o pior resultado da prova (Story 1.59).
+ * - `absent`: marca o atleta ausente (com o motivo), com o pior resultado da prova (Story 1.59);
+ * - `release`: tira o judge da súmula em andamento ou devolvida, com o motivo; os registros ficam (Story 1.148).
  */
 export const reviewSheet = async (
   supabaseAdmin: SupabaseClient,
@@ -1056,6 +1090,24 @@ export const reviewSheet = async (
   const { row, absentColumn } = await readSheet(supabaseAdmin, sheetId);
   const reason = readReason(input.reason);
   const at = nowIso();
+
+  // Story 1.148 (D8): tira o judge da súmula sem apagar os registros; o próximo
+  // judge que abrir assume (claimSheet). O histórico ganha "released" com o motivo.
+  if (input.action === 'release') {
+    if (row.status !== 'in_progress' && row.status !== 'returned') {
+      throw new SheetError('Só uma súmula em andamento ou devolvida pode ser liberada para outro judge.', 409);
+    }
+    if (!row.judge_user_id) throw new SheetError('Esta súmula já está livre: o próximo judge que abrir assume.', 409);
+    try {
+      await insertReview(supabaseAdmin, row.id, actor, 'released', { reason });
+    } catch (error) {
+      if (isMissingReleasedAction(error)) throw new SheetError(RELEASE_UNAVAILABLE_MESSAGE, 503);
+      throw error;
+    }
+    const patch = { judge_user_id: null, updated_at: at };
+    check(await supabaseAdmin.from('scoresheets').update(patch).eq('id', row.id));
+    return { sheet: toSheetDto({ ...row, ...patch }), ranking: [] as RankedScoreDto[] };
+  }
 
   if (input.action === 'return') {
     if (row.status !== 'submitted') throw new SheetError('Só uma súmula enviada pode ser devolvida.', 409);
@@ -1125,7 +1177,7 @@ export const reviewSheet = async (
 
   if (input.action === 'absent') return markExistingSheetAbsent(supabaseAdmin, actor, row, absentColumn, reason);
 
-  throw new SheetError('Ação desconhecida: use devolver, corrigir, cancelar ou marcar ausente.');
+  throw new SheetError('Ação desconhecida: use devolver, corrigir, cancelar, marcar ausente ou liberar para outro judge.');
 };
 
 /** Súmulas do evento para o painel do gestor, com o nome do atleta e da prova. */

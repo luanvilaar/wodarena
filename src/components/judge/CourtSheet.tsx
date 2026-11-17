@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, CloudOff, Loader2, Send, TriangleAlert, UserX } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { CheckCircle2, CloudOff, Loader2, Send, TriangleAlert, Undo2, UserX } from 'lucide-react';
 
 import { CourtShell } from '@/components/judge/CourtShell';
 import { useSheetSync } from '@/components/judge/useSheetSync';
@@ -177,6 +178,9 @@ function SheetSession({ payload }: { payload: SheetPayload }) {
   const [confirmingAbsent, setConfirmingAbsent] = useState(false);
   const [markingAbsent, setMarkingAbsent] = useState(false);
   const [absentError, setAbsentError] = useState('');
+  const [releasing, setReleasing] = useState(false);
+  const [releaseError, setReleaseError] = useState('');
+  const router = useRouter();
 
   useEffect(() => {
     if (clock.phase !== 'running') return;
@@ -228,6 +232,8 @@ function SheetSession({ payload }: { payload: SheetPayload }) {
   const syncReady = sync.pendingCount === 0 && sync.status === 'saved';
   // Atleta ausente: só sem nenhum registro, nem no servidor nem na fila do aparelho.
   const canMarkAbsent = writable && sync.confirmedCount === 0 && sync.pendingCount === 0 && events.length === 0;
+  // Story 1.148 (D4): enquanto nada foi registrado, o próprio judge libera a súmula aberta por engano.
+  const canRelease = canMarkAbsent && status === 'in_progress' && !published.absent;
   // Só informativo (o servidor calcula de novo); com erro, a confirmação omite o resultado.
   const absentOutcome = useMemo(() => computeAbsentOutcome(structure), [structure]);
   const absentResultText = absentOutcome.ok
@@ -256,6 +262,25 @@ function SheetSession({ payload }: { payload: SheetPayload }) {
       setSubmitError(cause instanceof Error ? cause.message : 'Não foi possível enviar a súmula.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const release = async () => {
+    setReleasing(true);
+    setReleaseError('');
+    try {
+      const response = await fetch('/api/sheets', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'release', sheetId: sheet.id })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Não foi possível liberar a súmula.');
+      clearLocalSheet(sheet.id);
+      router.replace(`/judge/quadra/${encodeURIComponent(sheet.eventId)}?liberada=1`);
+    } catch (cause) {
+      setReleaseError(cause instanceof Error ? cause.message : 'Não foi possível liberar a súmula.');
+      setReleasing(false);
     }
   };
 
@@ -337,6 +362,29 @@ function SheetSession({ payload }: { payload: SheetPayload }) {
             ? 'Esta súmula está sem judge: o judge do evento que abri-la assume. Você vê sem poder marcar.'
             : `Esta súmula está com ${sheet.judgeName}. Você vê sem poder marcar.`}
         </p>
+      )}
+
+      {canRelease && (
+        <section aria-label="Liberar súmula" className="space-y-2 rounded-xl border border-card-border bg-card p-3">
+          <p className="text-sm font-bold">
+            {context.athleteName}{laneLabel ? ` · ${laneLabel}` : ''}
+          </p>
+          <p className="text-sm text-muted">Não é este atleta? Enquanto nada for registrado, você mesmo libera a súmula. Ela não vira cancelada.</p>
+          {releaseError && <p role="alert" className="text-sm font-bold text-trading-down">{releaseError}</p>}
+          <button
+            type="button"
+            onClick={() => void release()}
+            disabled={releasing}
+            className={`${buttonClass} w-full border-card-border bg-dark-gray focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary`}
+          >
+            {releasing ? <Loader2 className="h-4 w-4 motion-safe:animate-spin" aria-hidden="true" /> : <Undo2 className="h-4 w-4" aria-hidden="true" />}
+            Liberar súmula
+          </button>
+        </section>
+      )}
+
+      {writable && status === 'in_progress' && !canRelease && (
+        <p className="text-xs font-semibold text-muted">Esta súmula já tem registro. Para passá-la a outro judge, peça ao gestor.</p>
       )}
 
       <SheetView

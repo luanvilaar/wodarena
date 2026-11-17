@@ -11,6 +11,7 @@ import {
   readScoresForWorkouts,
   readSheetEventId,
   readSheetForActor,
+  releaseEmptySheet,
   reviewSheet,
   submitSheet
 } from '@/lib/serverScoresheets';
@@ -31,7 +32,7 @@ import { checkRateLimit, createSupabaseAdmin, requireSession, safeErrorMessage }
 // `mark_absent` (gestor, atleta sem súmula); nenhum leva resultado no corpo.
 
 const ROLES = ['judge', 'manager', 'owner'] as const;
-const LIMITS: Record<string, number> = { append: 600, open: 60, submit: 30, review: 60, absent: 30, mark_absent: 60 };
+const LIMITS: Record<string, number> = { append: 600, open: 60, submit: 30, review: 60, absent: 30, mark_absent: 60, release: 30 };
 
 const errorResponse = (error: unknown) => {
   if (error instanceof SheetError) return NextResponse.json({ error: error.message, ...error.extra }, { status: error.status });
@@ -137,6 +138,12 @@ export async function POST(request: Request) {
     if (action === 'absent') {
       await assertSheetJudgeAccess(supabaseAdmin, actor, eventId);
       return NextResponse.json(await markSheetAbsent(supabaseAdmin, actor, body.sheetId));
+    }
+
+    // Story 1.148 (D4): o judge libera a própria súmula vazia, aberta por engano.
+    if (action === 'release') {
+      await assertSheetJudgeAccess(supabaseAdmin, actor, eventId);
+      return NextResponse.json(await releaseEmptySheet(supabaseAdmin, actor, body.sheetId));
     }
 
     await assertSheetManagerAccess(supabaseAdmin, actor, eventId);

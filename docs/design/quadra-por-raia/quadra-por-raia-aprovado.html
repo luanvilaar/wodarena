@@ -1,0 +1,906 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Quadra do Judge por Raia</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@125,800&family=IBM+Plex+Sans:wght@500;600;700&family=Inter:wght@400;500;600;700;800&display=swap">
+<style>
+/* Layout: coluna de leitura de 1120px no tema escuro do painel do gestor; as telas do judge usam o tema claro de alto contraste da quadra (court-light). */
+:root {
+  --bg: #0b0e11;
+  --panel: #1e2329;
+  --line: #2b3139;
+  --sunk: #151a1f;
+  --fg: #eaecef;
+  --muted: #9aa2ad;
+  --soft: #7d8693;
+  --accent: #fcd535;
+  --ink: #181a20;
+  --up: #0ecb81;
+  --down: #f6465d;
+  --down-text: #ff8a99;
+  --up-bg: rgba(14, 203, 129, .12);
+  --down-bg: rgba(246, 70, 93, .13);
+  --accent-bg: rgba(252, 213, 53, .12);
+  --shadow: rgba(0, 0, 0, .45);
+  --veil: rgba(11, 14, 17, .5);
+
+  --c-bg: #ffffff;
+  --c-fg: #0b0e11;
+  --c-card: #f3f4f6;
+  --c-elev: #dde1e7;
+  --c-line: #b9c0cb;
+  --c-muted: #3f4652;
+  --c-accent: #f5c518;
+  --c-accent-text: #7a5c00;
+  --c-accent-line: #b88f00;
+  --c-accent-bg: rgba(245, 197, 24, .18);
+  --c-up: #0a7d52;
+  --c-up-bg: rgba(10, 125, 82, .1);
+  --c-down: #b8243a;
+  --c-head: rgba(255, 255, 255, .96);
+
+  --f-display: "Archivo", "Inter", system-ui, sans-serif;
+  --f-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --f-num: "IBM Plex Sans", "Inter", ui-sans-serif, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; scrollbar-color: var(--line) transparent; }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 15px; line-height: 1.55; }
+::selection { background: var(--accent); color: var(--ink); }
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+a { color: var(--accent); text-underline-offset: 3px; }
+.num { font-family: var(--f-num); font-variant-numeric: tabular-nums; }
+code { font-family: var(--f-num); font-size: .84em; background: var(--sunk); border: 1px solid var(--line); border-radius: 4px; padding: 0 .35em; color: var(--fg); overflow-wrap: anywhere; }
+
+.wrap { max-width: 1120px; margin: 0 auto; padding-block: 44px 80px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 72px; }
+section, header.top { display: grid; gap: 20px; min-width: 0; }
+h1, h2 { font-family: var(--f-display); font-stretch: 125%; font-weight: 800; text-transform: uppercase; letter-spacing: -.01em; line-height: 1; text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(2rem, 5.4vw, 3.5rem); max-width: 16ch; }
+h2 { font-size: clamp(1.35rem, 2.8vw, 1.9rem); }
+h3 { font-size: 1.05rem; font-weight: 800; margin: 0; text-wrap: balance; }
+p { margin: 0; }
+.lead { font-size: 1.12rem; color: var(--fg); max-width: 66ch; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--muted); }
+.meta span { display: inline-flex; gap: 6px; align-items: center; }
+.prose { max-width: 68ch; color: var(--fg); }
+.prose + .prose { margin-top: -6px; }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+
+/* Evidência */
+figure { margin: 0; display: grid; gap: 12px; min-width: 0; }
+.chartbox { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 12px 8px; }
+.chartbox svg { display: block; min-width: 680px; width: 100%; height: auto; }
+figcaption { font-size: 13px; color: var(--muted); max-width: 80ch; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.split { display: grid; gap: 28px; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); align-items: start; }
+.facts { list-style: none; margin: 0; padding: 0; display: grid; }
+.facts li { padding: 12px 0; border-top: 1px solid var(--line); display: grid; grid-template-columns: 4.2rem minmax(0, 1fr); gap: 12px; }
+.facts li:last-child { border-bottom: 1px solid var(--line); }
+.facts b { font-family: var(--f-num); font-size: 1.35rem; font-weight: 700; line-height: 1.2; color: var(--fg); }
+.facts p { color: var(--fg); font-size: 14px; }
+.tblwrap { overflow-x: auto; min-width: 0; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 12px 10px 0; border-top: 1px solid var(--line); }
+th { font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; border-top: 0; padding-top: 0; }
+td.n, th.n { text-align: right; font-family: var(--f-num); font-variant-numeric: tabular-nums; padding-right: 0; white-space: nowrap; }
+tr.total td { font-weight: 700; border-top: 1px solid var(--soft); }
+.aside { font-size: 13px; color: var(--muted); max-width: 80ch; }
+
+/* Achados */
+.findings { list-style: none; margin: 0; padding: 0; display: grid; }
+.findings li { display: grid; grid-template-columns: 3.2rem minmax(0, 1fr); gap: 14px; padding: 18px 0; border-top: 1px solid var(--line); }
+.findings li:last-child { border-bottom: 1px solid var(--line); }
+.findings h3 { margin-bottom: 4px; }
+.findings p { color: var(--fg); max-width: 72ch; font-size: 14.5px; }
+.findings .ref { margin-top: 8px; font-size: 12.5px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px; }
+.sev { align-self: start; justify-self: start; font-family: var(--f-num); font-weight: 700; font-size: 12px; border-radius: 6px; padding: 3px 8px; border: 1px solid var(--line); color: var(--muted); }
+.sev.p0 { color: var(--down-text); background: var(--down-bg); border-color: var(--down); }
+.sev.p1 { color: var(--accent); background: var(--accent-bg); border-color: var(--accent); }
+.sev.p2 { color: var(--fg); }
+
+/* Simulador */
+.task { display: grid; gap: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+.task p:first-child { font-size: 1.05rem; font-weight: 600; }
+.sim { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px; align-items: start; }
+.simcol { display: grid; gap: 14px; min-width: 0; }
+.simhead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.simhead h3 { font-family: var(--f-display); font-stretch: 125%; text-transform: uppercase; font-size: 1.15rem; }
+.reset { min-height: 40px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); padding: 0 14px; font-size: 13px; font-weight: 600; }
+.reset:hover { border-color: var(--soft); }
+.phone { width: 100%; max-width: 375px; margin: 0 auto; border: 10px solid var(--line); border-radius: 34px; background: var(--line); box-shadow: 0 18px 40px var(--shadow); }
+.screenwrap { position: relative; border-radius: 24px; overflow: hidden; }
+.screen { height: 640px; overflow-y: auto; overscroll-behavior: contain; background: var(--c-bg); color: var(--c-fg); scrollbar-color: var(--c-line) transparent; }
+.screen:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
+.overlay { position: absolute; inset: 0; pointer-events: none; }
+.overlay > * { pointer-events: auto; }
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0; }
+.stats div { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.stats dt { font-size: 12px; color: var(--muted); line-height: 1.3; }
+.stats dd { margin: 4px 0 0; font-family: var(--f-num); font-size: 1.4rem; font-weight: 700; }
+.stats dd.bad { color: var(--down-text); }
+.simnote { min-height: 4.6em; font-size: 14px; color: var(--fg); background: var(--sunk); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+
+/* Telas da quadra (tema claro) */
+.court { font-family: var(--f-body); font-size: 15px; line-height: 1.4; color: var(--c-fg); }
+.court ::selection { background: var(--c-accent); color: var(--c-fg); }
+.court :focus-visible { outline: 2px solid var(--c-fg); outline-offset: 2px; }
+.chdr { position: sticky; top: 0; z-index: 3; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; background: var(--c-head); border-bottom: 1px solid var(--c-line); }
+.chdr .l { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ibtn { min-width: 44px; min-height: 44px; display: grid; place-items: center; border: 1px solid var(--c-line); border-radius: 6px; background: var(--c-bg); color: var(--c-fg); flex-shrink: 0; }
+.ibtn svg, .out svg { width: 18px; height: 18px; }
+.eyb { font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--c-accent-text); }
+.ttl { font-size: 17px; font-weight: 800; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sub { font-size: 12px; font-weight: 600; color: var(--c-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tcol { min-width: 0; }
+.out { min-height: 44px; display: flex; align-items: center; gap: 5px; border: 1px solid var(--c-line); border-radius: 6px; background: var(--c-bg); padding: 0 10px; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--c-muted); flex-shrink: 0; }
+.cbody { padding: 16px 12px 28px; display: grid; gap: 18px; }
+.chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.chip { min-height: 44px; flex-shrink: 0; border-radius: 999px; border: 1px solid var(--c-line); padding: 0 14px; font-size: 14px; font-weight: 700; background: var(--c-bg); color: var(--c-fg); }
+.chip.on { background: var(--c-accent); border-color: var(--c-accent-line); }
+.summ { font-size: 12px; font-weight: 600; color: var(--c-muted); }
+.heat { display: grid; gap: 8px; }
+.heat h4 { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin: 0; font-size: 13px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.heat h4 .num { font-size: 12px; color: var(--c-muted); }
+.lanes { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.lane { width: 100%; min-height: 64px; display: flex; align-items: center; gap: 10px; border: 1px solid var(--c-line); border-radius: 12px; background: var(--c-card); padding: 8px 10px; text-align: left; color: var(--c-fg); }
+.lane:hover:not(:disabled) { border-color: var(--c-accent-line); }
+.lane:disabled { opacity: .6; cursor: not-allowed; }
+.lchip { width: 44px; height: 44px; flex-shrink: 0; display: grid; place-items: center; border: 1px solid var(--c-line); border-radius: 8px; background: var(--c-bg); font-family: var(--f-num); font-weight: 800; font-size: 14px; }
+.lname { min-width: 0; flex: 1; }
+.lname b { display: block; font-size: 15px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lname small { display: block; font-size: 12px; font-weight: 600; color: var(--c-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st { flex-shrink: 0; border: 1px solid var(--c-line); border-radius: 999px; padding: 2px 8px; font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--c-muted); white-space: nowrap; }
+.st.in_progress { border-color: var(--c-accent-line); background: var(--c-accent-bg); color: var(--c-fg); }
+.st.submitted { border-color: var(--c-up); background: var(--c-up-bg); color: var(--c-up); }
+.fold { min-height: 48px; width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 10px; border: 1px solid var(--c-line); border-radius: 8px; background: var(--c-bg); padding: 0 12px; font-size: 14px; font-weight: 700; color: var(--c-fg); text-align: left; }
+.fold svg { width: 16px; height: 16px; flex-shrink: 0; }
+.syncok { display: flex; gap: 8px; align-items: center; border: 1px solid var(--c-up); color: var(--c-up); border-radius: 6px; padding: 8px 10px; font-size: 12px; font-weight: 700; }
+.scard { border: 1px solid var(--c-line); border-radius: 14px; background: var(--c-card); padding: 14px; display: grid; gap: 10px; }
+.swk { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--c-accent-text); }
+.swho { font-size: 18px; font-weight: 800; line-height: 1.2; }
+.swho span { margin-left: 6px; font-size: 13px; font-weight: 600; color: var(--c-muted); }
+.sclock { font-size: 44px; font-weight: 700; line-height: 1; }
+.sbig { min-height: 72px; border-radius: 14px; border: 2px solid var(--c-fg); background: var(--c-bg); font-size: 20px; font-weight: 800; color: var(--c-fg); }
+.sbig:disabled { opacity: .5; cursor: default; }
+.send { min-height: 52px; border-radius: 12px; border: 2px solid var(--c-accent-line); background: var(--c-accent); font-size: 15px; font-weight: 800; color: var(--c-fg); }
+.send:disabled { opacity: .45; cursor: default; }
+.pub { border: 1px solid var(--c-up); background: var(--c-up-bg); border-radius: 12px; padding: 12px; display: grid; gap: 2px; }
+.pub .k { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--c-up); }
+.pub .v { font-size: 28px; font-weight: 700; }
+.athsub { font-size: 13px; font-weight: 600; color: var(--c-muted); }
+
+/* Proposta */
+.lanebar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 12px; background: var(--c-card); border-bottom: 1px solid var(--c-line); font-size: 14px; }
+.lanebar b { font-weight: 800; }
+.lanebar button { min-height: 40px; border: 1px solid var(--c-line); border-radius: 8px; background: var(--c-bg); padding: 0 12px; font-size: 13px; font-weight: 700; color: var(--c-fg); }
+.ptitle { font-size: 22px; font-weight: 800; line-height: 1.15; }
+.pnote { font-size: 14px; color: var(--c-muted); font-weight: 500; }
+.lanegrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.lanepick { aspect-ratio: 1; max-width: 100%; border: 2px solid var(--c-line); border-radius: 14px; background: var(--c-card); font-family: var(--f-num); font-size: 30px; font-weight: 800; color: var(--c-fg); display: grid; place-items: center; align-content: center; gap: 0; line-height: 1; }
+.lanepick small { font-family: var(--f-body); font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--c-muted); margin-bottom: 4px; }
+.lanepick:hover { border-color: var(--c-accent-line); background: var(--c-accent-bg); }
+.ghost { min-height: 52px; width: 100%; border: 1px dashed var(--c-line); border-radius: 12px; background: var(--c-bg); font-size: 15px; font-weight: 700; color: var(--c-fg); }
+.now { border: 2px solid var(--c-fg); border-radius: 16px; padding: 16px; display: grid; gap: 12px; background: var(--c-bg); }
+.nowtop { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.nowmeta { font-size: 12px; font-weight: 700; color: var(--c-muted); display: flex; align-items: center; gap: 6px; }
+.live { width: 8px; height: 8px; border-radius: 50%; background: var(--c-down); flex-shrink: 0; }
+.nowheat { font-size: 17px; font-weight: 800; }
+.badge { display: grid; place-items: center; align-content: center; min-width: 84px; height: 84px; border-radius: 14px; background: var(--c-accent); border: 2px solid var(--c-accent-line); flex-shrink: 0; line-height: 1; }
+.badge small { font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; margin-bottom: 4px; }
+.badge b { font-family: var(--f-num); font-size: 46px; font-weight: 800; }
+.badge.sm { min-width: 52px; height: 52px; border-radius: 10px; }
+.badge.sm b { font-size: 26px; }
+.badge.sm small { font-size: 8px; margin-bottom: 2px; }
+.ath { font-size: 22px; font-weight: 800; line-height: 1.15; overflow-wrap: anywhere; }
+.primary { min-height: 56px; width: 100%; border-radius: 12px; background: var(--c-accent); border: 2px solid var(--c-accent-line); font-size: 16px; font-weight: 800; color: var(--c-fg); }
+.secondary { min-height: 48px; width: 100%; border: 1px solid var(--c-line); border-radius: 10px; background: var(--c-bg); font-size: 15px; font-weight: 700; color: var(--c-fg); }
+.held { font-size: 13px; color: var(--c-muted); font-weight: 600; }
+.nextrow { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border: 1px dashed var(--c-line); border-radius: 12px; }
+.nextrow .lname b { font-size: 14px; }
+.openstrip { display: grid; gap: 8px; border: 1px solid var(--c-accent-line); background: var(--c-accent-bg); border-radius: 12px; padding: 10px 12px; font-size: 13px; }
+.openstrip p { font-weight: 700; }
+.openstrip button { min-height: 44px; border: 1px solid var(--c-accent-line); border-radius: 8px; background: var(--c-bg); font-weight: 700; color: var(--c-fg); text-align: left; padding: 0 12px; }
+.release { border: 1px solid var(--c-line); background: var(--c-card); border-radius: 12px; padding: 12px; display: grid; gap: 10px; }
+.release .who { display: flex; gap: 10px; align-items: center; }
+.release .who b { display: block; font-size: 16px; font-weight: 800; line-height: 1.2; overflow-wrap: anywhere; }
+.locked { font-size: 13px; font-weight: 600; color: var(--c-muted); border-top: 1px solid var(--c-line); padding-top: 8px; }
+.trainlink { justify-self: center; min-height: 44px; border: 0; background: none; font-size: 14px; font-weight: 700; color: var(--c-fg); text-decoration: underline; text-underline-offset: 4px; padding: 0 8px; }
+.search { min-height: 44px; width: 100%; border: 1px solid var(--c-line); border-radius: 8px; padding: 0 12px; background: var(--c-bg); color: var(--c-fg); }
+.warnline { font-size: 13px; font-weight: 600; color: var(--c-muted); }
+.veil { position: absolute; inset: 0; background: var(--veil); display: flex; align-items: flex-end; z-index: 5; }
+.bsheet { background: var(--c-bg); color: var(--c-fg); width: 100%; border-radius: 18px 18px 0 0; padding: 18px 16px 20px; display: grid; gap: 12px; box-shadow: 0 -8px 24px var(--shadow); font-family: var(--f-body); }
+.bsheet .warn { font-size: 13px; font-weight: 800; color: var(--c-down); text-transform: uppercase; letter-spacing: .06em; }
+.bsheet .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.bsheet .who { display: flex; gap: 12px; align-items: center; }
+.toast { position: absolute; left: 12px; right: 12px; bottom: 14px; z-index: 6; background: var(--c-fg); color: var(--c-bg); border-radius: 10px; padding: 10px 12px; font-size: 13px; font-weight: 600; font-family: var(--f-body); }
+
+/* Comparação */
+.cmp td:first-child { font-weight: 700; width: 22%; }
+.cmp td:nth-child(2) { color: var(--muted); width: 37%; }
+
+/* Decisões */
+.decs { display: grid; gap: 14px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+fieldset.dec { margin: 0; border: 1px solid var(--line); border-radius: 12px; padding: 16px; background: var(--panel); display: grid; gap: 10px; min-width: 0; }
+fieldset.dec legend { padding: 0 6px; margin-left: -6px; font-weight: 800; font-size: 1rem; }
+.dec .q { font-size: 13.5px; color: var(--muted); }
+.opt { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: start; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--sunk); cursor: pointer; font-size: 14px; }
+.opt:has(input:checked) { border-color: var(--accent); background: var(--accent-bg); }
+.opt input { margin: 3px 0 0; accent-color: var(--accent); width: 16px; height: 16px; }
+.opt b { font-family: var(--f-num); margin-right: 4px; }
+.rec { display: inline-block; font-size: 11px; font-weight: 700; color: var(--ink); background: var(--accent); border-radius: 4px; padding: 0 6px; margin-left: 6px; vertical-align: 1px; }
+.choice { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+.choice output { font-family: var(--f-num); font-size: 15px; font-weight: 600; overflow-wrap: anywhere; min-width: 0; }
+.copy { min-height: 44px; border: 1px solid var(--accent); border-radius: 8px; background: var(--accent); color: var(--ink); font-weight: 800; padding: 0 16px; }
+
+/* Escopo */
+.cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; }
+.cols h3 { margin-bottom: 10px; }
+.cols ul { margin: 0; padding-left: 1.1em; display: grid; gap: 8px; font-size: 14.5px; }
+.stories { list-style: none; margin: 0; padding: 0; display: grid; }
+.stories li { display: grid; grid-template-columns: 4rem minmax(0, 1fr); gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); font-size: 14.5px; }
+.stories li:last-child { border-bottom: 1px solid var(--line); }
+.stories b.num { font-size: 15px; }
+
+@media (max-width: 880px) {
+  .sim, .split, .decs, .cols { grid-template-columns: minmax(0, 1fr); }
+  .sim { gap: 48px; }
+}
+@media (max-width: 480px) {
+  .stats dd { font-size: 1.15rem; }
+  .findings li { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .facts li { grid-template-columns: 3.4rem minmax(0, 1fr); }
+  .screen { height: 600px; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <h1>Quadra do judge por raia</h1>
+    <p class="lead">Análise da área do judge na quadra, em eventos de Functional Fitness: como a tela organiza atletas e baterias hoje, onde ela deixa o árbitro abrir o atleta errado, e uma organização em que cada judge vê primeiro a própria raia. Nada foi alterado no código; as mudanças esperam a sua aprovação.</p>
+    <p class="meta"><span>17/11/2026</span><span>Dados reais: Hibrido Games, 15/11, pelo painel salvo em <code>analise.md</code></span><span>Simulador: evento fictício com 96 atletas</span></p>
+  </header>
+
+  <section aria-labelledby="diag-title">
+    <h2 id="diag-title">O que o Hibrido Games mostrou</h2>
+    <p class="prose">Das 186 súmulas do evento, 32 foram canceladas, 17% do total. A maioria segue o mesmo desenho: um judge abriu a súmula de uma raia, o gestor cancelou e outra súmula foi aberta na mesma raia. A primeira bateria da Prova 2 mostra isso de perto.</p>
+    <figure>
+      <div class="chartbox" id="chart"></div>
+      <div class="legend" aria-hidden="true">
+        <span><svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="var(--panel)" stroke="var(--down)" stroke-width="2"/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5" stroke="var(--down)" stroke-width="1.8"/></svg> Súmula cancelada</span>
+        <span><svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="var(--up)"/></svg> Súmula enviada (valeu)</span>
+        <span>A a I: contas de judge, nomes omitidos</span>
+      </div>
+      <figcaption>Prova 2, Bateria 1. Cada marca é uma súmula, no horário da última alteração (cancelamento ou envio). Antes de a bateria terminar, o gestor cancelou 11 súmulas, 9 delas em duas rodadas (09:57 e 09:59); uma era da Bateria 2, que ainda nem tinha começado. Nas Raias 3 e 7, três judges diferentes abriram a raia até a súmula que valeu.</figcaption>
+    </figure>
+
+    <div class="split">
+      <div class="tblwrap">
+        <table>
+          <caption class="small muted" style="text-align:left; caption-side:top; padding-bottom:10px">As 32 súmulas canceladas</caption>
+          <thead><tr><th scope="col">Quando</th><th scope="col">O que aconteceu</th><th scope="col" class="n">Súmulas</th></tr></thead>
+          <tbody>
+            <tr><td>Véspera, 14/11</td><td>Abertas antes do evento em atletas reais e canceladas às 17:44 e às 18:44. Em 9 delas, a bateria ou a raia não era a do atleta no dia.</td><td class="n">11</td></tr>
+            <tr><td>Dia do evento</td><td>Mesma raia reaberta depois por outro judge</td><td class="n">10</td></tr>
+            <tr><td>Dia do evento</td><td>Mesma raia reaberta pelo mesmo judge</td><td class="n">4</td></tr>
+            <tr><td>Dia do evento</td><td>O atleta ficou sem súmula nessa prova</td><td class="n">7</td></tr>
+            <tr class="total"><td>Total</td><td>de 186 súmulas</td><td class="n">32</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <ul class="facts">
+        <li><b>13</b><p>contas de judge e nenhuma raia fixa: 5 judges passaram por 6 raias diferentes ao longo do dia.</p></li>
+        <li><b>40</b><p>súmulas da Prova 3.2, nenhuma com bateria. Todas saíram da lista "Atletas sem bateria", que vem fora de ordem e sem busca.</p></li>
+        <li><b>4</b><p>súmulas terminaram o dia Em andamento. Na quadra, o judge não vê as súmulas que deixou abertas.</p></li>
+        <li><b>11</b><p>súmulas abertas na véspera, em duas levas, por 4 contas. Parece treino; a quadra não tem modo de treino.</p></li>
+      </ul>
+    </div>
+    <p class="aside">O motivo de cada cancelamento fica no histórico da súmula, no banco. Não li o banco nesta análise, porque a leitura de produção foi bloqueada nesta sessão. Com a sua autorização, confirmo os motivos.</p>
+  </section>
+
+  <section aria-labelledby="hoje-title">
+    <h2 id="hoje-title">Como a quadra funciona hoje</h2>
+    <p class="prose">O detector do Impeccable não apontou nada nos componentes da quadra: contraste, alvos de toque de 44 px e foco estão certos. Os problemas estão na organização da tela e nas regras de abertura.</p>
+    <ul class="findings">
+      <li><span class="sev p0">P0</span><div><h3>Qualquer judge abre qualquer raia</h3><p>O servidor só confere se o judge está atribuído ao evento. A tela lista todas as baterias da prova e todas as raias, com o mesmo peso. Nada liga o judge à raia em que ele está.</p><p class="ref"><code>serverSheetAccess.ts</code><code>CourtBoard.tsx</code></p></div></li>
+      <li><span class="sev p0">P0</span><div><h3>Um toque abre a súmula e prende o atleta</h3><p>Tocar no nome já cria a súmula Em andamento com aquele judge, sem confirmação. Os outros judges passam a ver "Com Fulano" e ficam bloqueados, e a raia entra na chamada do telão. O judge não consegue desfazer. O gestor só tem "Cancelar", que fica no histórico, e a mensagem de bloqueio pede ao gestor para "liberar", ação que não existe no painel.</p><p class="ref"><code>serverScoresheets.ts · openSheet</code><code>broadcastMode.ts · regra 3</code></p></div></li>
+      <li><span class="sev p1">P1</span><div><h3>A quadra não sabe qual bateria é agora</h3><p>A tela abre sempre na primeira prova e mostra todas as baterias abertas, sem marcar a atual. A mesma "R3" aparece uma vez por bateria, 12 vezes numa prova grande.</p><p class="ref"><code>CourtBoard.tsx · firstSelection</code></p></div></li>
+      <li><span class="sev p1">P1</span><div><h3>Voltar da súmula recomeça do zero</h3><p>O voltar da súmula carrega a quadra de novo, que reabre na Prova 1, no topo. A cada bateria o judge escolhe a prova e rola tudo outra vez.</p><p class="ref"><code>CourtShell.tsx · back</code><code>CourtSheet.tsx</code></p></div></li>
+      <li><span class="sev p1">P1</span><div><h3>Súmula real a qualquer hora</h3><p>Dá para abrir súmula de bateria de outro dia e de prova que ainda não começou. Não há treino na quadra: a súmula de demonstração só existe no painel do gestor e em desenvolvimento.</p><p class="ref"><code>serverScoresheets.ts</code><code>SheetDemo.tsx</code></p></div></li>
+      <li><span class="sev p2">P2</span><div><h3>Atletas sem bateria fora de ordem</h3><p>A lista vem na ordem em que o banco devolve, sem busca, e cada linha abre a súmula direto, como as raias.</p><p class="ref"><code>CourtBoard.tsx · looseAthletes</code></p></div></li>
+      <li><span class="sev p2">P2</span><div><h3>Súmula esquecida não aparece para o judge</h3><p>Sair da súmula pelo voltar mantém Em andamento. A quadra não mostra ao judge quais súmulas dele continuam abertas.</p><p class="ref"><code>CourtBoard.tsx</code></p></div></li>
+      <li><span class="sev p3">P3</span><div><h3>Nome cortado na linha da raia</h3><p>Nome e box ficam numa linha só, com corte. Em duplas e equipes ("Equipe (Atleta A / Atleta B)"), some justamente a parte que diferencia um time do outro.</p><p class="ref"><code>CourtBoard.tsx · athleteButton</code></p></div></li>
+    </ul>
+  </section>
+
+  <section aria-labelledby="sim-title">
+    <h2 id="sim-title">Hoje e a proposta, na mesma quadra</h2>
+    <div class="task">
+      <p>Você é judge da Raia 3. São 10:12 e a Bateria 4 da Prova 2 está sendo chamada. Abra a súmula da sua atleta, Marina Couto.</p>
+      <p class="small muted">Evento simulado: 5 provas, 12 baterias por prova, 8 raias, 96 atletas. Tente também tocar num atleta errado e desfazer, e voltar da súmula.</p>
+    </div>
+    <div class="sim">
+      <div class="simcol">
+        <div class="simhead"><h3>Hoje</h3><button type="button" class="reset" data-reset="hoje">Recomeçar</button></div>
+        <div class="phone"><div class="screenwrap"><div class="screen court" id="hoje-screen" tabindex="0" role="region" aria-label="Tela do judge como é hoje"></div><div class="overlay court" id="hoje-ov"></div></div></div>
+        <dl class="stats" id="hoje-stats"></dl>
+        <p class="simnote" id="hoje-note" aria-live="polite"></p>
+      </div>
+      <div class="simcol">
+        <div class="simhead"><h3>Proposta</h3><button type="button" class="reset" data-reset="prop">Recomeçar</button></div>
+        <div class="phone"><div class="screenwrap"><div class="screen court" id="prop-screen" tabindex="0" role="region" aria-label="Tela do judge na proposta"></div><div class="overlay court" id="prop-ov"></div></div></div>
+        <dl class="stats" id="prop-stats"></dl>
+        <p class="simnote" id="prop-note" aria-live="polite"></p>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="cmp-title">
+    <h2 id="cmp-title">O que o judge faz, hoje e na proposta</h2>
+    <div class="tblwrap">
+      <table class="cmp">
+        <thead><tr><th scope="col">Momento</th><th scope="col">Hoje</th><th scope="col">Proposta</th></tr></thead>
+        <tbody>
+          <tr><td>Achar o atleta da sua raia</td><td>Escolhe a prova (a tela abre na Prova 1), rola até a bateria e procura a raia entre todas as linhas.</td><td>A tela abre na bateria que está sendo chamada, com o atleta da sua raia em destaque. Um toque.</td></tr>
+          <tr><td>Voltar da súmula</td><td>Volta para a Prova 1, no topo.</td><td>Volta para "Agora", na sua raia.</td></tr>
+          <tr><td>Tocar no atleta errado</td><td>A súmula abre, fica presa com você e a raia entra na chamada do telão.</td><td>Fora da sua raia ou da bateria atual, a tela pede confirmação com a raia, o atleta e a bateria em destaque.</td></tr>
+          <tr><td>Desfazer</td><td>Só o gestor, cancelando. O cancelamento fica no histórico e no painel.</td><td>"Liberar súmula" enquanto nada foi registrado. Depois do primeiro registro, o gestor usa "Liberar para outro judge" e os registros ficam.</td></tr>
+          <tr><td>Cobrir outra raia</td><td>Qualquer linha, sem aviso.</td><td>"Outras raias desta bateria", com confirmação, ou a opção "Vou cobrir várias raias".</td></tr>
+          <tr><td>Prova sem bateria no cronograma</td><td>Lista na ordem do banco, sem busca.</td><td>Ordem alfabética, busca, confirmação e o aviso de que a prova não tem baterias.</td></tr>
+          <tr><td>Antes do evento</td><td>Abre súmula real de qualquer bateria.</td><td>"Treinar" com atleta fictício. Súmula real só no dia da bateria.</td></tr>
+          <tr><td>Súmula esquecida aberta</td><td>Some da vista do judge.</td><td>Faixa "Sua súmula aberta" no topo, com "Retomar".</td></tr>
+          <tr><td>Equipe com nome longo</td><td>Cortado em uma linha.</td><td>Nome inteiro no cartão da raia.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="dec-title">
+    <h2 id="dec-title">Decisões</h2>
+    <p class="prose">Marque uma opção em cada decisão. A recomendada vem primeiro e já está marcada. O resumo no fim pode ser copiado para a sua resposta.</p>
+    <div class="decs" id="decs"></div>
+    <div class="choice"><output id="choice-out" aria-live="polite"></output><button type="button" class="copy" id="copy">Copiar escolhas</button></div>
+  </section>
+
+  <section aria-labelledby="scope-title">
+    <h2 id="scope-title">O que muda e o que fica igual</h2>
+    <div class="cols">
+      <div>
+        <h3>Muda, com as recomendadas</h3>
+        <ul>
+          <li>Quadra (<code>CourtBoard.tsx</code>): escolha da raia, cartão "Agora", baterias recolhidas, confirmação fora da raia, "Sua súmula aberta", lista sem bateria com busca, voltar para "Agora".</li>
+          <li>Regra da bateria atual num módulo puro novo, com a mesma lógica do telão (<code>broadcastMode.ts</code>), para a quadra e o telão nunca discordarem.</li>
+          <li>Súmula (<code>CourtSheet.tsx</code>): faixa "Liberar súmula" enquanto nada foi registrado.</li>
+          <li><code>/api/sheets</code>: liberar súmula vazia (descarta, sem cancelamento) e a trava do dia da bateria.</li>
+          <li>Painel do gestor, no detalhe da súmula: "Liberar para outro judge".</li>
+          <li>Treino na quadra com a súmula de demonstração que já existe.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Fica igual</h3>
+        <ul>
+          <li>A súmula em si: contagem, cronômetro, fila no aparelho, envio e publicação na hora.</li>
+          <li>Ranking, leaderboard e telão. A bateria atual usa a regra que o telão já usa.</li>
+          <li>Fitness Race, que já pede a estação ao árbitro e tem escala de judges.</li>
+          <li>Banco: D1, D4 e D5 sem migration. Só D8 pede uma migration pequena, para o histórico aceitar "liberada", no molde da de atleta ausente.</li>
+        </ul>
+      </div>
+    </div>
+    <h3>Stories sugeridas</h3>
+    <ul class="stories">
+      <li><b class="num">1.147</b><span>Quadra por raia: D1, D2, D3 e D7, mais "Sua súmula aberta" e o voltar para "Agora". Só tela e módulo puro.</span></li>
+      <li><b class="num">1.148</b><span>Liberar súmula: D4 no judge e D8 no gestor. API, painel e uma migration.</span></li>
+      <li><b class="num">1.149</b><span>Treino e dia da bateria: D5 e D6. Servidor e quadra.</span></li>
+    </ul>
+    <p class="aside">Depois da aprovação, esta página vai para <code>docs/design/quadra-por-raia/</code> com um README das decisões, e as stories citam a pasta nos critérios de aceite.</p>
+  </section>
+</div>
+
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  /* ---------- Gráfico da Bateria 1 (dados reais, judges anonimizados) ---------- */
+  (function chart() {
+    const rows = [
+      { lane: 1, marks: [['x', 'A', '09:57'], ['x', 'B', '09:59'], ['ok', 'A', '10:22']] },
+      { lane: 2, marks: [['x', 'C', '09:57'], ['x', 'C', '09:59'], ['ok', 'C', '10:21']] },
+      { lane: 3, marks: [['x', 'D', '09:57'], ['x', 'E', '09:59'], ['ok', 'F', '10:21']] },
+      { lane: 4, marks: [['x', 'G', '09:57'], ['x', 'D', '09:59'], ['ok', 'D', '11:51']] },
+      { lane: 5, marks: [['ok', 'B', '10:21']] },
+      { lane: 6, marks: [['ok', 'I', '11:11']] },
+      { lane: 7, marks: [['x', 'H', '10:00'], ['x', 'B', '10:24'], ['ok', 'A', '10:26']] },
+      { lane: 8, marks: [] }
+    ];
+    const W = 780, L = 70, R = 96, T = 40, RH = 38, B = 34;
+    const H = T + rows.length * RH + B;
+    const t0 = 9 * 60 + 55, t1 = 10 * 60 + 30;
+    const pw = W - L - R;
+    const mins = (s) => { const [h, m] = s.split(':').map(Number); return h * 60 + m; };
+    const x = (s) => L + ((mins(s) - t0) / (t1 - t0)) * pw;
+    let g = '';
+    for (let t = t0; t <= t1; t += 5) {
+      const xx = L + ((t - t0) / (t1 - t0)) * pw;
+      const lbl = `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+      g += `<line x1="${xx}" y1="${T - 6}" x2="${xx}" y2="${H - B + 4}" stroke="var(--line)" stroke-width="1"/>`;
+      g += `<text x="${xx}" y="${H - 10}" text-anchor="middle" font-size="11" fill="var(--muted)" font-family="IBM Plex Sans, sans-serif">${lbl}</text>`;
+    }
+    [['09:57', '1ª rodada de cancelamentos'], ['09:59', '2ª rodada']].forEach(([t, lbl], i) => {
+      const xx = x(t);
+      g += `<line x1="${xx}" y1="${T - 18}" x2="${xx}" y2="${H - B}" stroke="var(--down)" stroke-opacity=".55" stroke-dasharray="3 4"/>`;
+      g += `<text x="${xx + (i === 0 ? -6 : 6)}" y="${T - 22}" text-anchor="${i === 0 ? 'end' : 'start'}" font-size="11" font-weight="600" fill="var(--down-text)">${lbl}</text>`;
+    });
+    g += `<text x="${W - R + 30}" y="${T - 22}" text-anchor="middle" font-size="11" fill="var(--muted)">mais tarde</text>`;
+    rows.forEach((row, i) => {
+      const cy = T + i * RH + RH / 2;
+      g += `<text x="${L - 14}" y="${cy + 4}" text-anchor="end" font-size="12" font-weight="700" fill="var(--fg)">Raia ${row.lane}</text>`;
+      g += `<line x1="${L}" y1="${cy}" x2="${W - R + 50}" y2="${cy}" stroke="var(--line)" stroke-width="1"/>`;
+      if (!row.marks.length) g += `<text x="${L + 8}" y="${cy + 4}" font-size="11" fill="var(--muted)">sem súmula no painel salvo</text>`;
+      row.marks.forEach(([kind, who, t]) => {
+        const late = mins(t) > t1;
+        const cx = late ? W - R + 30 : x(t);
+        if (kind === 'x') {
+          g += `<circle cx="${cx}" cy="${cy}" r="7" fill="var(--panel)" stroke="var(--down)" stroke-width="2"/>`;
+          g += `<path d="M${cx - 3.2} ${cy - 3.2}l6.4 6.4M${cx + 3.2} ${cy - 3.2}l-6.4 6.4" stroke="var(--down)" stroke-width="1.8"/>`;
+        } else {
+          g += `<circle cx="${cx}" cy="${cy}" r="7" fill="var(--up)"/>`;
+        }
+        g += `<text x="${cx}" y="${cy - 11}" text-anchor="middle" font-size="10.5" font-weight="700" fill="var(--muted)">${who}</text>`;
+        if (late) g += `<text x="${cx + 12}" y="${cy + 4}" font-size="11" fill="var(--muted)" font-family="IBM Plex Sans, sans-serif">${t}</text>`;
+      });
+    });
+    $('chart').innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Linha do tempo da Bateria 1 da Prova 2: nas raias 1 a 4, súmulas canceladas às 09:57 e 09:59 antes da súmula enviada; na raia 7, canceladas às 10:00 e 10:24 e enviada às 10:26.">${g}</svg>`;
+  })();
+
+  /* ---------- Evento simulado ---------- */
+  const FIRST = ['Ana', 'Bruno', 'Carla', 'Diego', 'Elisa', 'Felipe', 'Gabriela', 'Heitor', 'Isabela', 'João', 'Karina', 'Lucas', 'Marina', 'Nathan', 'Olívia', 'Pedro', 'Rafaela', 'Samuel', 'Tatiane', 'Vitor', 'Yasmin', 'Caio', 'Bianca', 'Renan'];
+  const LAST = ['Couto', 'Costa', 'Moraes', 'Lacerda', 'Pires', 'Teles', 'Nunes', 'Freitas', 'Araújo', 'Barreto', 'Queiroz', 'Siqueira', 'Rocha', 'Paiva', 'Dantas', 'Leal'];
+  const BOXES = ['Box Litoral', 'CF Norte', 'Arena 81', 'Ferro Box', 'Cross Sertão', 'Base Box', 'Box Maré', 'CT Atlântico', 'Forja CF', 'Box Serra'];
+  const CATS = ['RX', 'Scale', 'Intermediário', 'Master 35+', 'Iniciante', 'Teens'];
+  const PROVAS = [
+    { n: 1, title: 'Prova 1 · Engine', start: 450, summary: 'For Time · cap 12 min · 3 rounds' },
+    { n: 2, title: 'Prova 2 · DT Speed', start: 580, summary: 'AMRAP 8 min · deadlift, hang power clean, push jerk' },
+    { n: 3, title: 'Prova 3 · Barbell Ladder', start: 720, summary: 'Carga máxima · 3 tentativas' },
+    { n: 4, title: 'Prova 4 · Chipper', start: 870, summary: 'For Time · cap 15 min' },
+    { n: 5, title: 'Prova 5 · Sprint Final', start: 1020, summary: 'AMRAP 6 min' }
+  ];
+  const HEATS = 12, LANES = 8, TARGET = '2|4|3';
+  const EVENT = 'Copa Litoral 2026';
+  const ATH = Array.from({ length: 96 }, (_, i) => ({
+    name: `${FIRST[i % 24]} ${LAST[(i + Math.floor(i / 24) * 5) % 16]}`,
+    box: BOXES[(i * 3 + Math.floor(i / 10)) % 10],
+    cat: CATS[(i * 5 + Math.floor(i / 6)) % 6]
+  }));
+  const order = (seed) => {
+    const a = ATH.map((_, i) => i);
+    let s = seed;
+    for (let i = a.length - 1; i > 0; i--) { s = (s * 16807) % 2147483647; const j = s % (i + 1); const t = a[i]; a[i] = a[j]; a[j] = t; }
+    return a;
+  };
+  const GRID = {};
+  PROVAS.forEach((p) => {
+    const o = order(p.n * 7919 + 13);
+    GRID[p.n] = {};
+    for (let h = 1; h <= HEATS; h++) { GRID[p.n][h] = {}; for (let l = 1; l <= LANES; l++) GRID[p.n][h][l] = ATH[o[(h - 1) * 8 + l - 1]]; }
+  });
+  GRID[2][4][3] = { name: 'Marina Couto', box: 'Box Litoral', cat: 'Scale' };
+  GRID[2][5][3] = { name: 'Marina Costa', box: 'Box Maré', cat: 'Scale' };
+  const LOOSE = { 2: [
+    { name: 'Equipe Ferro e Fogo (Diego Leal / Renan Teles)', box: 'Forja CF', cat: 'Intermediário' },
+    { name: 'Yasmin Barreto', box: 'Box Serra', cat: 'Scale' },
+    { name: 'Caio Queiroz', box: 'CF Norte', cat: 'RX' },
+    { name: 'Equipe Ferro e Foco (Diego Lima / Renan Teixeira)', box: 'Ferro Box', cat: 'Intermediário' },
+    { name: 'Bianca Paiva', box: 'Arena 81', cat: 'Master 35+' }
+  ] };
+  const hhmm = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+  const heatTime = (p, h) => hhmm(PROVAS[p - 1].start + (h - 1) * 10);
+  const athOf = (k) => {
+    const [a, b, c] = k.split('|');
+    if (a === 'L') return { ...LOOSE[b][c], p: Number(b), h: null, l: null };
+    return { ...GRID[a][b][c], p: Number(a), h: Number(b), l: Number(c) };
+  };
+  const initStatus = () => {
+    const S = {};
+    for (let h = 1; h <= HEATS; h++) for (let l = 1; l <= LANES; l++) S[`1|${h}|${l}`] = { st: 'submitted', res: `${7 + ((h + l) % 5)}:${String((h * 13 + l * 7) % 60).padStart(2, '0')}` };
+    for (let h = 1; h <= 3; h++) for (let l = 1; l <= LANES; l++) S[`2|${h}|${l}`] = { st: 'submitted', res: String(260 + ((h * 31 + l * 17) % 160)) };
+    [[1, 'Paulo'], [2, 'Bia'], [5, 'Rui'], [8, 'Lia']].forEach(([l, j]) => { S[`2|4|${l}`] = { st: 'in_progress', judge: j }; });
+    return S;
+  };
+  const statusOf = (S, k) => S[k] || { st: 'not_started' };
+  const statusLabel = (s) => (s.st === 'submitted' ? `Publicada · ${s.res}` : s.st === 'in_progress' ? (s.judge === 'você' ? 'Em andamento' : `Com ${s.judge}`) : 'Não iniciada');
+
+  const ICON = {
+    back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>',
+    out: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>',
+    down: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>',
+    right: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>',
+    ok: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>'
+  };
+  const header = ({ title, sub, backAct, backLabel }) => `
+    <header class="chdr"><div class="l">
+      <button type="button" class="ibtn" data-act="${backAct}" aria-label="${esc(backLabel)}">${ICON.back}</button>
+      <div class="tcol"><p class="eyb">Arbitragem na quadra</p><p class="ttl">${esc(title)}</p>${sub ? `<p class="sub">${esc(sub)}</p>` : ''}</div>
+    </div><button type="button" class="out" data-act="noop" aria-label="Sair da conta">${ICON.out}Sair</button></header>`;
+
+  const laneRow = (S, k, laneLabel, act) => {
+    const a = athOf(k), s = statusOf(S, k);
+    const blocked = s.st === 'in_progress' && s.judge !== 'você';
+    return `<li><button type="button" class="lane" data-act="${act}" data-k="${k}" ${blocked ? 'disabled' : ''} aria-label="${esc(`${laneLabel}: ${a.name}, ${a.cat}. ${statusLabel(s)}`)}">
+      <span class="lchip">${laneLabel}</span>
+      <span class="lname"><b>${esc(a.name)}</b><small>${esc(a.box)} · ${esc(a.cat)}</small></span>
+      <span class="st ${s.st}">${esc(statusLabel(s))}</span></button></li>`;
+  };
+
+  const sheetCard = (a, s, live, reps) => {
+    const pr = PROVAS[a.p - 1];
+    const where = [a.h ? `Bateria ${a.h}` : '', a.l ? `Raia ${a.l}` : ''].filter(Boolean).join(' · ');
+    const canWrite = live && s.st === 'in_progress';
+    return `<div class="scard">
+      <p class="swk">${esc(pr.title)}</p>
+      <p class="swho">${esc(a.name)}${where ? `<span>${where}</span>` : ''}</p>
+      <p class="sclock num">${canWrite && reps ? `${reps} reps` : '00:00'}</p>
+      <button type="button" class="sbig" data-act="rep" ${canWrite ? '' : 'disabled'}>${canWrite ? '+1 repetição' : 'Iniciar o cronômetro'}</button>
+      ${canWrite ? `<button type="button" class="send" data-act="submit" ${reps ? '' : 'disabled'}>Enviar e publicar</button>` : ''}
+    </div>`;
+  };
+
+  /* ---------- Painel de números e nota ---------- */
+  const statsHtml = (st) => `
+    <div><dt>Toques</dt><dd>${st.taps}</dd></div>
+    <div><dt>Telas roladas</dt><dd>${(st.scrolled / st.el.clientHeight || 0).toFixed(1).replace('.', ',')}</dd></div>
+    <div><dt>Súmulas presas por engano</dt><dd class="${st.wrong ? 'bad' : ''}">${st.wrong}</dd></div>`;
+  const setScroll = (st, v) => { st.last = v; st.el.scrollTop = v; };
+  const trackScroll = (st, statsEl) => {
+    st.el.addEventListener('scroll', () => {
+      const t = st.el.scrollTop;
+      st.scrolled += Math.abs(t - st.last);
+      st.last = t;
+      statsEl.innerHTML = statsHtml(st);
+    }, { passive: true });
+  };
+
+  /* ---------- HOJE ---------- */
+  const H = { el: $('hoje-screen'), ov: $('hoje-ov'), stats: $('hoje-stats'), note: $('hoje-note') };
+  const hojeReset = () => {
+    Object.assign(H, { S: initStatus(), prova: 1, loose: false, view: 'board', sheet: null, taps: 0, scrolled: 0, last: 0, wrong: 0, reps: {} });
+    H.msg = 'A quadra abre na Prova 1, que terminou de manhã. Toque em "Prova 2" e procure a Raia 3 da Bateria 4.';
+    hojeRender(); setScroll(H, 0);
+  };
+  const hojeBoard = () => {
+    const p = H.prova, pr = PROVAS[p - 1];
+    let html = header({ title: EVENT, sub: pr.title, backAct: 'noop', backLabel: 'Voltar aos eventos' });
+    html += '<div class="cbody">';
+    html += `<div class="chips" role="group" aria-label="Prova">${PROVAS.map((x) => `<button type="button" class="chip${x.n === p ? ' on' : ''}" data-act="prova" data-p="${x.n}" aria-pressed="${x.n === p}">${esc(x.title)}</button>`).join('')}</div>`;
+    html += `<p class="summ">${esc(pr.summary)}</p>`;
+    for (let h = 1; h <= HEATS; h++) {
+      let rows = '';
+      for (let l = 1; l <= LANES; l++) rows += laneRow(H.S, `${p}|${h}|${l}`, `R${l}`, 'open');
+      html += `<section class="heat" aria-label="Bateria ${h}"><h4><span>Bateria ${h}</span><span class="num">${heatTime(p, h)}</span></h4><ul class="lanes">${rows}</ul></section>`;
+    }
+    const loose = LOOSE[p] || [];
+    if (loose.length) {
+      html += `<section class="heat"><button type="button" class="fold" data-act="loose" aria-expanded="${H.loose}">Atletas sem bateria nesta prova (${loose.length})${H.loose ? ICON.down : ICON.right}</button>`;
+      if (H.loose) html += `<ul class="lanes">${loose.map((_, i) => laneRow(H.S, `L|${p}|${i}`, '–', 'open')).join('')}</ul>`;
+      html += '</section>';
+    }
+    return html + '</div>';
+  };
+  const hojeSheet = () => {
+    const a = athOf(H.sheet), s = statusOf(H.S, H.sheet);
+    let html = header({ title: a.name, sub: `${PROVAS[a.p - 1].title} · ${a.cat}`, backAct: 'back', backLabel: 'Voltar às baterias' });
+    html += '<div class="cbody">';
+    html += s.st === 'submitted'
+      ? `<div class="pub"><p class="k">Publicada</p><p class="v num">${esc(s.res)}</p><p class="athsub">Enviada por outro judge. Só leitura.</p></div>`
+      : `<p class="syncok">${ICON.ok}Tudo salvo neste aparelho e no servidor</p>`;
+    html += sheetCard(a, s, true, H.reps[H.sheet] || 0);
+    return html + '</div>';
+  };
+  const hojeRender = () => {
+    H.el.innerHTML = H.view === 'sheet' ? hojeSheet() : hojeBoard();
+    H.stats.innerHTML = statsHtml(H);
+    H.note.textContent = H.msg;
+  };
+  const hojeAct = (act, b) => {
+    if (act === 'prova') { H.prova = Number(b.dataset.p); H.msg = H.prova === 2 ? 'Prova 2 aberta. As 12 baterias vêm abertas, uma embaixo da outra, e nada marca a Bateria 4 como a atual.' : `Você está vendo a ${PROVAS[H.prova - 1].title}.`; hojeRender(); return; }
+    if (act === 'loose') { H.loose = !H.loose; H.msg = H.loose ? 'Estes atletas vêm na ordem do banco, sem busca. Dois times quase com o mesmo nome ficam um perto do outro.' : H.msg; hojeRender(); return; }
+    if (act === 'open') {
+      const k = b.dataset.k, a = athOf(k), s = statusOf(H.S, k);
+      const where = a.h ? `Bateria ${a.h}, Raia ${a.l}` : 'sem bateria';
+      if (s.st === 'not_started') {
+        H.S[k] = { st: 'in_progress', judge: 'você' };
+        if (k === TARGET) H.msg = `Achou a sua, com ${H.taps} toques e ${(H.scrolled / H.el.clientHeight).toFixed(1).replace('.', ',')} telas roladas. Agora volte da súmula para ver onde a quadra reabre.`;
+        else { H.wrong += 1; H.msg = `Você abriu a súmula de ${a.name} (${PROVAS[a.p - 1].title}, ${where}). Ela ficou Em andamento com você: outro judge vê "Com você" e não consegue abrir, e a raia entra na chamada do telão. Aqui não há como desfazer; só o gestor, cancelando.`; }
+      } else if (s.st === 'submitted') {
+        H.msg = `Você entrou na súmula publicada de ${a.name}. Qualquer judge do evento vê qualquer atleta.`;
+      } else {
+        H.msg = k === TARGET ? 'Você retomou a sua súmula.' : `Você retomou a súmula de ${a.name}, que continua presa com você.`;
+      }
+      H.view = 'sheet'; H.sheet = k; hojeRender(); setScroll(H, 0); return;
+    }
+    if (act === 'back') {
+      if (H.view === 'sheet') {
+        H.view = 'board'; H.prova = 1; H.loose = false;
+        H.msg = 'A quadra recarregou e voltou para a Prova 1, no topo, como o app faz hoje. Na próxima bateria, tudo de novo: escolher a prova e rolar.';
+        hojeRender(); setScroll(H, 0);
+      }
+      return;
+    }
+    if (act === 'rep') { H.reps[H.sheet] = (H.reps[H.sheet] || 0) + 1; H.msg = H.sheet === TARGET ? 'Registro feito na sua súmula.' : 'Registro feito numa súmula que não é a sua. Agora ela tem dados, e só o gestor resolve.'; hojeRender(); return; }
+    if (act === 'submit') {
+      const k = H.sheet;
+      H.S[k] = { st: 'submitted', res: String(H.reps[k] || 0) };
+      H.view = 'board'; H.prova = 1; H.loose = false;
+      H.msg = k === TARGET ? 'Enviada. A quadra voltou para a Prova 1, no topo; para a Bateria 5, escolher a prova e rolar de novo.' : 'Você publicou o resultado de outro atleta. Isso só se corrige no painel do gestor. A quadra voltou para a Prova 1.';
+      hojeRender(); setScroll(H, 0); return;
+    }
+    if (act === 'noop') { H.msg = 'Na simulação, este botão não sai da tela.'; hojeRender(); }
+  };
+
+  /* ---------- PROPOSTA ---------- */
+  const P = { el: $('prop-screen'), ov: $('prop-ov'), stats: $('prop-stats'), note: $('prop-note') };
+  let toastTimer = 0;
+  const propReset = () => {
+    Object.assign(P, { S: initStatus(), lane: null, view: 'lane', sheet: null, from: 'agora', fold: { other: false, prev: false, all: false }, q: '', taps: 0, scrolled: 0, last: 0, wrong: 0, reps: {}, dialog: null, toast: '' });
+    P.msg = 'Ao entrar no evento, o judge diz em que raia está. Toque em "3".';
+    propRender(); setScroll(P, 0);
+  };
+  // Bateria atual pelas súmulas (regra do telão): a primeira bateria, na ordem do cronograma, que ainda não terminou.
+  const currentHeat = (S) => {
+    for (const pr of PROVAS) for (let h = 1; h <= HEATS; h++) {
+      let called = false, done = true;
+      for (let l = 1; l <= LANES; l++) { const s = S[`${pr.n}|${h}|${l}`]; if (s && s.st === 'in_progress') called = true; if (!s || s.st !== 'submitted') done = false; }
+      if (!done) return { p: pr.n, h, called };
+    }
+    return null;
+  };
+  const mine = () => Object.keys(P.S).filter((k) => P.S[k].st === 'in_progress' && P.S[k].judge === 'você');
+  const laneBar = () => `<div class="lanebar"><span>${P.lane === 'multi' ? 'Você está cobrindo <b>várias raias</b>' : `Você está na <b>Raia ${P.lane}</b>`}</span><button type="button" data-act="changelane">Trocar</button></div>`;
+  const openStrip = () => {
+    const list = mine();
+    if (!list.length) return '';
+    return `<div class="openstrip"><p>${list.length === 1 ? 'Sua súmula aberta' : `Suas súmulas abertas (${list.length})`}</p>${list.map((k) => { const a = athOf(k); return `<button type="button" data-act="popen" data-k="${k}">Retomar · ${esc(a.name)} · ${a.h ? `B${a.h} R${a.l}` : 'sem bateria'}</button>`; }).join('')}</div>`;
+  };
+  const badge = (l, sm) => `<span class="badge${sm ? ' sm' : ''}"><small>Raia</small><b>${l}</b></span>`;
+  const nowCard = (cur, lane) => {
+    const k = `${cur.p}|${cur.h}|${lane}`, a = athOf(k), s = statusOf(P.S, k), pr = PROVAS[cur.p - 1];
+    let action = '';
+    if (s.st === 'not_started') action = `<button type="button" class="primary" data-act="popen" data-k="${k}">Abrir súmula</button>`;
+    else if (s.st === 'in_progress' && s.judge === 'você') action = `<button type="button" class="primary" data-act="popen" data-k="${k}">Retomar súmula</button>`;
+    else if (s.st === 'in_progress') action = `<p class="held">Esta súmula está com ${esc(s.judge)}. Fale com o gestor.</p>`;
+    else action = `<p class="held">Enviada. A próxima bateria aparece aqui quando a Bateria ${cur.h} terminar.</p>`;
+    return `<section class="now" aria-label="Agora na sua raia">
+      <div class="nowtop"><div><p class="nowmeta"><span class="live" aria-hidden="true"></span>${cur.called ? 'Em chamada agora' : 'Próxima a ser chamada'}</p><p class="nowheat">${esc(pr.title)}</p><p class="athsub">Bateria ${cur.h} · <span class="num">${heatTime(cur.p, cur.h)}</span></p></div>${badge(lane)}</div>
+      <div><p class="ath">${esc(a.name)}</p><p class="athsub">${esc(a.box)} · ${esc(a.cat)}</p></div>
+      <span class="st ${s.st}" style="justify-self:start">${esc(statusLabel(s))}</span>
+      ${action}
+    </section>`;
+  };
+  const propAgora = () => {
+    const cur = currentHeat(P.S);
+    const pr = PROVAS[cur.p - 1];
+    let html = header({ title: EVENT, sub: pr.title, backAct: 'noop', backLabel: 'Voltar aos eventos' }) + laneBar();
+    html += '<div class="cbody">' + openStrip();
+    if (P.lane === 'multi') {
+      let rows = '';
+      for (let l = 1; l <= LANES; l++) rows += laneRow(P.S, `${cur.p}|${cur.h}|${l}`, `R${l}`, 'popen');
+      html += `<section class="heat"><h4><span>${cur.called ? 'Em chamada' : 'Próxima'} · Bateria ${cur.h}</span><span class="num">${heatTime(cur.p, cur.h)}</span></h4><ul class="lanes">${rows}</ul></section>`;
+    } else {
+      html += nowCard(cur, P.lane);
+      if (cur.h < HEATS) {
+        const nk = `${cur.p}|${cur.h + 1}|${P.lane}`, na = athOf(nk);
+        html += `<div class="nextrow">${badge(P.lane, true)}<span class="lname"><small>Depois · Bateria ${cur.h + 1} · ${heatTime(cur.p, cur.h + 1)}</small><b>${esc(na.name)}</b></span></div>`;
+      }
+      const others = [];
+      for (let l = 1; l <= LANES; l++) if (l !== P.lane) others.push(`${cur.p}|${cur.h}|${l}`);
+      html += `<section class="heat"><button type="button" class="fold" data-act="fold" data-f="other" aria-expanded="${P.fold.other}">Outras raias da Bateria ${cur.h} (${others.length})${P.fold.other ? ICON.down : ICON.right}</button>`;
+      if (P.fold.other) html += `<ul class="lanes">${others.map((k) => laneRow(P.S, k, `R${k.split('|')[2]}`, 'popen')).join('')}</ul>`;
+      html += '</section>';
+      if (cur.h > 1) {
+        html += `<section class="heat"><button type="button" class="fold" data-act="fold" data-f="prev" aria-expanded="${P.fold.prev}">Sua raia nas baterias anteriores (${cur.h - 1})${P.fold.prev ? ICON.down : ICON.right}</button>`;
+        if (P.fold.prev) { let rows = ''; for (let h = cur.h - 1; h >= 1; h--) rows += laneRow(P.S, `${cur.p}|${h}|${P.lane}`, `B${h}`, 'popen'); html += `<ul class="lanes">${rows}</ul>`; }
+        html += '</section>';
+      }
+    }
+    const loose = LOOSE[cur.p] || [];
+    if (loose.length) {
+      html += `<section class="heat"><button type="button" class="fold" data-act="fold" data-f="all" aria-expanded="${P.fold.all}">Atletas sem bateria nesta prova (${loose.length})${P.fold.all ? ICON.down : ICON.right}</button>`;
+      if (P.fold.all) {
+        const q = P.q.trim().toLowerCase();
+        const list = loose.map((a, i) => ({ a, k: `L|${cur.p}|${i}` })).filter((x) => !q || x.a.name.toLowerCase().includes(q)).sort((x, y) => x.a.name.localeCompare(y.a.name, 'pt-BR'));
+        html += `<p class="warnline">Esta prova tem atletas fora das baterias do cronograma. Avise o gestor para colocá-los numa bateria.</p>`;
+        html += `<label class="warnline" for="prop-q">Buscar atleta</label><input id="prop-q" class="search" type="search" value="${esc(P.q)}" placeholder="Nome, equipe ou box" autocomplete="off">`;
+        html += `<ul class="lanes">${list.map((x) => laneRow(P.S, x.k, '–', 'popen')).join('') || '<li class="warnline">Nenhum atleta com esse nome.</li>'}</ul>`;
+      }
+      html += '</section>';
+    }
+    html += '<button type="button" class="trainlink" data-act="train">Treinar a súmula com atleta fictício</button>';
+    return html + '</div>';
+  };
+  const propLane = () => {
+    let html = header({ title: EVENT, sub: 'Sábado, 15/11', backAct: 'noop', backLabel: 'Voltar aos eventos' });
+    html += '<div class="cbody"><div><p class="ptitle">Em qual raia você está?</p><p class="pnote">Você vai ver primeiro o atleta desta raia em cada bateria. Dá para trocar a qualquer momento.</p></div>';
+    html += `<div class="lanegrid" role="group" aria-label="Raias">${Array.from({ length: LANES }, (_, i) => `<button type="button" class="lanepick" data-act="setlane" data-l="${i + 1}" aria-label="Raia ${i + 1}"><small>Raia</small>${i + 1}</button>`).join('')}</div>`;
+    html += '<button type="button" class="ghost" data-act="setlane" data-l="multi">Vou cobrir várias raias</button>';
+    html += '<button type="button" class="trainlink" data-act="train">Treinar a súmula com atleta fictício</button>';
+    return html + '</div>';
+  };
+  const propSheet = () => {
+    const k = P.sheet, a = athOf(k), s = statusOf(P.S, k), reps = P.reps[k] || 0;
+    let html = header({ title: a.name, sub: `${PROVAS[a.p - 1].title} · ${a.cat}`, backAct: 'pback', backLabel: 'Voltar para Agora' });
+    html += '<div class="cbody">';
+    if (s.st === 'submitted') html += `<div class="pub"><p class="k">Publicada</p><p class="v num">${esc(s.res)}</p><p class="athsub">Só leitura.</p></div>`;
+    else html += `<p class="syncok">${ICON.ok}Tudo salvo neste aparelho e no servidor</p>`;
+    if (s.st === 'in_progress' && s.judge === 'você') {
+      if (!reps) {
+        html += `<div class="release"><div class="who">${a.l ? badge(a.l, true) : ''}<div><b>${esc(a.name)}</b><p class="athsub">${a.h ? `Bateria ${a.h} · ${heatTime(a.p, a.h)}` : 'Sem bateria'}</p></div></div>
+          <p class="athsub">Não é este atleta? Enquanto nada for registrado, você mesmo libera a súmula.</p>
+          <button type="button" class="secondary" data-act="release">Liberar súmula</button></div>`;
+      } else {
+        html += '<p class="locked">Já há registro nesta súmula. Para passá-la a outro judge, o gestor usa "Liberar para outro judge" e os registros ficam.</p>';
+      }
+    }
+    html += sheetCard(a, s, true, reps);
+    return html + '</div>';
+  };
+  const propOverlay = () => {
+    let html = '';
+    if (P.dialog && P.dialog.type === 'confirm') {
+      const k = P.dialog.k, a = athOf(k), pr = PROVAS[a.p - 1];
+      const cur = currentHeat(P.S);
+      const lines = [];
+      if (P.lane !== 'multi' && a.l && a.l !== P.lane) lines.push(`Você está na Raia ${P.lane}`);
+      if (a.h && cur && (a.p !== cur.p || a.h !== cur.h)) lines.push(`Bateria ${a.h} não é a que está em chamada`);
+      if (!a.h) lines.push('Atleta fora das baterias do cronograma');
+      html += `<div class="veil"><div class="bsheet" role="dialog" aria-modal="true" aria-labelledby="cf-t">
+        ${lines.map((t) => `<p class="warn">${esc(t)}</p>`).join('')}
+        <div class="who">${a.l ? badge(a.l) : ''}<div><p class="ath" id="cf-t">${esc(a.name)}</p><p class="athsub">${esc(a.box)} · ${esc(a.cat)}</p><p class="athsub">${esc(pr.title)}${a.h ? ` · Bateria ${a.h} · ${heatTime(a.p, a.h)}` : ''}</p></div></div>
+        <div class="row"><button type="button" class="secondary" data-act="cancelcf">Voltar</button><button type="button" class="primary" data-act="confirm" data-k="${k}">${lines.length ? 'Abrir mesmo assim' : 'Abrir súmula'}</button></div>
+      </div></div>`;
+    }
+    if (P.dialog && P.dialog.type === 'train') {
+      html += `<div class="veil"><div class="bsheet" role="dialog" aria-modal="true" aria-labelledby="tr-t">
+        <p class="ath" id="tr-t">Treinar a súmula</p>
+        <p class="pnote">Abre a súmula de cada prova com a "Atleta de treino". Nada é gravado e nada vai para o ranking nem para o telão. Bom para o briefing da véspera.</p>
+        <button type="button" class="primary" data-act="closedlg">Entendi</button>
+      </div></div>`;
+    }
+    if (P.toast) html += `<p class="toast" role="status">${esc(P.toast)}</p>`;
+    return html;
+  };
+  const propRender = () => {
+    P.el.innerHTML = P.view === 'lane' ? propLane() : P.view === 'sheet' ? propSheet() : propAgora();
+    P.ov.innerHTML = propOverlay();
+    P.stats.innerHTML = statsHtml(P);
+    P.note.textContent = P.msg;
+    const q = $('prop-q');
+    if (q) q.addEventListener('input', () => { P.q = q.value; const pos = q.selectionStart; propRender(); const nq = $('prop-q'); if (nq) { nq.focus(); nq.setSelectionRange(pos, pos); } });
+    const first = P.ov.querySelector('.bsheet button');
+    if (first && P.dialog && !P.dialog.focused) { P.dialog.focused = true; first.focus(); }
+  };
+  const showToast = (t) => {
+    P.toast = t; clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { P.toast = ''; P.ov.querySelector('.toast')?.remove(); }, 2600);
+  };
+  const openSheetP = (k) => {
+    const s = statusOf(P.S, k), a = athOf(k);
+    if (s.st === 'not_started') {
+      P.S[k] = { st: 'in_progress', judge: 'você' };
+      if (k !== TARGET) { P.wrong += 1; P.msg = `Abriu a súmula de ${a.name} depois de confirmar. Ainda dá para desfazer: "Liberar súmula" aparece enquanto nada foi registrado.`; }
+      else P.msg = `Achou a sua com ${P.taps} toques e ${(P.scrolled / P.el.clientHeight).toFixed(1).replace('.', ',')} telas roladas. Volte para ver que a quadra continua em "Agora", na sua raia.`;
+    } else if (s.st === 'submitted') P.msg = `Súmula publicada de ${a.name}, só leitura, depois de confirmar.`;
+    else P.msg = 'Súmula retomada.';
+    P.view = 'sheet'; P.sheet = k; P.dialog = null; propRender(); setScroll(P, 0);
+  };
+  const propAct = (act, b) => {
+    if (act === 'setlane') {
+      P.lane = b.dataset.l === 'multi' ? 'multi' : Number(b.dataset.l);
+      P.view = 'agora';
+      P.msg = P.lane === 'multi'
+        ? 'No modo várias raias, a quadra mostra só a bateria em chamada, e cada raia pede confirmação.'
+        : P.lane === 3
+          ? 'A quadra abriu na bateria em chamada, a Bateria 4 da Prova 2, porque os judges das Raias 1, 2, 5 e 8 já abriram as súmulas dela (a mesma regra do telão). Toque em "Abrir súmula".'
+          : `Raia ${P.lane} escolhida. No cenário você está na Raia 3: toque em "Trocar".`;
+      propRender(); setScroll(P, 0); return;
+    }
+    if (act === 'changelane') { P.view = 'lane'; P.msg = 'Trocar de raia é uma ação de propósito, não um toque perdido na lista.'; propRender(); setScroll(P, 0); return; }
+    if (act === 'fold') { const f = b.dataset.f; P.fold[f] = !P.fold[f]; P.msg = f === 'all' && P.fold.all ? 'Lista em ordem alfabética, com busca. Repare nas duas equipes "Ferro e Fogo" e "Ferro e Foco": o nome aparece inteiro.' : f === 'other' && P.fold.other ? 'As outras raias ficam recolhidas. Abrir qualquer uma delas pede confirmação.' : P.msg; propRender(); return; }
+    if (act === 'popen') {
+      const k = b.dataset.k, a = athOf(k), cur = currentHeat(P.S), s = statusOf(P.S, k);
+      const safe = (s.st === 'in_progress' && s.judge === 'você') || (P.lane !== 'multi' && a.h && cur && a.p === cur.p && a.h === cur.h && a.l === P.lane);
+      if (safe) { openSheetP(k); return; }
+      P.dialog = { type: 'confirm', k }; P.msg = 'Fora da sua raia ou da bateria em chamada, a quadra pede confirmação com a raia e o atleta em destaque.'; propRender(); return;
+    }
+    if (act === 'confirm') { openSheetP(b.dataset.k); return; }
+    if (act === 'cancelcf' || act === 'closedlg') { P.dialog = null; P.msg = act === 'cancelcf' ? 'Nada foi aberto.' : P.msg; propRender(); return; }
+    if (act === 'train') { P.dialog = { type: 'train' }; P.msg = 'O treino usa a súmula de demonstração que o painel do gestor já tem.'; propRender(); return; }
+    if (act === 'release') {
+      const k = P.sheet;
+      delete P.S[k];
+      if (k !== TARGET) P.wrong = Math.max(0, P.wrong - 1);
+      P.view = 'agora'; P.sheet = null;
+      showToast('Súmula liberada. Nada foi gravado.');
+      P.msg = 'Liberada pelo próprio judge, sem o gestor, sem cancelamento no histórico, e a raia saiu da chamada do telão.';
+      propRender(); setScroll(P, 0); return;
+    }
+    if (act === 'rep') { P.reps[P.sheet] = (P.reps[P.sheet] || 0) + 1; P.msg = 'Com o primeiro registro, "Liberar súmula" some: a partir daqui, só o gestor passa a súmula para outro judge.'; propRender(); return; }
+    if (act === 'submit') { const k = P.sheet; P.S[k] = { st: 'submitted', res: String(P.reps[k] || 0) }; P.view = 'agora'; P.sheet = null; showToast('Enviada e publicada.'); P.msg = 'Enviada. O cartão da sua raia mostra o resultado e espera a próxima bateria ser chamada.'; propRender(); setScroll(P, 0); return; }
+    if (act === 'pback') { P.view = 'agora'; P.msg = 'De volta a "Agora", na sua raia. A súmula aberta aparece no topo com "Retomar".'; propRender(); setScroll(P, 0); return; }
+    if (act === 'noop') { P.msg = 'Na simulação, este botão não sai da tela.'; propRender(); }
+  };
+
+  /* ---------- Ligações ---------- */
+  const bind = (st, fn) => {
+    const handler = (e) => {
+      const b = e.target.closest('[data-act]');
+      if (!b || b.disabled) return;
+      st.taps += 1;
+      fn(b.dataset.act, b);
+    };
+    st.el.addEventListener('click', handler);
+    st.ov.addEventListener('click', handler);
+    trackScroll(st, st.stats);
+  };
+  bind(H, hojeAct);
+  bind(P, propAct);
+  P.ov.addEventListener('keydown', (e) => { if (e.key === 'Escape' && P.dialog) { P.dialog = null; propRender(); } });
+  document.querySelectorAll('[data-reset]').forEach((b) => b.addEventListener('click', () => (b.dataset.reset === 'hoje' ? hojeReset() : propReset())));
+  hojeReset();
+  propReset();
+
+  /* ---------- Decisões ---------- */
+  const DECS = [
+    { id: 'D1', t: 'Como o judge fica na raia', q: 'O que liga o judge à raia em que ele está.', o: [
+      ['A', 'O judge escolhe a raia no aparelho ao entrar no evento, com "Trocar" sempre à vista e a opção "Vou cobrir várias raias". Fica no aparelho, sem banco.', true],
+      ['B', 'Escala feita pelo gestor no painel (judge por raia, padrão e por bateria), como a escala do Fitness Race. Mais controle, mais trabalho antes do evento e uma migration.'],
+      ['C', 'Sem raia. Só a bateria atual em destaque.']] },
+    { id: 'D2', t: 'Qual é a bateria "agora"', q: 'Como a quadra decide o que mostrar primeiro.', o: [
+      ['A', 'Pelas súmulas, com a regra do telão: a bateria com súmula aberta; senão, a próxima depois da última terminada. O horário só ordena.', true],
+      ['B', 'Pelo horário do cronograma. Atrasos deixam a tela errada.']] },
+    { id: 'D3', t: 'Abrir fora da sua raia ou da bateria atual', q: 'O que acontece quando o judge toca em outra linha.', o: [
+      ['A', 'Pede confirmação, com a raia, o atleta e a bateria em destaque.', true],
+      ['B', 'Bloqueia para judge. Só gestor e owner abrem.'],
+      ['C', 'Igual hoje, sem confirmação.']] },
+    { id: 'D4', t: 'Desfazer uma abertura', q: 'Quem desfaz uma súmula aberta por engano.', o: [
+      ['A', 'O próprio judge, enquanto não houver registro. A súmula vazia é descartada (não vira cancelada) e sai da chamada do telão.', true],
+      ['B', 'O judge libera, mas a súmula fica como cancelada, com motivo automático.'],
+      ['C', 'Igual hoje: só o gestor, cancelando.']] },
+    { id: 'D5', t: 'Súmula antes do dia da bateria', q: 'O que evita súmulas reais abertas na véspera.', o: [
+      ['A', 'O servidor só abre súmula de bateria do dia, no fuso de Fortaleza. Gestor e owner seguem livres; bateria sem data não trava.', true],
+      ['B', 'Só um aviso na confirmação.'],
+      ['C', 'Igual hoje.']] },
+    { id: 'D6', t: 'Treino na quadra', q: 'Como o judge pratica sem mexer em atleta real.', o: [
+      ['A', 'Botão "Treinar" que abre a súmula de cada prova com um atleta fictício. Nada é gravado; usa a súmula de demonstração que já existe.', true],
+      ['B', 'Sem treino na quadra.']] },
+    { id: 'D7', t: 'Prova sem bateria no cronograma', q: 'Como o judge acha o atleta sem raia.', o: [
+      ['A', 'Lista em ordem alfabética, com busca, confirmação e o aviso de que a prova não tem baterias.', true],
+      ['B', 'Esconder a lista do judge; só o gestor abre essas súmulas.']] },
+    { id: 'D8', t: 'Gestor tirar a súmula de um judge', q: 'Como passar uma súmula com registros para outra pessoa.', o: [
+      ['A', '"Liberar para outro judge" no detalhe da súmula: os registros ficam e quem abrir em seguida assume. A mensagem de bloqueio de hoje já pede isso. Pede uma migration pequena para o histórico.', true],
+      ['B', 'Continuar só com "Cancelar".']] }
+  ];
+  const decsEl = $('decs');
+  decsEl.innerHTML = DECS.map((d) => `<fieldset class="dec"><legend>${d.id} · ${esc(d.t)}</legend><p class="q">${esc(d.q)}</p>${d.o.map(([k, txt, rec]) => `
+    <label class="opt"><input type="radio" name="${d.id}" id="${d.id}-${k}" value="${k}" ${rec ? 'checked' : ''}><span><b>${k}</b>${esc(txt)}${rec ? '<span class="rec">Recomendada</span>' : ''}</span></label>`).join('')}</fieldset>`).join('');
+  const out = $('choice-out');
+  const summary = () => DECS.map((d) => `${d.id}=${(decsEl.querySelector(`input[name="${d.id}"]:checked`) || {}).value || '?'}`).join(' · ');
+  const refresh = () => { out.textContent = summary(); };
+  decsEl.addEventListener('change', refresh);
+  refresh();
+  $('copy').addEventListener('click', async () => {
+    const text = `Quadra por raia: ${summary()}`;
+    const btn = $('copy');
+    try { await navigator.clipboard.writeText(text); btn.textContent = 'Copiado'; }
+    catch { const r = document.createRange(); r.selectNodeContents(out); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); btn.textContent = 'Selecionado: copie com o teclado'; }
+    setTimeout(() => { btn.textContent = 'Copiar escolhas'; }, 2200);
+  });
+})();
+</script>
+
+</body></html>

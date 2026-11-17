@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
-import { History, Link2, ReceiptText, RotateCcw, Search, Trash2, UserPlus, Wrench, X } from 'lucide-react';
+import { History, Link2, ReceiptText, RotateCcw, Search, Trash2, UserPlus, UserRoundX, Wrench, X } from 'lucide-react';
 
 import { LANE_STATE_CHIP, LANE_STATE_LABELS, ScoresheetBoard, type BoardRowSheet } from '@/components/admin/ScoresheetBoard';
 import { useApp } from '@/context/AppContext';
@@ -36,6 +36,7 @@ const REFRESH_MS = 20_000;
 type JudgeRow = { id: string; name: string; email: string };
 type SheetRow = BoardRowSheet & {
   heatId: string | null;
+  judgeUserId?: string | null;
   returnReason: string | null;
   createdAt: string;
   submittedAt: string | null;
@@ -51,7 +52,7 @@ type ReviewRow = {
   createdAt: string;
 };
 type ScoreRow = { athleteId: string; workoutId: string; result: string; value: number; rank?: number; points?: number; splits?: Record<string, string> };
-type Mode = { sheetId: string; kind: 'correct' | 'return' | 'cancel' } | null;
+type Mode = { sheetId: string; kind: 'correct' | 'return' | 'cancel' | 'release' } | null;
 // Linha aberta no painel de detalhe. Sem sheetId, o painel segue a súmula ativa da raia.
 type Selection = { provaKey: string; entryKey: string; sheetId: string | null } | null;
 type HistoryState = { sheetId: string; rows: ReviewRow[]; loading: boolean } | null;
@@ -364,7 +365,10 @@ export function ScoresheetsPanel({ event }: { event: Event }) {
         reason: form.reason,
         ...(mode.kind === 'correct' ? { result: form.result, tieBreak: form.tieBreak } : {})
       });
-      setNotice(mode.kind === 'correct' ? `Resultado de ${sheet.athleteName} corrigido e publicado.` : mode.kind === 'return' ? `Súmula de ${sheet.athleteName} devolvida ao judge.` : `Súmula de ${sheet.athleteName} cancelada.`);
+      setNotice(mode.kind === 'correct' ? `Resultado de ${sheet.athleteName} corrigido e publicado.`
+        : mode.kind === 'return' ? `Súmula de ${sheet.athleteName} devolvida ao judge.`
+          : mode.kind === 'release' ? `Súmula de ${sheet.athleteName} liberada. O próximo judge que abrir assume, com os registros.`
+            : `Súmula de ${sheet.athleteName} cancelada.`);
       // A súmula cancelada deixa de ser a ativa da raia: o painel continua nela.
       if (mode.kind === 'cancel') setSelection((current) => (current && current.entryKey === entryKey ? { ...current, sheetId: sheet.id } : current));
       setMode(null);
@@ -423,10 +427,13 @@ export function ScoresheetsPanel({ event }: { event: Event }) {
         )}
         <div>
           <label htmlFor={`${id}-reason`} className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-muted">
-            {mode.kind === 'correct' ? 'Justificativa (fica no histórico)' : mode.kind === 'return' ? 'Motivo para o judge' : 'Motivo do cancelamento'}
+            {mode.kind === 'correct' ? 'Justificativa (fica no histórico)' : mode.kind === 'return' ? 'Motivo para o judge' : mode.kind === 'release' ? 'Motivo da liberação (fica no histórico)' : 'Motivo do cancelamento'}
           </label>
           <input id={`${id}-reason`} required minLength={3} maxLength={500} value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} className={inputClass} />
         </div>
+        {mode.kind === 'release' && (
+          <p className="text-xs text-muted">Tira {sheet.judgeName} desta súmula. Os registros ficam, e o próximo judge que abrir a súmula na quadra assume dali.</p>
+        )}
         {mode.kind === 'cancel' && (
           <label className="flex items-start gap-2 text-xs text-white">
             <input type="checkbox" checked={form.acknowledged} onChange={(e) => setForm({ ...form, acknowledged: e.target.checked })} className="mt-0.5 accent-primary" />
@@ -435,7 +442,7 @@ export function ScoresheetsPanel({ event }: { event: Event }) {
         )}
         <div className="flex flex-wrap gap-2">
           <button type="submit" disabled={busy || (mode.kind === 'cancel' && !form.acknowledged)} className="inline-flex min-h-10 items-center rounded-md bg-primary px-4 text-xs font-bold uppercase tracking-wider text-ink disabled:opacity-50">
-            {mode.kind === 'correct' ? 'Publicar correção' : mode.kind === 'return' ? 'Devolver ao judge' : 'Cancelar súmula'}
+            {mode.kind === 'correct' ? 'Publicar correção' : mode.kind === 'return' ? 'Devolver ao judge' : mode.kind === 'release' ? 'Liberar para outro judge' : 'Cancelar súmula'}
           </button>
           <button type="button" onClick={() => setMode(null)} className={smallButton}>Fechar</button>
         </div>
@@ -494,7 +501,11 @@ export function ScoresheetsPanel({ event }: { event: Event }) {
                 {sheet.corrected && <span className="rounded border border-primary/50 px-1 text-[10px] uppercase text-primary">corrigido</span>}
                 {sheet.absent && <span className="rounded border border-info/60 px-1 text-[10px] uppercase text-info">Ausente</span>}
                 <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${LANE_STATE_CHIP[state]}`}>{LANE_STATE_LABELS[state]}</span>
-                <p className="basis-full text-xs text-muted">Judge {sheet.judgeName} · {formatWhen(sheet.updatedAt)}</p>
+                <p className="basis-full text-xs text-muted">
+                  {sheet.judgeUserId === null && (sheet.status === 'in_progress' || sheet.status === 'returned')
+                    ? `Sem judge (liberada; antes com ${sheet.judgeName})`
+                    : `Judge ${sheet.judgeName}`} · {formatWhen(sheet.updatedAt)}
+                </p>
                 {sheet.status === 'returned' && sheet.returnReason && <p className="basis-full text-xs text-muted">“{sheet.returnReason}”</p>}
               </div>
             )}
@@ -509,6 +520,12 @@ export function ScoresheetsPanel({ event }: { event: Event }) {
                 {sheet.status === 'submitted' && (
                   <button type="button" onClick={() => startMode(sheet, 'return')} aria-expanded={mode?.sheetId === sheet.id && mode.kind === 'return'} className={smallButton}>
                     <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />Devolver
+                  </button>
+                )}
+                {/* Story 1.148 (D8): tira o judge sem apagar os registros. */}
+                {(sheet.status === 'in_progress' || sheet.status === 'returned') && sheet.judgeUserId && (
+                  <button type="button" onClick={() => startMode(sheet, 'release')} aria-expanded={mode?.sheetId === sheet.id && mode.kind === 'release'} className={smallButton}>
+                    <UserRoundX className="h-3.5 w-3.5" aria-hidden="true" />Liberar para outro judge
                   </button>
                 )}
                 <button type="button" onClick={() => startMode(sheet, 'cancel')} aria-expanded={mode?.sheetId === sheet.id && mode.kind === 'cancel'} className={smallButton}>

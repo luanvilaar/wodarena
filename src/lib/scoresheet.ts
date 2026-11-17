@@ -23,7 +23,7 @@ import type { SheetEvent, WorkoutStructure } from '@/lib/workoutStructure';
 // rótulos de estado. O resultado do aparelho nunca é aceito como está.
 
 export type ScoresheetStatus = 'in_progress' | 'submitted' | 'returned' | 'cancelled';
-export type ScoresheetReviewAction = 'opened' | 'submitted' | 'returned' | 'corrected' | 'cancelled' | 'manual_override' | 'absent';
+export type ScoresheetReviewAction = 'opened' | 'submitted' | 'returned' | 'corrected' | 'cancelled' | 'manual_override' | 'absent' | 'released';
 
 /** Rótulos da seção 7 do documento da súmula ("Enviada" já é publicada: decisão 3 da E3). */
 export const SCORESHEET_STATUS_LABELS: Record<ScoresheetStatus | 'not_started', string> = {
@@ -41,7 +41,8 @@ export const SCORESHEET_REVIEW_LABELS: Record<ScoresheetReviewAction, string> = 
   corrected: 'Resultado corrigido pelo gestor',
   cancelled: 'Súmula cancelada',
   manual_override: 'Resultado lançado à mão por cima da súmula',
-  absent: 'Atleta ausente'
+  absent: 'Atleta ausente',
+  released: 'Liberada para outro judge'
 };
 
 /** Eventos por lote enviados pelo aparelho. */
