@@ -79,6 +79,14 @@ test('gestor: só em andamento ou devolvida, com judge, e com motivo', async () 
   assert.equal(db.rows('scoresheets')[0].judge_user_id, judge.id);
 });
 
+test('gestor: se o histórico não grava, a liberação é desfeita (o judge volta)', async () => {
+  const db = createFakeSupabase({ scoresheets: [sheetRow()], scoresheet_events: [], scoresheet_reviews: [] });
+  db.onceBeforeInsert('scoresheet_reviews', () => { throw Object.assign(new Error('violates check constraint "scoresheet_reviews_action_check" on scoresheet_reviews'), { code: '23514' }); });
+  await assert.rejects(sheets.reviewSheet(db.client, manager, 'sheet-1', { action: 'release', reason: 'motivo ok' }));
+  assert.equal(db.rows('scoresheets')[0].judge_user_id, judge.id);
+  assert.equal(db.rows('scoresheet_reviews').length, 0);
+});
+
 test('rota, telas e migration da liberação', () => {
   const route = read('../src/app/api/sheets/route.ts');
   assert.match(route, /release: 30/);

@@ -1098,14 +1098,29 @@ export const reviewSheet = async (
       throw new SheetError('Só uma súmula em andamento ou devolvida pode ser liberada para outro judge.', 409);
     }
     if (!row.judge_user_id) throw new SheetError('Esta súmula já está livre: o próximo judge que abrir assume.', 409);
+    // Só vale se a súmula continua com o mesmo judge e no mesmo estado (o judge
+    // pode ter enviado no meio). Sem linha alterada, nada é gravado no histórico.
+    const patch = { judge_user_id: null, updated_at: at };
+    const released = check(await supabaseAdmin
+      .from('scoresheets')
+      .update(patch)
+      .eq('id', row.id)
+      .eq('judge_user_id', row.judge_user_id)
+      .in('status', ['in_progress', 'returned'])
+      .select('id')) as { id: string }[] | null;
+    if (!released || released.length !== 1) throw new SheetError('Esta súmula mudou enquanto você liberava. Recarregue e confira.', 409);
     try {
       await insertReview(supabaseAdmin, row.id, actor, 'released', { reason });
     } catch (error) {
+      // Sem histórico, a liberação é desfeita: o judge volta para a súmula.
+      check(await supabaseAdmin
+        .from('scoresheets')
+        .update({ judge_user_id: row.judge_user_id, updated_at: row.updated_at })
+        .eq('id', row.id)
+        .is('judge_user_id', null));
       if (isMissingReleasedAction(error)) throw new SheetError(RELEASE_UNAVAILABLE_MESSAGE, 503);
       throw error;
     }
-    const patch = { judge_user_id: null, updated_at: at };
-    check(await supabaseAdmin.from('scoresheets').update(patch).eq('id', row.id));
     return { sheet: toSheetDto({ ...row, ...patch }), ranking: [] as RankedScoreDto[] };
   }
 
