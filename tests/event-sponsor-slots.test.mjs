@@ -60,7 +60,7 @@ test('o evento nasce sem os três nomes fixos (D8) e o painel grava as vagas', (
   assert.match(context, /newEvent\.sponsorLogos && newEvent\.sponsorLogos\.length > 0 \? \{ sponsor_logos: newEvent\.sponsorLogos \}/);
 
   const admin = read('../src/app/admin/page.tsx');
-  assert.match(admin, /<SponsorSlotsField key=\{selectedEventToManage\?\.id \?\? 'edit'\} idPrefix="edit-event-sponsors" value=\{editEventSponsorLogos\} onChange=\{setEditEventSponsorLogos\} onUploadingChange=\{setEditEventSponsorUploading\} \/>/);
+  assert.match(admin, /<SponsorSlotsField key=\{`\$\{selectedEventToManage\?\.id \?\? 'edit'\}-sponsors`\} idPrefix="edit-event-sponsors" value=\{editEventSponsorLogos\} onChange=\{setEditEventSponsorLogos\} onUploadingChange=\{setEditEventSponsorUploading\} \/>/);
   assert.match(admin, /<SponsorSlotsField idPrefix="event-sponsors" value=\{eventSponsorLogos\} onChange=\{setEventSponsorLogos\} onUploadingChange=\{setEventSponsorUploading\} \/>/);
   assert.equal((admin.match(/const sponsorIssue = findSponsorSlotIssue\(/g) || []).length, 2);
   assert.match(admin, /JSON\.stringify\(editEventSponsorLogos\) !== JSON\.stringify\(selectedEventToManage\.sponsorLogos \?\? \[\]\)/);

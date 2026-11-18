@@ -4452,7 +4452,7 @@ export default function AdminPage() {
             />
           </div>
 
-          <RulesDocumentField key={selectedEventToManage?.id ?? 'edit'} id="edit-event-rules-pdf" value={editEventRulesDocument} onChange={setEditEventRulesDocument} onUploadingChange={setEditEventPdfUploading} />
+          <RulesDocumentField key={`${selectedEventToManage?.id ?? 'edit'}-rules`} id="edit-event-rules-pdf" value={editEventRulesDocument} onChange={setEditEventRulesDocument} onUploadingChange={setEditEventPdfUploading} />
 
           <div>
             <label htmlFor="edit-event-rules" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Resumo do regulamento (opcional)</label>
@@ -4466,7 +4466,7 @@ export default function AdminPage() {
             />
           </div>
 
-          <SponsorSlotsField key={selectedEventToManage?.id ?? 'edit'} idPrefix="edit-event-sponsors" value={editEventSponsorLogos} onChange={setEditEventSponsorLogos} onUploadingChange={setEditEventSponsorUploading} />
+          <SponsorSlotsField key={`${selectedEventToManage?.id ?? 'edit'}-sponsors`} idPrefix="edit-event-sponsors" value={editEventSponsorLogos} onChange={setEditEventSponsorLogos} onUploadingChange={setEditEventSponsorUploading} />
         </div>
 
         <div className="space-y-4 border-t border-card-border pt-5">

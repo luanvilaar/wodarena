@@ -120,7 +120,7 @@ test('rota de envio, gravação, painel, página e migration', () => {
 
   const admin = read('../src/app/admin/page.tsx');
   // Achado do CodeRabbit: o campo é refeito por evento e salvar espera o envio terminar.
-  assert.match(admin, /<RulesDocumentField key=\{selectedEventToManage\?\.id \?\? 'edit'\} id="edit-event-rules-pdf" value=\{editEventRulesDocument\} onChange=\{setEditEventRulesDocument\} onUploadingChange=\{setEditEventPdfUploading\} \/>/);
+  assert.match(admin, /<RulesDocumentField key=\{`\$\{selectedEventToManage\?\.id \?\? 'edit'\}-rules`\} id="edit-event-rules-pdf" value=\{editEventRulesDocument\} onChange=\{setEditEventRulesDocument\} onUploadingChange=\{setEditEventPdfUploading\} \/>/);
   assert.match(admin, /<RulesDocumentField id="event-rules-pdf" value=\{eventRulesDocument\} onChange=\{setEventRulesDocument\} onUploadingChange=\{setEventPdfUploading\} \/>/);
   assert.match(admin, /if \(editEventPdfUploading \|\| editEventSponsorUploading\) \{/);
   assert.match(admin, /if \(eventPdfUploading \|\| eventSponsorUploading\) \{/);
