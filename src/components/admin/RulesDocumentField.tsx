@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type DragEvent } from 'react';
+import { useEffect, useRef, useState, type DragEvent } from 'react';
 import { ExternalLink, FileText, Loader2, Upload, X } from 'lucide-react';
 
 import { formatFileSize, type RulesDocument } from '@/lib/eventMediaFields';
@@ -15,6 +15,8 @@ type RulesDocumentFieldProps = {
   id: string;
   value: RulesDocument | null;
   onChange: (document: RulesDocument | null) => void;
+  // O formulário não salva enquanto o PDF sobe (senão grava o valor anterior).
+  onUploadingChange?: (uploading: boolean) => void;
   disabled?: boolean;
 };
 
@@ -23,20 +25,38 @@ const formatDate = (iso: string) => {
   return Number.isFinite(parsed) ? new Date(parsed).toLocaleDateString('pt-BR', { timeZone: 'America/Fortaleza' }) : '';
 };
 
-export function RulesDocumentField({ id, value, onChange, disabled = false }: RulesDocumentFieldProps) {
+export function RulesDocumentField({ id, value, onChange, onUploadingChange, disabled = false }: RulesDocumentFieldProps) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
+  // Envio que termina depois de o campo sair da tela (outro evento aberto) não muda nada.
+  const mounted = useRef(true);
+  const reportUploading = useRef(onUploadingChange);
+  useEffect(() => {
+    reportUploading.current = onUploadingChange;
+  }, [onUploadingChange]);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      reportUploading.current?.(false);
+    };
+  }, []);
 
   const send = async (file: File | undefined) => {
     if (!file || uploading) return;
     setUploading(true);
+    reportUploading.current?.(true);
     setError('');
     try {
-      onChange(await uploadRulesDocument(file));
+      const document = await uploadRulesDocument(file);
+      if (mounted.current) onChange(document);
     } catch (cause) {
-      setError(cause instanceof RulesDocumentUploadError || cause instanceof Error ? cause.message : 'Não foi possível enviar o PDF.');
+      if (mounted.current) setError(cause instanceof RulesDocumentUploadError || cause instanceof Error ? cause.message : 'Não foi possível enviar o PDF.');
     } finally {
-      setUploading(false);
+      if (mounted.current) {
+        setUploading(false);
+        reportUploading.current?.(false);
+      }
     }
   };
 

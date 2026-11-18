@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type Dispatch, type SetStateAction } from 'react';
+import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import Image from 'next/image';
 import { ChevronDown, ChevronUp, ImagePlus, Loader2, Minus, Plus, X } from 'lucide-react';
 
@@ -19,6 +19,8 @@ type SponsorSlotsFieldProps = {
   value: SponsorSlot[];
   // O setter do estado do formulário: o envio do PNG aplica sobre o estado mais recente.
   onChange: Dispatch<SetStateAction<SponsorSlot[]>>;
+  // O formulário não salva enquanto um logo sobe.
+  onUploadingChange?: (uploading: boolean) => void;
   disabled?: boolean;
 };
 
@@ -26,11 +28,26 @@ const EMPTY_SLOT: SponsorSlot = { name: '', logoUrl: null, link: '' };
 const inputClass = 'w-full min-h-10 rounded-md border border-card-border bg-dark-gray px-3 py-2 text-sm text-white placeholder:text-muted focus:border-primary/50 focus:outline-none';
 const iconButton = 'flex h-9 w-9 items-center justify-center rounded-md border border-card-border text-white transition-colors hover:border-primary disabled:cursor-not-allowed disabled:opacity-40';
 
-export function SponsorSlotsField({ idPrefix, value, onChange, disabled = false }: SponsorSlotsFieldProps) {
+export function SponsorSlotsField({ idPrefix, value, onChange, onUploadingChange, disabled = false }: SponsorSlotsFieldProps) {
   // Vagas tiradas pelo "−" ficam aqui até o formulário fechar.
   const [stash, setStash] = useState<SponsorSlot[]>([]);
   const [uploading, setUploading] = useState<number | null>(null);
   const [errors, setErrors] = useState<Record<number, string>>({});
+  // Durante o envio de um logo, quantidade, ordem e "tirar" ficam travados: a
+  // resposta cai na vaga que começou o envio (o índice não muda).
+  const busy = uploading !== null;
+  const mounted = useRef(true);
+  const reportUploading = useRef(onUploadingChange);
+  useEffect(() => {
+    reportUploading.current = onUploadingChange;
+  }, [onUploadingChange]);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      reportUploading.current?.(false);
+    };
+  }, []);
   const count = value.length;
   const filled = value.filter((slot) => slot.logoUrl).length;
   const empty = count - filled;
@@ -60,17 +77,21 @@ export function SponsorSlotsField({ idPrefix, value, onChange, disabled = false 
   const sendLogo = async (index: number, file: File | undefined) => {
     if (!file) return;
     setUploading(index);
+    reportUploading.current?.(true);
     setErrors((current) => ({ ...current, [index]: '' }));
     try {
       const url = await uploadEventMedia(file, 'sponsor');
       // O gestor pode ter digitado o nome durante o envio: aplica sobre o estado de agora.
       const fallbackName = file.name.replace(/\.png$/i, '').replace(/[-_]+/g, ' ').trim().slice(0, SPONSOR_NAME_MAX);
-      onChange((slots) => slots.map((slot, i) => (i === index ? { ...slot, logoUrl: url, name: slot.name || fallbackName } : slot)));
+      if (mounted.current) onChange((slots) => slots.map((slot, i) => (i === index ? { ...slot, logoUrl: url, name: slot.name || fallbackName } : slot)));
     } catch (cause) {
       const message = cause instanceof EventMediaUploadError || cause instanceof Error ? cause.message : 'Não foi possível enviar o logo.';
-      setErrors((current) => ({ ...current, [index]: message }));
+      if (mounted.current) setErrors((current) => ({ ...current, [index]: message }));
     } finally {
-      setUploading(null);
+      if (mounted.current) {
+        setUploading(null);
+        reportUploading.current?.(false);
+      }
     }
   };
 
@@ -84,11 +105,11 @@ export function SponsorSlotsField({ idPrefix, value, onChange, disabled = false 
       <div className="flex flex-wrap items-center gap-3">
         <span id={`${idPrefix}-count-label`} className="text-sm font-semibold text-white">Quantas marcas?</span>
         <div role="group" aria-labelledby={`${idPrefix}-count-label`} className="inline-flex items-center overflow-hidden rounded-md border border-card-border">
-          <button type="button" onClick={() => setCount(count - 1)} disabled={disabled || count <= 0} aria-label="Uma marca a menos" className="flex h-10 w-10 items-center justify-center bg-dark-gray text-white hover:bg-card-border disabled:opacity-40">
+          <button type="button" onClick={() => setCount(count - 1)} disabled={disabled || busy || count <= 0} aria-label="Uma marca a menos" className="flex h-10 w-10 items-center justify-center bg-dark-gray text-white hover:bg-card-border disabled:opacity-40">
             <Minus className="h-4 w-4" aria-hidden="true" />
           </button>
           <output aria-live="polite" className="min-w-12 text-center font-number text-base font-bold text-white">{count}</output>
-          <button type="button" onClick={() => setCount(count + 1)} disabled={disabled || count >= SPONSOR_MAX_SLOTS} aria-label="Uma marca a mais" className="flex h-10 w-10 items-center justify-center bg-dark-gray text-white hover:bg-card-border disabled:opacity-40">
+          <button type="button" onClick={() => setCount(count + 1)} disabled={disabled || busy || count >= SPONSOR_MAX_SLOTS} aria-label="Uma marca a mais" className="flex h-10 w-10 items-center justify-center bg-dark-gray text-white hover:bg-card-border disabled:opacity-40">
             <Plus className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
@@ -150,14 +171,14 @@ export function SponsorSlotsField({ idPrefix, value, onChange, disabled = false 
                 </div>
 
                 <div className="flex gap-1.5 sm:flex-col">
-                  <button type="button" onClick={() => move(index, -1)} disabled={disabled || index === 0} aria-label={`Subir a marca ${index + 1}`} className={iconButton}>
+                  <button type="button" onClick={() => move(index, -1)} disabled={disabled || busy || index === 0} aria-label={`Subir a marca ${index + 1}`} className={iconButton}>
                     <ChevronUp className="h-4 w-4" aria-hidden="true" />
                   </button>
-                  <button type="button" onClick={() => move(index, 1)} disabled={disabled || index === count - 1} aria-label={`Descer a marca ${index + 1}`} className={iconButton}>
+                  <button type="button" onClick={() => move(index, 1)} disabled={disabled || busy || index === count - 1} aria-label={`Descer a marca ${index + 1}`} className={iconButton}>
                     <ChevronDown className="h-4 w-4" aria-hidden="true" />
                   </button>
                   {slot.logoUrl && (
-                    <button type="button" onClick={() => update(index, { logoUrl: null })} disabled={disabled} aria-label={`Tirar o logo da marca ${index + 1}`} className={`${iconButton} hover:border-trading-down hover:text-trading-down`}>
+                    <button type="button" onClick={() => update(index, { logoUrl: null })} disabled={disabled || busy} aria-label={`Tirar o logo da marca ${index + 1}`} className={`${iconButton} hover:border-trading-down hover:text-trading-down`}>
                       <X className="h-4 w-4" aria-hidden="true" />
                     </button>
                   )}

@@ -55,8 +55,11 @@ test('carrossel: 5 s, para ao tocar, passar o mouse ou focar, e respeita menos m
   const source = read('../src/components/SponsorCarousel.tsx');
   assert.match(source, /const ROTATE_MS = 5000;/);
   assert.match(source, /if \(!rotates \|\| paused \|\| holding \|\| reducedMotion\) return;/);
-  assert.match(source, /onMouseEnter=\{\(\) => setHolding\(true\)\}/);
-  assert.match(source, /onFocus=\{\(\) => setHolding\(true\)\}/);
+  // Achado do CodeRabbit: mouse, foco e toque pausam cada um por si.
+  assert.match(source, /const holding = hover \|\| focused \|\| touching;/);
+  assert.match(source, /onMouseLeave=\{\(\) => setHover\(false\)\}/);
+  assert.match(source, /setFocused\(false\)/);
+  assert.match(source, /onTouchCancel=/);
   assert.match(source, /window\.matchMedia\('\(prefers-reduced-motion: reduce\)'\)/);
   assert.match(source, /motion-reduce:transition-none/);
 });

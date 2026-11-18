@@ -19,7 +19,7 @@ O botão "Regulamento" da página do evento não levava ao documento oficial, e 
 1. **D1:** PDF oficial e resumo em texto opcional. O texto atual (`rules`) continua, como resumo.
 2. **D2:** a folha do regulamento mostra o arquivo (nome, tamanho, data) com "Abrir PDF" numa nova aba e "Baixar". Sem PDF embutido.
 3. **D3:** PDF até 10 MB, enviado direto ao Storage por link assinado pelo servidor, num espaço só de documentos (`event-documents`); o servidor confere o gestor e que o arquivo começa com `%PDF`.
-4. **D4:** "Quantas marcas?" de 1 a 12 cria as vagas, na ordem do carrossel. Vaga vazia não aparece no site e o painel avisa quantas estão vazias.
+4. **D4:** "Quantas marcas?" cria as vagas, na ordem do carrossel. A maquete dizia de 1 a 12; na implementação vai de 0 a 12, e 0 é "sem patrocinadores" (a área não aparece). Vaga vazia não aparece no site e o painel avisa quantas estão vazias.
 5. **D5:** só PNG, até 2 MB, ajustado para até 600 px de largura, mantendo a transparência. Nome obrigatório (texto do leitor de tela) e link opcional (http ou https).
 6. **D6:** cada logo num cartão claro na página escura.
 7. **D7:** carrossel de duas marcas por vez, troca a cada 5 s, para ao tocar ou passar o mouse, com setas, pontos e botão de pausa; com até 2 marcas fica parado; sem movimento para quem pede menos animação.
@@ -28,7 +28,7 @@ O botão "Regulamento" da página do evento não levava ao documento oficial, e 
 ## Como ficou
 
 - Banco: `events.rules_document` (JSONB) e `events.sponsor_logos` (JSONB, lista de vagas `{name, logoUrl, link}`), na migration `20261118120000_event_rules_document_sponsor_logos.sql`, que também documenta o bucket `event-documents`. O servidor cria o bucket no primeiro envio, como o de imagens.
-- Sem a migration, a página e o painel seguem como antes: o bootstrap pede as colunas novas primeiro e volta para o select de antes; o painel só envia o PDF e as marcas quando mudaram, e a gravação responde 503 com o nome da migration.
+- Sem a migration, o regulamento em texto e a edição normal do evento seguem como antes: o bootstrap pede as colunas novas primeiro e volta para o select de antes; o painel só envia o PDF e as marcas quando mudaram, e a gravação responde 503 com o nome da migration. A área de patrocinadores, porém, some de todos os eventos já no deploy: a página não lê mais a lista antiga de nomes (D8) e nenhum evento tem logo até a migration ser aplicada e o gestor enviar as marcas.
 - Regras puras em `src/lib/eventMediaFields.ts`; envio do PDF em `src/lib/rulesDocumentUpload.ts` e `POST /api/admin/documents/upload`; logo pela rota de mídia de antes, com o tipo `sponsor`.
 
 ## Fora de escopo

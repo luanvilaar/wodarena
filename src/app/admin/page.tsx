@@ -873,6 +873,9 @@ export default function AdminPage() {
   const [eventRulesDocument, setEventRulesDocument] = useState<RulesDocument | null>(null);
   // Story 1.151: vagas de patrocinador com logo PNG.
   const [eventSponsorLogos, setEventSponsorLogos] = useState<SponsorSlot[]>([]);
+  // Envio de PDF ou de logo em andamento: salvar espera terminar (senão grava o valor anterior).
+  const [eventPdfUploading, setEventPdfUploading] = useState(false);
+  const [eventSponsorUploading, setEventSponsorUploading] = useState(false);
   const [eventInstagram, setEventInstagram] = useState('');
   const [eventWebsite, setEventWebsite] = useState('');
   const [eventTicketPrice, setEventTicketPrice] = useState<number>(150);
@@ -903,6 +906,8 @@ export default function AdminPage() {
   const [editEventRules, setEditEventRules] = useState('');
   const [editEventRulesDocument, setEditEventRulesDocument] = useState<RulesDocument | null>(null);
   const [editEventSponsorLogos, setEditEventSponsorLogos] = useState<SponsorSlot[]>([]);
+  const [editEventPdfUploading, setEditEventPdfUploading] = useState(false);
+  const [editEventSponsorUploading, setEditEventSponsorUploading] = useState(false);
   const [editEventInstagram, setEditEventInstagram] = useState('');
   const [editEventWebsite, setEditEventWebsite] = useState('');
   const [editEventTicketPrice, setEditEventTicketPrice] = useState<number>(150);
@@ -1895,6 +1900,10 @@ export default function AdminPage() {
       eventCoordinatesRef.current?.focus();
       return;
     }
+    if (eventPdfUploading || eventSponsorUploading) {
+      setAdminNotice({ text: 'Aguarde o envio do arquivo terminar para salvar o evento.', tone: 'error' });
+      return;
+    }
     const sponsorIssue = findSponsorSlotIssue(eventSponsorLogos);
     if (sponsorIssue) {
       setAdminNotice({ text: `Revise os patrocinadores: ${sponsorIssue}`, tone: 'error' });
@@ -2152,6 +2161,10 @@ export default function AdminPage() {
       : {};
     // Stories 1.150 e 1.151: PDF e marcas só vão quando mudaram, para a edição do
     // resto do evento seguir funcionando em banco ainda sem a migration.
+    if (editEventPdfUploading || editEventSponsorUploading) {
+      setAdminNotice({ text: 'Aguarde o envio do arquivo terminar para salvar o evento.', tone: 'error' });
+      return;
+    }
     const sponsorIssue = findSponsorSlotIssue(editEventSponsorLogos);
     if (sponsorIssue) {
       setAdminNotice({ text: `Revise os patrocinadores: ${sponsorIssue}`, tone: 'error' });
@@ -4439,7 +4452,7 @@ export default function AdminPage() {
             />
           </div>
 
-          <RulesDocumentField id="edit-event-rules-pdf" value={editEventRulesDocument} onChange={setEditEventRulesDocument} />
+          <RulesDocumentField key={selectedEventToManage?.id ?? 'edit'} id="edit-event-rules-pdf" value={editEventRulesDocument} onChange={setEditEventRulesDocument} onUploadingChange={setEditEventPdfUploading} />
 
           <div>
             <label htmlFor="edit-event-rules" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Resumo do regulamento (opcional)</label>
@@ -4453,7 +4466,7 @@ export default function AdminPage() {
             />
           </div>
 
-          <SponsorSlotsField key={selectedEventToManage?.id ?? 'edit'} idPrefix="edit-event-sponsors" value={editEventSponsorLogos} onChange={setEditEventSponsorLogos} />
+          <SponsorSlotsField key={selectedEventToManage?.id ?? 'edit'} idPrefix="edit-event-sponsors" value={editEventSponsorLogos} onChange={setEditEventSponsorLogos} onUploadingChange={setEditEventSponsorUploading} />
         </div>
 
         <div className="space-y-4 border-t border-card-border pt-5">
@@ -10237,7 +10250,7 @@ export default function AdminPage() {
                     />
                   </div>
 
-                  <RulesDocumentField id="event-rules-pdf" value={eventRulesDocument} onChange={setEventRulesDocument} />
+                  <RulesDocumentField id="event-rules-pdf" value={eventRulesDocument} onChange={setEventRulesDocument} onUploadingChange={setEventPdfUploading} />
 
                   <div>
                     <label htmlFor="event-rules" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans">Resumo do regulamento (opcional)</label>
@@ -10252,7 +10265,7 @@ export default function AdminPage() {
                     />
                   </div>
 
-                  <SponsorSlotsField idPrefix="event-sponsors" value={eventSponsorLogos} onChange={setEventSponsorLogos} />
+                  <SponsorSlotsField idPrefix="event-sponsors" value={eventSponsorLogos} onChange={setEventSponsorLogos} onUploadingChange={setEventSponsorUploading} />
                 </div>
 
                 <div className="space-y-4 border-t border-card-border pt-5">

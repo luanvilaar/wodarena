@@ -20,6 +20,8 @@ test('link da marca: só http ou https; sem protocolo entra https://', () => {
   assert.equal(fields.normalizeSponsorLink('javascript:alert(1)').ok, false);
   assert.equal(fields.normalizeSponsorLink('ftp://arquivo.example.com').ok, false);
   assert.equal(fields.normalizeSponsorLink('semponto').ok, false);
+  // O limite vale também depois de normalizar (o https:// conta).
+  assert.equal(fields.normalizeSponsorLink(`${'a'.repeat(288)}.example.com`).ok, false);
 });
 
 test('vagas para gravar: até 12, logo do Storage do projeto, nome obrigatório com logo', () => {
@@ -58,14 +60,17 @@ test('o evento nasce sem os três nomes fixos (D8) e o painel grava as vagas', (
   assert.match(context, /newEvent\.sponsorLogos && newEvent\.sponsorLogos\.length > 0 \? \{ sponsor_logos: newEvent\.sponsorLogos \}/);
 
   const admin = read('../src/app/admin/page.tsx');
-  assert.match(admin, /<SponsorSlotsField key=\{selectedEventToManage\?\.id \?\? 'edit'\} idPrefix="edit-event-sponsors" value=\{editEventSponsorLogos\} onChange=\{setEditEventSponsorLogos\} \/>/);
-  assert.match(admin, /<SponsorSlotsField idPrefix="event-sponsors" value=\{eventSponsorLogos\} onChange=\{setEventSponsorLogos\} \/>/);
+  assert.match(admin, /<SponsorSlotsField key=\{selectedEventToManage\?\.id \?\? 'edit'\} idPrefix="edit-event-sponsors" value=\{editEventSponsorLogos\} onChange=\{setEditEventSponsorLogos\} onUploadingChange=\{setEditEventSponsorUploading\} \/>/);
+  assert.match(admin, /<SponsorSlotsField idPrefix="event-sponsors" value=\{eventSponsorLogos\} onChange=\{setEventSponsorLogos\} onUploadingChange=\{setEventSponsorUploading\} \/>/);
   assert.equal((admin.match(/const sponsorIssue = findSponsorSlotIssue\(/g) || []).length, 2);
   assert.match(admin, /JSON\.stringify\(editEventSponsorLogos\) !== JSON\.stringify\(selectedEventToManage\.sponsorLogos \?\? \[\]\)/);
 
   const field = read('../src/components/admin/SponsorSlotsField.tsx');
   assert.match(field, /Quantas marcas\?/);
-  assert.match(field, /disabled=\{disabled \|\| count >= SPONSOR_MAX_SLOTS\}/);
+  // Achado do CodeRabbit (major): durante o envio, quantidade, ordem e "tirar" ficam travados.
+  assert.match(field, /disabled=\{disabled \|\| busy \|\| count >= SPONSOR_MAX_SLOTS\}/);
+  assert.match(field, /disabled=\{disabled \|\| busy \|\| index === 0\}/);
+  assert.match(field, /disabled=\{disabled \|\| busy\}/);
   assert.match(field, /accept="image\/png"/);
   assert.match(field, /uploadEventMedia\(file, 'sponsor'\)/);
   assert.match(field, /Falta o nome: ele é lido por quem usa leitor de tela\./);

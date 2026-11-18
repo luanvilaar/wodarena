@@ -78,7 +78,9 @@ export const normalizeSponsorLink = (raw: unknown): Result<string> => {
     const url = new URL(candidate);
     if (url.protocol !== 'https:' && url.protocol !== 'http:') return { ok: false, error: 'O link da marca precisa começar com http ou https.' };
     if (!url.hostname.includes('.')) return { ok: false, error: 'Link da marca inválido.' };
-    return { ok: true, value: url.toString() };
+    const normalized = url.toString();
+    if (normalized.length > SPONSOR_LINK_MAX) return { ok: false, error: 'Link da marca muito longo.' };
+    return { ok: true, value: normalized };
   } catch {
     return { ok: false, error: 'Link da marca inválido.' };
   }

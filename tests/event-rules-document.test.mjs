@@ -119,8 +119,12 @@ test('rota de envio, gravação, painel, página e migration', () => {
   assert.match(persistence, /isMissingEventMediaColumn\(error\)\) return NextResponse\.json\(\{ error: EVENT_MEDIA_MIGRATION_MESSAGE \}, \{ status: 503 \}\)/);
 
   const admin = read('../src/app/admin/page.tsx');
-  assert.match(admin, /<RulesDocumentField id="edit-event-rules-pdf" value=\{editEventRulesDocument\} onChange=\{setEditEventRulesDocument\} \/>/);
-  assert.match(admin, /<RulesDocumentField id="event-rules-pdf" value=\{eventRulesDocument\} onChange=\{setEventRulesDocument\} \/>/);
+  // Achado do CodeRabbit: o campo é refeito por evento e salvar espera o envio terminar.
+  assert.match(admin, /<RulesDocumentField key=\{selectedEventToManage\?\.id \?\? 'edit'\} id="edit-event-rules-pdf" value=\{editEventRulesDocument\} onChange=\{setEditEventRulesDocument\} onUploadingChange=\{setEditEventPdfUploading\} \/>/);
+  assert.match(admin, /<RulesDocumentField id="event-rules-pdf" value=\{eventRulesDocument\} onChange=\{setEventRulesDocument\} onUploadingChange=\{setEventPdfUploading\} \/>/);
+  assert.match(admin, /if \(editEventPdfUploading \|\| editEventSponsorUploading\) \{/);
+  assert.match(admin, /if \(eventPdfUploading \|\| eventSponsorUploading\) \{/);
+  assert.match(read('../src/components/admin/RulesDocumentField.tsx'), /if \(mounted\.current\) onChange\(document\);/);
   assert.match(admin, /Resumo do regulamento \(opcional\)/);
   assert.match(admin, /JSON\.stringify\(editEventRulesDocument\) !== JSON\.stringify\(selectedEventToManage\.rulesDocument \?\? null\)/);
 

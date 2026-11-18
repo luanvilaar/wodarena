@@ -65,7 +65,11 @@ export function SponsorCarousel({ heading, sponsors, labels }: SponsorCarouselPr
   const rotates = sponsorsRotate(sponsors.length);
   const [page, setPage] = useState(0);
   const [paused, setPaused] = useState(false);
-  const [holding, setHolding] = useState(false);
+  // Mouse em cima, foco do teclado dentro e dedo na tela pausam a troca, cada um por si.
+  const [hover, setHover] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const [touching, setTouching] = useState(false);
+  const holding = hover || focused || touching;
   const [reducedMotion, setReducedMotion] = useState(false);
   const touchStart = useRef<number | null>(null);
   const current = pages.length > 0 ? Math.min(page, pages.length - 1) : 0;
@@ -92,13 +96,13 @@ export function SponsorCarousel({ heading, sponsors, labels }: SponsorCarouselPr
   const go = (next: number) => setPage(((next % pages.length) + pages.length) % pages.length);
   const onTouchStart = (event: TouchEvent) => {
     touchStart.current = event.touches[0]?.clientX ?? null;
-    setHolding(true);
+    setTouching(true);
   };
   const onTouchEnd = (event: TouchEvent) => {
     const start = touchStart.current;
     const end = event.changedTouches[0]?.clientX;
     touchStart.current = null;
-    setHolding(false);
+    setTouching(false);
     if (start === null || end === undefined || Math.abs(end - start) < SWIPE_PX) return;
     go(end < start ? current + 1 : current - 1);
   };
@@ -120,14 +124,18 @@ export function SponsorCarousel({ heading, sponsors, labels }: SponsorCarouselPr
           aria-roledescription={labels.carousel}
           aria-labelledby="event-sponsors-heading"
           className="space-y-3"
-          onMouseEnter={() => setHolding(true)}
-          onMouseLeave={() => setHolding(false)}
-          onFocus={() => setHolding(true)}
+          onMouseEnter={() => setHover(true)}
+          onMouseLeave={() => setHover(false)}
+          onFocus={() => setFocused(true)}
           onBlur={(event) => {
-            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setHolding(false);
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocused(false);
           }}
           onTouchStart={onTouchStart}
           onTouchEnd={onTouchEnd}
+          onTouchCancel={() => {
+            touchStart.current = null;
+            setTouching(false);
+          }}
         >
           <div className="overflow-hidden rounded-lg">
             <div
