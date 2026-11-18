@@ -49,7 +49,7 @@ test('o snapshot do checkout valida a camisa e calcula o total no servidor', () 
   assert.match(serverCheckout, /import \{ calculateRegistrationAmounts, getDivisionParticipantCount, normalizeShirtMode, resolveParticipantShirts \} from '@\/lib\/shirtPricing'/);
   assert.ok(snapshotBlock, 'calculateSecureRegistrationSnapshot deve existir');
   // Story 1.71: o select ganhou time_zone e passa por selectEventWithDates (datas do evento).
-  assert.match(snapshotBlock, /is_ticketing_active, shirt_mode, shirt_addon_price, time_zone'\s*\)/);
+  assert.match(snapshotBlock, /is_ticketing_active, shirt_mode, shirt_addon_price, time_zone, country_code'\s*\)/);
   assert.match(snapshotBlock, /resolveParticipantShirts\(\{ mode: shirtMode, divisionType: division\.type, athleteProfile \}\)/);
   assert.match(snapshotBlock, /throw new RegistrationAccessError\(shirts\.error, 400\)/);
   assert.match(snapshotBlock, /calculateRegistrationAmounts\(\{[\s\S]*discount,[\s\S]*shirtAddonPrice: asNumber\(event\.shirt_addon_price, 0\),[\s\S]*shirtAddonCount: shirts\.addonCount[\s\S]*\}\)/);
@@ -57,7 +57,8 @@ test('o snapshot do checkout valida a camisa e calcula o total no servidor', () 
   assert.doesNotMatch(snapshotBlock, /subtotal - discount/);
   // Valores do navegador são sobrescritos: o spread vem antes dos campos do servidor.
   assert.match(snapshotBlock, /\.\.\.clientRegistrationData,[\s\S]*ticketPrice,[\s\S]*totalPaid: transactionAmount,[\s\S]*shirtAddonCount: shirts\.addonCount,[\s\S]*shirtAddonAmount: amounts\.shirtAddonAmount/);
-  assert.match(snapshotBlock, /athleteProfile: \{\s*\.\.\.clientAthleteProfile,\s*isTeam,\s*shirtSize: shirts\.shirtSize,\s*teamMembers: shirts\.teamMembers\s*\}/);
+  // Story 1.154: o estado gravado também sai do servidor (UF normalizada pelo país do evento).
+  assert.match(snapshotBlock, /athleteProfile: \{\s*\.\.\.clientAthleteProfile,\s*isTeam,\s*shirtSize: shirts\.shirtSize,\s*teamMembers: shirts\.teamMembers,\s*(?:\/\/[^\n]*\s*)*state: normalizeStateForStorage\(clientAthleteProfile\.state, eventCountryCode\) \?\? undefined\s*\}/);
   // Validações existentes continuam antes do cálculo.
   assert.match(snapshotBlock, /assertRegistrationAvailableForEvent\(event\)[\s\S]*assertManagerSalesAccessForEvent[\s\S]*division\.is_active === false[\s\S]*resolveParticipantShirts[\s\S]*divisionSlotsLimit/);
 });

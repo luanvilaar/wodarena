@@ -1,0 +1,16 @@
+Bandeiras dos estados brasileiros (public/flags/br/*.svg)
+
+Origem:   https://github.com/pierrelapalu/icones-bandeiras-br-uf
+Estilo:   rounded (3:2, cantos arredondados), pasta dist/rounded/svg
+Commit:   ed47411 (28/10/2021)
+Licença:  CC0 1.0 Universal (domínio público). Não exige atribuição; este aviso
+          registra a origem.
+
+Os arquivos são cópias sem alteração, renomeados para a sigla da UF em
+minúsculas (ce.svg, sp.svg...). Versão usada nos três estados que têm duas
+(Ceará, Espírito Santo e Paraíba): a primeira (v1), a mesma da folha de
+exemplos do autor. Decisão D5 em docs/design/bandeiras-uf/README.md.
+
+Os SVGs usam classes de CSS globais (.cls-1, .cls-2...). Por isso entram sempre
+por <img src>, nunca inline: dois SVGs inline na mesma página sobrescreveriam as
+cores um do outro.

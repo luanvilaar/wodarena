@@ -223,7 +223,7 @@ export default function TermosPage() {
                 </li>
                 <li className="space-y-1 bg-[#fcd535]/5 border border-[#fcd535]/10 p-3 rounded-lg text-foreground">
                   <strong className="text-foreground uppercase tracking-wider text-[11px] block">C. Transparência Esportiva nos Leaderboards</strong>
-                  <span>O participante declara estar ciente e concorda que suas informações esportivas de desempenho (nome, equipe, box de treino, categoria e pontuações/resultados das provas) serão exibidas publicamente nos Leaderboards (rankings públicos) em tempo real no site da WODArena para auditoria esportiva e acompanhamento do público.</span>
+                  <span>O participante declara estar ciente e concorda que suas informações esportivas de desempenho (nome, equipe, box de treino, categoria, pontuações/resultados das provas e, para atletas individuais que informarem o estado de nascimento no cadastro, a bandeira desse estado) serão exibidas publicamente nos Leaderboards (rankings públicos) em tempo real no site da WODArena para auditoria esportiva e acompanhamento do público.</span>
                 </li>
                 <li className="space-y-1">
                   <strong className="text-foreground uppercase tracking-wider text-[11px] block">D. Direito de Uso de Imagem</strong>

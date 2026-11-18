@@ -8,6 +8,7 @@ import { getRegistrationAvailability } from '@/lib/eventStatus';
 import { selectEventWithDates, toEventLifecycleInput, type EventLifecycleRow } from '@/lib/serverEventLifecycle';
 import { calculateRegistrationAmounts, getDivisionParticipantCount, normalizeShirtMode, resolveParticipantShirts } from '@/lib/shirtPricing';
 import { createAthleteId, createRegistrationId } from '@/lib/registrationIds';
+import { normalizeStateForStorage } from '@/lib/ufFlags';
 import { getNewPaymentBlockReason, NEW_PAYMENT_BLOCK_MESSAGES } from '@/lib/paymentStatusTransition';
 import type { PaymentTransitionRow } from '@/lib/serverPaymentTransition';
 import { Registration } from '@/types';
@@ -21,6 +22,8 @@ export type SecureCheckoutSnapshot = {
   transactionAmount: number;
   eventId: string;
   registrationId: string;
+  // País do evento (country_code): decide se o estado vira UF (BR) ou segue texto livre.
+  eventCountryCode?: string;
   // Estado do pagamento como está no banco (Story 1.137): decide se a inscrição
   // aceita uma cobrança nova e entra na regra única de mudança de status.
   paymentRow: PaymentTransitionRow;
@@ -316,7 +319,7 @@ export const calculateSecureRegistrationSnapshot = async (
   const { data: event, error: eventError } = await selectEventWithDates<EventRegistrationAvailabilityRow & Record<string, unknown>>(
     supabaseAdmin,
     eventId,
-    'id, name, status, date, registration_deadline, ticket_price, ticket_slots, is_ticketing_active, shirt_mode, shirt_addon_price, time_zone'
+    'id, name, status, date, registration_deadline, ticket_price, ticket_slots, is_ticketing_active, shirt_mode, shirt_addon_price, time_zone, country_code'
   );
 
   if (eventError || !event) {
@@ -326,6 +329,7 @@ export const calculateSecureRegistrationSnapshot = async (
   assertRegistrationAvailableForEvent(event);
 
   await assertManagerSalesAccessForEvent(supabaseAdmin, eventId);
+  const eventCountryCode = asString(event.country_code) || undefined;
 
   const { data: division, error: divisionError } = await supabaseAdmin
     .from('divisions')
@@ -427,10 +431,14 @@ export const calculateSecureRegistrationSnapshot = async (
       ...clientAthleteProfile,
       isTeam,
       shirtSize: shirts.shirtSize,
-      teamMembers: shirts.teamMembers
+      teamMembers: shirts.teamMembers,
+      // Story 1.154: o estado gravado sai daqui. Evento brasileiro só aceita UF válida
+      // (sigla ou nome por extenso); o que não for UF não é gravado.
+      state: normalizeStateForStorage(clientAthleteProfile.state, eventCountryCode) ?? undefined
     },
     transactionAmount,
     eventId,
+    eventCountryCode,
     registrationId
   };
 };
@@ -698,6 +706,8 @@ export const createManagerRegistration = async (
     throw new RegistrationAccessError('Este e-mail já possui uma inscrição ativa para este evento.', 409);
   }
 
+  // Story 1.154: a UF sai daqui, normalizada pelo país do evento, tanto para atleta novo quanto existente.
+  const safeState = normalizeStateForStorage(input.state, secureSnapshot.eventCountryCode);
   let athleteId = createAthleteId();
   const { data: existingAthlete } = await supabaseAdmin
     .from('athletes')
@@ -713,7 +723,9 @@ export const createManagerRegistration = async (
       .update({
         shirt_size: safeShirtSize,
         is_team: safeIsTeam,
-        team_members: teamMembersJson
+        team_members: teamMembersJson,
+        // Sem estado informado, o que já está gravado fica.
+        ...(safeState ? { state: safeState } : {})
       })
       .eq('id', athleteId);
     if (athleteUpdateError) {
@@ -731,7 +743,7 @@ export const createManagerRegistration = async (
         birth_date: input.birthDate || null,
         gender: input.gender || null,
         city: input.city || null,
-        state: input.state || null,
+        state: safeState,
         instagram: input.instagram || null,
         photo_url: input.photoUrl || null,
         shirt_size: safeShirtSize,

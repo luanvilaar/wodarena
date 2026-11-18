@@ -53,4 +53,4 @@ O resultado nasce na quadra: a súmula digital registra cada repetição no serv
 1. O resultado oficial vem do servidor, nunca do aparelho; o que é parcial é sempre rotulado como parcial.
 2. Uma fonte de verdade por dado: o ranking público, o painel e qualquer nova tela usam a mesma regra de classificação.
 3. O dia do evento não pode depender de uma pessoa digitando: o que a quadra registra aparece sozinho.
-4. Dados pessoais do atleta não saem do servidor além do nome sanitizado e do box.
+4. Dados pessoais do atleta não saem do servidor além do nome sanitizado, do box e da localização (cidade e estado). O estado de nascimento vira a bandeira ao lado do nome no leaderboard (Story 1.153), com aviso no formulário e na política de privacidade.

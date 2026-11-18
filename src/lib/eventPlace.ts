@@ -3,19 +3,15 @@
 // misturados ("JOAO PESSOA", "Rio grande do Norte", "PB - PARAÍBA"); aqui viram
 // cidade capitalizada e a sigla da UF quando o estado é reconhecível.
 
-const UF_BY_NAME: Record<string, string> = {
-  acre: 'AC', alagoas: 'AL', amapa: 'AP', amazonas: 'AM', bahia: 'BA', ceara: 'CE',
-  'distrito federal': 'DF', 'espirito santo': 'ES', goias: 'GO', maranhao: 'MA',
-  'mato grosso': 'MT', 'mato grosso do sul': 'MS', 'minas gerais': 'MG', para: 'PA',
-  paraiba: 'PB', parana: 'PR', pernambuco: 'PE', piaui: 'PI', 'rio de janeiro': 'RJ',
-  'rio grande do norte': 'RN', 'rio grande do sul': 'RS', rondonia: 'RO', roraima: 'RR',
-  'santa catarina': 'SC', 'sao paulo': 'SP', sergipe: 'SE', tocantins: 'TO',
-};
+import { BR_UFS, foldUfText } from '@/lib/ufFlags';
 
-export const BRAZIL_UFS: readonly string[] = Object.values(UF_BY_NAME).sort();
+// A lista dos 27 estados mora em ufFlags.ts (uma tabela só); aqui ela vira o mapa
+// nome dobrado -> sigla usado pelo leitor tolerante abaixo.
+const UF_BY_NAME: Record<string, string> = Object.fromEntries(
+  BR_UFS.map((item) => [foldUfText(item.name), item.uf])
+);
 
-const fold = (value: string) =>
-  value.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+export const BRAZIL_UFS: readonly string[] = BR_UFS.map((item) => item.uf as string).sort();
 
 // "PB", "pb", "Paraíba", "PB - PARAÍBA", "Rio grande do Norte" -> sigla; senão null.
 export function toUf(state: string | null | undefined): string | null {
@@ -23,7 +19,7 @@ export function toUf(state: string | null | undefined): string | null {
   if (!raw) return null;
   const leading = raw.match(/^([A-Za-z]{2})(?:\s*[-–/]|$)/);
   if (leading && BRAZIL_UFS.includes(leading[1].toUpperCase())) return leading[1].toUpperCase();
-  const folded = fold(raw);
+  const folded = foldUfText(raw);
   if (UF_BY_NAME[folded]) return UF_BY_NAME[folded];
   const trailing = folded.match(/(?:^|[-–/]\s*)([a-z ]+)$/);
   if (trailing && UF_BY_NAME[trailing[1].trim()]) return UF_BY_NAME[trailing[1].trim()];

@@ -9,6 +9,8 @@ import { RegistrationVoucher } from '@/components/RegistrationVoucher';
 import { Event, Division, Registration, Athlete, AppLocale } from '@/types';
 import { useApp } from '@/context/AppContext';
 import { normalizeInstagram } from '@/lib/fitnessRacing';
+import { isBrazilEventCountry } from '@/lib/ufFlags';
+import { UfSelect } from '@/components/UfSelect';
 import { getRegistrationAvailability } from '@/lib/eventStatus';
 import { calculateServiceFee } from '@/lib/serviceFee';
 import { formatMoney, toMinorUnits } from '@/lib/intl/format';
@@ -399,6 +401,8 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess: onSuccessProp
   const isTeamCategory = participantCount > 1;
   const primaryParticipant = visibleParticipants[0] || createEmptyParticipant();
   const isFitnessRacing = event.eventType === 'fitness_racing';
+  // Estado de nascimento (Story 1.154): em evento brasileiro é um seletor de UF; fora do Brasil segue texto livre.
+  const isBrazilEvent = isBrazilEventCountry(event.countryCode);
   const clearAppliedCoupon = () => {
     setAppliedCoupon(null);
     setDiscountApplied(0);
@@ -1220,21 +1224,54 @@ export function RegisterModal({ event, isOpen, onClose, onSuccess: onSuccessProp
                               className={fieldClass}
                             />
                           </div>
-                          <div>
-                            <label htmlFor={`athlete-${index}-state`} className={labelClass}>{t('stateLabel')}</label>
-                            <input
-                              id={`athlete-${index}-state`}
-                              name={`participants.${index}.state`}
-                              type="text"
-                              required
-                              maxLength={2}
-                              placeholder={t('stateUfPlaceholder')}
-                              value={participant.state}
-                              onChange={(e) => updateParticipant(index, 'state', e.target.value.toUpperCase())}
-                              className={`${fieldClass} uppercase`}
-                            />
-                          </div>
+                          {isBrazilEvent ? (
+                            <div>
+                              <label htmlFor={`athlete-${index}-state`} className={labelClass}>{t('stateBirthLabelRequired')}</label>
+                              <UfSelect
+                                id={`athlete-${index}-state`}
+                                name={`participants.${index}.state`}
+                                required
+                                value={participant.state}
+                                onChange={(uf) => updateParticipant(index, 'state', uf)}
+                                placeholder={t('stateBirthPlaceholder')}
+                                className={fieldClass}
+                              />
+                            </div>
+                          ) : (
+                            <div>
+                              <label htmlFor={`athlete-${index}-state`} className={labelClass}>{t('stateLabel')}</label>
+                              <input
+                                id={`athlete-${index}-state`}
+                                name={`participants.${index}.state`}
+                                type="text"
+                                required
+                                maxLength={60}
+                                placeholder={t('stateUfPlaceholder')}
+                                value={participant.state}
+                                onChange={(e) => updateParticipant(index, 'state', e.target.value)}
+                                className={fieldClass}
+                              />
+                            </div>
+                          )}
                         </div>
+                      )}
+
+                      {!isFitnessRacing && isBrazilEvent && !isTeamCategory && (
+                        <div>
+                          <label htmlFor={`athlete-${index}-state`} className={labelClass}>{t('stateBirthLabelOptional')}</label>
+                          <UfSelect
+                            id={`athlete-${index}-state`}
+                            name={`participants.${index}.state`}
+                            value={participant.state}
+                            onChange={(uf) => updateParticipant(index, 'state', uf)}
+                            placeholder={t('stateBirthPlaceholder')}
+                            className={fieldClass}
+                          />
+                        </div>
+                      )}
+
+                      {isBrazilEvent && !isTeamCategory && (
+                        <p className="text-[11px] leading-snug text-muted">{t('stateBirthFlagNotice')}</p>
                       )}
                     </fieldset>
 

@@ -135,8 +135,8 @@ test('public surfaces consistently hide registration for derived finished events
 });
 
 test('server rejects registrations for derived finished events before persistence', () => {
-  // Story 1.71: os selects do checkout pedem time_zone e passam por selectEventWithDates.
-  assert.match(serverCheckout, /selectEventWithDates<[^>]*>>\(\s*supabaseAdmin,\s*eventId,\s*'id, name, status, date, registration_deadline, ticket_price, ticket_slots, is_ticketing_active, shirt_mode, shirt_addon_price, time_zone'/);
+  // Story 1.71: os selects do checkout pedem time_zone e passam por selectEventWithDates. Story 1.154: o do snapshot pede também country_code.
+  assert.match(serverCheckout, /selectEventWithDates<[^>]*>>\(\s*supabaseAdmin,\s*eventId,\s*'id, name, status, date, registration_deadline, ticket_price, ticket_slots, is_ticketing_active, shirt_mode, shirt_addon_price, time_zone, country_code'/);
   assert.match(serverCheckout, /getRegistrationAvailability\(toEventLifecycleInput\(event\)\)/);
   assert.match(serverCheckout, /throw new RegistrationAccessError\('Este evento esta encerrado e nao aceita novas inscricoes\.', 409\)/);
   assert.match(registrationStart, /RegistrationAccessError/);

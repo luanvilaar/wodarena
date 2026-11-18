@@ -26,6 +26,8 @@ import { Event, Athlete, Workout, Score } from '@/types';
 import { getAgeGroupFromDate } from '@/lib/fitnessRacing';
 import { sortWorkouts } from '@/lib/workoutOrder';
 import { getTeamDisplayName } from '@/lib/teamDisplay';
+import { resolveAthleteFlag, type AthleteFlag } from '@/lib/ufFlags';
+import { UfFlag } from '@/components/UfFlag';
 
 interface LeaderboardProps {
   event: Event;
@@ -322,11 +324,32 @@ const WorkoutScoreResult = ({ workout, score, tieBreakGroupSize, compact = false
   );
 };
 
+// Linha de localização do perfil (Story 1.155): bandeira ao lado de "Cidade / UF" e o nome do
+// estado por extenso. Com bandeira, imprime a sigla já normalizada, não o texto cadastrado
+// ("Ceará", "ce"), para o estado não aparecer duas vezes.
+const AthleteLocationLine = ({ athlete, flag }: { athlete: Athlete; flag: AthleteFlag | null }) => {
+  const t = useTranslations('Leaderboard');
+  const cityLine = athlete.city ? `${athlete.city} / ${flag ? flag.uf : athlete.state || ''}` : null;
+  const text = cityLine
+    ? (flag ? `${cityLine} · ${flag.name}` : cityLine)
+    : (flag ? flag.name : t('locationNotInformed'));
+  return (
+    <p className="flex items-center gap-2 text-xs text-muted-soft">
+      {flag && <UfFlag uf={flag.uf} size="lg" />}
+      <span>{text}</span>
+    </p>
+  );
+};
+
 type LeaderboardParticipantCellProps = {
   athlete: Athlete;
   rank: number;
   isExpanded: boolean;
   compact?: boolean;
+  // Bandeira do estado (Story 1.153). `showFlagSlot` reserva a faixa de 24 px no desktop
+  // quando alguém da categoria tem bandeira, para os nomes seguirem alinhados.
+  flag?: AthleteFlag | null;
+  showFlagSlot?: boolean;
   onToggleTeam: () => void;
   onOpenProfile: () => void;
 };
@@ -336,6 +359,8 @@ const LeaderboardParticipantCell = ({
   rank,
   isExpanded,
   compact = false,
+  flag = null,
+  showFlagSlot = false,
   onToggleTeam,
   onOpenProfile
 }: LeaderboardParticipantCellProps) => {
@@ -343,10 +368,14 @@ const LeaderboardParticipantCell = ({
   const isTeam = athlete.isTeam;
   const members = getTeamMembersArray(athlete.teamMembers);
   const displayName = isTeam ? athlete.name.split('(')[0].trim() : athlete.name;
+  const hasFlagSlot = !compact && showFlagSlot;
+  const gridClass = compact ? 'min-h-14 grid-cols-[1.375rem_1fr] gap-x-2 pl-1 pr-2'
+    : hasFlagSlot ? 'min-h-16 grid-cols-[2.5rem_1.5rem_1fr] gap-x-3 pl-2 pr-4'
+    : 'min-h-16 grid-cols-[2.5rem_1fr] gap-x-3.5 pl-2 pr-4';
 
   return (
     <div
-      className={`grid items-center ${compact ? 'min-h-14 grid-cols-[1.375rem_1fr] gap-x-2 pl-1 pr-2' : 'min-h-16 grid-cols-[2.5rem_1fr] gap-x-3.5 pl-2 pr-4'}`}
+      className={`grid items-center ${gridClass}`}
       role="button"
       tabIndex={0}
       onClick={onOpenProfile}
@@ -356,12 +385,16 @@ const LeaderboardParticipantCell = ({
           onOpenProfile();
         }
       }}
-      aria-label={t('openProfileAria', { name: displayName })}
+      aria-label={flag ? t('openProfileWithStateAria', { name: displayName, state: flag.name }) : t('openProfileAria', { name: displayName })}
     >
-      {/* Colocação como número simples: sem forma nem cor de pódio */}
-      <span className={`text-right font-number font-bold ${compact ? 'text-sm' : 'text-base'} ${rank > 0 ? 'text-foreground' : 'text-muted-soft'}`}>
-        {rank > 0 ? rank : '–'}
-      </span>
+      {/* Colocação como número simples: sem forma nem cor de pódio. No celular a bandeira fica sob o número, na coluna que já existe. */}
+      <div className="flex flex-col items-end gap-0.5">
+        <span className={`text-right font-number font-bold ${compact ? 'text-sm' : 'text-base'} ${rank > 0 ? 'text-foreground' : 'text-muted-soft'}`}>
+          {rank > 0 ? rank : '–'}
+        </span>
+        {compact && flag && <UfFlag uf={flag.uf} size="sm" />}
+      </div>
+      {hasFlagSlot && (flag ? <UfFlag uf={flag.uf} size="md" /> : <span aria-hidden="true" className="block h-4 w-6" />)}
       <div className={compact ? 'min-w-0 py-2' : 'min-w-0 py-2.5'}>
         <div className="flex min-w-0 items-center gap-1.5">
           <span className={`${compact ? 'line-clamp-2 text-[11px] leading-tight' : 'truncate text-xs sm:text-sm'} font-black uppercase tracking-[0.045em] text-white`}>
@@ -399,7 +432,7 @@ const LeaderboardParticipantCell = ({
           <div className="mt-1 flex min-w-0 items-center gap-2">
             <span className="truncate text-[10px] font-semibold uppercase tracking-wide text-muted-soft">{athlete.box || t('boxNotInformed')}</span>
             {athlete.country && (
-              <span className="shrink-0 border-l border-card-border/70 pl-2 text-[9px] font-bold uppercase tracking-wider text-muted">{athlete.country}</span>
+              <span className="shrink-0 border-l border-card-border/70 pl-2 text-[9px] font-bold uppercase tracking-wider text-muted">{flag ? `${athlete.country} · ${flag.uf}` : athlete.country}</span>
             )}
           </div>
         )}
@@ -577,6 +610,18 @@ export function Leaderboard({ event }: LeaderboardProps) {
     return groups;
   }, [divisionWorkouts, leaderboardData]);
 
+  // Bandeira do estado de cada atleta da categoria (Story 1.153). Só atleta individual com UF
+  // válida em evento brasileiro; `hasAnyFlag` decide se o desktop reserva a faixa da bandeira.
+  const flagsByAthleteId = useMemo(() => {
+    const flags = new Map<string, AthleteFlag>();
+    leaderboardData.forEach((row) => {
+      const flag = resolveAthleteFlag(row.athlete, event.countryCode);
+      if (flag) flags.set(row.athlete.id, flag);
+    });
+    return flags;
+  }, [leaderboardData, event.countryCode]);
+  const hasAnyFlag = flagsByAthleteId.size > 0;
+
   // Qualifier: resultados enviados que ainda esperam o judge. Enquanto houver, o ranking é parcial.
   const qualifierReviewSummary = useMemo(() => {
     if (event.eventType !== 'functional_fitness_qualifier') return null;
@@ -747,6 +792,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
                             athlete={row.athlete}
                             rank={row.rank}
                             compact
+                            flag={flagsByAthleteId.get(row.athlete.id) ?? null}
                             isExpanded={Boolean(expandedTeams[row.athlete.id])}
                             onToggleTeam={() => toggleTeamExpanded(row.athlete.id)}
                             onOpenProfile={() => row.athlete.isTeam ? setSelectedTeamForProfile(row.athlete) : setSelectedAthleteForProfile(row.athlete)}
@@ -797,6 +843,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
                               athlete={row.athlete}
                               rank={row.rank}
                               compact
+                              flag={flagsByAthleteId.get(row.athlete.id) ?? null}
                               isExpanded={Boolean(expandedTeams[row.athlete.id])}
                               onToggleTeam={() => toggleTeamExpanded(row.athlete.id)}
                               onOpenProfile={() => row.athlete.isTeam ? setSelectedTeamForProfile(row.athlete) : setSelectedAthleteForProfile(row.athlete)}
@@ -883,6 +930,8 @@ export function Leaderboard({ event }: LeaderboardProps) {
                           <LeaderboardParticipantCell
                             athlete={row.athlete}
                             rank={row.rank}
+                            flag={flagsByAthleteId.get(row.athlete.id) ?? null}
+                            showFlagSlot={hasAnyFlag}
                             isExpanded={Boolean(expandedTeams[row.athlete.id])}
                             onToggleTeam={() => toggleTeamExpanded(row.athlete.id)}
                             onOpenProfile={() => row.athlete.isTeam ? setSelectedTeamForProfile(row.athlete) : setSelectedAthleteForProfile(row.athlete)}
@@ -939,6 +988,8 @@ export function Leaderboard({ event }: LeaderboardProps) {
                         <LeaderboardParticipantCell
                           athlete={row.athlete}
                           rank={row.rank}
+                          flag={flagsByAthleteId.get(row.athlete.id) ?? null}
+                          showFlagSlot={hasAnyFlag}
                           isExpanded={Boolean(expandedTeams[row.athlete.id])}
                           onToggleTeam={() => toggleTeamExpanded(row.athlete.id)}
                           onOpenProfile={() => row.athlete.isTeam ? setSelectedTeamForProfile(row.athlete) : setSelectedAthleteForProfile(row.athlete)}
@@ -1067,9 +1118,7 @@ export function Leaderboard({ event }: LeaderboardProps) {
                             @{selectedAthleteForProfile.instagram.replace(/^@/, '')}
                           </a>
                         )}
-                        <p className="text-xs text-muted-soft">
-                          {selectedAthleteForProfile.city ? `${selectedAthleteForProfile.city} / ${selectedAthleteForProfile.state || ''}` : t('locationNotInformed')}
-                        </p>
+                        <AthleteLocationLine athlete={selectedAthleteForProfile} flag={flagsByAthleteId.get(selectedAthleteForProfile.id) ?? null} />
                       </div>
                     </div>
 

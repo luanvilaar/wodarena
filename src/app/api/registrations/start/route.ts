@@ -198,7 +198,10 @@ export async function POST(request: Request) {
         .from('athletes')
         .update({
           shirt_size: safeAthleteProfile.shirtSize || null,
-          team_members: safeAthleteProfile.teamMembers ? JSON.stringify(safeAthleteProfile.teamMembers) : '[]'
+          team_members: safeAthleteProfile.teamMembers ? JSON.stringify(safeAthleteProfile.teamMembers) : '[]',
+          // Story 1.154: quem se inscreve de novo (PIX expirado, cadastro anterior à bandeira)
+          // e escolhe o estado passa a ter a UF gravada. Sem escolha, o estado que já existe fica.
+          ...(safeAthleteProfile.state ? { state: safeAthleteProfile.state } : {})
         })
         .eq('id', athleteId);
 
