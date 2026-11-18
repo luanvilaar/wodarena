@@ -1,11 +1,16 @@
 'use client';
 
-export type EventMediaKind = 'logo' | 'banner';
+// Story 1.151: 'sponsor' é o logo de patrocinador (só PNG, transparência mantida).
+export type EventMediaKind = 'logo' | 'banner' | 'sponsor';
 
 const MEDIA_LIMITS: Record<EventMediaKind, { maxWidth: number; maxHeight: number; quality: number }> = {
   logo: { maxWidth: 512, maxHeight: 512, quality: 0.85 },
-  banner: { maxWidth: 1600, maxHeight: 640, quality: 0.82 }
+  banner: { maxWidth: 1600, maxHeight: 640, quality: 0.82 },
+  sponsor: { maxWidth: 600, maxHeight: 300, quality: 1 }
 };
+
+// Logo de patrocinador (D5): só PNG, até 2 MB, e sai em PNG para manter o fundo transparente.
+const SPONSOR_SOURCE_MAX_BYTES = 2 * 1024 * 1024;
 
 const MAX_SOURCE_FILE_BYTES = 8 * 1024 * 1024;
 const ACCEPTED_SOURCE_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
@@ -51,6 +56,10 @@ const resolveOutputDimensions = (sourceWidth: number, sourceHeight: number, kind
  * arquivo original enviado pelo usuário.
  */
 export const compressEventMediaFile = async (file: File, kind: EventMediaKind): Promise<Blob> => {
+  if (kind === 'sponsor') {
+    if (file.type !== 'image/png') throw new EventMediaUploadError('Só PNG. Exporte o logo em PNG, de preferência com fundo transparente.');
+    if (file.size > SPONSOR_SOURCE_MAX_BYTES) throw new EventMediaUploadError('O PNG passa de 2 MB. Reduza o tamanho do logo e envie de novo.');
+  }
   if (!ACCEPTED_SOURCE_TYPES.includes(file.type)) {
     throw new EventMediaUploadError('Apenas arquivos PNG, JPEG ou WebP são permitidos.');
   }
@@ -69,7 +78,8 @@ export const compressEventMediaFile = async (file: File, kind: EventMediaKind): 
     ctx.drawImage(bitmap, 0, 0, width, height);
 
     const { quality } = MEDIA_LIMITS[kind];
-    const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/webp', quality));
+    const outputType = kind === 'sponsor' ? 'image/png' : 'image/webp';
+    const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, outputType, quality));
     if (!blob) throw new EventMediaUploadError('Falha ao gerar a imagem otimizada.');
     return blob;
   } finally {
@@ -82,7 +92,7 @@ export const uploadEventMedia = async (file: File, kind: EventMediaKind): Promis
 
   const formData = new FormData();
   formData.append('type', kind);
-  formData.append('file', compressed, `${kind}.webp`);
+  formData.append('file', compressed, `${kind}.${compressed.type === 'image/png' ? 'png' : 'webp'}`);
 
   const response = await fetch('/api/admin/media/upload', {
     method: 'POST',

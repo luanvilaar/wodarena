@@ -7,6 +7,10 @@ export const PUBLIC_EVENT_SELECT_LEGACY = 'id, name, logo_url, banner_url, statu
 // Sem as datas estruturadas (Story 1.71): usado quando o banco ainda não tem a migration.
 export const PUBLIC_EVENT_SELECT_WITHOUT_DATES = 'id, name, logo_url, banner_url, status, location, date, description, organizer_id, sponsors, format, ticket_price, ticket_slots, is_ticketing_active, is_featured, time, city, state, rules, instagram, website, event_type, event_schedule, mp_public_key, marketplace_fee, registration_deadline, country_code, currency, time_zone, payment_gateway, default_locale, shirt_mode, shirt_addon_price, latitude, longitude';
 export const PUBLIC_EVENT_SELECT = `${PUBLIC_EVENT_SELECT_WITHOUT_DATES}, start_date, end_date`;
+// Regulamento em PDF e patrocinadores com logo (Stories 1.150 e 1.151): pedidos
+// primeiro; sem a migration, a leitura volta para o PUBLIC_EVENT_SELECT.
+export const EVENT_MEDIA_COLUMNS = ['rules_document', 'sponsor_logos'] as const;
+export const PUBLIC_EVENT_SELECT_WITH_MEDIA = `${PUBLIC_EVENT_SELECT}, ${EVENT_MEDIA_COLUMNS.join(', ')}`;
 export const PUBLIC_ATHLETE_SELECT = 'id, name, box, country, division_id, gender, is_team, city, state, instagram, team_members';
 export const PUBLIC_SCORE_SELECT = 'athlete_id, workout_id, result, value, rank, points, splits, result_status';
 export const PUBLIC_DIVISION_SELECT = 'id, event_id, name, category, type, slots_limit, price, is_active, order_index, use_age_groups, age_groups, course_layout, is_course_published';
@@ -135,7 +139,13 @@ export const readEventsWithFeaturedFallback = async <T>(
   primaryQuery: (select: string) => PromiseLike<BootstrapQueryResult<unknown>>,
   legacyQuery: () => PromiseLike<BootstrapQueryResult<T>>
 ): Promise<T> => {
-  let result = await primaryQuery(PUBLIC_EVENT_SELECT) as BootstrapQueryResult<T>;
+  let result = await primaryQuery(PUBLIC_EVENT_SELECT_WITH_MEDIA) as BootstrapQueryResult<T>;
+
+  const missingMediaColumn = findMissingEventColumn(result.error, EVENT_MEDIA_COLUMNS);
+  if (missingMediaColumn) {
+    console.warn('[Bootstrap Query] Regulamento em PDF e patrocinadores ausentes, lendo sem eles:', JSON.stringify({ label, column: missingMediaColumn }));
+    result = await primaryQuery(PUBLIC_EVENT_SELECT) as BootstrapQueryResult<T>;
+  }
 
   const missingDateColumn = findMissingEventColumn(result.error, EVENT_DATE_COLUMNS);
   if (missingDateColumn) {

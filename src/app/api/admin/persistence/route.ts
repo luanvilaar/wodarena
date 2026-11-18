@@ -5,6 +5,8 @@ import { checkRateLimit, createSupabaseAdmin, hashPassword, requireSession, safe
 import { getEventStatus } from '@/lib/eventStatus';
 import { validateEventCoordinates } from '@/lib/eventMap';
 import { resolveEventDatesForWrite } from '@/lib/eventDates';
+import { EVENT_DOCUMENTS_BUCKET, normalizeRulesDocument, normalizeSponsorSlots, storagePublicPrefix } from '@/lib/eventMediaFields';
+import { EVENT_MEDIA_BUCKET } from '@/lib/mediaStorage';
 import { selectEventWithDates, toEventLifecycleInput, type EventLifecycleRow } from '@/lib/serverEventLifecycle';
 import { sendQualifierWorkoutDeletedEmails } from '@/lib/resend';
 import { checkRegistrationShirtEdit, validateShirtConfig } from '@/lib/shirtPricing';
@@ -69,7 +71,8 @@ const EVENT_UPDATABLE_FIELDS = [
   'name', 'logo_url', 'banner_url', 'status', 'location', 'date', 'description',
   'format', 'ticket_price', 'ticket_slots', 'is_ticketing_active', 'time', 'city',
   'state', 'rules', 'instagram', 'website', 'event_type', 'event_schedule', 'mp_public_key',
-  'shirt_mode', 'shirt_addon_price', 'latitude', 'longitude', 'start_date', 'end_date'
+  'shirt_mode', 'shirt_addon_price', 'latitude', 'longitude', 'start_date', 'end_date',
+  'rules_document', 'sponsor_logos'
 ] as const;
 
 const DIVISION_UPDATABLE_FIELDS = [
@@ -100,6 +103,30 @@ const COORDINATES_TOGETHER_MESSAGE = 'Envie latitude e longitude juntas: as duas
 // Ponto do mapa do evento (Story 1.41): os dois campos andam juntos, como no
 // CHECK events_coordinates_both_or_none do banco. Devolve os valores saneados
 // para gravar, ou a mensagem do 400.
+// Regulamento em PDF e patrocinadores (Stories 1.150 e 1.151): o PDF e os logos
+// têm de ser do Storage do projeto (enviados pelo painel); o resto é conferido
+// em eventMediaFields.ts. Devolve a mensagem de erro, ou null com os campos limpos.
+const applyEventMediaFields = (data: Record<string, unknown>) => {
+  const base = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+  if ('rules_document' in data) {
+    const document = normalizeRulesDocument(data.rules_document, storagePublicPrefix(base, EVENT_DOCUMENTS_BUCKET));
+    if (!document.ok) return document.error;
+    data.rules_document = document.value;
+  }
+  if ('sponsor_logos' in data) {
+    const slots = normalizeSponsorSlots(data.sponsor_logos, storagePublicPrefix(base, EVENT_MEDIA_BUCKET));
+    if (!slots.ok) return slots.error;
+    data.sponsor_logos = slots.value;
+  }
+  return null;
+};
+
+const EVENT_MEDIA_MIGRATION_MESSAGE = 'O regulamento em PDF e os patrocinadores ainda não estão disponíveis neste ambiente. Aplique a migration 20261118120000_event_rules_document_sponsor_logos.sql antes de usar.';
+const isMissingEventMediaColumn = (error: unknown) => {
+  const details = error && typeof error === 'object' ? error as { code?: unknown; message?: unknown } : null;
+  return (details?.code === '42703' || details?.code === 'PGRST204') && /rules_document|sponsor_logos/.test(String(details?.message ?? ''));
+};
+
 const resolveEventCoordinatesForWrite = (data: Record<string, unknown>) => {
   if (!('latitude' in data) || !('longitude' in data)) {
     return { ok: false as const, error: COORDINATES_TOGETHER_MESSAGE };
@@ -759,8 +786,13 @@ export async function POST(request: Request) {
         if (structureRejection) return structureRejection;
 
         delete event.is_featured;
+        const mediaError = applyEventMediaFields(event);
+        if (mediaError) return NextResponse.json({ error: mediaError }, { status: 400 });
         const { error: eventError } = await supabaseAdmin.from('events').insert(event);
-        if (eventError) throw eventError;
+        if (eventError) {
+          if (isMissingEventMediaColumn(eventError)) return NextResponse.json({ error: EVENT_MEDIA_MIGRATION_MESSAGE }, { status: 503 });
+          throw eventError;
+        }
 
         // event_id de cada divisão/prova é sempre sobrescrito com o evento
         // recém-validado — nunca confiar no que o payload trouxer, senão o
@@ -881,8 +913,13 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Defina o prazo de submissão em todas as provas antes de converter o evento em Qualifier.' }, { status: 409 });
           }
         }
+        const mediaError = applyEventMediaFields(allowedData);
+        if (mediaError) return NextResponse.json({ error: mediaError }, { status: 400 });
         const { error } = await supabaseAdmin.from('events').update(allowedData).eq('id', payload.eventId);
-        if (error) throw error;
+        if (error) {
+          if (isMissingEventMediaColumn(error)) return NextResponse.json({ error: EVENT_MEDIA_MIGRATION_MESSAGE }, { status: 503 });
+          throw error;
+        }
         return NextResponse.json({ success: true });
       }
 

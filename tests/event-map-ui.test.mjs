@@ -239,9 +239,10 @@ test('painel: salvar bloqueia coordenada inválida com aviso e foco; criação s
   const update = block(adminPage, /const handleUpdateEventInfo = async[\s\S]*?\n {2}\};/);
   assert.match(update, /const mapPoint = parseCoordinatesInput\(editEventCoordinates\);\s*if \(!mapPoint\.ok\) \{[\s\S]*?editEventCoordinatesRef\.current\?\.focus\(\);\s*return;/);
   assert.match(update, /const mapPointUpdate: Pick<Event, 'latitude' \| 'longitude'> = editEventCoordinatesChanged\s*\? \{\s*latitude: mapPoint\.coordinates \? mapPoint\.coordinates\.latitude : null,\s*longitude: mapPoint\.coordinates \? mapPoint\.coordinates\.longitude : null\s*\}\s*: \{\};/);
-  assert.match(update, /shirtAddonPrice: shirtSettings\.price,\s*\.\.\.mapPointUpdate\s*\}\);/);
+  // Story 1.150: o PDF e as marcas vêm logo depois do ponto, também só quando mudaram.
+  assert.match(update, /shirtAddonPrice: shirtSettings\.price,\s*\.\.\.mapPointUpdate,\s*\.\.\.mediaUpdate\s*\}\);/);
   // selectedEventToManage reflete o ponto salvo.
-  assert.match(update, /setSelectedEventToManage\(prev => \{[\s\S]*shirtAddonPrice: shirtSettings\.price,\s*\.\.\.mapPointUpdate\s*\};/);
+  assert.match(update, /setSelectedEventToManage\(prev => \{[\s\S]*shirtAddonPrice: shirtSettings\.price,\s*\.\.\.mapPointUpdate,\s*\.\.\.mediaUpdate\s*\};/);
 });
 
 test('picker: rótulo, ajuda, busca, remoção e prévia do mapa do Mapbox', () => {

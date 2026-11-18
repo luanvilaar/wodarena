@@ -125,6 +125,9 @@ import {
 import { sortDivisions } from '@/lib/divisionOrder';
 import { getTeamDisplayName } from '@/lib/teamDisplay';
 import { buildEventDateLabel, resolveEventDateForm } from '@/lib/eventDates';
+import { findSponsorSlotIssue, type RulesDocument, type SponsorSlot } from '@/lib/eventMediaFields';
+import { RulesDocumentField } from '@/components/admin/RulesDocumentField';
+import { SponsorSlotsField } from '@/components/admin/SponsorSlotsField';
 import { fortalezaDateTimeLocalToUtc, normalizeQualifierSubmissionWindow, utcToFortalezaDateTimeLocal } from '@/lib/submissionWindow';
 import {
   canChangeQualifierWorkoutType,
@@ -866,6 +869,10 @@ export default function AdminPage() {
   const [eventCity, setEventCity] = useState('');
   const [eventState, setEventState] = useState('');
   const [eventRules, setEventRules] = useState('');
+  // Story 1.150: regulamento oficial em PDF; `eventRules` vira o resumo em texto.
+  const [eventRulesDocument, setEventRulesDocument] = useState<RulesDocument | null>(null);
+  // Story 1.151: vagas de patrocinador com logo PNG.
+  const [eventSponsorLogos, setEventSponsorLogos] = useState<SponsorSlot[]>([]);
   const [eventInstagram, setEventInstagram] = useState('');
   const [eventWebsite, setEventWebsite] = useState('');
   const [eventTicketPrice, setEventTicketPrice] = useState<number>(150);
@@ -894,6 +901,8 @@ export default function AdminPage() {
   const [editEventCity, setEditEventCity] = useState('');
   const [editEventState, setEditEventState] = useState('');
   const [editEventRules, setEditEventRules] = useState('');
+  const [editEventRulesDocument, setEditEventRulesDocument] = useState<RulesDocument | null>(null);
+  const [editEventSponsorLogos, setEditEventSponsorLogos] = useState<SponsorSlot[]>([]);
   const [editEventInstagram, setEditEventInstagram] = useState('');
   const [editEventWebsite, setEditEventWebsite] = useState('');
   const [editEventTicketPrice, setEditEventTicketPrice] = useState<number>(150);
@@ -1886,6 +1895,11 @@ export default function AdminPage() {
       eventCoordinatesRef.current?.focus();
       return;
     }
+    const sponsorIssue = findSponsorSlotIssue(eventSponsorLogos);
+    if (sponsorIssue) {
+      setAdminNotice({ text: `Revise os patrocinadores: ${sponsorIssue}`, tone: 'error' });
+      return;
+    }
 
     try {
       await addEvent({
@@ -1902,6 +1916,8 @@ export default function AdminPage() {
         city: eventCity,
         state: eventState,
         rules: eventRules,
+        rulesDocument: eventRulesDocument,
+        sponsorLogos: eventSponsorLogos,
         instagram: eventInstagram.trim().replace(/^@/, ''),
         website: eventWebsite,
         ticketPrice: eventTicketPrice,
@@ -1933,6 +1949,8 @@ export default function AdminPage() {
       setEventCity('');
       setEventState('');
       setEventRules('');
+      setEventRulesDocument(null);
+      setEventSponsorLogos([]);
       setEventInstagram('');
       setEventWebsite('');
       setEventTicketPrice(150);
@@ -2022,6 +2040,8 @@ export default function AdminPage() {
     setEditEventCity(evt.city || '');
     setEditEventState(evt.state || '');
     setEditEventRules(evt.rules || '');
+    setEditEventRulesDocument(evt.rulesDocument ?? null);
+    setEditEventSponsorLogos(evt.sponsorLogos ?? []);
     setEditEventInstagram(evt.instagram || '');
     setEditEventWebsite(evt.website || '');
     setEditEventTicketPrice(evt.ticketPrice || 150);
@@ -2130,6 +2150,17 @@ export default function AdminPage() {
         longitude: mapPoint.coordinates ? mapPoint.coordinates.longitude : null
       }
       : {};
+    // Stories 1.150 e 1.151: PDF e marcas só vão quando mudaram, para a edição do
+    // resto do evento seguir funcionando em banco ainda sem a migration.
+    const sponsorIssue = findSponsorSlotIssue(editEventSponsorLogos);
+    if (sponsorIssue) {
+      setAdminNotice({ text: `Revise os patrocinadores: ${sponsorIssue}`, tone: 'error' });
+      return;
+    }
+    const mediaUpdate: Pick<Event, 'rulesDocument' | 'sponsorLogos'> = {
+      ...(JSON.stringify(editEventRulesDocument) !== JSON.stringify(selectedEventToManage.rulesDocument ?? null) ? { rulesDocument: editEventRulesDocument } : {}),
+      ...(JSON.stringify(editEventSponsorLogos) !== JSON.stringify(selectedEventToManage.sponsorLogos ?? []) ? { sponsorLogos: editEventSponsorLogos } : {})
+    };
 
     try {
       await updateEvent(selectedEventToManage.id, {
@@ -2155,7 +2186,8 @@ export default function AdminPage() {
         eventType: editEventType,
         shirtMode: shirtSettings.mode,
         shirtAddonPrice: shirtSettings.price,
-        ...mapPointUpdate
+        ...mapPointUpdate,
+        ...mediaUpdate
       });
 
       // Recarregar evento selecionado no estado local
@@ -2185,7 +2217,8 @@ export default function AdminPage() {
           eventType: editEventType,
           shirtMode: shirtSettings.mode,
           shirtAddonPrice: shirtSettings.price,
-          ...mapPointUpdate
+          ...mapPointUpdate,
+          ...mediaUpdate
         };
       });
       // Os campos passam a mostrar o valor salvo (texto gerado, término = início, centavos).
@@ -4406,17 +4439,21 @@ export default function AdminPage() {
             />
           </div>
 
+          <RulesDocumentField id="edit-event-rules-pdf" value={editEventRulesDocument} onChange={setEditEventRulesDocument} />
+
           <div>
-            <label htmlFor="edit-event-rules" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Regulamento</label>
+            <label htmlFor="edit-event-rules" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted">Resumo do regulamento (opcional)</label>
             <textarea
               id="edit-event-rules"
               rows={4}
-              placeholder="Coloque o regulamento oficial e os critérios de participação do torneio..."
+              placeholder="Pontos principais, para quem não quer abrir o PDF..."
               value={editEventRules}
               onChange={(e) => setEditEventRules(e.target.value)}
               className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2 text-sm text-white placeholder:text-muted focus:border-primary/50 focus:outline-none"
             />
           </div>
+
+          <SponsorSlotsField key={selectedEventToManage?.id ?? 'edit'} idPrefix="edit-event-sponsors" value={editEventSponsorLogos} onChange={setEditEventSponsorLogos} />
         </div>
 
         <div className="space-y-4 border-t border-card-border pt-5">
@@ -10200,18 +10237,22 @@ export default function AdminPage() {
                     />
                   </div>
 
+                  <RulesDocumentField id="event-rules-pdf" value={eventRulesDocument} onChange={setEventRulesDocument} />
+
                   <div>
-                    <label htmlFor="event-rules" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans">Regulamento</label>
+                    <label htmlFor="event-rules" className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted font-sans">Resumo do regulamento (opcional)</label>
                     <textarea
                       id="event-rules"
                       name="event-rules"
                       rows={4}
-                      placeholder="Coloque o regulamento oficial e os critérios de participação do torneio..."
+                      placeholder="Pontos principais, para quem não quer abrir o PDF..."
                       value={eventRules}
                       onChange={(e) => setEventRules(e.target.value)}
                       className="w-full rounded-md border border-card-border bg-dark-gray px-4 py-2.5 text-sm text-white placeholder:text-muted focus:border-primary/50 focus:outline-none"
                     />
                   </div>
+
+                  <SponsorSlotsField idPrefix="event-sponsors" value={eventSponsorLogos} onChange={setEventSponsorLogos} />
                 </div>
 
                 <div className="space-y-4 border-t border-card-border pt-5">

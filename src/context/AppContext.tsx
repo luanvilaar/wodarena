@@ -15,6 +15,7 @@ import { getManagerAccessStatus, normalizeServiceValidUntil } from '@/lib/manage
 import { rankWorkoutScores } from '@/lib/scoring';
 import { normalizeShirtMode } from '@/lib/shirtPricing';
 import { validateEventCoordinates } from '@/lib/eventMap';
+import { readRulesDocument, readSponsorSlots } from '@/lib/eventMediaFields';
 import { validateWorkoutStructure, type WorkoutStructure } from '@/lib/workoutStructure';
 import type { QualifierWorkoutDeleteConfirmation, QualifierWorkoutDeleteResult } from '@/lib/workoutEdit';
 
@@ -801,6 +802,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               description: evt.description,
               organizerId: evt.organizer_id,
               sponsors: evt.sponsors || [],
+              // Stories 1.150 e 1.151; ausentes em banco sem a migration.
+              sponsorLogos: readSponsorSlots(evt.sponsor_logos),
+              rulesDocument: readRulesDocument(evt.rules_document),
               divisions: evDivs,
               workouts: evWods,
               format: evt.format || 'individual',
@@ -1153,7 +1157,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       ...eventData,
       id: newId,
       organizerId: currentUser.id,
-      sponsors: ['Bull Fit', 'WOD Gear', 'Strong Nutrition'],
+      // Story 1.151 (D8): o evento nasce sem patrocinador; o gestor envia os logos no painel.
+      sponsors: [],
       format: eventData.format || 'individual',
       ticketPrice: eventData.ticketPrice ?? 150.00,
       ticketSlots: eventData.ticketSlots ?? 100,
@@ -1201,6 +1206,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       mp_public_key: newEvent.mpPublicKey || null,
       shirt_mode: newEvent.shirtMode,
       shirt_addon_price: newEvent.shirtAddonPrice,
+      // Stories 1.150 e 1.151: PDF e marcas só vão no insert quando existem, para
+      // criar evento sem eles seguir funcionando em banco sem a migration.
+      ...(newEvent.rulesDocument ? { rules_document: newEvent.rulesDocument } : {}),
+      ...(newEvent.sponsorLogos && newEvent.sponsorLogos.length > 0 ? { sponsor_logos: newEvent.sponsorLogos } : {}),
       // As colunas do ponto só vão no insert quando há ponto: criar evento sem
       // ponto segue funcionando em banco ainda sem a migration (Story 1.41).
       ...(mapPoint.latitude != null && mapPoint.longitude != null
@@ -2233,6 +2242,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (updatedData.city !== undefined) dbPayload.city = updatedData.city;
     if (updatedData.state !== undefined) dbPayload.state = updatedData.state;
     if (updatedData.rules !== undefined) dbPayload.rules = updatedData.rules;
+    // Stories 1.150 e 1.151: o painel só manda quando o PDF ou as marcas mudaram.
+    if (updatedData.rulesDocument !== undefined) dbPayload.rules_document = updatedData.rulesDocument;
+    if (updatedData.sponsorLogos !== undefined) dbPayload.sponsor_logos = updatedData.sponsorLogos;
     if (updatedData.instagram !== undefined) dbPayload.instagram = updatedData.instagram;
     if (updatedData.website !== undefined) dbPayload.website = updatedData.website;
     if (updatedData.eventType !== undefined) dbPayload.event_type = updatedData.eventType;

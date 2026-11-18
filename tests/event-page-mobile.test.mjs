@@ -17,7 +17,9 @@ test('topo: banner inteiro 5:2, título largo, regulamento só quando existe e c
   assert.doesNotMatch(eventView, /h-\[390px\]|opacity-55/, 'o banner não fica mais escurecido atrás do texto');
   assert.match(eventView, /<h1 className="type-display /);
   assert.match(eventView, /const rulesText = \(event\.rules \?\? ''\)\.trim\(\);/);
-  assert.match(eventView, /\{rulesText && \(\s*<button/);
+  // Story 1.150: o botão aparece com o texto ou com o PDF oficial.
+  assert.match(eventView, /const hasRules = Boolean\(rulesText \|\| rulesDocument\);/);
+  assert.match(eventView, /\{hasRules && \(\s*<button/);
   assert.match(eventView, /<NextLink href="\/admin#inscricoes"/);
   assert.match(eventView, /tTop\('divisionsCount', \{ count: activeDivisions\.length \}\)/);
 });

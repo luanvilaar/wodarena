@@ -1,3 +1,4 @@
+import type { RulesDocument, SponsorSlot } from '@/lib/eventMediaFields';
 import type { ShirtMode } from '@/lib/shirtPricing';
 import type { WorkoutStructure } from '@/lib/workoutStructure';
 
@@ -182,7 +183,12 @@ export interface Event {
   endDate?: string;
   description: string;
   organizerId: string;
+  // Nomes em texto de antes da Story 1.151: não aparecem mais na página (D8).
   sponsors: string[];
+  // Vagas de patrocinador com logo, na ordem do carrossel (Story 1.151).
+  sponsorLogos?: SponsorSlot[];
+  // Regulamento oficial em PDF (Story 1.150); `rules` vira o resumo em texto.
+  rulesDocument?: RulesDocument | null;
   divisions: Division[];
   workouts: Workout[];
   format: 'individual' | 'duo' | 'trio';

@@ -21,7 +21,7 @@ setActiveSupabaseClient({
 const eventStatus = await importServerModule('lib/eventStatus.ts');
 const eventDates = await importServerModule('lib/eventDates.ts');
 const { selectEventWithDates, toEventLifecycleInput } = await importServerModule('lib/serverEventLifecycle.ts');
-const { readEventsWithFeaturedFallback, PUBLIC_EVENT_SELECT, PUBLIC_EVENT_SELECT_WITHOUT_DATES } = await importServerModule('lib/bootstrapPayload.ts');
+const { readEventsWithFeaturedFallback, PUBLIC_EVENT_SELECT, PUBLIC_EVENT_SELECT_WITHOUT_DATES, PUBLIC_EVENT_SELECT_WITH_MEDIA } = await importServerModule('lib/bootstrapPayload.ts');
 const { POST: postPersistence } = await importServerModule('app/api/admin/persistence/route.ts');
 const { createSessionToken } = await importServerModule('lib/serverSecurity.ts');
 
@@ -233,7 +233,8 @@ test('bootstrap: sem as colunas de data, refaz o select completo sem elas e mant
     },
     async () => { throw new Error('não deveria cair no legado'); }
   );
-  assert.deepEqual(selects, [PUBLIC_EVENT_SELECT, PUBLIC_EVENT_SELECT_WITHOUT_DATES]);
+  // Story 1.150: o primeiro select também pede o PDF e as marcas; sem as datas, cai direto no select sem elas.
+  assert.deepEqual(selects, [PUBLIC_EVENT_SELECT_WITH_MEDIA, PUBLIC_EVENT_SELECT_WITHOUT_DATES]);
   assert.deepEqual(rows, [{ id: 'evt-1', is_featured: true, latitude: -7.1 }]);
 });
 

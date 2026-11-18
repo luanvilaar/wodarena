@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     const kind = formData.get('type');
     const file = formData.get('file');
 
-    if (kind !== 'logo' && kind !== 'banner') {
+    if (kind !== 'logo' && kind !== 'banner' && kind !== 'sponsor') {
       return NextResponse.json({ error: 'Tipo de mídia inválido.' }, { status: 400 });
     }
     if (!(file instanceof Blob)) {
@@ -31,6 +31,10 @@ export async function POST(request: Request) {
     }
     if (!EVENT_MEDIA_ACCEPTED_TYPES.includes(file.type as typeof EVENT_MEDIA_ACCEPTED_TYPES[number])) {
       return NextResponse.json({ error: 'Formato de imagem não suportado.' }, { status: 400 });
+    }
+    // Logo de patrocinador (Story 1.151, D5): só PNG, para manter a transparência.
+    if (kind === 'sponsor' && file.type !== 'image/png') {
+      return NextResponse.json({ error: 'O logo do patrocinador precisa ser PNG.' }, { status: 400 });
     }
     if (file.size > EVENT_MEDIA_MAX_BYTES) {
       return NextResponse.json({ error: 'Imagem muito grande após processamento.' }, { status: 400 });

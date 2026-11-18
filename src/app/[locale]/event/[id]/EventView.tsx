@@ -10,6 +10,8 @@ import { RegisterModal } from '@/components/RegisterModal';
 import { RegistrationVoucher } from '@/components/RegistrationVoucher';
 import { EventLocationCard } from '@/components/EventLocationCard';
 import { EventRulesSheet } from '@/components/EventRulesSheet';
+import { SponsorCarousel } from '@/components/SponsorCarousel';
+import { publicSponsors } from '@/lib/eventMediaFields';
 import { EventBuyBar } from '@/components/EventBuyBar';
 import {
   Calendar, MapPin, Trophy, Share2, Ticket, Clock,
@@ -573,6 +575,23 @@ export function EventView({ eventId }: { eventId: string }) {
           ? tTop('perTrio')
           : tTop('perTeam');
   const rulesText = (event.rules ?? '').trim();
+  // Story 1.150: o PDF oficial; o botão aparece com PDF ou com texto.
+  const rulesDocument = event.rulesDocument ?? null;
+  const hasRules = Boolean(rulesText || rulesDocument);
+  const publicSponsorList = publicSponsors(event.sponsorLogos ?? []);
+  const rulesSheetDocument = rulesDocument ? {
+    url: rulesDocument.url,
+    // O Storage manda baixar com o nome original quando recebe ?download=.
+    downloadUrl: `${rulesDocument.url}?download=${encodeURIComponent(rulesDocument.name)}`,
+    name: rulesDocument.name,
+    detail: [
+      new Intl.NumberFormat(locale, { style: 'unit', unit: rulesDocument.size >= 1024 * 1024 ? 'megabyte' : 'kilobyte', maximumFractionDigits: 1 })
+        .format(rulesDocument.size >= 1024 * 1024 ? rulesDocument.size / 1024 / 1024 : Math.max(1, Math.round(rulesDocument.size / 1024))),
+      Number.isFinite(Date.parse(rulesDocument.uploadedAt))
+        ? tTop('rulesUpdated', { date: new Date(rulesDocument.uploadedAt).toLocaleDateString(locale, { timeZone: event.timeZone || 'America/Fortaleza' }) })
+        : ''
+    ].filter(Boolean).join(' · ')
+  } : null;
   const placeLabel = event.city ? formatEventPlace({ city: event.city, state: event.state }) : '';
   const showPlaceSuffix = Boolean(placeLabel) && !event.location.toLowerCase().includes((event.city ?? '').trim().toLowerCase());
   const timing = getEventTiming(event);
@@ -732,7 +751,7 @@ export function EventView({ eventId }: { eventId: string }) {
             </div>
 
             <div className="flex flex-wrap gap-2">
-              {rulesText && (
+              {hasRules && (
                 <button
                   type="button"
                   onClick={() => setIsRulesOpen(true)}
@@ -1541,30 +1560,23 @@ export function EventView({ eventId }: { eventId: string }) {
               </div>
             )}
 
-            {/* Área de Patrocinadores do Evento */}
-            {event.sponsors && event.sponsors.length > 0 && (
-              <div className="space-y-4 rounded-xl border border-card-border bg-card p-6">
-                <h4 className="text-xs font-bold text-white uppercase tracking-widest text-center border-b border-card-border pb-3">
-                  {tSidebar('sponsorsHeading')}
-                </h4>
-                <div className="grid grid-cols-2 gap-4">
-                  {event.sponsors.map((sponsor, i) => {
-                    const isLastOdd = event.sponsors.length % 2 !== 0 && i === event.sponsors.length - 1;
-                    return (
-                      <div
-                        key={i}
-                        className={`group flex h-14 items-center justify-center rounded-lg border border-card-border bg-dark-gray p-3 text-center transition-colors hover:border-primary/60 ${
-                          isLastOdd ? 'col-span-2' : ''
-                        }`}
-                      >
-                        <span className="text-xs font-bold text-muted group-hover:text-white transition-colors uppercase tracking-wider italic">
-                          {sponsor}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+            {/* Patrocinadores (Story 1.152, D6 a D8): só os logos enviados no painel; a lista antiga de nomes não aparece mais. */}
+            {publicSponsorList.length > 0 && (
+              <SponsorCarousel
+                heading={tSidebar('sponsorsHeading')}
+                sponsors={publicSponsorList}
+                labels={{
+                  carousel: tSidebar('sponsorsCarousel'),
+                  slide: tSidebar('sponsorsSlide'),
+                  previous: tSidebar('sponsorsPrevious'),
+                  next: tSidebar('sponsorsNext'),
+                  pause: tSidebar('sponsorsPause'),
+                  play: tSidebar('sponsorsPlay'),
+                  goTo: (page) => tSidebar('sponsorsGoTo', { page }),
+                  page: (page, total) => tSidebar('sponsorsPage', { page, total }),
+                  opensNewTab: (name) => tSidebar('sponsorsOpensNewTab', { name })
+                }}
+              />
             )}
 
             {/* Organização do evento (Story 1.135): contatos visíveis e a central de ajuda. */}
@@ -1637,6 +1649,8 @@ export function EventView({ eventId }: { eventId: string }) {
         title={tTop('rules')}
         eventName={event.name}
         rules={rulesText}
+        document={rulesSheetDocument}
+        labels={{ pdf: tTop('rulesPdf'), open: tTop('rulesOpenPdf'), download: tTop('rulesDownload'), summary: tTop('rulesSummary') }}
         closeLabel={tTop('closeRules')}
         onClose={closeRules}
       />

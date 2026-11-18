@@ -5,6 +5,9 @@
   --foreground: #eaecef;
   --card: #1e2329;
   --card-border: #2b3139;
+  /* Cartão claro dos logos de patrocinador (Story 1.151, D6): logo preto ou colorido aparece igual na página escura. */
+  --sponsor-tile: #eef0f3;
+  --sponsor-tile-border: #d5d9e0;
   --primary: #fcd535;
   --primary-hover: #f0b90b;
   --primary-disabled: #3a3a1f;
@@ -31,6 +34,8 @@
   --color-foreground: var(--foreground);
   --color-card: var(--card);
   --color-card-border: var(--card-border);
+  --color-sponsor-tile: var(--sponsor-tile);
+  --color-sponsor-tile-border: var(--sponsor-tile-border);
   --color-primary: var(--primary);
   --color-primary-hover: var(--primary-hover);
   --color-primary-disabled: var(--primary-disabled);
